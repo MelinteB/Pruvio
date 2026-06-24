@@ -1,0 +1,19 @@
+# Virtual environments
+.venv/
+.pvenv/
+backend/.venv/
+backend/.pvenv/
+
+# Python
+__pycache__/
+*.pyc
+
+# Environment variables
+.env
+
+# Databases
+*.db
+
+# Storage
+storage/*
+!storage/.gitkeep
