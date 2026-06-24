@@ -1,0 +1,130 @@
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from app.db.database import get_db
+from app.schemas.webhook import IncomingTestMessage
+from app.schemas.user import UserCreate
+from app.services.user_service import (
+    get_user_by_phone,
+    create_user,
+    activate_user,
+    block_user
+)
+
+router = APIRouter()
+
+
+JOIN_MESSAGE = """
+Welcome to Pruvio 👋
+
+Pruvio is a WhatsApp-first assistant that helps you process receipts, invoices, screenshots, QR codes, PDFs and claims.
+
+To start using Pruvio, reply:
+
+YES - to join and accept processing of the documents you send
+STOP - to cancel
+"""
+
+
+ACTIVE_MESSAGE = """
+You are now registered in Pruvio ✅
+
+Send me a receipt, invoice, screenshot, QR code, PDF or text message and I will help you process it.
+"""
+
+
+BLOCKED_MESSAGE = """
+No problem. You will not receive messages from Pruvio.
+
+If you want to join later, send START.
+"""
+
+
+@router.post("/test")
+def test_incoming_message(
+    incoming: IncomingTestMessage,
+    db: Session = Depends(get_db)
+):
+    message = incoming.message.strip().lower()
+
+    user = get_user_by_phone(db, incoming.phone_number)
+
+    if not user:
+        user = create_user(
+            db,
+            UserCreate(
+                phone_number=incoming.phone_number,
+                name=incoming.name
+            )
+        )
+
+        return {
+            "phone_number": incoming.phone_number,
+            "user_status": user.status,
+            "allowed_to_continue": False,
+            "reply": JOIN_MESSAGE
+        }
+
+    if user.status == "pending_join":
+        if message in ["yes", "da", "accept", "join", "start"]:
+            user = activate_user(db, user)
+
+            return {
+                "phone_number": incoming.phone_number,
+                "user_status": user.status,
+                "allowed_to_continue": True,
+                "reply": ACTIVE_MESSAGE
+            }
+
+        if message in ["stop", "no", "nu", "cancel"]:
+            user = block_user(db, user)
+
+            return {
+                "phone_number": incoming.phone_number,
+                "user_status": user.status,
+                "allowed_to_continue": False,
+                "reply": BLOCKED_MESSAGE
+            }
+
+        return {
+            "phone_number": incoming.phone_number,
+            "user_status": user.status,
+            "allowed_to_continue": False,
+            "reply": JOIN_MESSAGE
+        }
+
+    if user.status == "blocked":
+        if message in ["start", "join", "yes"]:
+            user.status = "pending_join"
+            db.commit()
+            db.refresh(user)
+
+            return {
+                "phone_number": incoming.phone_number,
+                "user_status": user.status,
+                "allowed_to_continue": False,
+                "reply": JOIN_MESSAGE
+            }
+
+        return {
+            "phone_number": incoming.phone_number,
+            "user_status": user.status,
+            "allowed_to_continue": False,
+            "reply": BLOCKED_MESSAGE
+        }
+
+    if user.status == "active":
+        return {
+            "phone_number": incoming.phone_number,
+            "user_status": user.status,
+            "allowed_to_continue": True,
+            "reply": None,
+            "next_step": "Message can now go to Module Router"
+        }
+
+    return {
+        "phone_number": incoming.phone_number,
+        "user_status": user.status,
+        "allowed_to_continue": False,
+        "reply": "Unknown user status"
+    }
