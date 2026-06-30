@@ -4,11 +4,24 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.schemas.webhook import IncomingTestMessage
 from app.schemas.user import UserCreate
+from app.schemas.case import CaseCreate
+from app.schemas.message import MessageCreate
 from app.services.user_service import (
     get_user_by_phone,
     create_user,
     activate_user,
     block_user
+)
+from app.services.case_service import (
+    get_open_case_for_user,
+    create_case,
+    update_case_module,
+    update_case_status
+)
+from app.services.message_service import create_message
+from app.services.module_router import (
+    detect_module_from_text,
+    get_module_welcome_message
 )
 
 router = APIRouter()
@@ -114,12 +127,55 @@ def test_incoming_message(
         }
 
     if user.status == "active":
+        detected = detect_module_from_text(incoming.message)
+
+        case = get_open_case_for_user(db, user.id)
+
+        if not case:
+            case = create_case(
+                db,
+                CaseCreate(
+                    user_id=user.id,
+                    module=detected["module"],
+                    status="waiting_for_input"
+                )
+            )
+        else:
+            if case.module == "unknown" and detected["module"] != "unknown":
+                case = update_case_module(db, case, detected["module"])
+
+            case = update_case_status(db, case, "waiting_for_input")
+
+        saved_message = create_message(
+            db,
+            MessageCreate(
+                case_id=case.id,
+                direction="incoming",
+                content=incoming.message
+            )
+        )
+
+        reply = get_module_welcome_message(case.module)
+
+        create_message(
+            db,
+            MessageCreate(
+                case_id=case.id,
+                direction="outgoing",
+                content=reply
+            )
+        )
+
         return {
             "phone_number": incoming.phone_number,
             "user_status": user.status,
             "allowed_to_continue": True,
-            "reply": None,
-            "next_step": "Message can now go to Module Router"
+            "case_id": case.id,
+            "incoming_message_id": saved_message.id,
+            "suggested_module": case.module,
+            "confidence": detected["confidence"],
+            "reason": detected["reason"],
+            "reply": reply
         }
 
     return {

@@ -3,6 +3,12 @@ from sqlalchemy.orm import Session
 from app.models.case import Case
 from app.schemas.case import CaseCreate
 
+OPEN_CASE_STATUSES = [
+    "created",
+    "waiting_for_input",
+    "processing",
+    "needs_confirmation"
+]
 
 def get_cases(db: Session):
     return db.query(Case).order_by(Case.created_at.desc()).all()
@@ -11,6 +17,14 @@ def get_cases(db: Session):
 def get_case_by_id(db: Session, case_id: int):
     return db.query(Case).filter(Case.id == case_id).first()
 
+def get_open_case_for_user(db: Session, user_id: int):
+
+    return (
+        db.query(Case)
+        .filter(Case.user_id == user_id, Case.status.in_(OPEN_CASE_STATUSES))
+        .order_by(Case.created_at.desc())
+        .first()
+    )
 
 def create_case(db: Session, case_data: CaseCreate):
     case = Case(
@@ -20,6 +34,20 @@ def create_case(db: Session, case_data: CaseCreate):
     )
 
     db.add(case)
+    db.commit()
+    db.refresh(case)
+
+    return case
+
+def update_case_status(db: Session, case:Case, status: str):
+    case.status = status
+    db.commit()
+    db.refresh(case)
+
+    return case
+
+def update_case_module(db: Session, case:Case, module: str):
+    case.module = module
     db.commit()
     db.refresh(case)
 

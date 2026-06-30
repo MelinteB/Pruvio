@@ -16,3 +16,6 @@ class CaseResponse(BaseModel):
     module: str
     status: str
     created_at: datetime
+
+class CaseDetailResponse(CaseResponse):
+    pass

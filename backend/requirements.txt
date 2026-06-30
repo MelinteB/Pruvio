@@ -5,3 +5,4 @@ sqlalchemy
 pydantic
 pydantic-settings
 requests
+python-multipart
