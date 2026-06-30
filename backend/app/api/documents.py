@@ -2,7 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-from app.schemas.document import DocumentResponse
+from app.schemas.document import (
+    DocumentResponse,
+    DocumentClassificationResponse,
+    TextClassificationRequest
+)
 from app.services.case_service import get_case_by_id
 from app.services.document_service import (
     get_documents,
@@ -10,6 +14,11 @@ from app.services.document_service import (
     get_documents_by_case,
     save_document_bytes
 )
+from app.services.document_classifier import (
+    classify_document,
+    classify_document_from_text
+)
+from app.services.case_service import update_case_module
 
 router = APIRouter()
 
@@ -34,6 +43,50 @@ def list_documents_for_case(
 
     return get_documents_by_case(db, case_id)
 
+@router.post("/classify-text")
+def classify_text(
+    payload: TextClassificationRequest
+):
+    result = classify_document_from_text(payload.text)
+
+    return result
+
+@router.post("/{document_id}/classify", response_model=DocumentClassificationResponse)
+def classify_uploaded_document(
+    document_id: int,
+    db: Session = Depends(get_db)
+):
+    document = get_document_by_id(db, document_id)
+
+    if not document:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found"
+        )
+
+    result = classify_document(document)
+
+    document.document_type = result["document_type"]
+
+    case = get_case_by_id(db, document.case_id)
+
+    if case and result["suggested_module"] != "unknown":
+        update_case_module(
+            db=db,
+            case=case,
+            module=result["suggested_module"]
+        )
+
+    db.commit()
+    db.refresh(document)
+
+    return {
+        "document_id": document.id,
+        "document_type": result["document_type"],
+        "suggested_module": result["suggested_module"],
+        "confidence": result["confidence"],
+        "reason": result["reason"]
+    }
 
 @router.get("/{document_id}", response_model=DocumentResponse)
 def get_document(

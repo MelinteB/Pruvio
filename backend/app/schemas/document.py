@@ -15,3 +15,14 @@ class DocumentResponse(BaseModel):
     size_bytes: int | None = None
     ocr_text: str | None = None
     created_at: datetime
+
+class DocumentClassificationResponse(BaseModel):
+    document_id: int
+    document_type: str
+    suggested_module: str
+    confidence: float
+    reason: str
+
+
+class TextClassificationRequest(BaseModel):
+    text: str

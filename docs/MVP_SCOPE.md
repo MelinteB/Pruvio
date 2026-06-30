@@ -48,3 +48,21 @@ Fields:
 - case_id
 - due_date
 - status
+
+
+## Day 6 - Document Classification v1
+
+Pruvio can classify uploaded documents and text into service modules.
+
+Supported classification outputs:
+
+- receipt → split_bill
+- invoice → refund_claim
+- claim_document → refund_claim
+- subscription_document → subscription
+- qr_code → payment_assist
+- unknown → unknown
+
+Current classification is rule-based.
+
+Future classification will use OCR text and AI extraction.
