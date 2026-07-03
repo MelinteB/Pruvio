@@ -2,6 +2,11 @@ import json
 import re
 from dataclasses import dataclass
 
+from app.modules.split_bill.rule_engine import (
+    load_profile_rules,
+    apply_profile_rules_to_ocr_text,
+    apply_profile_rules_to_items
+)
 
 @dataclass
 class ParsedReceipt:
@@ -125,11 +130,16 @@ def clean_item_name(name: str) -> str:
     # 2OOGR -> 200GR
     # 5OOML -> 500ML
     def fix_measurement(match):
-        fragment = match.group(0)
-        return fragment.replace("O", "0").replace("o", "0")
+        value = match.group("value")
+        unit = match.group("unit")
+
+        fixed_value = value.replace("O", "0").replace("o", "0")
+        fixed_unit = unit.upper()
+
+        return f"{fixed_value}{fixed_unit}"
 
     name = re.sub(
-        r"\b\d+[oO0]+\d*(GR|G|KG|ML|L)\b",
+        r"\b(?P<value>(?=[0-9Oo]*[0-9])[0-9Oo]{1,6})\s*(?P<unit>GR|G|KG|ML|L|CL|DL)\b",
         fix_measurement,
         name,
         flags=re.IGNORECASE
@@ -539,31 +549,64 @@ def parse_receipt(ocr_text: str) -> ParsedReceipt:
 
 
 def parse_receipt_with_profile(ocr_text: str, profile=None) -> dict:
-    parsed = parse_receipt(ocr_text)
+    """
+    Adaptive parser wrapper.
+
+    If an active profile exists:
+    - load profile rules
+    - clean OCR text using profile rules
+    - parse cleaned OCR text
+    - clean extracted items using profile rules
+    """
+
+    rules = load_profile_rules(profile)
 
     profile_id = None
     profile_name = None
     parser_strategy = "generic"
+
+    processed_ocr_text = ocr_text
 
     if profile:
         profile_id = profile.id
         profile_name = profile.profile_name
         parser_strategy = profile.parser_strategy
 
-        try:
-            rules = json.loads(profile.rules_json or "{}")
-        except json.JSONDecodeError:
-            rules = {}
+        processed_ocr_text = apply_profile_rules_to_ocr_text(
+            ocr_text=ocr_text,
+            rules=rules
+        )
 
-        if rules.get("ignore_quantity_lines"):
-            pass
+    parsed = parse_receipt(processed_ocr_text)
+
+    items = parsed.items
+
+    if profile:
+        items = apply_profile_rules_to_items(
+            items=items,
+            rules=rules
+        )
+
+    detected_total = round(
+        sum(item["total_price"] for item in items),
+        2
+    )
+
+    confidence, warnings = validate_items_against_total(
+        items=items,
+        receipt_total=parsed.receipt_total
+    )
+
+    if not items:
+        warnings.append("No receipt items were detected.")
+        confidence = 0.20
 
     return {
-        "items": parsed.items,
-        "detected_total": parsed.detected_total,
+        "items": items,
+        "detected_total": detected_total,
         "receipt_total": parsed.receipt_total,
-        "confidence": parsed.confidence,
-        "warnings": parsed.warnings,
+        "confidence": confidence,
+        "warnings": warnings,
         "profile_id": profile_id,
         "profile_name": profile_name,
         "parser_strategy": parser_strategy

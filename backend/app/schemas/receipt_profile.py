@@ -53,3 +53,14 @@ class ReceiptCorrectionResponse(BaseModel):
     corrected_items_json: str
     notes: str | None = None
     created_at: datetime
+
+class ReceiptProfileUpdate(BaseModel):
+    merchant_name: str | None = None
+    merchant_tax_id: str | None = None
+    country: str | None = None
+    profile_name: str | None = None
+    profile_signature: str | None = None
+    parser_strategy: str | None = None
+    rules_json: str | None = None
+    status: str | None = None
+    confidence_score: float | None = None

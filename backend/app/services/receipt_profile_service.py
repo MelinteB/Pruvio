@@ -13,7 +13,24 @@ from app.services.receipt_format_detector import (
     build_receipt_signature,
     build_receipt_signature_json
 )
+from app.schemas.receipt_profile import ReceiptProfileUpdate
 
+def update_receipt_profile(
+    db: Session,
+    profile: ReceiptProfile,
+    profile_data: ReceiptProfileUpdate
+):
+    update_data = profile_data.model_dump(exclude_unset=True)
+
+    for field, value in update_data.items():
+        setattr(profile, field, value)
+
+    profile.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(profile)
+
+    return profile
 
 def get_receipt_profiles(db: Session):
     return (
@@ -102,6 +119,19 @@ def find_matching_active_profile(
         if profile:
             return profile
 
+    generic_profile = (
+        db.query(ReceiptProfile)
+        .filter(
+            ReceiptProfile.profile_name == "Generic Romanian Supermarket Profile",
+            ReceiptProfile.status == "active"
+        )
+        .order_by(ReceiptProfile.confidence_score.desc())
+        .first()
+    )
+
+    if generic_profile:
+        return generic_profile
+    
     return None
 
 
@@ -135,12 +165,52 @@ def create_draft_profile_from_document(
         return existing_draft, False
 
     rules = {
-        "ignore_quantity_lines": True,
-        "ignore_payment_lines": True,
-        "ignore_tax_lines": True,
-        "prefer_product_line_final_price": True,
-        "requires_review": True
-    }
+            "preprocess": {
+                "normalize_measurements": True,
+                "ignore_keywords": [
+                    "tva",
+                    "vat",
+                    "card",
+                    "cash",
+                    "numerar",
+                    "rest",
+                    "bon fiscal",
+                    "operator",
+                    "casier",
+                    "cui",
+                    "cod identificare",
+                    "ecotaxa"
+                ],
+                "ignore_line_patterns": [
+                    r"^\s*\d{1,6}(?:[.,]\d{1,3})?\s+\w+\s*(?:x|×)\s*\d{1,6}(?:[.,]\d{2})\s*$"
+                ],
+                "replace_patterns": []
+            },
+            "item_cleanup": {
+                "normalize_measurements": True,
+                "ignore_item_names": [
+                    "buc",
+                    "blc",
+                    "kg",
+                    "gr",
+                    "g",
+                    "ml",
+                    "l",
+                    "pcs",
+                    "x",
+                    "ron",
+                    "lei"
+                ],
+                "remove_name_prefix_patterns": [
+                    r"^(lei|lel|lcl|ron)\s+"
+                ],
+                "remove_name_suffix_patterns": [
+                    r"\s+[a-zA-Z]$"
+                ],
+                "replace_patterns": []
+            },
+            "requires_review": True
+        }
 
     profile_data = ReceiptProfileCreate(
         merchant_name=merchant_name,
