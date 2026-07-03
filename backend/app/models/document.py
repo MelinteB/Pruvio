@@ -28,3 +28,4 @@ class Document(Base):
     ocr_text: Mapped[str | None] = mapped_column(Text,nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime,default=datetime.utcnow)
     case = relationship("Case", back_populates="documents")
+    receipt_items = relationship("ReceiptItem", back_populates="document")

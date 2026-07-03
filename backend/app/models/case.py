@@ -18,3 +18,4 @@ class Case(Base):
     documents = relationship("Document", back_populates="case")
     messages = relationship("Message", back_populates="case")
     reminders = relationship("Reminder", back_populates="case")
+    receipt_items = relationship("ReceiptItem", back_populates="case")

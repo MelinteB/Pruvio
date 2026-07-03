@@ -11,6 +11,12 @@ from app.api.users import router as users_router
 from app.api.cases import router as cases_router
 from app.api.webhook import router as webhook_router
 from app.api.documents import router as documents_router
+from app.models.receipt_item import ReceiptItem
+from app.api.split_bill import router as split_bill_router
+from app.models.receipt_profile import ReceiptProfile
+from app.models.receipt_correction import ReceiptCorrection
+from app.api.receipt_profiles import router as receipt_profiles_router
+
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -47,6 +53,18 @@ app.include_router(
     documents_router,
     prefix="/documents",
     tags=["Documents"]
+)
+
+app.include_router(
+    split_bill_router,
+    prefix="/split-bill",
+    tags=["Split Bill"]
+)
+
+app.include_router(
+    receipt_profiles_router,
+    prefix="/receipt-profiles",
+    tags=["Receipt Profiles"]
 )
 
 @app.get("/health")

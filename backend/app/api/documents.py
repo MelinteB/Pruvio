@@ -2,10 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
+
 from app.schemas.document import (
     DocumentResponse,
     DocumentClassificationResponse,
-    TextClassificationRequest
+    TextClassificationRequest,
+    DocumentOCRResponse
 )
 from app.services.case_service import get_case_by_id
 from app.services.document_service import (
@@ -19,6 +21,7 @@ from app.services.document_classifier import (
     classify_document_from_text
 )
 from app.services.case_service import update_case_module
+from app.services.ocr_service import extract_text_from_document
 
 router = APIRouter()
 
@@ -103,7 +106,60 @@ def get_document(
 
     return document
 
+@router.post("/{document_id}/ocr", response_model=DocumentOCRResponse)
+def run_ocr_on_document(
+    document_id: int,
+    db: Session = Depends(get_db)
+):
+    document = get_document_by_id(db, document_id)
 
+    if not document:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found"
+        )
+
+    try:
+        ocr_text = extract_text_from_document(document)
+
+        document.ocr_text = ocr_text
+        db.commit()
+        db.refresh(document)
+
+        classification = classify_document(document)
+
+        document.document_type = classification["document_type"]
+
+        case = get_case_by_id(db, document.case_id)
+
+        if case and classification["suggested_module"] != "unknown":
+            update_case_module(
+                db=db,
+                case=case,
+                module=classification["suggested_module"]
+            )
+
+        db.commit()
+        db.refresh(document)
+
+        return {
+            "document_id": document.id,
+            "ocr_text": document.ocr_text,
+            "classification": classification
+        }
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"OCR failed: {str(error)}"
+        )
+    
 @router.post("/upload", response_model=DocumentResponse)
 async def upload_document(
     case_id: int = Form(...),

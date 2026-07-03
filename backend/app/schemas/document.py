@@ -1,7 +1,11 @@
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
-
+class DocumentOCRResponse(BaseModel):
+    document_id: int
+    ocr_text: str
+    classification: dict
+    
 class DocumentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
