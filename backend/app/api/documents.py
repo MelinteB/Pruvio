@@ -21,7 +21,10 @@ from app.services.document_classifier import (
     classify_document_from_text
 )
 from app.services.case_service import update_case_module
-from app.services.ocr_service import extract_text_from_document
+from app.services.ocr_service import(
+    extract_text_from_document,
+    extract_ocr_candidates_from_document
+)
 
 router = APIRouter()
 
@@ -91,20 +94,6 @@ def classify_uploaded_document(
         "reason": result["reason"]
     }
 
-@router.get("/{document_id}", response_model=DocumentResponse)
-def get_document(
-    document_id: int,
-    db: Session = Depends(get_db)
-):
-    document = get_document_by_id(db, document_id)
-
-    if not document:
-        raise HTTPException(
-            status_code=404,
-            detail="Document not found"
-        )
-
-    return document
 
 @router.post("/{document_id}/ocr", response_model=DocumentOCRResponse)
 def run_ocr_on_document(
@@ -159,6 +148,57 @@ def run_ocr_on_document(
             status_code=500,
             detail=f"OCR failed: {str(error)}"
         )
+
+@router.post("/{document_id}/ocr-candidates")
+def get_ocr_candidates(
+    document_id: int,
+    db: Session = Depends(get_db)
+):
+    document = get_document_by_id(db, document_id)
+
+    if not document:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found"
+        )
+
+    try:
+        candidates = extract_ocr_candidates_from_document(document)
+
+        return {
+            "document_id": document.id,
+            "candidates_count": len(candidates),
+            "best_strategy": candidates[0]["strategy"] if candidates else None,
+            "candidates": candidates
+        }
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"OCR candidate extraction failed: {str(error)}"
+        )
+    
+@router.get("/{document_id}", response_model=DocumentResponse)
+def get_document(
+    document_id: int,
+    db: Session = Depends(get_db)
+):
+    document = get_document_by_id(db, document_id)
+
+    if not document:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found"
+        )
+
+    return document
+
     
 @router.post("/upload", response_model=DocumentResponse)
 async def upload_document(

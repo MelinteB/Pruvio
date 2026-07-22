@@ -49,20 +49,26 @@ def extract_receipt_items(
         items = result["items"]
 
         return {
-            "document_id": document.id,
-            "case_id": document.case_id,
-            "items_count": len(items),
-            "detected_total": result["detected_total"],
-            "receipt_total": result["receipt_total"],
-            "confidence": result["confidence"],
-            "warnings": result["warnings"],
-            "profile_id": result["profile_id"],
-            "profile_name": result["profile_name"],
-            "parser_strategy": result["parser_strategy"],
-            "draft_profile_created": result["draft_profile_created"],
-            "draft_profile_id": result["draft_profile_id"],
-            "items": items
-        }
+                    "document_id": document.id,
+                    "case_id": document.case_id,
+                    "items_count": len(items),
+                    "detected_total": result["detected_total"],
+                    "receipt_total": result["receipt_total"],
+                    "confidence": result["confidence"],
+                    "name_quality": result["name_quality"],
+                    "external_ocr_recommended": result["external_ocr_recommended"],
+                    "external_ocr_request_id": result["external_ocr_request_id"],
+                    "external_ocr_request_created": result["external_ocr_request_created"],
+                    "extraction_status": result["extraction_status"],
+                    "recommended_next_step": result["recommended_next_step"],
+                    "warnings": result["warnings"],
+                    "profile_id": result["profile_id"],
+                    "profile_name": result["profile_name"],
+                    "parser_strategy": result["parser_strategy"],
+                    "draft_profile_created": result["draft_profile_created"],
+                    "draft_profile_id": result["draft_profile_id"],
+                    "items": items
+                }
 
     except ValueError as error:
         raise HTTPException(

@@ -24,6 +24,12 @@ class ReceiptExtractionResponse(BaseModel):
     detected_total: float
     receipt_total: float | None = None
     confidence: float
+    name_quality: float
+    external_ocr_request_id: int | None = None
+    external_ocr_request_created: bool
+    external_ocr_recommended: bool
+    extraction_status: str
+    recommended_next_step: str
     warnings: list[str]
     profile_id: int | None = None
     profile_name: str | None = None

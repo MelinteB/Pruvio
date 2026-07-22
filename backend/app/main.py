@@ -17,6 +17,8 @@ from app.models.receipt_profile import ReceiptProfile
 from app.models.receipt_correction import ReceiptCorrection
 from app.api.receipt_profiles import router as receipt_profiles_router
 
+from app.models.external_ocr_request import ExternalOCRRequest
+from app.api.external_ocr import router as external_ocr_router
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -65,6 +67,12 @@ app.include_router(
     receipt_profiles_router,
     prefix="/receipt-profiles",
     tags=["Receipt Profiles"]
+)
+
+app.include_router(
+    external_ocr_router,
+    prefix="/external-ocr",
+    tags=["External OCR"]
 )
 
 @app.get("/health")

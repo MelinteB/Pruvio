@@ -93,6 +93,40 @@ NOISE_KEYWORDS = [
     "tr:",
 ]
 
+STOP_ITEM_AREA_KEYWORDS = [
+    "subtotal",
+    "sub total",
+    "total",
+    "total tva",
+    "tva",
+    "vat",
+    "cash",
+    "card",
+    "numerar",
+    "rest",
+    "change",
+    "bon fiscal"
+]
+
+FOOTER_PROMO_KEYWORDS = [
+    "felicitari",
+    "puncte",
+    "promotie",
+    "campanie",
+    "perioada",
+    "google play",
+    "appstore",
+    "carrefour pay",
+    "virtuale",
+    "scaneaza",
+    "detalii",
+    "www.",
+    "telverde",
+    "fax",
+    "telefon",
+    "multumeste",
+    "cod card"
+]
 
 def normalize_price(price_text: str) -> float:
     return float(price_text.replace(",", "."))
@@ -386,16 +420,100 @@ def item_name_quality_score(name: str) -> int:
 
     return score
 
+def is_stop_item_area_line(line: str) -> bool:
+    normalized = line.lower()
+    compact = re.sub(r"[^a-z0-9]", "", normalized)
+
+    stop_markers = [
+        "subtotal",
+        "total",
+        "totaltva",
+        "tva",
+        "vat",
+        "cash",
+        "card",
+        "numerar",
+        "rest",
+        "change",
+        "bonfiscal"
+    ]
+
+    return any(marker in compact for marker in stop_markers)
+
+
+def is_footer_or_promo_line(line: str) -> bool:
+    normalized = line.lower()
+
+    for keyword in FOOTER_PROMO_KEYWORDS:
+        if keyword in normalized:
+            return True
+
+    return False
+
+
+def looks_like_percentage_or_tax_line(line: str) -> bool:
+    normalized = line.lower()
+
+    if "%" in normalized:
+        return True
+
+    if "tva" in normalized or "vat" in normalized:
+        return True
+
+    # Example OCR: 9 .00r 0.96
+    if re.search(r"\b\d{1,2}\s*[.,]\s*0{2}\s*[a-z]?\b", normalized):
+        if extract_last_price(line) is not None:
+            return True
+
+    return False
+
+
+def looks_like_date_or_time_line(line: str) -> bool:
+    normalized = line.lower()
+
+    # dates like 01.05.2019, 23/02/2019
+    if re.search(r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b", normalized):
+        return True
+
+    # times like 20-30-06 or 21:17:50
+    if re.search(r"\b\d{1,2}[:-]\d{1,2}[:-]\d{1,2}\b", normalized):
+        return True
+
+    return False
+
+
+def is_bad_item_line(line: str) -> bool:
+    if is_footer_or_promo_line(line):
+        return True
+
+    if looks_like_percentage_or_tax_line(line):
+        return True
+
+    if looks_like_date_or_time_line(line):
+        return True
+
+    return False
+
 def extract_items(lines: list[str]) -> list[dict]:
     items = []
     pending_name = None
+    item_area_started = False
 
     for line in lines:
+        # Once totals/payment area starts, stop parsing items completely.
+        if is_stop_item_area_line(line):
+            break
+
+        if is_bad_item_line(line):
+            pending_name = None
+            continue
+
         if is_noise_line(line):
             pending_name = None
             continue
 
         if is_quantity_line(line):
+            item_area_started = True
             continue
 
         match = PRICE_AT_END_PATTERN.match(line)
@@ -409,22 +527,12 @@ def extract_items(lines: list[str]) -> list[dict]:
                 continue
 
             if is_low_value_item_name(raw_name):
-                # Example: Blc 0.89
-                # Usually a broken quantity/unit line, not a real product.
                 pending_name = None
                 continue
 
             if is_descriptor_name(raw_name):
-                # Example:
-                # COCA-COLA ZERO
-                # PET 3.49
-                #
-                # AMANDINA
-                # 2OOGR 7.49
                 name = merge_product_name(pending_name, raw_name)
             else:
-                # If there is a pending name and current name is very short,
-                # merge them.
                 if pending_name and len(raw_name) <= 6:
                     name = merge_product_name(pending_name, raw_name)
                 else:
@@ -442,6 +550,7 @@ def extract_items(lines: list[str]) -> list[dict]:
                 )
 
             pending_name = None
+            item_area_started = True
             continue
 
         price_only = PRICE_ONLY_PATTERN.match(line)
@@ -461,6 +570,7 @@ def extract_items(lines: list[str]) -> list[dict]:
                 )
 
             pending_name = None
+            item_area_started = True
             continue
 
         if looks_like_product_name(line):
@@ -470,18 +580,12 @@ def extract_items(lines: list[str]) -> list[dict]:
                 pending_name = None
                 continue
 
-            # Support product names split over multiple OCR lines.
-            # Example:
-            # COCA-COLA
-            # ZERO
-            # PET 3.49
             if pending_name:
                 pending_name = clean_item_name(f"{pending_name} {cleaned_name}")
             else:
                 pending_name = cleaned_name
 
     return remove_duplicate_items(items)
-
 
 def validate_items_against_total(
     items: list[dict],

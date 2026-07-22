@@ -11,6 +11,14 @@ from app.services.receipt_profile_service import (
 )
 from app.modules.split_bill.receipt_parser import parse_receipt_with_profile
 
+from app.services.receipt_quality_service import (
+    calculate_items_name_quality,
+    get_extraction_decision
+)
+from app.services.external_ocr_service import (
+    create_external_ocr_request_if_needed
+)
+
 def get_receipt_item_by_id(db: Session, item_id: int):
     return (
         db.query(ReceiptItem)
@@ -114,12 +122,48 @@ def extract_and_save_items_from_document(
         else:
             update_profile_failure(db, profile)
 
+    name_quality = calculate_items_name_quality(saved_items)
+
+    extraction_decision = get_extraction_decision(
+        parser_confidence=parsed["confidence"],
+        name_quality=name_quality,
+        items_count=len(saved_items)
+    )
+
+    warnings = list(parsed["warnings"])
+
+    if extraction_decision["external_ocr_recommended"]:
+        warnings.append(
+            "Local OCR result is not reliable enough. External OCR is recommended."
+        )
+
+    extraction_result = {
+        "detected_total": parsed["detected_total"],
+        "receipt_total": parsed["receipt_total"],
+        "confidence": parsed["confidence"],
+        "name_quality": name_quality,
+        "external_ocr_recommended": extraction_decision["external_ocr_recommended"]
+    }
+
+    external_request, external_request_created = (
+        create_external_ocr_request_if_needed(
+            db=db,
+            document=document,
+            extraction_result=extraction_result
+        )
+    )
     return {
         "items": saved_items,
         "detected_total": parsed["detected_total"],
         "receipt_total": parsed["receipt_total"],
         "confidence": parsed["confidence"],
-        "warnings": parsed["warnings"],
+        "name_quality": name_quality,
+        "external_ocr_recommended": extraction_decision["external_ocr_recommended"],
+        "external_ocr_request_id": external_request.id if external_request else None,
+        "external_ocr_request_created": external_request_created,
+        "extraction_status": extraction_decision["extraction_status"],
+        "recommended_next_step": extraction_decision["recommended_next_step"],
+        "warnings": warnings,
         "profile_id": parsed["profile_id"],
         "profile_name": parsed["profile_name"],
         "parser_strategy": parsed["parser_strategy"],

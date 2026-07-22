@@ -10,3 +10,4 @@ pytesseract
 easyocr
 pillow
 pypdf
+opencv-python
