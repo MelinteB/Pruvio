@@ -5,6 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.database import Base
 
 
+
 class ExternalOCRRequest(Base):
     __tablename__ = "external_ocr_requests"
 
@@ -33,6 +34,7 @@ class ExternalOCRRequest(Base):
     # processing
     # completed
     # failed
+    # needs_review
     # skipped
 
     preferred_provider: Mapped[str | None] = mapped_column(

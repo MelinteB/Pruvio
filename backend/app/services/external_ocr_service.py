@@ -9,6 +9,173 @@ from sqlalchemy.orm import Session
 
 from app.models.external_ocr_request import ExternalOCRRequest
 from app.models.document import Document
+from app.services.receipt_quality_service import calculate_items_name_quality
+
+from app.services.document_service import get_document_by_id
+from app.services.ocr_providers.provider_router import (
+    process_external_ocr_with_provider
+)
+
+def process_external_ocr_request_with_router(
+    db: Session,
+    request: ExternalOCRRequest
+):
+    document = get_document_by_id(
+        db=db,
+        document_id=request.document_id
+    )
+
+    if not document:
+        fail_external_ocr_request(
+            db=db,
+            request=request,
+            error_message="Document not found for external OCR request."
+        )
+
+        raise ValueError("Document not found for external OCR request.")
+
+    mark_external_ocr_processing(
+        db=db,
+        request=request,
+        provider=request.preferred_provider or "auto"
+    )
+
+    try:
+        provider_result = process_external_ocr_with_provider(
+            document=document,
+            request=request
+        )
+
+        validation = validate_external_ocr_result(provider_result)
+
+        external_result_json = provider_result.model_dump()
+        external_result_json["validation"] = validation
+
+        if not validation["is_valid"]:
+            reviewed_request = mark_external_ocr_needs_review(
+                db=db,
+                request=request,
+                external_result=external_result_json,
+                error_message="External OCR provider result failed validation."
+            )
+
+            return {
+                "request": reviewed_request,
+                "items": [],
+                "validation": validation,
+                "items_replaced": False
+            }
+
+        saved_items = replace_receipt_items_from_external_result(
+            db=db,
+            request=request,
+            external_result=provider_result
+        )
+
+        completed_request = complete_external_ocr_request(
+            db=db,
+            request=request,
+            external_result=external_result_json
+        )
+
+        return {
+            "request": completed_request,
+            "items": saved_items,
+            "validation": validation,
+            "items_replaced": True
+        }
+
+    except Exception as error:
+        failed_request = fail_external_ocr_request(
+            db=db,
+            request=request,
+            error_message=str(error)
+        )
+
+        return {
+            "request": failed_request,
+            "items": [],
+            "validation": None,
+            "items_replaced": False
+        }
+
+def validate_external_ocr_result(
+    external_result: ExternalOCRMockResult
+) -> dict:
+    items_total = round(
+        sum(item.total_price for item in external_result.items),
+        2
+    )
+
+    receipt_total = round(external_result.receipt_total, 2)
+
+    total_difference = round(
+        abs(items_total - receipt_total),
+        2
+    )
+
+    name_quality = calculate_items_name_quality(
+        [
+            {
+                "name": item.name,
+                "total_price": item.total_price
+            }
+            for item in external_result.items
+        ]
+    )
+
+    warnings = []
+
+    if total_difference > 0.05:
+        warnings.append(
+            f"External OCR items total ({items_total}) does not match receipt total ({receipt_total})."
+        )
+
+    if name_quality < 0.70:
+        warnings.append(
+            f"External OCR product name quality is low ({name_quality})."
+        )
+
+    if external_result.provider_confidence < 0.75:
+        warnings.append(
+            f"External OCR provider confidence is low ({external_result.provider_confidence})."
+        )
+
+    is_valid = (
+        total_difference <= 0.05
+        and name_quality >= 0.70
+        and external_result.provider_confidence >= 0.75
+        and len(external_result.items) > 0
+    )
+
+    return {
+        "is_valid": is_valid,
+        "items_total": items_total,
+        "receipt_total": receipt_total,
+        "total_difference": total_difference,
+        "name_quality": name_quality,
+        "provider_confidence": external_result.provider_confidence,
+        "warnings": warnings
+    }
+
+def mark_external_ocr_needs_review(
+    db: Session,
+    request: ExternalOCRRequest,
+    external_result: dict,
+    error_message: str
+):
+    request.provider_status = "needs_review"
+    request.external_result_json = json.dumps(
+        external_result,
+        ensure_ascii=False
+    )
+    request.error_message = error_message
+    request.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(request)
+
+    return request
 
 def mark_external_ocr_processing(
     db: Session,
@@ -109,13 +276,31 @@ def process_mock_external_ocr_result(
         provider=mock_result.provider
     )
 
+    validation = validate_external_ocr_result(mock_result)
+
+    external_result_json = mock_result.model_dump()
+    external_result_json["validation"] = validation
+
+    if not validation["is_valid"]:
+        reviewed_request = mark_external_ocr_needs_review(
+            db=db,
+            request=request,
+            external_result=external_result_json,
+            error_message="External OCR result failed validation."
+        )
+
+        return {
+            "request": reviewed_request,
+            "items": [],
+            "validation": validation,
+            "items_replaced": False
+        }
+
     saved_items = replace_receipt_items_from_external_result(
         db=db,
         request=request,
         external_result=mock_result
     )
-
-    external_result_json = mock_result.model_dump()
 
     completed_request = complete_external_ocr_request(
         db=db,
@@ -125,7 +310,9 @@ def process_mock_external_ocr_result(
 
     return {
         "request": completed_request,
-        "items": saved_items
+        "items": saved_items,
+        "validation": validation,
+        "items_replaced": True
     }
 
 

@@ -10,7 +10,8 @@ from app.services.external_ocr_service import (
     get_external_ocr_requests,
     get_pending_external_ocr_requests,
     get_external_ocr_request_by_id,
-    process_mock_external_ocr_result
+    process_mock_external_ocr_result,
+    process_external_ocr_request_with_router
 )
 
 
@@ -88,6 +89,51 @@ def process_external_ocr_request_with_mock(
         "external_ocr_request_id": result["request"].id,
         "provider_status": result["request"].provider_status,
         "provider": result["request"].preferred_provider,
-        "items_replaced": len(result["items"]),
+        "items_replaced": result["items_replaced"],
+        "items_count": len(result["items"]),
+        "validation": result["validation"],
+        "items": result["items"]
+    }
+
+@router.post("/requests/{request_id}/process")
+def process_external_ocr_request(
+    request_id: int,
+    db: Session = Depends(get_db)
+):
+    request = get_external_ocr_request_by_id(
+        db=db,
+        request_id=request_id
+    )
+
+    if not request:
+        raise HTTPException(
+            status_code=404,
+            detail="External OCR request not found"
+        )
+
+    if request.provider_status == "completed":
+        raise HTTPException(
+            status_code=400,
+            detail="External OCR request is already completed"
+        )
+
+    if request.provider_status == "processing":
+        raise HTTPException(
+            status_code=400,
+            detail="External OCR request is currently processing"
+        )
+
+    result = process_external_ocr_request_with_router(
+        db=db,
+        request=request
+    )
+
+    return {
+        "external_ocr_request_id": result["request"].id,
+        "provider_status": result["request"].provider_status,
+        "provider": result["request"].preferred_provider,
+        "items_replaced": result["items_replaced"],
+        "items_count": len(result["items"]),
+        "validation": result["validation"],
         "items": result["items"]
     }
