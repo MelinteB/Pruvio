@@ -1,7 +1,7 @@
 import json
 
 from app.models.receipt_item import ReceiptItem
-from app.schemas.external_ocr import ExternalOCRMockResult
+from app.schemas.external_ocr import ExternalOCRMockResult, ExternalOCRProviderUpdate
 
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -13,7 +13,9 @@ from app.services.receipt_quality_service import calculate_items_name_quality
 from app.services.document_service import get_document_by_id
 from app.services.ocr_providers.provider_router import (
     choose_provider_name,
-    process_external_ocr_with_provider
+    process_external_ocr_with_provider,
+    list_configured_providers,
+    get_provider
 )
 
 def process_external_ocr_request_with_router(
@@ -411,3 +413,25 @@ def create_external_ocr_request_if_needed(
     db.refresh(request)
 
     return request, True
+
+def get_available_external_ocr_providers():
+    return list_configured_providers()
+
+def update_external_ocr_request_provider(
+    db: Session,
+    request: ExternalOCRRequest,
+    provider_data: ExternalOCRProviderUpdate
+):
+    provider_name = provider_data.preferred_provider
+
+    if provider_name:
+        # Validate provider exists before saving it.
+        get_provider(provider_name)
+
+    request.preferred_provider = provider_name
+    request.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(request)
+
+    return request

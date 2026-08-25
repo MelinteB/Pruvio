@@ -49,3 +49,19 @@ def process_external_ocr_with_provider(
         document=document,
         request=request
     )
+
+def list_configured_providers() -> list[dict]:
+    default_provider = get_default_provider_name()
+
+    providers = []
+
+    for provider_name in PROVIDERS.keys():
+        providers.append(
+            {
+                "provider_name": provider_name,
+                "is_default": provider_name == default_provider,
+                "status": "configured"
+            }
+        )
+
+    return providers

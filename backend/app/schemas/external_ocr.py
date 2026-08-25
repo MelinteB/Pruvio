@@ -35,3 +35,12 @@ class ExternalOCRMockResult(BaseModel):
     currency: str = "RON"
     provider_confidence: float = 0.90
     items: list[ExternalOCRMockItem]
+
+class ExternalOCRProviderResponse(BaseModel):
+    provider_name: str
+    is_default: bool
+    status: str
+
+
+class ExternalOCRProviderUpdate(BaseModel):
+    preferred_provider: str | None = None

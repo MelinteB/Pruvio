@@ -4,7 +4,9 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.schemas.external_ocr import (
     ExternalOCRRequestResponse,
-    ExternalOCRMockResult
+    ExternalOCRMockResult,
+    ExternalOCRProviderUpdate,
+    ExternalOCRProviderResponse
 )
 from app.services.external_ocr_service import (
     get_external_ocr_requests,
@@ -13,10 +15,19 @@ from app.services.external_ocr_service import (
     process_mock_external_ocr_result,
     process_external_ocr_request_with_router,
     reset_external_ocr_request,
+    get_available_external_ocr_providers,
+    update_external_ocr_request_provider
 )
 
 
 router = APIRouter()
+
+@router.get(
+    "/providers",
+    response_model=list[ExternalOCRProviderResponse]
+)
+def list_external_ocr_providers():
+    return get_available_external_ocr_providers()
 
 @router.get(
     "/requests",
@@ -55,6 +66,38 @@ def get_external_ocr_request(
         )
 
     return request
+
+@router.patch(
+    "/requests/{request_id}/provider",
+    response_model=ExternalOCRRequestResponse
+)
+def set_external_ocr_request_provider(
+    request_id: int,
+    provider_data: ExternalOCRProviderUpdate,
+    db: Session = Depends(get_db)
+):
+    request = get_external_ocr_request_by_id(
+        db=db,
+        request_id=request_id
+    )
+
+    if not request:
+        raise HTTPException(
+            status_code=404,
+            detail="External OCR request not found"
+        )
+
+    if request.provider_status == "completed":
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot change provider for a completed request"
+        )
+
+    return update_external_ocr_request_provider(
+        db=db,
+        request=request,
+        provider_data=provider_data
+    )
 
 @router.post("/requests/{request_id}/process-mock")
 def process_external_ocr_request_with_mock(
