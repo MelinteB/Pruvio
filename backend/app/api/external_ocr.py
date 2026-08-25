@@ -11,12 +11,12 @@ from app.services.external_ocr_service import (
     get_pending_external_ocr_requests,
     get_external_ocr_request_by_id,
     process_mock_external_ocr_result,
-    process_external_ocr_request_with_router
+    process_external_ocr_request_with_router,
+    reset_external_ocr_request,
 )
 
 
 router = APIRouter()
-
 
 @router.get(
     "/requests",
@@ -137,3 +137,27 @@ def process_external_ocr_request(
         "validation": result["validation"],
         "items": result["items"]
     }
+
+@router.patch(
+    "/requests/{request_id}/reset",
+    response_model=ExternalOCRRequestResponse
+)
+def reset_external_ocr_request_dev(
+    request_id: int,
+    db: Session = Depends(get_db)
+):
+    request = get_external_ocr_request_by_id(
+        db=db,
+        request_id=request_id
+    )
+
+    if not request:
+        raise HTTPException(
+            status_code=404,
+            detail="External OCR request not found"
+        )
+
+    return reset_external_ocr_request(
+        db=db,
+        request=request
+    )

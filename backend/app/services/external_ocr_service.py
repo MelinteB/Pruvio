@@ -3,7 +3,6 @@ import json
 from app.models.receipt_item import ReceiptItem
 from app.schemas.external_ocr import ExternalOCRMockResult
 
-
 from datetime import datetime
 from sqlalchemy.orm import Session
 
@@ -13,6 +12,7 @@ from app.services.receipt_quality_service import calculate_items_name_quality
 
 from app.services.document_service import get_document_by_id
 from app.services.ocr_providers.provider_router import (
+    choose_provider_name,
     process_external_ocr_with_provider
 )
 
@@ -34,13 +34,15 @@ def process_external_ocr_request_with_router(
 
         raise ValueError("Document not found for external OCR request.")
 
-    mark_external_ocr_processing(
-        db=db,
-        request=request,
-        provider=request.preferred_provider or "auto"
-    )
-
     try:
+        provider_name = choose_provider_name(request)
+
+        mark_external_ocr_processing(
+            db=db,
+            request=request,
+            provider=provider_name
+        )
+
         provider_result = process_external_ocr_with_provider(
             document=document,
             request=request
@@ -191,7 +193,6 @@ def mark_external_ocr_processing(
 
     return request
 
-
 def complete_external_ocr_request(
     db: Session,
     request: ExternalOCRRequest,
@@ -210,7 +211,6 @@ def complete_external_ocr_request(
 
     return request
 
-
 def fail_external_ocr_request(
     db: Session,
     request: ExternalOCRRequest,
@@ -224,7 +224,6 @@ def fail_external_ocr_request(
     db.refresh(request)
 
     return request
-
 
 def replace_receipt_items_from_external_result(
     db: Session,
@@ -263,7 +262,6 @@ def replace_receipt_items_from_external_result(
         db.refresh(item)
 
     return saved_items
-
 
 def process_mock_external_ocr_result(
     db: Session,
@@ -315,14 +313,12 @@ def process_mock_external_ocr_result(
         "items_replaced": True
     }
 
-
 def get_external_ocr_requests(db: Session):
     return (
         db.query(ExternalOCRRequest)
         .order_by(ExternalOCRRequest.created_at.desc())
         .all()
     )
-
 
 def get_external_ocr_request_by_id(
     db: Session,
@@ -334,7 +330,6 @@ def get_external_ocr_request_by_id(
         .first()
     )
 
-
 def get_pending_external_ocr_requests(db: Session):
     return (
         db.query(ExternalOCRRequest)
@@ -342,7 +337,6 @@ def get_pending_external_ocr_requests(db: Session):
         .order_by(ExternalOCRRequest.created_at.asc())
         .all()
     )
-
 
 def get_external_ocr_request_by_document(
     db: Session,
@@ -360,6 +354,28 @@ def get_external_ocr_request_by_document(
         .first()
     )
 
+def reset_external_ocr_request(
+    db: Session,
+    request: ExternalOCRRequest
+):
+    """
+    Dev-only reset.
+
+    Allows retesting the same external OCR request without deleting the DB.
+    This does not restore the previous local OCR receipt items.
+    It only resets the external OCR request status.
+    """
+
+    request.provider_status = "pending"
+    request.preferred_provider = None
+    request.external_result_json = None
+    request.error_message = None
+    request.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(request)
+
+    return request
 
 def create_external_ocr_request_if_needed(
     db: Session,
