@@ -11,3 +11,6 @@ easyocr
 pillow
 pypdf
 opencv-python
+azure-ai-documentintelligence
+azure-core
+python-dotenv

@@ -8,6 +8,8 @@ from app.schemas.external_ocr import (
     ExternalOCRProviderUpdate,
     ExternalOCRProviderResponse
 )
+from app.schemas.receipt_item import ReceiptItemResponse
+
 from app.services.external_ocr_service import (
     get_external_ocr_requests,
     get_pending_external_ocr_requests,
@@ -93,11 +95,18 @@ def set_external_ocr_request_provider(
             detail="Cannot change provider for a completed request"
         )
 
-    return update_external_ocr_request_provider(
-        db=db,
-        request=request,
-        provider_data=provider_data
-    )
+    try:
+        return update_external_ocr_request_provider(
+            db=db,
+            request=request,
+            provider_data=provider_data
+        )
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
 
 @router.post("/requests/{request_id}/process-mock")
 def process_external_ocr_request_with_mock(
@@ -171,14 +180,19 @@ def process_external_ocr_request(
         request=request
     )
 
+    items_response = [
+        ReceiptItemResponse.model_validate(item).model_dump(mode="json")
+        for item in result["items"]
+    ]
+
     return {
         "external_ocr_request_id": result["request"].id,
         "provider_status": result["request"].provider_status,
         "provider": result["request"].preferred_provider,
         "items_replaced": result["items_replaced"],
-        "items_count": len(result["items"]),
+        "items_count": len(items_response),
         "validation": result["validation"],
-        "items": result["items"]
+        "items": items_response
     }
 
 @router.patch(
