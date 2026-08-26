@@ -4,10 +4,12 @@ from app.models.document import Document
 from app.models.external_ocr_request import ExternalOCRRequest
 from app.schemas.external_ocr import ExternalOCRMockResult
 from app.services.ocr_providers.mock_provider import MockExternalOCRProvider
+from app.services.ocr_providers.azure_receipt_provider import AzureReceiptOCRProvider
 
 
 PROVIDERS = {
-    "mock_external_ocr": MockExternalOCRProvider()
+    "mock_external_ocr": MockExternalOCRProvider(),
+    "azure_receipt": AzureReceiptOCRProvider()
 }
 
 
@@ -24,8 +26,13 @@ def get_provider(provider_name: str):
     if not provider:
         available = ", ".join(PROVIDERS.keys())
         raise ValueError(
-            f"External OCR provider '{provider_name}' is not configured. "
+            f"External OCR provider '{provider_name}' is not registered. "
             f"Available providers: {available}"
+        )
+
+    if not provider.is_configured():
+        raise ValueError(
+            f"External OCR provider '{provider_name}' is not configured."
         )
 
     return provider
@@ -50,17 +57,18 @@ def process_external_ocr_with_provider(
         request=request
     )
 
+
 def list_configured_providers() -> list[dict]:
     default_provider = get_default_provider_name()
 
     providers = []
 
-    for provider_name in PROVIDERS.keys():
+    for provider_name, provider in PROVIDERS.items():
         providers.append(
             {
                 "provider_name": provider_name,
                 "is_default": provider_name == default_provider,
-                "status": "configured"
+                "status": provider.get_status()
             }
         )
 
