@@ -88,12 +88,14 @@ class AzureReceiptOCRProvider(ExternalOCRProvider):
             items=items
         )
 
+        pages_processed = len(getattr(result, "pages", []) or []) or 1
         return ExternalOCRMockResult(
             provider=self.provider_name,
             merchant_name=merchant_name,
             receipt_total=round(receipt_total, 2),
             currency=currency,
             provider_confidence=provider_confidence,
+            pages_processed=pages_processed,
             items=items
         )
 

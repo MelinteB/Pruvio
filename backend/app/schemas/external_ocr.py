@@ -34,6 +34,7 @@ class ExternalOCRMockResult(BaseModel):
     receipt_total: float
     currency: str = "RON"
     provider_confidence: float = 0.90
+    pages_processed: int = 1
     items: list[ExternalOCRMockItem]
 
 class ExternalOCRProviderResponse(BaseModel):
@@ -44,3 +45,21 @@ class ExternalOCRProviderResponse(BaseModel):
 
 class ExternalOCRProviderUpdate(BaseModel):
     preferred_provider: str | None = None
+
+class ExternalOCRUsageResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    external_ocr_request_id: int
+    document_id: int
+    case_id: int
+    provider: str
+    status: str
+    pages_processed: int
+    items_count: int
+    receipt_total: float | None = None
+    provider_confidence: float | None = None
+    validation_is_valid: bool | None = None
+    duration_ms: int | None = None
+    error_message: str | None = None
+    created_at: datetime

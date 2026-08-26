@@ -1,5 +1,5 @@
 import json
-
+from time import perf_counter
 from app.models.receipt_item import ReceiptItem
 from app.schemas.external_ocr import ExternalOCRMockResult, ExternalOCRProviderUpdate
 
@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models.external_ocr_request import ExternalOCRRequest
 from app.models.document import Document
+from app.models.external_ocr_usage import ExternalOCRUsage
 from app.services.receipt_quality_service import calculate_items_name_quality
 
 from app.services.document_service import get_document_by_id
@@ -18,10 +19,56 @@ from app.services.ocr_providers.provider_router import (
     get_provider
 )
 
+def create_external_ocr_usage_log(
+    db: Session,
+    request: ExternalOCRRequest,
+    provider: str,
+    status: str,
+    duration_ms: int | None = None,
+    provider_result=None,
+    validation: dict | None = None,
+    items_count: int = 0,
+    error_message: str | None = None
+):
+    usage = ExternalOCRUsage(
+        external_ocr_request_id=request.id,
+        document_id=request.document_id,
+        case_id=request.case_id,
+        provider=provider,
+        status=status,
+        pages_processed=getattr(provider_result, "pages_processed", 1) if provider_result else 1,
+        items_count=items_count,
+        receipt_total=getattr(provider_result, "receipt_total", None) if provider_result else None,
+        provider_confidence=getattr(provider_result, "provider_confidence", None) if provider_result else None,
+        validation_is_valid=validation.get("is_valid") if validation else None,
+        duration_ms=duration_ms,
+        error_message=error_message
+    )
+
+    db.add(usage)
+    db.commit()
+    db.refresh(usage)
+
+    return usage
+
+def get_external_ocr_usage_logs(
+    db: Session,
+    limit: int = 100
+):
+    return (
+        db.query(ExternalOCRUsage)
+        .order_by(ExternalOCRUsage.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
 def process_external_ocr_request_with_router(
     db: Session,
     request: ExternalOCRRequest
 ):
+    start_time = perf_counter()
+    provider_name = request.preferred_provider or "unknown"
+
     document = get_document_by_id(
         db=db,
         document_id=request.document_id
@@ -55,11 +102,25 @@ def process_external_ocr_request_with_router(
         external_result_json = provider_result.model_dump()
         external_result_json["validation"] = validation
 
+        duration_ms = int((perf_counter() - start_time) * 1000)
+
         if not validation["is_valid"]:
             reviewed_request = mark_external_ocr_needs_review(
                 db=db,
                 request=request,
                 external_result=external_result_json,
+                error_message="External OCR provider result failed validation."
+            )
+
+            create_external_ocr_usage_log(
+                db=db,
+                request=reviewed_request,
+                provider=provider_name,
+                status="needs_review",
+                duration_ms=duration_ms,
+                provider_result=provider_result,
+                validation=validation,
+                items_count=0,
                 error_message="External OCR provider result failed validation."
             )
 
@@ -82,6 +143,18 @@ def process_external_ocr_request_with_router(
             external_result=external_result_json
         )
 
+        create_external_ocr_usage_log(
+            db=db,
+            request=completed_request,
+            provider=provider_name,
+            status="completed",
+            duration_ms=duration_ms,
+            provider_result=provider_result,
+            validation=validation,
+            items_count=len(saved_items),
+            error_message=None
+        )
+
         return {
             "request": completed_request,
             "items": saved_items,
@@ -90,9 +163,23 @@ def process_external_ocr_request_with_router(
         }
 
     except Exception as error:
+        duration_ms = int((perf_counter() - start_time) * 1000)
+
         failed_request = fail_external_ocr_request(
             db=db,
             request=request,
+            error_message=str(error)
+        )
+
+        create_external_ocr_usage_log(
+            db=db,
+            request=failed_request,
+            provider=provider_name,
+            status="failed",
+            duration_ms=duration_ms,
+            provider_result=None,
+            validation=None,
+            items_count=0,
             error_message=str(error)
         )
 

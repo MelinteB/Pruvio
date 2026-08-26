@@ -5,9 +5,11 @@ from app.db.database import get_db
 from app.schemas.external_ocr import (
     ExternalOCRRequestResponse,
     ExternalOCRMockResult,
+    ExternalOCRProviderResponse,
     ExternalOCRProviderUpdate,
-    ExternalOCRProviderResponse
+    ExternalOCRUsageResponse
 )
+
 from app.schemas.receipt_item import ReceiptItemResponse
 
 from app.services.external_ocr_service import (
@@ -18,11 +20,13 @@ from app.services.external_ocr_service import (
     process_external_ocr_request_with_router,
     reset_external_ocr_request,
     get_available_external_ocr_providers,
-    update_external_ocr_request_provider
+    update_external_ocr_request_provider,
+    get_external_ocr_usage_logs
 )
 
-
 router = APIRouter()
+
+
 
 @router.get(
     "/providers",
@@ -50,6 +54,18 @@ def list_pending_external_ocr_requests(
 ):
     return get_pending_external_ocr_requests(db)
 
+@router.get(
+    "/usage",
+    response_model=list[ExternalOCRUsageResponse]
+)
+def list_external_ocr_usage(
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    return get_external_ocr_usage_logs(
+        db=db,
+        limit=limit
+    )
 
 @router.get(
     "/requests/{request_id}",

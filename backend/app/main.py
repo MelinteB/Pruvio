@@ -15,6 +15,7 @@ from app.models.receipt_item import ReceiptItem
 from app.api.split_bill import router as split_bill_router
 from app.models.receipt_profile import ReceiptProfile
 from app.models.receipt_correction import ReceiptCorrection
+from app.models.external_ocr_usage import ExternalOCRUsage
 from app.api.receipt_profiles import router as receipt_profiles_router
 
 from app.models.external_ocr_request import ExternalOCRRequest
