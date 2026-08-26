@@ -97,6 +97,55 @@ class AzureReceiptOCRProvider(ExternalOCRProvider):
             items=items
         )
 
+    def _normalize_quantity(
+        self,
+        name: str,
+        quantity: float,
+        unit_price: float | None,
+        total_price: float
+    ) -> float:
+        """
+        Azure sometimes detects volume/weight/package information as quantity.
+
+        Example:
+        CEAI MENTA 500ML OLY
+        quantity = 1000
+        unit_price = 7.49
+        total_price = 7.49
+
+        In this case, the real purchased quantity is 1.
+        """
+
+        if quantity is None:
+            return 1.0
+
+        quantity = float(quantity)
+
+        if quantity <= 0:
+            return 1.0
+
+        if unit_price is not None:
+            unit_price = float(unit_price)
+            total_price = float(total_price)
+
+            if quantity > 50 and round(unit_price, 2) == round(total_price, 2):
+                return 1.0
+
+        name_upper = name.upper()
+
+        measurement_markers = [
+            "ML",
+            "L",
+            "G",
+            "GR",
+            "KG"
+        ]
+
+        if quantity > 50 and any(marker in name_upper for marker in measurement_markers):
+            return 1.0
+
+        return quantity
+    
     def _extract_items(
         self,
         items_field,
@@ -136,13 +185,20 @@ class AzureReceiptOCRProvider(ExternalOCRProvider):
             if not name or total_price is None:
                 continue
 
+            quantity = self._normalize_quantity(
+                name=name,
+                quantity=quantity,
+                unit_price=unit_price,
+                total_price=total_price
+            )
+
             if unit_price is None:
                 unit_price = total_price / quantity if quantity else total_price
 
             extracted_items.append(
                 ExternalOCRMockItem(
                     name=name.strip(),
-                    quantity=float(quantity),
+                    quantity=round(float(quantity), 3),
                     unit_price=round(float(unit_price), 2),
                     total_price=round(float(total_price), 2),
                     currency=currency
