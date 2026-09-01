@@ -1,3 +1,5 @@
+from pathlib import Path
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from dotenv import load_dotenv
 from app.db.database import Base, engine
@@ -20,6 +22,10 @@ from app.api.receipt_profiles import router as receipt_profiles_router
 
 from app.models.external_ocr_request import ExternalOCRRequest
 from app.api.external_ocr import router as external_ocr_router
+
+ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(dotenv_path=ENV_PATH, override=True)
+
 Base.metadata.create_all(bind=engine)
 load_dotenv()
 

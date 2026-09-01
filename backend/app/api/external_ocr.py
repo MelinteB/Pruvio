@@ -13,6 +13,7 @@ from app.schemas.external_ocr import (
 from app.schemas.receipt_item import ReceiptItemResponse
 
 from app.services.external_ocr_service import (
+    get_external_ocr_usage_summary,
     get_external_ocr_requests,
     get_pending_external_ocr_requests,
     get_external_ocr_request_by_id,
@@ -21,7 +22,8 @@ from app.services.external_ocr_service import (
     reset_external_ocr_request,
     get_available_external_ocr_providers,
     update_external_ocr_request_provider,
-    get_external_ocr_usage_logs
+    get_external_ocr_usage_logs,
+    ExternalOCRUsageLimitError
 )
 
 router = APIRouter()
@@ -71,6 +73,17 @@ def list_external_ocr_usage(
     "/requests/{request_id}",
     response_model=ExternalOCRRequestResponse
 )
+
+@router.get("/usage/summary")
+def external_ocr_usage_summary(
+    days: int = 30,
+    db: Session = Depends(get_db)
+):
+    return get_external_ocr_usage_summary(
+        db=db,
+        days=days
+    )
+
 def get_external_ocr_request(
     request_id: int,
     db: Session = Depends(get_db)
@@ -191,10 +204,17 @@ def process_external_ocr_request(
             detail="External OCR request is currently processing"
         )
 
-    result = process_external_ocr_request_with_router(
-        db=db,
-        request=request
-    )
+    try:
+        result = process_external_ocr_request_with_router(
+            db=db,
+            request=request
+        )
+
+    except ExternalOCRUsageLimitError as error:
+        raise HTTPException(
+            status_code=429,
+            detail=str(error)
+        )
 
     items_response = [
         ReceiptItemResponse.model_validate(item).model_dump(mode="json")

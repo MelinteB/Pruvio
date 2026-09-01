@@ -1,10 +1,12 @@
 import json
+import os
 from time import perf_counter
 from app.models.receipt_item import ReceiptItem
 from app.schemas.external_ocr import ExternalOCRMockResult, ExternalOCRProviderUpdate
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.models.external_ocr_request import ExternalOCRRequest
 from app.models.document import Document
@@ -86,6 +88,11 @@ def process_external_ocr_request_with_router(
     try:
         provider_name = choose_provider_name(request)
 
+        assert_external_ocr_usage_allowed(
+            db=db,
+            provider=provider_name
+        )
+
         mark_external_ocr_processing(
             db=db,
             request=request,
@@ -161,6 +168,9 @@ def process_external_ocr_request_with_router(
             "validation": validation,
             "items_replaced": True
         }
+
+    except ExternalOCRUsageLimitError:
+        raise
 
     except Exception as error:
         duration_ms = int((perf_counter() - start_time) * 1000)
@@ -522,3 +532,175 @@ def update_external_ocr_request_provider(
     db.refresh(request)
 
     return request
+
+class ExternalOCRUsageLimitError(Exception):
+    """
+    Raised when external OCR processing is blocked by usage limits.
+    Example: daily Azure OCR call limit reached.
+    """
+    pass
+
+
+def get_external_ocr_daily_limits():
+    max_calls = int(
+        os.getenv("MAX_EXTERNAL_OCR_CALLS_PER_DAY", "20")
+    )
+
+    max_pages = int(
+        os.getenv("MAX_EXTERNAL_OCR_PAGES_PER_DAY", "50")
+    )
+
+    return {
+        "max_calls_per_day": max_calls,
+        "max_pages_per_day": max_pages
+    }
+
+
+def get_external_ocr_usage_today(
+    db: Session,
+    provider: str | None = None
+):
+    today_start = datetime.utcnow().replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0
+    )
+
+    query = db.query(ExternalOCRUsage).filter(
+        ExternalOCRUsage.created_at >= today_start
+    )
+
+    if provider:
+        query = query.filter(
+            ExternalOCRUsage.provider == provider
+        )
+
+    total_calls = query.count()
+
+    total_pages = (
+        query.with_entities(
+            func.coalesce(func.sum(ExternalOCRUsage.pages_processed), 0)
+        )
+        .scalar()
+        or 0
+    )
+
+    return {
+        "date_utc": today_start.date().isoformat(),
+        "provider": provider,
+        "calls_today": total_calls,
+        "pages_today": int(total_pages)
+    }
+
+
+def assert_external_ocr_usage_allowed(
+    db: Session,
+    provider: str
+):
+    """
+    Applies limits only to real paid providers.
+    Mock provider is ignored because it does not call Azure.
+    """
+
+    if provider == "mock_external_ocr":
+        return
+
+    external_ocr_enabled = os.getenv(
+        "ENABLE_EXTERNAL_OCR",
+        "true"
+    ).lower()
+
+    if external_ocr_enabled not in ["true", "1", "yes"]:
+        raise ExternalOCRUsageLimitError(
+            "External OCR is disabled by ENABLE_EXTERNAL_OCR."
+        )
+
+    limits = get_external_ocr_daily_limits()
+    usage = get_external_ocr_usage_today(
+        db=db,
+        provider=provider
+    )
+
+    if usage["calls_today"] >= limits["max_calls_per_day"]:
+        raise ExternalOCRUsageLimitError(
+            f"Daily external OCR call limit reached for provider '{provider}'. "
+            f"Used {usage['calls_today']} / {limits['max_calls_per_day']} calls."
+        )
+
+    if usage["pages_today"] >= limits["max_pages_per_day"]:
+        raise ExternalOCRUsageLimitError(
+            f"Daily external OCR page limit reached for provider '{provider}'. "
+            f"Used {usage['pages_today']} / {limits['max_pages_per_day']} pages."
+        )
+
+def get_external_ocr_usage_summary(
+    db: Session,
+    days: int = 30
+):
+    since = datetime.utcnow() - timedelta(days=days)
+
+    rows = (
+        db.query(
+            ExternalOCRUsage.provider,
+            ExternalOCRUsage.status,
+            func.count(ExternalOCRUsage.id).label("requests_count"),
+            func.coalesce(func.sum(ExternalOCRUsage.pages_processed), 0).label("pages_processed"),
+            func.coalesce(func.sum(ExternalOCRUsage.items_count), 0).label("items_extracted"),
+            func.coalesce(func.avg(ExternalOCRUsage.duration_ms), 0).label("avg_duration_ms")
+        )
+        .filter(ExternalOCRUsage.created_at >= since)
+        .group_by(
+            ExternalOCRUsage.provider,
+            ExternalOCRUsage.status
+        )
+        .all()
+    )
+
+    breakdown = []
+
+    total_requests = 0
+    total_pages = 0
+    total_items = 0
+
+    for row in rows:
+        requests_count = int(row.requests_count or 0)
+        pages_processed = int(row.pages_processed or 0)
+        items_extracted = int(row.items_extracted or 0)
+
+        total_requests += requests_count
+        total_pages += pages_processed
+        total_items += items_extracted
+
+        breakdown.append(
+            {
+                "provider": row.provider,
+                "status": row.status,
+                "requests_count": requests_count,
+                "pages_processed": pages_processed,
+                "items_extracted": items_extracted,
+                "avg_duration_ms": round(float(row.avg_duration_ms or 0), 2)
+            }
+        )
+
+    return {
+        "period_days": days,
+        "since_utc": since.isoformat(),
+        "totals": {
+            "requests_count": total_requests,
+            "pages_processed": total_pages,
+            "items_extracted": total_items
+        },
+        "daily_limits": get_external_ocr_daily_limits(),
+        "today": {
+            "azure_receipt": get_external_ocr_usage_today(
+                db=db,
+                provider="azure_receipt"
+            ),
+            "mock_external_ocr": get_external_ocr_usage_today(
+                db=db,
+                provider="mock_external_ocr"
+            )
+        },
+        "breakdown": breakdown
+    }
