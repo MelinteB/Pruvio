@@ -1,27 +1,43 @@
-from fastapi import APIRouter, Depends, HTTPException
+import io
+
+import qrcode
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
+from fastapi.responses import RedirectResponse
 
 from app.db.database import get_db
 from app.schemas.split_bill_session import (
+    SplitBillSessionCreateRequest,
     SplitBillSessionCreateResponse,
-    SplitBillParticipantCreate,
-    SplitBillParticipantResponse,
+    SplitBillJoinRequest,
+    SplitBillJoinResponse,
     SplitBillSessionSelectionRequest,
-    SplitBillSessionSummaryResponse
+    SplitBillSessionCloseRequest,
+    SplitBillSessionSummaryResponse,
+    SplitBillCloseResponse
 )
 from app.services.split_bill_session_service import (
     create_split_bill_session,
     get_split_bill_session_by_token,
-    create_split_bill_participant,
-    save_participant_selection,
     get_split_bill_session_summary,
+    join_split_bill_session,
+    save_participant_selection,
+    close_split_bill_session,
     build_share_url,
-    build_qr_url
+    build_qr_url,
+    build_widget_url,
+    get_owner_participant
 )
 
 
 router = APIRouter()
 
+@router.get("/s/{token}")
+def short_split_bill_link(token: str):
+    return RedirectResponse(
+        url=f"/split-bill/sessions/{token}/join",
+        status_code=302
+    )
 
 @router.post(
     "/cases/{case_id}/sessions",
@@ -29,23 +45,58 @@ router = APIRouter()
 )
 def create_session_for_case(
     case_id: int,
+    session_data: SplitBillSessionCreateRequest,
     db: Session = Depends(get_db)
 ):
-    session = create_split_bill_session(
-        db=db,
-        case_id=case_id
-    )
+    try:
+        session = create_split_bill_session(
+            db=db,
+            case_id=case_id,
+            owner_user_id=session_data.owner_user_id,
+            expected_participants_count=session_data.expected_participants_count
+        )
 
-    return {
-        "session_id": session.id,
-        "case_id": session.case_id,
-        "token": session.token,
-        "status": session.status,
-        "share_url": build_share_url(session.token),
-        "qr_url": build_qr_url(session.token),
-        "created_at": session.created_at,
-        "expires_at": session.expires_at
-    }
+        summary = get_split_bill_session_summary(
+            db=db,
+            session=session
+        )
+
+        owner_participant = get_owner_participant(
+            db=db,
+            session=session
+        )
+
+        owner_widget_url = None
+
+        if owner_participant:
+            owner_widget_url = build_widget_url(
+                token=session.token,
+                participant_id=owner_participant.id
+            )
+
+        return {
+                "session_id": session.id,
+                "case_id": session.case_id,
+                "owner_user_id": session.owner_user_id,
+                "token": session.token,
+                "status": session.status,
+                "expected_participants_count": session.expected_participants_count,
+                "joined_participants_count": summary["joined_participants_count"],
+                "missing_participants_count": summary["missing_participants_count"],
+                "can_close": summary["can_close"],
+                "close_block_reason": summary["close_block_reason"],
+                "share_url": build_share_url(session.token),
+                "qr_url": build_qr_url(session.token),
+                "owner_widget_url": owner_widget_url,
+                "created_at": session.created_at,
+                "expires_at": session.expires_at
+            }
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
 
 
 @router.get(
@@ -64,7 +115,7 @@ def get_session_summary(
     if not session:
         raise HTTPException(
             status_code=404,
-            detail="Split bill session not found"
+            detail="Split bill session not found."
         )
 
     return get_split_bill_session_summary(
@@ -74,12 +125,12 @@ def get_session_summary(
 
 
 @router.post(
-    "/sessions/{token}/participants",
-    response_model=SplitBillParticipantResponse
+    "/sessions/{token}/join",
+    response_model=SplitBillJoinResponse
 )
-def create_participant(
+def join_session(
     token: str,
-    participant_data: SplitBillParticipantCreate,
+    join_data: SplitBillJoinRequest,
     db: Session = Depends(get_db)
 ):
     session = get_split_bill_session_by_token(
@@ -90,20 +141,22 @@ def create_participant(
     if not session:
         raise HTTPException(
             status_code=404,
-            detail="Split bill session not found"
+            detail="Split bill session not found."
         )
 
-    if not participant_data.display_name.strip():
+    try:
+        return join_split_bill_session(
+            db=db,
+            session=session,
+            phone_number=join_data.phone_number,
+            display_name=join_data.display_name
+        )
+
+    except ValueError as error:
         raise HTTPException(
             status_code=400,
-            detail="Display name is required"
+            detail=str(error)
         )
-
-    return create_split_bill_participant(
-        db=db,
-        session=session,
-        display_name=participant_data.display_name
-    )
 
 
 @router.post(
@@ -123,7 +176,7 @@ def save_selection(
     if not session:
         raise HTTPException(
             status_code=404,
-            detail="Split bill session not found"
+            detail="Split bill session not found."
         )
 
     try:
@@ -139,3 +192,66 @@ def save_selection(
             status_code=400,
             detail=str(error)
         )
+
+
+@router.post(
+    "/sessions/{token}/close",
+    response_model=SplitBillCloseResponse
+)
+def close_session(
+    token: str,
+    close_data: SplitBillSessionCloseRequest,
+    db: Session = Depends(get_db)
+):
+    session = get_split_bill_session_by_token(
+        db=db,
+        token=token
+    )
+
+    if not session:
+        raise HTTPException(
+            status_code=404,
+            detail="Split bill session not found."
+        )
+
+    try:
+        return close_split_bill_session(
+            db=db,
+            session=session,
+            owner_user_id=close_data.owner_user_id
+        )
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
+
+
+@router.get("/sessions/{token}/qr")
+def get_session_qr(
+    token: str,
+    db: Session = Depends(get_db)
+):
+    session = get_split_bill_session_by_token(
+        db=db,
+        token=token
+    )
+
+    if not session:
+        raise HTTPException(
+            status_code=404,
+            detail="Split bill session not found."
+        )
+
+    share_url = build_share_url(session.token)
+
+    qr_image = qrcode.make(share_url)
+    buffer = io.BytesIO()
+    qr_image.save(buffer, format="PNG")
+    buffer.seek(0)
+
+    return Response(
+        content=buffer.getvalue(),
+        media_type="image/png"
+    )

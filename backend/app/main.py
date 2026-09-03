@@ -1,35 +1,37 @@
 from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
-
+from fastapi.responses import RedirectResponse
 from nicegui import ui
 from app.ui.split_bill_widget_ui import setup_split_bill_widget_ui
-from app.api.split_bill_sessions import router as split_bill_sessions_router
+from app.ui.split_bill_session_widget_ui import setup_split_bill_session_widget_ui
+
+from app.db.database import Base, engine
 
 from app.models.split_bill_session import SplitBillSession
 from app.models.split_bill_participant import SplitBillParticipant
 from app.models.split_bill_item_assignment import SplitBillItemAssignment
-
-from app.db.database import Base, engine
 from app.models.user import User
 from app.models.case import Case
 from app.models.document import Document
 from app.models.message import Message
 from app.models.reminder import Reminder
+from app.models.external_ocr_request import ExternalOCRRequest
+from app.models.receipt_profile import ReceiptProfile
+from app.models.receipt_correction import ReceiptCorrection
+from app.models.external_ocr_usage import ExternalOCRUsage
+from app.models.receipt_item import ReceiptItem
+from app.models.verification_code import VerificationCode
 
 from app.api.users import router as users_router
 from app.api.cases import router as cases_router
 from app.api.webhook import router as webhook_router
 from app.api.documents import router as documents_router
-from app.models.receipt_item import ReceiptItem
-from app.api.split_bill import router as split_bill_router
-from app.models.receipt_profile import ReceiptProfile
-from app.models.receipt_correction import ReceiptCorrection
-from app.models.external_ocr_usage import ExternalOCRUsage
+from app.api.split_bill_sessions import router as split_bill_sessions_router
 from app.api.receipt_profiles import router as receipt_profiles_router
-
-from app.models.external_ocr_request import ExternalOCRRequest
+from app.api.split_bill import router as split_bill_router
 from app.api.external_ocr import router as external_ocr_router
+from app.api.onboarding_otp import router as onboarding_otp_router
 
 ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(dotenv_path=ENV_PATH, override=True)
@@ -53,6 +55,12 @@ app.include_router(
     users_router,
     prefix="/users",
     tags=["Users"]
+)
+
+app.include_router(
+    onboarding_otp_router,
+    prefix="/onboarding/otp",
+    tags=["Onboarding OTP"]
 )
 
 app.include_router(
@@ -107,6 +115,14 @@ def health():
         "database": "connected"
     }
 
+@app.get("/s/{token}")
+def short_split_bill_link(token: str):
+    return RedirectResponse(
+        url=f"/split-bill/sessions/{token}/join",
+        status_code=302
+    )
+
 setup_split_bill_widget_ui()
+setup_split_bill_session_widget_ui()
 
 ui.run_with(app)

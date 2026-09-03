@@ -17,10 +17,25 @@ class SplitBillSession(Base):
         index=True
     )
 
+    owner_user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True
+    )
+
     token = Column(String, unique=True, nullable=False, index=True)
 
     status = Column(String, default="open", index=True)
     currency = Column(String, default="RON")
+
+    expected_participants_count = Column(
+        Integer,
+        nullable=False,
+        default=2
+    )
+
+    closed_at = Column(DateTime, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(

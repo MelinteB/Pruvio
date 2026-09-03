@@ -15,3 +15,6 @@ azure-ai-documentintelligence
 azure-core
 python-dotenv
 nicegui
+qrcode[pil]
+email-validator
+psycopg2-binary

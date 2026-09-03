@@ -17,7 +17,24 @@ class SplitBillParticipant(Base):
         index=True
     )
 
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True
+    )
+
     display_name = Column(String, nullable=False)
-    participant_token = Column(String, unique=True, nullable=False, index=True)
+    phone_number = Column(String, nullable=True, index=True)
+
+    participant_token = Column(
+        String,
+        unique=True,
+        nullable=False,
+        index=True
+    )
+
+    role = Column(String, default="participant", index=True)
+    status = Column(String, default="joined", index=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
