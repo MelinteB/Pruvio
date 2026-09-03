@@ -14,3 +14,4 @@ opencv-python
 azure-ai-documentintelligence
 azure-core
 python-dotenv
+nicegui

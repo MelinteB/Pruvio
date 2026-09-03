@@ -1,7 +1,15 @@
 from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
-from dotenv import load_dotenv
+
+from nicegui import ui
+from app.ui.split_bill_widget_ui import setup_split_bill_widget_ui
+from app.api.split_bill_sessions import router as split_bill_sessions_router
+
+from app.models.split_bill_session import SplitBillSession
+from app.models.split_bill_participant import SplitBillParticipant
+from app.models.split_bill_item_assignment import SplitBillItemAssignment
+
 from app.db.database import Base, engine
 from app.models.user import User
 from app.models.case import Case
@@ -48,6 +56,12 @@ app.include_router(
 )
 
 app.include_router(
+    split_bill_sessions_router,
+    prefix="/split-bill",
+    tags=["Split Bill Sessions"]
+)
+
+app.include_router(
     cases_router,
     prefix="/cases",
     tags=["Cases"]
@@ -83,6 +97,8 @@ app.include_router(
     tags=["External OCR"]
 )
 
+
+
 @app.get("/health")
 def health():
     return {
@@ -90,3 +106,7 @@ def health():
         "app": "Pruvio Core",
         "database": "connected"
     }
+
+setup_split_bill_widget_ui()
+
+ui.run_with(app)
