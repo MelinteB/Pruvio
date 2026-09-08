@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -113,6 +114,14 @@ def health():
         "status": "ok",
         "app": "Pruvio Core",
         "database": "connected"
+    }
+
+@app.get("/debug/database")
+def debug_database():
+    return {
+        "database_url_present": bool(os.getenv("DATABASE_URL")),
+        "database_dialect": engine.dialect.name,
+        "database_driver": engine.dialect.driver
     }
 
 @app.get("/s/{token}")
