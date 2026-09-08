@@ -1,8 +1,6 @@
+import os
 from pathlib import Path
 
-import cv2
-import easyocr
-import numpy as np
 from pypdf import PdfReader
 
 from app.models.document import Document
@@ -16,11 +14,114 @@ IMAGE_EXTENSIONS = {
     ".webp"
 }
 
+_EASYOCR_READER = None
+_CV2 = None
+_NP = None
 
-try:
-    reader = easyocr.Reader(["ro", "en"], gpu=False)
-except Exception:
-    reader = easyocr.Reader(["en"], gpu=False)
+
+def is_local_ocr_enabled() -> bool:
+    """
+    Controls whether local OCR libraries are allowed to load.
+
+    Local development:
+        LOCAL_OCR_ENABLED=true
+
+    Render / production:
+        LOCAL_OCR_ENABLED=false
+
+    This prevents heavy packages like torch/easyocr/cv2 from being loaded
+    during app startup on small cloud instances.
+    """
+    return os.getenv("LOCAL_OCR_ENABLED", "true").lower() in {
+        "true",
+        "1",
+        "yes",
+        "y"
+    }
+
+
+def get_easyocr_reader():
+    """
+    Lazy-load EasyOCR only when a local OCR function is actually called.
+
+    Important for Render:
+    importing easyocr at module import time loads torch and can exceed
+    512 MB RAM on the free instance.
+    """
+    global _EASYOCR_READER
+
+    if not is_local_ocr_enabled():
+        raise RuntimeError(
+            "Local OCR is disabled in this environment. Use Azure OCR instead."
+        )
+
+    if _EASYOCR_READER is None:
+        import easyocr
+
+        try:
+            _EASYOCR_READER = easyocr.Reader(
+                ["ro", "en"],
+                gpu=False
+            )
+        except Exception:
+            _EASYOCR_READER = easyocr.Reader(
+                ["en"],
+                gpu=False
+            )
+
+    return _EASYOCR_READER
+
+
+def get_cv2():
+    """
+    Lazy-load OpenCV only when image preprocessing is actually needed.
+    """
+    global _CV2
+
+    if not is_local_ocr_enabled():
+        raise RuntimeError(
+            "Local OCR is disabled in this environment. Use Azure OCR instead."
+        )
+
+    if _CV2 is None:
+        import cv2
+        _CV2 = cv2
+
+    return _CV2
+
+
+def get_numpy():
+    """
+    Lazy-load NumPy only when image preprocessing / row grouping is needed.
+    """
+    global _NP
+
+    if not is_local_ocr_enabled():
+        raise RuntimeError(
+            "Local OCR is disabled in this environment. Use Azure OCR instead."
+        )
+
+    if _NP is None:
+        import numpy as np
+        _NP = np
+
+    return _NP
+
+
+def build_local_ocr_disabled_candidate() -> dict:
+    return {
+        "strategy": "local_ocr_disabled",
+        "ocr_text": "",
+        "average_confidence": 0.0,
+        "score": 0.0,
+        "items_count": 0,
+        "detected_total": 0.0,
+        "receipt_total": None,
+        "parser_confidence": 0.0,
+        "warnings": [
+            "Local OCR is disabled in this environment. Use Azure OCR instead."
+        ]
+    }
 
 
 def clean_ocr_text(text: str) -> str:
@@ -38,6 +139,8 @@ def clean_ocr_text(text: str) -> str:
 
 
 def load_image(file_path: str):
+    cv2 = get_cv2()
+
     image = cv2.imread(file_path)
 
     if image is None:
@@ -47,6 +150,8 @@ def load_image(file_path: str):
 
 
 def resize_image(image, scale_percent: int = 180):
+    cv2 = get_cv2()
+
     height, width = image.shape[:2]
 
     new_width = int(width * scale_percent / 100)
@@ -64,11 +169,17 @@ def strategy_original(image):
 
 
 def strategy_gray_resized(image):
+    cv2 = get_cv2()
+
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
     return resize_image(gray, 180)
 
 
 def strategy_contrast_sharpen(image):
+    cv2 = get_cv2()
+    np = get_numpy()
+
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     resized = resize_image(gray, 200)
 
@@ -86,6 +197,8 @@ def strategy_contrast_sharpen(image):
 
 
 def strategy_otsu_threshold(image):
+    cv2 = get_cv2()
+
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     resized = resize_image(gray, 220)
 
@@ -102,6 +215,8 @@ def strategy_otsu_threshold(image):
 
 
 def strategy_adaptive_threshold(image):
+    cv2 = get_cv2()
+
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     resized = resize_image(gray, 220)
 
@@ -123,6 +238,7 @@ def group_easyocr_results_into_lines(results: list) -> list[str]:
 
     This function groups tokens that are visually on the same row.
     """
+    np = get_numpy()
 
     entries = []
 
@@ -162,7 +278,11 @@ def group_easyocr_results_into_lines(results: list) -> list[str]:
     if not entries:
         return []
 
-    heights = [entry["height"] for entry in entries if entry["height"] > 0]
+    heights = [
+        entry["height"]
+        for entry in entries
+        if entry["height"] > 0
+    ]
 
     median_height = 12
 
@@ -173,7 +293,10 @@ def group_easyocr_results_into_lines(results: list) -> list[str]:
 
     entries = sorted(
         entries,
-        key=lambda entry: (entry["y_center"], entry["x_min"])
+        key=lambda entry: (
+            entry["y_center"],
+            entry["x_min"]
+        )
     )
 
     rows = []
@@ -201,7 +324,10 @@ def group_easyocr_results_into_lines(results: list) -> list[str]:
                 }
             )
 
-    rows = sorted(rows, key=lambda row: row["y_center"])
+    rows = sorted(
+        rows,
+        key=lambda row: row["y_center"]
+    )
 
     lines = []
 
@@ -225,6 +351,8 @@ def group_easyocr_results_into_lines(results: list) -> list[str]:
 
 
 def run_easyocr(image) -> dict:
+    reader = get_easyocr_reader()
+
     results = reader.readtext(
         image,
         detail=1,
@@ -308,7 +436,9 @@ def score_ocr_candidate(
         score += 20
 
     if parsed.receipt_total is not None:
-        difference = abs(parsed.detected_total - parsed.receipt_total)
+        difference = abs(
+            parsed.detected_total - parsed.receipt_total
+        )
 
         if difference == 0:
             score += 80
@@ -319,7 +449,10 @@ def score_ocr_candidate(
 
         # Strong penalty if detected total is much smaller than receipt total.
         # Example: items total 8.65 but receipt total wrongly detected as CASH 50.00.
-        if parsed.detected_total > 0 and parsed.receipt_total > parsed.detected_total * 2:
+        if (
+            parsed.detected_total > 0
+            and parsed.receipt_total > parsed.detected_total * 2
+        ):
             score -= 100
 
     if parsed.items:
@@ -341,6 +474,11 @@ def score_ocr_candidate(
 
 
 def extract_ocr_candidates_from_image(file_path: str) -> list[dict]:
+    if not is_local_ocr_enabled():
+        return [
+            build_local_ocr_disabled_candidate()
+        ]
+
     image = load_image(file_path)
 
     strategies = [
@@ -401,6 +539,11 @@ def extract_ocr_candidates_from_image(file_path: str) -> list[dict]:
 
 
 def extract_text_from_image(file_path: str) -> str:
+    if not is_local_ocr_enabled():
+        raise ValueError(
+            "Local OCR is disabled in this environment. Use Azure OCR instead."
+        )
+
     image_path = Path(file_path)
 
     if not image_path.exists():
@@ -412,6 +555,9 @@ def extract_text_from_image(file_path: str) -> str:
         raise ValueError("OCR failed. No candidates generated.")
 
     best_candidate = candidates[0]
+
+    if not best_candidate["ocr_text"].strip():
+        raise ValueError("OCR failed. Best candidate has no text.")
 
     return best_candidate["ocr_text"]
 
@@ -449,7 +595,7 @@ def extract_text_from_document(document: Document) -> str:
 
         if not text.strip():
             raise ValueError(
-                "No text found in this PDF. Scanned PDF OCR will be added later."
+                "No text found in this PDF. Scanned PDF OCR should use Azure OCR in production."
             )
 
         return text
