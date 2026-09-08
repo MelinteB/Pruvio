@@ -462,3 +462,50 @@ def verify_email_otp(
         action="email_verified",
         message=message
     )
+
+def get_otp_onboarding_status(
+    db: Session,
+    phone_number: str
+) -> dict:
+    normalized_phone = normalize_phone_number(phone_number)
+
+    user = (
+        db.query(User)
+        .filter(User.phone_number == normalized_phone)
+        .first()
+    )
+
+    if not user:
+        return {
+            "user_id": None,
+            "phone_number": normalized_phone,
+            "email": None,
+            "display_name": None,
+            "status": "not_found",
+            "accepted_terms": False,
+            "is_phone_verified": False,
+            "is_email_verified": False,
+            "can_create_split_bill": False,
+            "action": "not_found",
+            "message": "User does not exist in Pruvio yet."
+        }
+
+    can_create_split_bill = (
+        user.status == "active"
+        and bool(user.accepted_terms)
+        and bool(user.is_phone_verified)
+    )
+
+    return {
+        "user_id": user.id,
+        "phone_number": user.phone_number,
+        "email": user.email,
+        "display_name": user.name,
+        "status": user.status,
+        "accepted_terms": bool(user.accepted_terms),
+        "is_phone_verified": bool(user.is_phone_verified),
+        "is_email_verified": bool(user.is_email_verified),
+        "can_create_split_bill": can_create_split_bill,
+        "action": "status",
+        "message": f"User status is {user.status}."
+    }

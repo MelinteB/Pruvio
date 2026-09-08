@@ -42,3 +42,19 @@ class OTPResponse(BaseModel):
 
     debug_phone_otp: str | None = None
     debug_email_otp: str | None = None
+
+
+class OTPStatusResponse(BaseModel):
+    user_id: int | None = None
+    phone_number: str
+    email: str | None = None
+    display_name: str | None = None
+
+    status: str
+    accepted_terms: bool
+    is_phone_verified: bool
+    is_email_verified: bool
+
+    can_create_split_bill: bool
+    action: str
+    message: str

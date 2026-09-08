@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
@@ -6,12 +6,15 @@ from app.schemas.onboarding_otp import (
     OTPStartRequest,
     OTPVerifyPhoneRequest,
     OTPVerifyEmailRequest,
-    OTPResponse
+    OTPResponse,
+    OTPStatusResponse,
+    
 )
 from app.services.onboarding_otp_service import (
     start_otp_onboarding,
     verify_phone_otp,
-    verify_email_otp
+    verify_email_otp,
+    get_otp_onboarding_status
 )
 
 
@@ -77,6 +80,26 @@ def verify_email(
             db=db,
             email=otp_data.email,
             code=otp_data.code
+        )
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
+
+@router.get(
+    "/status",
+    response_model=OTPStatusResponse
+)
+def get_otp_status(
+    phone_number: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    try:
+        return get_otp_onboarding_status(
+            db=db,
+            phone_number=phone_number
         )
 
     except ValueError as error:
