@@ -11,6 +11,7 @@ from app.models.split_bill_session import SplitBillSession
 from app.models.split_bill_participant import SplitBillParticipant
 from app.models.split_bill_item_assignment import SplitBillItemAssignment
 
+
 def get_owner_participant(
     db: Session,
     session: SplitBillSession
