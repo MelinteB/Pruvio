@@ -25,7 +25,9 @@ from app.services.ocr_service import(
     extract_text_from_document,
     extract_ocr_candidates_from_document
 )
-
+from app.services.azure_receipt_direct_service import (
+    process_document_with_azure_receipt_direct,
+)
 router = APIRouter()
 
 
@@ -183,7 +185,24 @@ def get_ocr_candidates(
             status_code=500,
             detail=f"OCR candidate extraction failed: {str(error)}"
         )
-    
+
+@router.post("/{document_id}/azure-receipt-ocr")
+def azure_receipt_ocr(
+    document_id: int,
+    db: Session = Depends(get_db)
+):
+    try:
+        return process_document_with_azure_receipt_direct(
+            db=db,
+            document_id=document_id
+        )
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
+        
 @router.get("/{document_id}", response_model=DocumentResponse)
 def get_document(
     document_id: int,
