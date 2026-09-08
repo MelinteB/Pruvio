@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.models.document import Document
 from app.models.receipt_item import ReceiptItem
 from app.models.external_ocr_request import ExternalOCRRequest
+from app.models.split_bill_item_assignment import SplitBillItemAssignment
 from app.services.ocr_providers.azure_receipt_provider import AzureReceiptOCRProvider
 
 
@@ -42,6 +43,101 @@ def is_discount_item(item_name: str | None) -> bool:
         keyword in normalized_name
         for keyword in discount_keywords
     )
+
+
+def safe_float(value, default: float = 0.0) -> float:
+    if value is None:
+        return default
+
+    try:
+        return float(value)
+    except Exception:
+        return default
+
+
+def build_net_receipt_items(raw_items: list, default_currency: str = "RON") -> list[dict]:
+    """
+    Converts Azure receipt lines into split-bill friendly items.
+
+    Discount lines such as REDUCERE / DISCOUNT are not saved as selectable items.
+    They are merged into the previous product.
+    """
+
+    net_items = []
+
+    for raw_item in raw_items:
+        name = raw_item.name or "Unknown item"
+        currency = raw_item.currency or default_currency or "RON"
+
+        quantity = safe_float(raw_item.quantity, 1.0)
+        unit_price = (
+            safe_float(raw_item.unit_price)
+            if raw_item.unit_price is not None
+            else None
+        )
+        total_price = safe_float(raw_item.total_price, 0.0)
+
+        if is_discount_item(name) or total_price < 0:
+            discount_amount = -abs(total_price)
+
+            if net_items:
+                previous_item = net_items[-1]
+
+                previous_item["discount_total"] = round(
+                    previous_item.get("discount_total", 0.0) + discount_amount,
+                    2
+                )
+
+                previous_item["total_price"] = round(
+                    previous_item["total_price"] + discount_amount,
+                    2
+                )
+
+                if previous_item["quantity"]:
+                    previous_item["unit_price"] = round(
+                        previous_item["total_price"] / previous_item["quantity"],
+                        2
+                    )
+
+                previous_item["name"] = (
+                    f'{previous_item["base_name"]} '
+                    f'| Reducere {previous_item["discount_total"]:.2f} {currency}'
+                )
+
+            else:
+                # If Azure detects an orphan discount before any product,
+                # keep it as a negative line instead of losing it.
+                net_items.append(
+                    {
+                        "base_name": name,
+                        "name": name,
+                        "quantity": 1.0,
+                        "unit_price": discount_amount,
+                        "total_price": discount_amount,
+                        "currency": currency,
+                        "discount_total": discount_amount,
+                    }
+                )
+
+            continue
+
+        net_items.append(
+            {
+                "base_name": name,
+                "name": name,
+                "quantity": quantity,
+                "unit_price": unit_price,
+                "total_price": total_price,
+                "currency": currency,
+                "discount_total": 0.0,
+            }
+        )
+
+    for item in net_items:
+        item.pop("base_name", None)
+        item.pop("discount_total", None)
+
+    return net_items
 
 def normalize_receipt_item_amounts(external_item) -> dict:
     name = external_item.name or "Unknown item"
@@ -120,23 +216,38 @@ def process_document_with_azure_receipt_direct(
 
         result_dict = model_to_dict(result)
 
+        existing_item_ids = [
+            item_id
+            for item_id, in db.query(ReceiptItem.id)
+            .filter(ReceiptItem.document_id == document.id)
+            .all()
+        ]
+
+        if existing_item_ids:
+            db.query(SplitBillItemAssignment).filter(
+                SplitBillItemAssignment.receipt_item_id.in_(existing_item_ids)
+            ).delete(synchronize_session=False)
+
         db.query(ReceiptItem).filter(
             ReceiptItem.document_id == document.id
-        ).delete()
+        ).delete(synchronize_session=False)
+
+        net_items = build_net_receipt_items(
+            raw_items=result.items,
+            default_currency=result.currency or "RON"
+        )
 
         saved_items = []
 
-        for external_item in result.items:
-            normalized_item = normalize_receipt_item_amounts(external_item)
-
+        for net_item in net_items:
             item = ReceiptItem(
                 case_id=document.case_id,
                 document_id=document.id,
-                name=normalized_item["name"],
-                quantity=normalized_item["quantity"],
-                unit_price=normalized_item["unit_price"],
-                total_price=normalized_item["total_price"],
-                currency=external_item.currency or result.currency or "RON",
+                name=net_item["name"],
+                quantity=net_item["quantity"],
+                unit_price=net_item["unit_price"],
+                total_price=net_item["total_price"],
+                currency=net_item["currency"],
                 selected_by_user=False,
             )
 
