@@ -18,6 +18,56 @@ def model_to_dict(model):
 
     return model
 
+def is_discount_item(item_name: str | None) -> bool:
+    if not item_name:
+        return False
+
+    normalized_name = item_name.strip().lower()
+
+    discount_keywords = [
+        "reducere",
+        "reduceri",
+        "discount",
+        "discounts",
+        "voucher",
+        "coupon",
+        "cupon",
+        "promo",
+        "promotie",
+        "promotion",
+        "rabatt",
+    ]
+
+    return any(
+        keyword in normalized_name
+        for keyword in discount_keywords
+    )
+
+def normalize_receipt_item_amounts(external_item) -> dict:
+    name = external_item.name or "Unknown item"
+
+    quantity = float(external_item.quantity or 1)
+
+    unit_price = (
+        float(external_item.unit_price)
+        if external_item.unit_price is not None
+        else None
+    )
+
+    total_price = float(external_item.total_price or 0)
+
+    if is_discount_item(name):
+        total_price = -abs(total_price)
+
+        if unit_price is not None:
+            unit_price = -abs(unit_price)
+
+    return {
+        "name": name,
+        "quantity": quantity,
+        "unit_price": unit_price,
+        "total_price": total_price,
+    }
 
 def process_document_with_azure_receipt_direct(
     db: Session,
@@ -77,17 +127,15 @@ def process_document_with_azure_receipt_direct(
         saved_items = []
 
         for external_item in result.items:
+            normalized_item = normalize_receipt_item_amounts(external_item)
+
             item = ReceiptItem(
                 case_id=document.case_id,
                 document_id=document.id,
-                name=external_item.name,
-                quantity=float(external_item.quantity or 1),
-                unit_price=(
-                    float(external_item.unit_price)
-                    if external_item.unit_price is not None
-                    else None
-                ),
-                total_price=float(external_item.total_price or 0),
+                name=normalized_item["name"],
+                quantity=normalized_item["quantity"],
+                unit_price=normalized_item["unit_price"],
+                total_price=normalized_item["total_price"],
                 currency=external_item.currency or result.currency or "RON",
                 selected_by_user=False,
             )
@@ -111,7 +159,7 @@ def process_document_with_azure_receipt_direct(
 
         document.document_type = "receipt"
         document.ocr_text = "\n".join(
-            f"{item.name} {item.total_price:.2f} {item.currency}"
+            f"{item.name} {item.total_price:+.2f} {item.currency}"
             for item in saved_items
         )
 
