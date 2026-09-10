@@ -33,6 +33,8 @@ from app.api.receipt_profiles import router as receipt_profiles_router
 from app.api.split_bill import router as split_bill_router
 from app.api.external_ocr import router as external_ocr_router
 from app.api.onboarding_otp import router as onboarding_otp_router
+from app.api.whatsapp import router as whatsapp_router
+
 
 ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(dotenv_path=ENV_PATH, override=True)
@@ -106,6 +108,11 @@ app.include_router(
     tags=["External OCR"]
 )
 
+app.include_router(
+    whatsapp_router,
+    prefix="/webhook",
+    tags=["WhatsApp"]
+)
 
 
 @app.get("/health")
