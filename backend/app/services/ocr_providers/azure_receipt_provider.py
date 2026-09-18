@@ -308,13 +308,22 @@ class AzureReceiptOCRProvider(ExternalOCRProvider):
         return {}
 
     def _parse_number(self, text: str) -> float | None:
+        if not text:
+            return None
+
         cleaned = (
-            text.replace("RON", "")
+            str(text)
+            .replace("RON", "")
             .replace("Lei", "")
             .replace("lei", "")
             .replace(",", ".")
             .strip()
         )
+
+        # Preserve negative sign from values such as:
+        # -21.41
+        # - 21,41
+        is_negative = "-" in cleaned
 
         number_parts = []
 
@@ -328,7 +337,13 @@ class AzureReceiptOCRProvider(ExternalOCRProvider):
             return None
 
         try:
-            return float(number_text)
+            value = float(number_text)
+
+            if is_negative:
+                value = -abs(value)
+
+            return value
+
         except ValueError:
             return None
 

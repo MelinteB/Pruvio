@@ -23,27 +23,40 @@ def is_discount_item(item_name: str | None) -> bool:
     if not item_name:
         return False
 
-    normalized_name = item_name.strip().lower()
+    normalized_name = (
+        item_name
+        .strip()
+        .lower()
+        .replace("ă", "a")
+        .replace("â", "a")
+        .replace("î", "i")
+        .replace("ș", "s")
+        .replace("ş", "s")
+        .replace("ț", "t")
+        .replace("ţ", "t")
+    )
 
     discount_keywords = [
         "reducere",
         "reduceri",
         "discount",
-        "discounts",
         "voucher",
         "coupon",
         "cupon",
         "promo",
         "promotie",
-        "promotion",
         "rabatt",
     ]
 
-    return any(
-        keyword in normalized_name
-        for keyword in discount_keywords
-    )
+    if any(keyword in normalized_name for keyword in discount_keywords):
+        return True
 
+    # OCR may read REDUCERE imperfectly:
+    # REDUCER, REDUC., REDUCE etc.
+    if normalized_name.startswith("reduc"):
+        return True
+
+    return False
 
 def safe_float(value, default: float = 0.0) -> float:
     if value is None:
@@ -53,7 +66,6 @@ def safe_float(value, default: float = 0.0) -> float:
         return float(value)
     except Exception:
         return default
-
 
 def build_net_receipt_items(raw_items: list, default_currency: str = "RON") -> list[dict]:
     """
@@ -77,8 +89,17 @@ def build_net_receipt_items(raw_items: list, default_currency: str = "RON") -> l
         )
         total_price = safe_float(raw_item.total_price, 0.0)
 
-        if is_discount_item(name) or total_price < 0:
-            discount_amount = -abs(total_price)
+        if (
+                is_discount_item(name)
+                or total_price < 0
+                or (unit_price is not None and unit_price < 0)
+            ):
+            discount_source = total_price
+
+            if discount_source == 0 and unit_price is not None:
+                discount_source = unit_price
+
+            discount_amount = -abs(discount_source)
 
             if net_items:
                 previous_item = net_items[-1]
