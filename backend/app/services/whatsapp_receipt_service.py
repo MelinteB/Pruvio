@@ -1,4 +1,5 @@
 import os
+import json
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -17,6 +18,7 @@ from app.services.split_bill_session_service import (
     get_owner_participant,
 )
 from app.services.whatsapp_service import download_whatsapp_media
+
 
 
 MIME_EXTENSION_MAP = {
@@ -116,7 +118,14 @@ def process_whatsapp_receipt(
         db=db,
         document_id=document.id,
     )
-
+    print(
+    "WHATSAPP OCR RESULT:",
+    json.dumps(
+        ocr_result,
+        ensure_ascii=False,
+        default=str
+    )
+)
     if not ocr_result.get("is_valid"):
         case.status = "needs_confirmation"
         db.commit()
@@ -126,9 +135,14 @@ def process_whatsapp_receipt(
             "case_id": case.id,
             "document_id": document.id,
             "message": (
-                "Am procesat bonul, dar totalul detectat nu se potriveste "
-                "cu suma produselor. Verifica rezultatul in Pruvio."
-            ),
+                        "Am procesat bonul, dar totalul nu se potriveste ⚠️\n\n"
+                        f"Total bon: {ocr_result.get('receipt_total', 0):.2f} "
+                        f"{ocr_result.get('currency', 'RON')}\n"
+                        f"Suma produse: {ocr_result.get('items_total', 0):.2f} "
+                        f"{ocr_result.get('currency', 'RON')}\n"
+                        f"Diferenta: {ocr_result.get('total_difference', 0):.2f} "
+                        f"{ocr_result.get('currency', 'RON')}"
+                    ),
             "ocr": ocr_result,
         }
 
