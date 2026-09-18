@@ -1,8 +1,11 @@
 import os
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy.orm import Session
 
+from app.db.database import get_db
+from app.services.whatsapp_receipt_service import process_whatsapp_receipt
 from app.services.whatsapp_service import send_whatsapp_text_message
 
 
@@ -20,7 +23,7 @@ def verify_whatsapp_webhook(
     if not expected_token:
         raise HTTPException(
             status_code=500,
-            detail="WHATSAPP_VERIFY_TOKEN is not configured."
+            detail="WHATSAPP_VERIFY_TOKEN is not configured.",
         )
 
     if hub_mode == "subscribe" and hub_verify_token == expected_token:
@@ -28,7 +31,7 @@ def verify_whatsapp_webhook(
 
     raise HTTPException(
         status_code=403,
-        detail="Webhook verification failed."
+        detail="Webhook verification failed.",
     )
 
 
@@ -47,18 +50,44 @@ def extract_whatsapp_messages(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 contact_name = profile.get("name")
 
             for message in value.get("messages", []):
+                message_type = message.get("type")
+                media_object = None
+
+                if message_type in {"image", "document"}:
+                    media_object = message.get(message_type, {}) or {}
+
                 messages.append(
                     {
                         "from": message.get("from"),
-                        "type": message.get("type"),
+                        "type": message_type,
                         "text": (
                             message.get("text", {}).get("body")
-                            if message.get("type") == "text"
+                            if message_type == "text"
                             else None
                         ),
                         "message_id": message.get("id"),
                         "timestamp": message.get("timestamp"),
                         "contact_name": contact_name,
+                        "media_id": (
+                            media_object.get("id")
+                            if media_object
+                            else None
+                        ),
+                        "mime_type": (
+                            media_object.get("mime_type")
+                            if media_object
+                            else None
+                        ),
+                        "filename": (
+                            media_object.get("filename")
+                            if media_object
+                            else None
+                        ),
+                        "caption": (
+                            media_object.get("caption")
+                            if media_object
+                            else None
+                        ),
                         "raw": message,
                     }
                 )
@@ -66,10 +95,22 @@ def extract_whatsapp_messages(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return messages
 
 
-@router.post("/whatsapp")
-async def receive_whatsapp_webhook(request: Request):
-    payload = await request.json()
+def _send_reply(sender: str, text: str):
+    try:
+        send_whatsapp_text_message(
+            to_phone_number=sender,
+            message=text,
+        )
+    except Exception as error:
+        print(f"WhatsApp reply failed: {error}")
 
+
+@router.post("/whatsapp")
+async def receive_whatsapp_webhook(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    payload = await request.json()
     messages = extract_whatsapp_messages(payload)
 
     for message in messages:
@@ -86,14 +127,14 @@ async def receive_whatsapp_webhook(request: Request):
             if lower_text in ["start", "hi", "hello", "salut", "buna", "bună"]:
                 reply = (
                     "Salut! Sunt Pruvio ✅\n\n"
-                    "Trimite-mi o poza cu bonul, iar eu te ajut sa il procesez "
-                    "si sa creez nota de plata partajata."
+                    "Trimite-mi o poza cu bonul, iar eu il procesez "
+                    "si iti creez automat nota de plata partajata."
                 )
             elif lower_text in ["split", "nota", "bon"]:
                 reply = (
                     "Perfect ✅\n\n"
-                    "Trimite-mi poza bonului, iar dupa procesare iti voi genera "
-                    "un link Pruvio pentru impartirea notei."
+                    "Trimite-mi poza bonului. Dupa procesare iti voi trimite "
+                    "linkul Pruvio pentru impartirea notei."
                 )
             else:
                 reply = (
@@ -101,28 +142,94 @@ async def receive_whatsapp_webhook(request: Request):
                     "Pentru test, trimite: start, bon sau split."
                 )
 
-            try:
-                send_whatsapp_text_message(
-                    to_phone_number=sender,
-                    message=reply
-                )
-            except Exception as error:
-                print(f"WhatsApp reply failed: {error}")
+            _send_reply(sender, reply)
+            continue
 
-        else:
-            try:
-                send_whatsapp_text_message(
-                    to_phone_number=sender,
-                    message=(
-                        "Am primit fisierul tau ✅\n\n"
-                        "In pasul urmator voi procesa automat imaginile/PDF-urile "
-                        "prin Azure OCR."
-                    )
+        if message_type in {"image", "document"}:
+            media_id = message.get("media_id")
+
+            if not media_id:
+                _send_reply(
+                    sender,
+                    "Am primit mesajul, dar nu am gasit identificatorul fisierului.",
                 )
+                continue
+
+            _send_reply(
+                sender,
+                "Am primit bonul ✅ Il procesez acum prin Azure OCR...",
+            )
+
+            try:
+                result = process_whatsapp_receipt(
+                    db=db,
+                    sender_phone=sender,
+                    contact_name=message.get("contact_name"),
+                    media_id=media_id,
+                    mime_type=message.get("mime_type"),
+                    filename=message.get("filename"),
+                )
+
+                if result["status"] == "onboarding_required":
+                    _send_reply(sender, result["message"])
+                    continue
+
+                if result["status"] == "needs_confirmation":
+                    _send_reply(sender, result["message"])
+                    continue
+
+                merchant = result.get("merchant_name") or "Bon"
+                total = float(result.get("receipt_total") or 0)
+                currency = result.get("currency") or "RON"
+                items_count = result.get("items_count") or 0
+                participants = result.get("expected_participants_count") or 2
+                owner_url = result.get("owner_widget_url")
+                share_url = result.get("share_url")
+
+                reply_parts = [
+                    "Bon procesat cu succes ✅",
+                    "",
+                    f"Magazin: {merchant}",
+                    f"Total: {total:.2f} {currency}",
+                    f"Produse: {items_count}",
+                    f"Participanti: {participants}",
+                ]
+
+                if owner_url:
+                    reply_parts.extend(
+                        [
+                            "",
+                            "Deschide nota ta Pruvio:",
+                            owner_url,
+                        ]
+                    )
+
+                if share_url:
+                    reply_parts.extend(
+                        [
+                            "",
+                            "Link pentru ceilalti participanti:",
+                            share_url,
+                        ]
+                    )
+
+                _send_reply(sender, "\n".join(reply_parts))
+
             except Exception as error:
-                print(f"WhatsApp media reply failed: {error}")
+                print(f"WhatsApp receipt processing failed: {error}")
+                _send_reply(
+                    sender,
+                    "Nu am putut procesa bonul. Incearca din nou cu o poza mai clara sau un PDF.",
+                )
+
+            continue
+
+        _send_reply(
+            sender,
+            "Momentan pot procesa mesaje text, poze cu bonuri si PDF-uri.",
+        )
 
     return {
         "status": "received",
-        "messages_count": len(messages)
+        "messages_count": len(messages),
     }
