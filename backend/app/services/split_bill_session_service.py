@@ -461,9 +461,9 @@ def join_split_bill_session(
             "participant_id": existing_participant.id,
             "participant_token": existing_participant.participant_token,
             "display_name": existing_participant.display_name,
-            "widget_url": build_widget_url(
-                token=session.token,
-                participant_id=existing_participant.id
+            "widget_url": build_participant_url(
+                session_token=session.token,
+                participant_token=existing_participant.participant_token
             )
         }
 
@@ -504,9 +504,9 @@ def join_split_bill_session(
         "participant_id": participant.id,
         "participant_token": participant.participant_token,
         "display_name": participant.display_name,
-        "widget_url": build_widget_url(
-            token=session.token,
-            participant_id=participant.id
+        "widget_url": build_participant_url(
+            session_token=session.token,
+            participant_token=participant.participant_token
         )
     }
 
@@ -829,3 +829,38 @@ def close_split_bill_session(
         "closed_at": session.closed_at,
         "message": "Split bill session was closed successfully."
     }
+
+def update_expected_participants_count(
+    db: Session,
+    session: SplitBillSession,
+    owner_user_id: int,
+    expected_participants_count: int,
+) -> dict:
+    if session.status != "open":
+        raise ValueError("This split bill session is closed.")
+
+    if session.owner_user_id != owner_user_id:
+        raise ValueError("Only the bill owner can change the participant count.")
+
+    joined_count = get_joined_participants_count(
+        db=db,
+        session=session,
+    )
+
+    if expected_participants_count < joined_count:
+        raise ValueError(
+            f"Participant count cannot be lower than {joined_count}, "
+            "because those participants have already joined."
+        )
+
+    if expected_participants_count > 20:
+        raise ValueError("Participant count cannot be greater than 20.")
+
+    session.expected_participants_count = expected_participants_count
+    db.commit()
+    db.refresh(session)
+
+    return get_split_bill_session_summary(
+        db=db,
+        session=session,
+    )

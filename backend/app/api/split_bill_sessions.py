@@ -27,6 +27,7 @@ from app.services.split_bill_session_service import (
     build_share_url,
     build_qr_url,
     build_widget_url,
+    build_participant_url,
     get_owner_participant,
 )
 

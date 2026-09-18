@@ -1,5 +1,4 @@
 import os
-import json
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -13,12 +12,11 @@ from app.services.document_service import save_document_bytes
 from app.services.onboarding_otp_service import normalize_phone_number
 from app.services.split_bill_session_service import (
     build_share_url,
-    build_widget_url,
+    build_participant_url,
     create_split_bill_session,
     get_owner_participant,
 )
 from app.services.whatsapp_service import download_whatsapp_media
-
 
 
 MIME_EXTENSION_MAP = {
@@ -118,14 +116,7 @@ def process_whatsapp_receipt(
         db=db,
         document_id=document.id,
     )
-    print(
-    "WHATSAPP OCR RESULT:",
-    json.dumps(
-        ocr_result,
-        ensure_ascii=False,
-        default=str
-    )
-)
+
     if not ocr_result.get("is_valid"):
         case.status = "needs_confirmation"
         db.commit()
@@ -135,14 +126,9 @@ def process_whatsapp_receipt(
             "case_id": case.id,
             "document_id": document.id,
             "message": (
-                        "Am procesat bonul, dar totalul nu se potriveste ⚠️\n\n"
-                        f"Total bon: {ocr_result.get('receipt_total', 0):.2f} "
-                        f"{ocr_result.get('currency', 'RON')}\n"
-                        f"Suma produse: {ocr_result.get('items_total', 0):.2f} "
-                        f"{ocr_result.get('currency', 'RON')}\n"
-                        f"Diferenta: {ocr_result.get('total_difference', 0):.2f} "
-                        f"{ocr_result.get('currency', 'RON')}"
-                    ),
+                "Am procesat bonul, dar totalul detectat nu se potriveste "
+                "cu suma produselor. Verifica rezultatul in Pruvio."
+            ),
             "ocr": ocr_result,
         }
 
@@ -164,9 +150,9 @@ def process_whatsapp_receipt(
 
     owner_widget_url = None
     if owner_participant:
-        owner_widget_url = build_widget_url(
-            token=session.token,
-            participant_id=owner_participant.id,
+        owner_widget_url = build_participant_url(
+            session_token=session.token,
+            participant_token=owner_participant.participant_token,
         )
 
     case.status = "needs_confirmation"

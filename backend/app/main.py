@@ -1,14 +1,18 @@
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
+
+ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(dotenv_path=ENV_PATH, override=False)
+
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from nicegui import ui
-from app.ui.split_bill_widget_ui import setup_split_bill_widget_ui
-from app.ui.split_bill_session_widget_ui import setup_split_bill_session_widget_ui
 
 from app.db.database import Base, engine
 
+# Import every model before create_all so new tables are created.
 from app.models.split_bill_session import SplitBillSession
 from app.models.split_bill_participant import SplitBillParticipant
 from app.models.split_bill_item_assignment import SplitBillItemAssignment
@@ -23,6 +27,7 @@ from app.models.receipt_correction import ReceiptCorrection
 from app.models.external_ocr_usage import ExternalOCRUsage
 from app.models.receipt_item import ReceiptItem
 from app.models.verification_code import VerificationCode
+from app.models.whatsapp_event import WhatsAppEvent
 
 from app.api.users import router as users_router
 from app.api.cases import router as cases_router
@@ -34,13 +39,11 @@ from app.api.split_bill import router as split_bill_router
 from app.api.external_ocr import router as external_ocr_router
 from app.api.onboarding_otp import router as onboarding_otp_router
 from app.api.whatsapp import router as whatsapp_router
+from app.ui.split_bill_widget_ui import setup_split_bill_widget_ui
+from app.ui.split_bill_session_widget_ui import setup_split_bill_session_widget_ui
 
-
-ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
-load_dotenv(dotenv_path=ENV_PATH, override=True)
 
 Base.metadata.create_all(bind=engine)
-load_dotenv()
 
 app = FastAPI(
     title="Pruvio Core",
@@ -48,71 +51,21 @@ app = FastAPI(
 Pruvio is a WhatsApp-first modular platform.
 
 Users send receipts, invoices, screenshots, QR codes, PDFs and text messages.
-
 Pruvio analyzes the content, identifies the user's intent and activates the appropriate service module.
 """,
-    version="1.0.0"
+    version="1.0.0",
 )
 
-app.include_router(
-    users_router,
-    prefix="/users",
-    tags=["Users"]
-)
-
-app.include_router(
-    onboarding_otp_router,
-    prefix="/onboarding/otp",
-    tags=["Onboarding OTP"]
-)
-
-app.include_router(
-    split_bill_sessions_router,
-    prefix="/split-bill",
-    tags=["Split Bill Sessions"]
-)
-
-app.include_router(
-    cases_router,
-    prefix="/cases",
-    tags=["Cases"]
-)
-
-app.include_router(
-    webhook_router,
-    prefix="/webhook",
-    tags=["Webhook"]
-)
-
-app.include_router(
-    documents_router,
-    prefix="/documents",
-    tags=["Documents"]
-)
-
-app.include_router(
-    split_bill_router,
-    prefix="/split-bill",
-    tags=["Split Bill"]
-)
-
-app.include_router(
-    receipt_profiles_router,
-    prefix="/receipt-profiles",
-    tags=["Receipt Profiles"]
-)
-
-app.include_router(
-    external_ocr_router,
-    prefix="/external-ocr",
-    tags=["External OCR"]
-)
-
-app.include_router(
-    whatsapp_router,
-    prefix="/webhook",
-    tags=["WhatsApp"]
-)
+app.include_router(users_router, prefix="/users", tags=["Users"])
+app.include_router(onboarding_otp_router, prefix="/onboarding/otp", tags=["Onboarding OTP"])
+app.include_router(split_bill_sessions_router, prefix="/split-bill", tags=["Split Bill Sessions"])
+app.include_router(cases_router, prefix="/cases", tags=["Cases"])
+app.include_router(webhook_router, prefix="/webhook", tags=["Webhook"])
+app.include_router(documents_router, prefix="/documents", tags=["Documents"])
+app.include_router(split_bill_router, prefix="/split-bill", tags=["Split Bill"])
+app.include_router(receipt_profiles_router, prefix="/receipt-profiles", tags=["Receipt Profiles"])
+app.include_router(external_ocr_router, prefix="/external-ocr", tags=["External OCR"])
+app.include_router(whatsapp_router, prefix="/webhook", tags=["WhatsApp"])
 
 
 @app.get("/health")
@@ -120,23 +73,26 @@ def health():
     return {
         "status": "ok",
         "app": "Pruvio Core",
-        "database": "connected"
+        "database": "connected",
     }
+
 
 @app.get("/debug/database")
 def debug_database():
     return {
         "database_url_present": bool(os.getenv("DATABASE_URL")),
         "database_dialect": engine.dialect.name,
-        "database_driver": engine.dialect.driver
+        "database_driver": engine.dialect.driver,
     }
+
 
 @app.get("/s/{token}")
 def short_split_bill_link(token: str):
     return RedirectResponse(
         url=f"/split-bill/sessions/{token}/join",
-        status_code=302
+        status_code=302,
     )
+
 
 setup_split_bill_widget_ui()
 setup_split_bill_session_widget_ui()

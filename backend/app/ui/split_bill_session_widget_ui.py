@@ -1,3 +1,4 @@
+import json
 from fastapi import Request
 from nicegui import ui
 
@@ -9,6 +10,7 @@ from app.services.split_bill_session_service import (
     save_participant_selection,
     close_split_bill_session,
     get_split_bill_participant_by_token,
+    update_expected_participants_count,
 )
 from app.services.onboarding_otp_service import (
     start_otp_onboarding,
@@ -84,8 +86,9 @@ def setup_split_bill_session_widget_ui():
                 )
                 return
 
-            ui.navigate.to(
-                f"/split-bill/sessions/{token}/widget-ui?participant_id={participant.id}"
+            render_widget_page(
+                token=token,
+                participant_id=participant.id
             )
 
         finally:
@@ -93,59 +96,107 @@ def setup_split_bill_session_widget_ui():
 
 
 def add_global_style():
-    ui.page_title("Pruvio Split Bill")
+    ui.page_title("Pruvio")
 
     ui.colors(
-        primary="#0f172a",
+        primary="#111827",
         secondary="#64748b",
-        accent="#0284c7",
-        positive="#047857",
-        negative="#b91c1c"
+        accent="#10b981",
+        positive="#059669",
+        negative="#dc2626"
     )
 
     ui.add_head_html(
         """
         <style>
+            :root {
+                color-scheme: light;
+            }
+
             body {
+                margin: 0;
                 background:
-                    radial-gradient(circle at top left, rgba(14,165,233,.14), transparent 34%),
-                    linear-gradient(180deg, #ffffff 0%, #f5f7fb 42%, #e2e8f0 100%);
+                    radial-gradient(circle at 15% -10%, rgba(16,185,129,.10), transparent 28%),
+                    #f6f7f9;
+                color: #111827;
             }
 
             .pruvio-page {
                 width: 100%;
                 min-height: 100vh;
-                padding: 18px;
+                padding: 14px;
             }
 
             .pruvio-shell {
                 width: 100%;
-                max-width: 1120px;
+                max-width: 980px;
                 margin: 0 auto;
             }
 
             .pruvio-card {
-                border-radius: 28px;
-                box-shadow: 0 18px 50px rgba(15, 23, 42, 0.10);
-                border: 1px solid rgba(226, 232, 240, 0.95);
-                background: rgba(255, 255, 255, 0.94);
-                backdrop-filter: blur(12px);
+                border-radius: 22px;
+                border: 1px solid rgba(226,232,240,.9);
+                background: rgba(255,255,255,.92);
+                box-shadow: 0 10px 32px rgba(15,23,42,.055);
+                backdrop-filter: blur(16px);
             }
 
-            .pruvio-item-card {
-                border-radius: 20px;
-                border: 1px solid #e2e8f0;
-                background: #ffffff;
-            }
-
-            .pruvio-item-locked {
-                opacity: .62;
+            .metric-pill {
+                padding: 8px 11px;
+                border-radius: 999px;
                 background: #f8fafc;
+                border: 1px solid #e5e7eb;
+                color: #334155;
+                font-size: 12px;
+                font-weight: 800;
             }
 
-            @media (max-width: 800px) {
+            .metric-pill-accent {
+                background: #ecfdf5;
+                border-color: #d1fae5;
+                color: #047857;
+            }
+
+            .item-row {
+                border-bottom: 1px solid #f1f5f9;
+                transition: background .16s ease;
+            }
+
+            .item-row:last-child {
+                border-bottom: 0;
+            }
+
+            .item-row:hover {
+                background: rgba(248,250,252,.72);
+            }
+
+            .compact-btn {
+                min-height: 40px;
+                padding: 0 16px;
+                border-radius: 13px;
+                font-size: 13px;
+                font-weight: 800;
+                letter-spacing: -.01em;
+                box-shadow: none;
+            }
+
+            .compact-btn-primary {
+                background: #111827;
+                color: white;
+            }
+
+            .compact-btn-secondary {
+                background: #f8fafc;
+                color: #334155;
+                border: 1px solid #e2e8f0;
+            }
+
+            @media (max-width: 700px) {
                 .pruvio-page {
-                    padding: 12px;
+                    padding: 10px;
+                }
+                .pruvio-card {
+                    border-radius: 18px;
                 }
             }
         </style>
@@ -671,8 +722,8 @@ def render_widget_page(
 
     if not summary:
         render_error_page(
-            title="Split bill not found",
-            message="The link is invalid or expired."
+            title="Nota nu a fost gasita",
+            message="Linkul este invalid sau a expirat."
         )
         return
 
@@ -689,8 +740,8 @@ def render_widget_page(
 
     if not current_participant:
         render_error_page(
-            title="Participant not found",
-            message="You are not connected to this split bill session."
+            title="Participant negasit",
+            message="Nu esti conectat la aceasta nota."
         )
         return
 
@@ -702,313 +753,343 @@ def render_widget_page(
         if item["participant_id"] == participant_id
     }
 
-    with ui.element("main").classes("pruvio-page"):
-        with ui.column().classes("pruvio-shell gap-4"):
+    def reload_page():
+        ui.navigate.to(
+            f"/split-bill/sessions/{token}/widget-ui?participant_id={participant_id}"
+        )
 
-            with ui.row().classes("w-full items-center justify-between gap-3"):
+    def split_item_label(name: str) -> tuple[str, str | None]:
+        marker = " | Reducere "
+        if marker not in name:
+            return name, None
+        base_name, discount = name.split(marker, 1)
+        return base_name, f"Reducere {discount}"
+
+    share_url = summary["share_url"]
+    share_message = (
+        "Te invit sa impartim nota in Pruvio. "
+        "Deschide linkul si alege produsele tale."
+    )
+
+    def share_invitation():
+        script = f"""
+        (() => {{
+            const data = {{
+                title: 'Pruvio',
+                text: {json.dumps(share_message)},
+                url: {json.dumps(share_url)}
+            }};
+            if (navigator.share) {{
+                navigator.share(data).catch(() => {{}});
+            }} else if (navigator.clipboard) {{
+                navigator.clipboard.writeText(data.text + '\\n' + data.url);
+            }}
+        }})();
+        """
+        ui.run_javascript(script)
+
+    def copy_invitation():
+        text_to_copy = f"{share_message}\n{share_url}"
+        ui.run_javascript(
+            f"navigator.clipboard.writeText({json.dumps(text_to_copy)})"
+        )
+        ui.notify("Link copiat.", type="positive", position="top")
+
+    with ui.element("main").classes("pruvio-page"):
+        with ui.column().classes("pruvio-shell gap-3"):
+
+            with ui.row().classes("w-full items-center justify-between gap-3 px-1"):
                 with ui.row().classes("items-center gap-3"):
                     ui.label("P").classes(
-                        "w-11 h-11 rounded-2xl bg-slate-900 text-white "
-                        "font-black text-xl flex items-center justify-center shadow-lg"
+                        "w-10 h-10 rounded-xl bg-slate-950 text-white "
+                        "font-black text-lg flex items-center justify-center"
                     )
-
                     with ui.column().classes("gap-0"):
                         ui.label("Pruvio").classes(
-                            "text-lg font-black text-slate-900 leading-tight"
+                            "text-base font-black text-slate-950 leading-tight"
                         )
-                        ui.label("Shared split bill").classes(
-                            "text-xs text-slate-500"
+                        ui.label("Split bill").classes(
+                            "text-[11px] text-slate-500 tracking-wide uppercase"
                         )
 
-                ui.button(
-                    "Refresh",
-                    on_click=lambda: ui.navigate.to(
-                        f"/split-bill/sessions/{token}/widget-ui?participant_id={participant_id}"
-                    )
-                ).props("outline").classes("rounded-full text-xs")
-
-            with ui.card().classes("pruvio-card w-full p-6 sm:p-8"):
-                ui.label(f"Salut, {current_participant['display_name']}").classes(
-                    "text-3xl sm:text-5xl font-black text-slate-900 "
-                    "tracking-tight leading-tight"
+                status_text = "Deschisa" if summary["status"] == "open" else "Inchisa"
+                ui.label(status_text).classes(
+                    "px-3 py-1.5 rounded-full bg-white border border-slate-200 "
+                    "text-xs font-bold text-slate-600"
                 )
 
-                ui.label(
-                    "Selecteaza produsele tale. Produsele deja selectate "
-                    "de alti participanti sunt blocate."
-                ).classes("text-sm sm:text-base text-slate-500 mt-2")
-
-                with ui.row().classes("gap-3 mt-5 flex-wrap"):
-                    ui.label(
-                        f"Total bon: {summary['bill_total']:.2f} {currency}"
-                    ).classes("px-4 py-3 rounded-2xl bg-slate-100 font-black")
-
-                    ui.label(
-                        f"Asignat: {summary['assigned_total']:.2f} {currency}"
-                    ).classes("px-4 py-3 rounded-2xl bg-slate-100 font-black")
-
-                    ui.label(
-                        f"Ramas: {summary['remaining_total']:.2f} {currency}"
-                    ).classes("px-4 py-3 rounded-2xl bg-green-50 text-green-700 font-black")
-
-                    ui.label(
-                        f"Participanti: {summary['joined_participants_count']} / "
-                        f"{summary['expected_participants_count']}"
-                    ).classes("px-4 py-3 rounded-2xl bg-slate-100 font-black")
-
-            with ui.row().classes("w-full gap-4 items-start flex-col lg:flex-row"):
-
-                with ui.card().classes(
-                    "pruvio-card w-full lg:flex-1 p-0 overflow-hidden"
+            with ui.card().classes("pruvio-card w-full p-5 sm:p-6"):
+                with ui.row().classes(
+                    "w-full items-start justify-between gap-5 flex-col md:flex-row"
                 ):
+                    with ui.column().classes("gap-1"):
+                        ui.label(
+                            f"Salut, {current_participant['display_name']}"
+                        ).classes(
+                            "text-2xl sm:text-3xl font-black text-slate-950 tracking-tight"
+                        )
+                        ui.label(
+                            "Alege produsele tale. Modificarile raman sincronizate cu ceilalti participanti."
+                        ).classes("text-sm text-slate-500 max-w-2xl")
+
+                    with ui.row().classes("gap-2 flex-wrap"):
+                        ui.label(
+                            f"{summary['bill_total']:.2f} {currency}"
+                        ).classes("metric-pill")
+                        ui.label(
+                            f"Ramas {summary['remaining_total']:.2f} {currency}"
+                        ).classes("metric-pill metric-pill-accent")
+                        ui.label(
+                            f"{summary['joined_participants_count']}/{summary['expected_participants_count']} persoane"
+                        ).classes("metric-pill")
+
+                progress_value = 0.0
+                if summary["bill_total"]:
+                    progress_value = min(
+                        1.0,
+                        max(0.0, summary["assigned_total"] / summary["bill_total"])
+                    )
+
+                ui.linear_progress(value=progress_value).classes(
+                    "w-full mt-4 rounded-full h-2"
+                )
+
+            if is_owner and summary["status"] == "open":
+                with ui.card().classes("pruvio-card w-full p-4 sm:p-5"):
+                    with ui.row().classes(
+                        "w-full items-center justify-between gap-4 flex-col md:flex-row"
+                    ):
+                        with ui.column().classes("gap-0"):
+                            ui.label("Invita participantii").classes(
+                                "text-base font-black text-slate-950"
+                            )
+                            ui.label(
+                                "Alege numarul total de persoane, inclusiv tu, apoi distribuie invitatia."
+                            ).classes("text-xs text-slate-500")
+
+                        with ui.row().classes("items-end gap-2 flex-wrap justify-end"):
+                            participant_count_input = ui.number(
+                                label="Participanti",
+                                value=summary["expected_participants_count"],
+                                min=summary["joined_participants_count"],
+                                max=20,
+                                step=1,
+                            ).props("outlined dense").classes("w-32")
+
+                            def save_participant_count():
+                                try:
+                                    new_count = int(participant_count_input.value or 0)
+                                except (TypeError, ValueError):
+                                    ui.notify("Numar invalid.", type="warning", position="top")
+                                    return
+
+                                db = SessionLocal()
+                                try:
+                                    session = get_split_bill_session_by_token(db=db, token=token)
+                                    update_expected_participants_count(
+                                        db=db,
+                                        session=session,
+                                        owner_user_id=current_participant["user_id"],
+                                        expected_participants_count=new_count,
+                                    )
+                                except ValueError as error:
+                                    ui.notify(str(error), type="negative", position="top")
+                                    return
+                                finally:
+                                    db.close()
+
+                                ui.notify("Numarul de participanti a fost actualizat.", type="positive", position="top")
+                                reload_page()
+
+                            ui.button(
+                                "Salveaza",
+                                on_click=save_participant_count,
+                            ).classes("compact-btn compact-btn-secondary")
+
+                            ui.button(
+                                "Distribuie",
+                                icon="ios_share",
+                                on_click=share_invitation,
+                            ).classes("compact-btn compact-btn-primary")
+
+                            ui.button(
+                                icon="content_copy",
+                                on_click=copy_invitation,
+                            ).props("flat round").classes("text-slate-600")
+
+            with ui.row().classes("w-full gap-3 items-start flex-col lg:flex-row"):
+                with ui.card().classes("pruvio-card w-full lg:flex-1 p-0 overflow-hidden"):
+                    with ui.row().classes(
+                        "w-full items-center justify-between px-4 sm:px-5 py-4 border-b border-slate-100"
+                    ):
+                        with ui.column().classes("gap-0"):
+                            ui.label("Produse").classes("text-base font-black text-slate-950")
+                            ui.label("Selecteaza ce ai consumat").classes("text-xs text-slate-500")
+
+                        my_total_label = ui.label("").classes(
+                            "text-sm font-black text-emerald-700"
+                        )
+
                     with ui.column().classes("w-full gap-0"):
-
-                        with ui.row().classes(
-                            "w-full items-center justify-between p-5 border-b border-slate-200"
-                        ):
-                            with ui.column().classes("gap-1"):
-                                ui.label("Produse").classes(
-                                    "text-lg font-black text-slate-900"
-                                )
-                                ui.label(
-                                    f"Selectie pentru {current_participant['display_name']}"
-                                ).classes("text-sm text-slate-500")
-
-                            my_total_label = ui.label("").classes(
-                                "font-black text-green-700"
+                        def refresh_my_total():
+                            my_total = sum(
+                                float(item["total_price"] or 0)
+                                for item in summary["items"]
+                                if item["item_id"] in selected_item_ids
+                            )
+                            my_total_label.set_text(
+                                f"Al tau · {my_total:.2f} {currency}"
                             )
 
-                        with ui.column().classes("w-full gap-2 p-3"):
-
-                            def refresh_my_total():
-                                my_total = 0.0
-
-                                for item in summary["items"]:
-                                    if item["item_id"] in selected_item_ids:
-                                        my_total += float(item["total_price"] or 0)
-
-                                my_total_label.set_text(
-                                    f"Totalul tau: {my_total:.2f} {currency}"
-                                )
-
-                            def toggle_item(item_id: int, checked: bool):
-                                if checked:
-                                    selected_item_ids.add(item_id)
-                                else:
-                                    selected_item_ids.discard(item_id)
-
-                                refresh_my_total()
-
-                            for item in summary["items"]:
-                                item_id = item["item_id"]
-                                assigned_to = item["assigned_to"]
-                                assigned_participant_id = item["participant_id"]
-
-                                is_assigned = item["status"] == "assigned"
-                                is_mine = assigned_participant_id == participant_id
-
-                                disabled = (
-                                    summary["status"] != "open"
-                                    or (is_assigned and not is_mine)
-                                )
-
-                                card_class = "pruvio-item-card w-full shadow-none p-4"
-
-                                if is_assigned and not is_mine:
-                                    card_class += " pruvio-item-locked"
-
-                                with ui.card().classes(card_class):
-                                    with ui.row().classes(
-                                        "w-full items-center justify-between gap-3"
-                                    ):
-                                        with ui.row().classes(
-                                            "items-center gap-3 flex-1"
-                                        ):
-                                            checkbox = ui.checkbox(
-                                                value=is_mine,
-                                                on_change=lambda e, item_id=item_id: toggle_item(
-                                                    item_id=item_id,
-                                                    checked=e.value
-                                                )
-                                            )
-
-                                            if disabled:
-                                                checkbox.disable()
-
-                                            with ui.column().classes("gap-1 flex-1"):
-                                                ui.label(item["name"]).classes(
-                                                    "font-black text-slate-900 leading-tight"
-                                                )
-
-                                                if is_mine:
-                                                    ui.label("Selectat de tine").classes(
-                                                        "text-xs text-green-700 font-bold"
-                                                    )
-                                                elif assigned_to:
-                                                    ui.label(
-                                                        f"Selectat deja de {assigned_to}"
-                                                    ).classes(
-                                                        "text-xs text-orange-700 font-bold"
-                                                    )
-                                                else:
-                                                    ui.label("Disponibil").classes(
-                                                        "text-xs text-slate-500"
-                                                    )
-
-                                        ui.label(
-                                            f"{item['total_price']:.2f} {currency}"
-                                        ).classes(
-                                            "font-black text-slate-900 whitespace-nowrap"
-                                        )
-
+                        def toggle_item(item_id: int, checked: bool):
+                            if checked:
+                                selected_item_ids.add(item_id)
+                            else:
+                                selected_item_ids.discard(item_id)
                             refresh_my_total()
 
-                with ui.card().classes(
-                    "pruvio-card w-full lg:w-[370px] p-5 sticky top-4"
-                ):
-                    ui.label("Rezumat nota").classes(
-                        "text-lg font-black text-slate-900"
-                    )
-
-                    ui.label(
-                        f"Total bon: {summary['bill_total']:.2f} {currency}"
-                    ).classes("mt-3 font-bold")
-
-                    ui.label(
-                        f"Asignat: {summary['assigned_total']:.2f} {currency}"
-                    ).classes("font-bold")
-
-                    ui.label(
-                        f"Ramas: {summary['remaining_total']:.2f} {currency}"
-                    ).classes("font-black text-green-700")
-
-                    ui.label(
-                        f"Participanti: {summary['joined_participants_count']} / "
-                        f"{summary['expected_participants_count']}"
-                    ).classes("font-bold mt-2")
-
-                    if summary["close_block_reason"]:
-                        ui.label(summary["close_block_reason"]).classes(
-                            "text-sm text-orange-700 mt-2"
-                        )
-
-                    def save_my_selection():
-                        db = SessionLocal()
-
-                        try:
-                            session = get_split_bill_session_by_token(
-                                db=db,
-                                token=token
+                        for item in summary["items"]:
+                            item_id = item["item_id"]
+                            assigned_to = item["assigned_to"]
+                            assigned_participant_id = item["participant_id"]
+                            is_assigned = item["status"] == "assigned"
+                            is_mine = assigned_participant_id == participant_id
+                            disabled = (
+                                summary["status"] != "open"
+                                or (is_assigned and not is_mine)
                             )
 
-                            save_participant_selection(
-                                db=db,
-                                session=session,
-                                participant_id=participant_id,
-                                selected_item_ids=list(selected_item_ids)
-                            )
+                            product_name, discount_text = split_item_label(item["name"])
 
-                        except ValueError as error:
-                            ui.notify(
-                                str(error),
-                                type="negative",
-                                position="top"
-                            )
-                            return
+                            with ui.row().classes(
+                                "item-row w-full items-center gap-3 px-4 sm:px-5 py-3.5"
+                            ):
+                                checkbox = ui.checkbox(
+                                    value=is_mine,
+                                    on_change=lambda e, item_id=item_id: toggle_item(
+                                        item_id=item_id,
+                                        checked=e.value,
+                                    )
+                                ).props("dense")
 
-                        finally:
-                            db.close()
+                                if disabled:
+                                    checkbox.disable()
 
-                        ui.notify(
-                            "Selectia ta a fost salvata.",
-                            type="positive",
-                            position="top"
-                        )
+                                with ui.column().classes("gap-0 flex-1 min-w-0"):
+                                    ui.label(product_name).classes(
+                                        "text-sm font-bold text-slate-900 leading-snug"
+                                    )
 
-                        ui.navigate.to(
-                            f"/split-bill/sessions/{token}/widget-ui?participant_id={participant_id}"
-                        )
+                                    status_parts = []
+                                    if discount_text:
+                                        status_parts.append(discount_text)
+                                    if is_mine:
+                                        status_parts.append("Selectat de tine")
+                                    elif assigned_to:
+                                        status_parts.append(f"{assigned_to}")
 
-                    if summary["status"] == "open":
-                        ui.button(
-                            "Salveaza selectia mea",
-                            on_click=save_my_selection
-                        ).classes(
-                            "w-full h-13 rounded-2xl bg-slate-900 "
-                            "text-white font-black mt-4"
-                        )
-                    else:
-                        ui.label("Nota este inchisa.").classes(
-                            "text-sm text-slate-500 mt-4"
-                        )
+                                    if status_parts:
+                                        ui.label(" · ".join(status_parts)).classes(
+                                            "text-[11px] text-slate-500"
+                                        )
 
-                    if is_owner:
-                        ui.separator().classes("my-4")
+                                ui.label(
+                                    f"{item['total_price']:.2f} {currency}"
+                                ).classes("text-sm font-black text-slate-950 whitespace-nowrap")
 
-                        ui.label("Owner controls").classes(
-                            "text-sm font-black text-slate-700"
-                        )
+                        refresh_my_total()
 
-                        def close_session():
-                            db = SessionLocal()
+                with ui.column().classes("w-full lg:w-[300px] gap-3 lg:sticky lg:top-3"):
+                    with ui.card().classes("pruvio-card w-full p-4 sm:p-5"):
+                        ui.label("Nota ta").classes("text-base font-black text-slate-950")
 
-                            try:
-                                session = get_split_bill_session_by_token(
-                                    db=db,
-                                    token=token
-                                )
-
-                                close_split_bill_session(
-                                    db=db,
-                                    session=session,
-                                    owner_user_id=current_participant["user_id"]
-                                )
-
-                            except ValueError as error:
-                                ui.notify(
-                                    str(error),
-                                    type="negative",
-                                    position="top"
-                                )
-                                return
-
-                            finally:
-                                db.close()
-
-                            ui.notify(
-                                "Nota a fost inchisa.",
-                                type="positive",
-                                position="top"
-                            )
-
-                            ui.navigate.to(
-                                f"/split-bill/sessions/{token}/widget-ui?participant_id={participant_id}"
-                            )
-
-                        close_button = ui.button(
-                            "Inchide nota",
-                            on_click=close_session
-                        ).props("outline").classes(
-                            "w-full rounded-2xl font-black mt-2"
-                        )
-
-                        if not summary["can_close"]:
-                            close_button.disable()
-
-                    ui.separator().classes("my-4")
-
-                    ui.label("Participanti").classes(
-                        "text-sm font-black text-slate-700"
-                    )
-
-                    for participant in summary["participants"]:
-                        with ui.row().classes("w-full justify-between mt-2"):
-                            name = participant["display_name"]
-
-                            if participant["role"] == "owner":
-                                name = f"{name} · owner"
-
-                            ui.label(name).classes("font-bold")
+                        with ui.row().classes("w-full justify-between mt-3"):
+                            ui.label("Alocat").classes("text-sm text-slate-500")
                             ui.label(
-                                f"{participant['total']:.2f} {currency}"
-                            ).classes("font-black")
+                                f"{summary['assigned_total']:.2f} {currency}"
+                            ).classes("text-sm font-bold")
+
+                        with ui.row().classes("w-full justify-between"):
+                            ui.label("Ramas").classes("text-sm text-slate-500")
+                            ui.label(
+                                f"{summary['remaining_total']:.2f} {currency}"
+                            ).classes("text-sm font-black text-emerald-700")
+
+                        if summary["status"] == "open":
+                            def save_my_selection():
+                                db = SessionLocal()
+                                try:
+                                    session = get_split_bill_session_by_token(db=db, token=token)
+                                    save_participant_selection(
+                                        db=db,
+                                        session=session,
+                                        participant_id=participant_id,
+                                        selected_item_ids=list(selected_item_ids),
+                                    )
+                                except ValueError as error:
+                                    ui.notify(str(error), type="negative", position="top")
+                                    return
+                                finally:
+                                    db.close()
+
+                                ui.notify("Selectia a fost salvata.", type="positive", position="top")
+                                reload_page()
+
+                            ui.button(
+                                "Salveaza selectia",
+                                on_click=save_my_selection,
+                            ).classes("compact-btn compact-btn-primary w-full mt-4")
+
+                        if is_owner:
+                            def close_session():
+                                db = SessionLocal()
+                                try:
+                                    session = get_split_bill_session_by_token(db=db, token=token)
+                                    close_split_bill_session(
+                                        db=db,
+                                        session=session,
+                                        owner_user_id=current_participant["user_id"],
+                                    )
+                                except ValueError as error:
+                                    ui.notify(str(error), type="negative", position="top")
+                                    return
+                                finally:
+                                    db.close()
+
+                                ui.notify("Nota a fost inchisa.", type="positive", position="top")
+                                reload_page()
+
+                            close_button = ui.button(
+                                "Inchide nota",
+                                on_click=close_session,
+                            ).props("flat").classes("w-full text-xs mt-2 text-slate-500")
+
+                            if not summary["can_close"]:
+                                close_button.disable()
+
+                            if summary["close_block_reason"]:
+                                ui.label(summary["close_block_reason"]).classes(
+                                    "text-[11px] text-amber-700 mt-1 leading-snug"
+                                )
+
+                    with ui.card().classes("pruvio-card w-full p-4 sm:p-5"):
+                        ui.label("Participanti").classes("text-sm font-black text-slate-950")
+
+                        for participant in summary["participants"]:
+                            with ui.row().classes(
+                                "w-full items-center justify-between gap-2 py-2 border-b border-slate-100 last:border-0"
+                            ):
+                                with ui.row().classes("items-center gap-2 min-w-0"):
+                                    initial = (participant["display_name"] or "?").strip()[:1].upper()
+                                    ui.label(initial).classes(
+                                        "w-7 h-7 rounded-full bg-slate-100 text-slate-700 "
+                                        "text-xs font-black flex items-center justify-center"
+                                    )
+                                    name = participant["display_name"]
+                                    if participant["role"] == "owner":
+                                        name = f"{name} · tu"
+                                    ui.label(name).classes("text-xs font-bold truncate")
+
+                                ui.label(
+                                    f"{participant['total']:.2f} {currency}"
+                                ).classes("text-xs font-black whitespace-nowrap")

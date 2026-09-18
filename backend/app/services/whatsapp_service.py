@@ -36,28 +36,13 @@ def normalize_whatsapp_recipient(phone_number: str) -> str:
     return phone_number.replace("+", "").replace(" ", "").strip()
 
 
-def send_whatsapp_text_message(
-    to_phone_number: str,
-    message: str,
-) -> dict[str, Any]:
+def _post_whatsapp_message(payload: dict[str, Any]) -> dict[str, Any]:
     config = _require_whatsapp_config()
-    recipient = normalize_whatsapp_recipient(to_phone_number)
-
     url = (
         f"https://graph.facebook.com/"
         f"{config['graph_api_version']}/"
         f"{config['phone_number_id']}/messages"
     )
-
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": recipient,
-        "type": "text",
-        "text": {
-            "preview_url": True,
-            "body": message,
-        },
-    }
 
     headers = {
         "Authorization": f"Bearer {config['access_token']}",
@@ -74,7 +59,7 @@ def send_whatsapp_text_message(
 
     if response.status_code >= 400:
         raise ValueError(
-            f"WhatsApp send failed: {response.status_code} - {response_data}"
+            f"WhatsApp request failed: {response.status_code} - {response_data}"
         )
 
     return {
@@ -84,8 +69,101 @@ def send_whatsapp_text_message(
     }
 
 
+def send_whatsapp_text_message(
+    to_phone_number: str,
+    message: str,
+) -> dict[str, Any]:
+    recipient = normalize_whatsapp_recipient(to_phone_number)
+
+    return _post_whatsapp_message(
+        {
+            "messaging_product": "whatsapp",
+            "to": recipient,
+            "type": "text",
+            "text": {
+                "preview_url": True,
+                "body": message,
+            },
+        }
+    )
+
+
+def send_whatsapp_otp_message(
+    to_phone_number: str,
+    code: str,
+    ttl_minutes: int = 10,
+) -> dict[str, Any]:
+    """Send onboarding OTP.
+
+    WHATSAPP_OTP_MODE=text is convenient for the Meta test environment.
+    In production use template mode with an approved AUTHENTICATION template.
+    """
+    mode = os.getenv("WHATSAPP_OTP_MODE", "text").strip().lower()
+
+    if mode != "template":
+        return send_whatsapp_text_message(
+            to_phone_number=to_phone_number,
+            message=(
+                f"Codul tau Pruvio este {code}. "
+                f"Expira in {ttl_minutes} minute. "
+                "Nu comunica acest cod altor persoane."
+            ),
+        )
+
+    recipient = normalize_whatsapp_recipient(to_phone_number)
+    template_name = os.getenv(
+        "WHATSAPP_OTP_TEMPLATE_NAME",
+        "pruvio_authentication_code",
+    )
+    language = os.getenv("WHATSAPP_OTP_TEMPLATE_LANGUAGE", "ro")
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": recipient,
+        "type": "template",
+        "template": {
+            "name": template_name,
+            "language": {"code": language},
+            "components": [
+                {
+                    "type": "body",
+                    "parameters": [
+                        {"type": "text", "text": code},
+                    ],
+                },
+                {
+                    "type": "button",
+                    "sub_type": "url",
+                    "index": "0",
+                    "parameters": [
+                        {"type": "text", "text": code},
+                    ],
+                },
+            ],
+        },
+    }
+
+    return _post_whatsapp_message(payload)
+
+
+def send_whatsapp_typing_indicator(message_id: str | None) -> dict[str, Any] | None:
+    if not message_id:
+        return None
+
+    return _post_whatsapp_message(
+        {
+            "messaging_product": "whatsapp",
+            "status": "read",
+            "message_id": message_id,
+            "typing_indicator": {
+                "type": "text",
+            },
+        }
+    )
+
+
 def retrieve_whatsapp_media_info(media_id: str) -> dict[str, Any]:
-    """Retrieve the short-lived download URL for a WhatsApp media object."""
     if not media_id:
         raise ValueError("WhatsApp media ID is missing.")
 
@@ -127,7 +205,6 @@ def retrieve_whatsapp_media_info(media_id: str) -> dict[str, Any]:
 
 
 def download_whatsapp_media(media_id: str) -> dict[str, Any]:
-    """Retrieve media metadata, then download the actual media bytes."""
     config = _require_whatsapp_config()
     media_info = retrieve_whatsapp_media_info(media_id)
 

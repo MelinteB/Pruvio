@@ -223,19 +223,25 @@ def create_verification_code(
     return verification_code, code
 
 
+def is_email_verification_required() -> bool:
+    return os.getenv("REQUIRE_EMAIL_VERIFICATION", "true").lower() == "true"
+
+
 def activate_user_if_ready(
     db: Session,
     user: User
 ):
-    email_required = bool(user.email)
+    email_required = is_email_verification_required()
+
+    email_ready = (
+        not email_required
+        or (bool(user.email) and bool(user.is_email_verified))
+    )
 
     can_activate = (
         bool(user.accepted_terms)
         and bool(user.is_phone_verified)
-        and (
-            not email_required
-            or bool(user.is_email_verified)
-        )
+        and email_ready
     )
 
     if can_activate:
@@ -490,10 +496,16 @@ def get_otp_onboarding_status(
             "message": "User does not exist in Pruvio yet."
         }
 
+    email_ready = (
+        not is_email_verification_required()
+        or (bool(user.email) and bool(user.is_email_verified))
+    )
+
     can_create_split_bill = (
         user.status == "active"
         and bool(user.accepted_terms)
         and bool(user.is_phone_verified)
+        and email_ready
     )
 
     return {
