@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 
 from azure.core.credentials import AzureKeyCredential
@@ -19,7 +20,7 @@ class AzureReceiptOCRProvider(ExternalOCRProvider):
     def __init__(self):
         self.endpoint = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT")
         self.api_key = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_KEY")
-        self.locale = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_LOCALE", "ro-RO")
+        self.locale = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_LOCALE", "auto")
 
     def is_configured(self) -> bool:
         return bool(self.endpoint and self.api_key)
@@ -46,11 +47,16 @@ class AzureReceiptOCRProvider(ExternalOCRProvider):
             credential=AzureKeyCredential(self.api_key)
         )
 
+        analyze_kwargs = {}
+
+        if self.locale and self.locale.lower() != "auto":
+            analyze_kwargs["locale"] = self.locale
+
         with open(file_path, "rb") as receipt_file:
             poller = client.begin_analyze_document(
                 "prebuilt-receipt",
                 body=receipt_file,
-                locale=self.locale
+                **analyze_kwargs
             )
 
         result = poller.result()
@@ -76,7 +82,16 @@ class AzureReceiptOCRProvider(ExternalOCRProvider):
         if receipt_total is None:
             raise ValueError("Azure did not detect receipt total.")
 
-        currency = self._get_currency(fields.get("Total")) or "RON"
+        currency = (
+            self._get_currency(fields.get("Total"))
+            or self._detect_currency_from_receipt(result)
+        )
+
+        if not currency:
+            raise ValueError(
+                "Azure did not detect receipt currency. "
+                "Refusing to assign a default currency because it could produce an incorrect bill."
+            )
 
         items = self._extract_items(fields.get("Items"), currency)
 
@@ -98,6 +113,42 @@ class AzureReceiptOCRProvider(ExternalOCRProvider):
             pages_processed=pages_processed,
             items=items
         )
+
+    def _detect_currency_from_receipt(self, result) -> str | None:
+        content = (getattr(result, "content", "") or "").upper()
+
+        currency_markers = {
+            "€": "EUR",
+            " EUR": "EUR",
+            "$": "USD",
+            " USD": "USD",
+            "£": "GBP",
+            " GBP": "GBP",
+            " RON": "RON",
+            " LEI": "RON",
+            " PLN": "PLN",
+            " CZK": "CZK",
+            " HUF": "HUF",
+            " CHF": "CHF",
+        }
+
+        for marker, currency in currency_markers.items():
+            if marker in content:
+                return currency
+
+        # Country/language fallback
+        greek_markers = [
+            "ΣΥΝΟΛΟ",
+            "ΤΡΑΠΕΖΙΟΥ",
+            "ΠΕΛΑΤΗΣ",
+            "ΗΜΕΡΟΜΗΝΙΑ",
+            "ΤΙΜΗ",
+        ]
+
+        if any(marker in content for marker in greek_markers):
+            return "EUR"
+
+        return None
 
     def _normalize_quantity(
         self,
@@ -135,15 +186,9 @@ class AzureReceiptOCRProvider(ExternalOCRProvider):
 
         name_upper = name.upper()
 
-        measurement_markers = [
-            "ML",
-            "L",
-            "G",
-            "GR",
-            "KG"
-        ]
+        measurement_pattern = r"\b\d+(?:[.,]\d+)?\s*(?:ML|CL|DL|L|G|GR|KG)\b"
 
-        if quantity > 50 and any(marker in name_upper for marker in measurement_markers):
+        if quantity > 50 and re.search(measurement_pattern, name_upper):
             return 1.0
 
         return quantity

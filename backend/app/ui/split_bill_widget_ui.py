@@ -1,7 +1,81 @@
+from collections import Counter
+
 from nicegui import ui
 
 from app.db.database import SessionLocal
 from app.models.receipt_item import ReceiptItem
+
+
+def _currency_or_unknown(value: str | None) -> str:
+    currency = (value or "").strip().upper()
+    return currency or "—"
+
+
+def _resolve_item_names(item) -> tuple[str, str | None]:
+    original_name = (
+        getattr(item, "original_name", None)
+        or getattr(item, "name", None)
+        or "Unnamed item"
+    ).strip()
+
+    translated_name = (getattr(item, "translated_name", None) or "").strip()
+    display_name = translated_name or original_name
+
+    original_for_ui = None
+    if translated_name and translated_name.casefold() != original_name.casefold():
+        original_for_ui = original_name
+
+    return display_name, original_for_ui
+
+
+def _logical_unit_count(quantity: float | int | None) -> int:
+    try:
+        value = float(quantity or 1)
+    except (TypeError, ValueError):
+        return 1
+
+    # Integer quantities are true unit counts. Fractional values are normally
+    # weights (kg/l), and extreme values are usually OCR packaging artefacts.
+    if 1 <= value <= 50 and abs(value - round(value)) < 0.001:
+        return max(1, int(round(value)))
+
+    return 1
+
+
+def _count_lines_and_units(items: list[dict]) -> tuple[int, int]:
+    return (
+        len(items),
+        sum(_logical_unit_count(item.get("quantity")) for item in items),
+    )
+
+
+def _choose_receipt_currency(items: list[dict]) -> str:
+    currencies = [
+        _currency_or_unknown(item.get("currency"))
+        for item in items
+        if _currency_or_unknown(item.get("currency")) != "—"
+    ]
+
+    if not currencies:
+        return "—"
+
+    return Counter(currencies).most_common(1)[0][0]
+
+
+def _quantity_title(quantity: float, display_name: str) -> str:
+    if 1 < quantity <= 50 and abs(quantity - round(quantity)) < 0.001:
+        return f"{int(round(quantity))} × {display_name}"
+    return display_name
+
+
+def _quantity_meta(quantity: float, unit_price: float, currency: str) -> str:
+    if 1 < quantity <= 50 and abs(quantity - round(quantity)) < 0.001:
+        return f"{unit_price:.2f} {currency} each"
+
+    if abs(quantity - 1) > 0.001:
+        return f"Qty {quantity:g} · Unit {unit_price:.2f} {currency}"
+
+    return f"Unit {unit_price:.2f} {currency}"
 
 
 def get_case_items(case_id: int) -> list[ReceiptItem]:
@@ -58,7 +132,7 @@ def save_split_bill_selection(
             2
         )
 
-        currency = selected_items[0].currency if selected_items else "RON"
+        currency = _currency_or_unknown(selected_items[0].currency) if selected_items else "—"
 
         db.commit()
 
@@ -175,23 +249,28 @@ def setup_split_bill_widget_ui():
         selected_item_ids: set[int] = set()
         checkbox_by_item_id = {}
 
-        item_data = [
-            {
-                "id": item.id,
-                "name": item.name,
-                "quantity": float(item.quantity or 1),
-                "unit_price": float(item.unit_price or 0),
-                "total_price": float(item.total_price or 0),
-                "currency": item.currency or "RON",
-            }
-            for item in items
-        ]
+        item_data = []
+        for item in items:
+            display_name, original_name = _resolve_item_names(item)
+            item_data.append(
+                {
+                    "id": item.id,
+                    "name": item.name,
+                    "display_name": display_name,
+                    "original_name": original_name,
+                    "quantity": float(item.quantity or 1),
+                    "unit_price": float(item.unit_price or 0),
+                    "total_price": float(item.total_price or 0),
+                    "currency": _currency_or_unknown(item.currency),
+                }
+            )
 
-        currency = item_data[0]["currency"] if item_data else "RON"
+        currency = _choose_receipt_currency(item_data)
         receipt_total = round(
             sum(item["total_price"] for item in item_data),
             2
         )
+        line_items_count, total_units_count = _count_lines_and_units(item_data)
 
         with ui.element("main").classes("pruvio-page"):
             with ui.column().classes("pruvio-shell gap-4"):
@@ -245,6 +324,11 @@ def setup_split_bill_widget_ui():
                             ui.label(f"{receipt_total:.2f} {currency}").classes(
                                 "text-2xl font-black text-slate-900"
                             )
+                            ui.label(
+                                f"{line_items_count} lines · {total_units_count} units"
+                            ).classes(
+                                "text-xs text-slate-500 mt-1 font-bold"
+                            )
 
                 if not item_data:
                     with ui.card().classes("pruvio-card w-full p-6"):
@@ -272,7 +356,7 @@ def setup_split_bill_widget_ui():
                                     )
 
                                     selected_count_label = ui.label(
-                                        "0 produse selectate"
+                                        f"0 of {line_items_count} lines · 0 units"
                                     ).classes("text-sm text-slate-500")
 
                                 with ui.row().classes("gap-2"):
@@ -305,8 +389,8 @@ def setup_split_bill_widget_ui():
                             "rounded-2xl shadow-none p-4 mt-3"
                         ):
                             with ui.row().classes("w-full justify-between"):
-                                ui.label("Produse").classes("text-slate-500")
-                                summary_count = ui.label("0").classes("font-bold")
+                                ui.label("Selected").classes("text-slate-500")
+                                summary_count = ui.label("0 lines · 0 units").classes("font-bold")
 
                             with ui.row().classes("w-full justify-between mt-2"):
                                 ui.label("Subtotal").classes("text-slate-500")
@@ -391,7 +475,7 @@ def setup_split_bill_widget_ui():
                 ):
                     with ui.column().classes("gap-0"):
                         mobile_count_label = ui.label(
-                            "0 produse"
+                            "0 lines · 0 units"
                         ).classes("text-xs text-slate-500 font-bold")
 
                         mobile_total_label = ui.label(
@@ -434,18 +518,22 @@ def setup_split_bill_widget_ui():
                 2
             )
 
+            selected_lines, selected_units = _count_lines_and_units(selected_items)
+
             selected_count_label.set_text(
-                f"{len(selected_items)} produse selectate"
+                f"{selected_lines} of {line_items_count} lines · {selected_units} units"
             )
 
-            summary_count.set_text(str(len(selected_items)))
+            summary_count.set_text(
+                f"{selected_lines} lines · {selected_units} units"
+            )
             subtotal_label.set_text(f"{subtotal:.2f} {currency}")
             tips_label.set_text(f"{tip_amount:.2f} {currency}")
             service_label.set_text(f"{service_charge:.2f} {currency}")
             total_label.set_text(f"{total_to_pay:.2f} {currency}")
 
             mobile_count_label.set_text(
-                f"{len(selected_items)} produse"
+                f"{selected_lines} lines · {selected_units} units"
             )
             mobile_total_label.set_text(
                 f"{total_to_pay:.2f} {currency}"
@@ -554,14 +642,27 @@ def setup_split_bill_widget_ui():
 
                             checkbox_by_item_id[item["id"]] = checkbox
 
-                            with ui.column().classes("gap-1 flex-1"):
-                                ui.label(item["name"]).classes(
+                            with ui.column().classes("gap-1 flex-1 min-w-0"):
+                                ui.label(
+                                    _quantity_title(
+                                        item["quantity"],
+                                        item["display_name"]
+                                    )
+                                ).classes(
                                     "font-black text-slate-900 leading-tight"
                                 )
 
+                                if item["original_name"]:
+                                    ui.label(item["original_name"]).classes(
+                                        "text-xs text-slate-400 leading-snug"
+                                    )
+
                                 ui.label(
-                                    f"Qty {item['quantity']:g} · "
-                                    f"Unit {item['unit_price']:.2f} {currency}"
+                                    _quantity_meta(
+                                        item["quantity"],
+                                        item["unit_price"],
+                                        currency
+                                    )
                                 ).classes(
                                     "text-xs text-slate-500"
                                 )
