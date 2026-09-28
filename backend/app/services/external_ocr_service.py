@@ -12,6 +12,7 @@ from app.models.external_ocr_request import ExternalOCRRequest
 from app.models.document import Document
 from app.models.external_ocr_usage import ExternalOCRUsage
 from app.services.receipt_quality_service import calculate_items_name_quality
+from app.services.receipt_translation_service import translate_receipt_item_names
 
 from app.services.document_service import get_document_by_id
 from app.services.ocr_providers.provider_router import (
@@ -335,6 +336,13 @@ def replace_receipt_items_from_external_result(
 
     saved_items = []
 
+    translation = translate_receipt_item_names(
+        [item.name for item in external_result.items]
+    )
+
+    if translation.error:
+        print(f"Receipt translation skipped: {translation.error}")
+
     for item in external_result.items:
         unit_price = item.unit_price
 
@@ -345,6 +353,8 @@ def replace_receipt_items_from_external_result(
             case_id=request.case_id,
             document_id=request.document_id,
             name=item.name,
+            translated_name=translation.translated_names.get(item.name),
+            source_language=translation.source_language,
             quantity=item.quantity,
             unit_price=round(unit_price, 2),
             total_price=item.total_price,

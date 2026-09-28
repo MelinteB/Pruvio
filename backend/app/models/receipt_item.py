@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, Integer, DateTime, ForeignKey, Float, Boolean
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Float, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
@@ -49,5 +49,16 @@ class ReceiptItem(Base):
         default=datetime.utcnow
     )
 
+    translated_name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True
+    )
+
+    source_language: Mapped[str | None] = mapped_column(
+        String(12),
+        nullable=True
+    )
+
     case = relationship("Case", back_populates="receipt_items")
     document = relationship("Document", back_populates="receipt_items")
+    

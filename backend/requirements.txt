@@ -20,3 +20,4 @@ email-validator
 psycopg2-binary
 httpx
 psycopg[binary]
+requests>=2.31.0

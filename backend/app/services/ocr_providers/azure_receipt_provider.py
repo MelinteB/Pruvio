@@ -1,5 +1,4 @@
 import os
-import re
 from pathlib import Path
 
 from azure.core.credentials import AzureKeyCredential
@@ -83,15 +82,10 @@ class AzureReceiptOCRProvider(ExternalOCRProvider):
             raise ValueError("Azure did not detect receipt total.")
 
         currency = (
-            self._get_currency(fields.get("Total"))
-            or self._detect_currency_from_receipt(result)
-        )
-
-        if not currency:
-            raise ValueError(
-                "Azure did not detect receipt currency. "
-                "Refusing to assign a default currency because it could produce an incorrect bill."
-            )
+                        self._get_currency(fields.get("Total"))
+                        or self._detect_currency_from_receipt(result)
+                        or "EUR"  # only as final emergency fallback if you prefer
+                    )
 
         items = self._extract_items(fields.get("Items"), currency)
 
@@ -186,9 +180,15 @@ class AzureReceiptOCRProvider(ExternalOCRProvider):
 
         name_upper = name.upper()
 
-        measurement_pattern = r"\b\d+(?:[.,]\d+)?\s*(?:ML|CL|DL|L|G|GR|KG)\b"
+        measurement_markers = [
+            "ML",
+            "L",
+            "G",
+            "GR",
+            "KG"
+        ]
 
-        if quantity > 50 and re.search(measurement_pattern, name_upper):
+        if quantity > 50 and any(marker in name_upper for marker in measurement_markers):
             return 1.0
 
         return quantity

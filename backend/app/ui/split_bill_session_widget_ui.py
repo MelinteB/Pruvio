@@ -3,6 +3,7 @@ from fastapi import Request
 from nicegui import ui
 
 from app.db.database import SessionLocal
+from app.models.receipt_item import ReceiptItem
 from app.services.split_bill_session_service import (
     get_split_bill_session_by_token,
     get_split_bill_session_summary,
@@ -19,88 +20,6 @@ from app.services.onboarding_otp_service import (
 )
 
 
-def _safe_currency(value: str | None) -> str:
-    currency = (value or "").strip().upper()
-    return currency or "—"
-
-
-def _summary_item_names(item: dict) -> tuple[str, str | None]:
-    original_name = str(
-        item.get("original_name")
-        or item.get("name")
-        or "Unnamed item"
-    ).strip()
-
-    translated_name = str(
-        item.get("translated_name")
-        or item.get("display_name")
-        or ""
-    ).strip()
-
-    # Do not treat a duplicated display_name as a translation.
-    if translated_name.casefold() == original_name.casefold():
-        translated_name = ""
-
-    display_name = translated_name or original_name
-    original_for_ui = original_name if translated_name else None
-    return display_name, original_for_ui
-
-
-def _summary_item_quantity(item: dict) -> float:
-    try:
-        return float(item.get("quantity") or 1)
-    except (TypeError, ValueError):
-        return 1.0
-
-
-def _summary_item_unit_price(item: dict) -> float:
-    quantity = _summary_item_quantity(item)
-    total_price = float(item.get("total_price") or 0)
-
-    try:
-        explicit = item.get("unit_price")
-        if explicit is not None:
-            return float(explicit)
-    except (TypeError, ValueError):
-        pass
-
-    if quantity:
-        return total_price / quantity
-    return total_price
-
-
-def _logical_unit_count(quantity: float | int | None) -> int:
-    try:
-        value = float(quantity or 1)
-    except (TypeError, ValueError):
-        return 1
-
-    if 1 <= value <= 50 and abs(value - round(value)) < 0.001:
-        return max(1, int(round(value)))
-    return 1
-
-
-def _count_summary_lines_units(items: list[dict]) -> tuple[int, int]:
-    return (
-        len(items),
-        sum(_logical_unit_count(_summary_item_quantity(item)) for item in items),
-    )
-
-
-def _quantity_title(quantity: float, display_name: str) -> str:
-    if 1 < quantity <= 50 and abs(quantity - round(quantity)) < 0.001:
-        return f"{int(round(quantity))} × {display_name}"
-    return display_name
-
-
-def _quantity_meta(quantity: float, unit_price: float, currency: str) -> str:
-    if 1 < quantity <= 50 and abs(quantity - round(quantity)) < 0.001:
-        return f"{unit_price:.2f} {currency} each"
-    if abs(quantity - 1) > 0.001:
-        return f"Qty {quantity:g} · Unit {unit_price:.2f} {currency}"
-    return f"Unit {unit_price:.2f} {currency}"
-
-
 def load_session_summary(token: str) -> dict | None:
     db = SessionLocal()
 
@@ -113,10 +32,34 @@ def load_session_summary(token: str) -> dict | None:
         if not session:
             return None
 
-        return get_split_bill_session_summary(
+        summary = get_split_bill_session_summary(
             db=db,
             session=session
         )
+
+        # Enrich session summary with the persisted English translation without
+        # requiring translation calls when the widget is opened/refreshed.
+        item_ids = [
+            item.get("item_id")
+            for item in summary.get("items", [])
+            if item.get("item_id") is not None
+        ]
+
+        if item_ids:
+            receipt_items = (
+                db.query(ReceiptItem)
+                .filter(ReceiptItem.id.in_(item_ids))
+                .all()
+            )
+            translation_by_id = {
+                item.id: getattr(item, "translated_name", None)
+                for item in receipt_items
+            }
+
+            for item in summary.get("items", []):
+                item["translated_name"] = translation_by_id.get(item.get("item_id"))
+
+        return summary
 
     finally:
         db.close()
@@ -319,9 +262,6 @@ def render_join_page(token: str):
         )
         return
 
-    join_currency = _safe_currency(summary.get("currency"))
-    join_lines, join_units = _count_summary_lines_units(summary.get("items", []))
-
     phone_verified = False
     email_required = False
     current_phone = None
@@ -364,11 +304,7 @@ def render_join_page(token: str):
 
                 with ui.row().classes("gap-3 mt-5 flex-wrap"):
                     ui.label(
-                        f"Total bon: {summary['bill_total']:.2f} {join_currency}"
-                    ).classes("px-4 py-3 rounded-2xl bg-slate-100 font-black")
-
-                    ui.label(
-                        f"{join_lines} lines · {join_units} units"
+                        f"Total bon: {summary['bill_total']:.2f} {summary['currency']}"
                     ).classes("px-4 py-3 rounded-2xl bg-slate-100 font-black")
 
                     ui.label(
@@ -377,7 +313,7 @@ def render_join_page(token: str):
                     ).classes("px-4 py-3 rounded-2xl bg-slate-100 font-black")
 
                     ui.label(
-                        f"Ramas: {summary['remaining_total']:.2f} {join_currency}"
+                        f"Ramas: {summary['remaining_total']:.2f} {summary['currency']}"
                     ).classes("px-4 py-3 rounded-2xl bg-green-50 text-green-700 font-black")
 
             with ui.row().classes("w-full gap-4 items-start flex-col lg:flex-row"):
@@ -797,7 +733,7 @@ def render_join_page(token: str):
                                     "font-bold"
                                 )
                                 ui.label(
-                                    f"{participant['total']:.2f} {join_currency}"
+                                    f"{participant['total']:.2f} {summary['currency']}"
                                 ).classes("font-black")
 
 
@@ -834,8 +770,7 @@ def render_widget_page(
         )
         return
 
-    currency = _safe_currency(summary.get("currency"))
-    line_items_count, total_units_count = _count_summary_lines_units(summary.get("items", []))
+    currency = summary["currency"]
     is_owner = current_participant["role"] == "owner"
     selected_item_ids = {
         item["item_id"]
@@ -925,9 +860,6 @@ def render_widget_page(
                     with ui.row().classes("gap-2 flex-wrap"):
                         ui.label(
                             f"{summary['bill_total']:.2f} {currency}"
-                        ).classes("metric-pill")
-                        ui.label(
-                            f"{line_items_count} lines · {total_units_count} units"
                         ).classes("metric-pill")
                         ui.label(
                             f"Ramas {summary['remaining_total']:.2f} {currency}"
@@ -1025,19 +957,13 @@ def render_widget_page(
 
                     with ui.column().classes("w-full gap-0"):
                         def refresh_my_total():
-                            selected_rows = [
-                                item
-                                for item in summary["items"]
-                                if item["item_id"] in selected_item_ids
-                            ]
                             my_total = sum(
                                 float(item["total_price"] or 0)
-                                for item in selected_rows
+                                for item in summary["items"]
+                                if item["item_id"] in selected_item_ids
                             )
-                            selected_lines, selected_units = _count_summary_lines_units(selected_rows)
                             my_total_label.set_text(
-                                f"{selected_lines} lines · {selected_units} units · "
-                                f"{my_total:.2f} {currency}"
+                                f"Al tau · {my_total:.2f} {currency}"
                             )
 
                         def toggle_item(item_id: int, checked: bool):
@@ -1058,10 +984,13 @@ def render_widget_page(
                                 or (is_assigned and not is_mine)
                             )
 
-                            display_name, original_name = _summary_item_names(item)
-                            product_name, discount_text = split_item_label(display_name)
-                            quantity = _summary_item_quantity(item)
-                            unit_price = _summary_item_unit_price(item)
+                            product_name, discount_text = split_item_label(item["name"])
+                            translated_name = (item.get("translated_name") or "").strip()
+                            display_name = (
+                                f"{product_name} ({translated_name})"
+                                if translated_name
+                                else product_name
+                            )
 
                             with ui.row().classes(
                                 "item-row w-full items-center gap-3 px-4 sm:px-5 py-3.5"
@@ -1078,20 +1007,9 @@ def render_widget_page(
                                     checkbox.disable()
 
                                 with ui.column().classes("gap-0 flex-1 min-w-0"):
-                                    ui.label(
-                                        _quantity_title(quantity, product_name)
-                                    ).classes(
+                                    ui.label(display_name).classes(
                                         "text-sm font-bold text-slate-900 leading-snug"
                                     )
-
-                                    if original_name:
-                                        ui.label(original_name).classes(
-                                            "text-[11px] text-slate-400 leading-snug"
-                                        )
-
-                                    ui.label(
-                                        _quantity_meta(quantity, unit_price, currency)
-                                    ).classes("text-[11px] text-slate-500")
 
                                     status_parts = []
                                     if discount_text:

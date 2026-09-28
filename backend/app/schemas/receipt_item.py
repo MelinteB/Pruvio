@@ -15,6 +15,8 @@ class ReceiptItemResponse(BaseModel):
     currency: str
     selected_by_user: bool
     created_at: datetime
+    translated_name: str | None = None
+    source_language: str | None = None
 
 
 class ReceiptExtractionResponse(BaseModel):
