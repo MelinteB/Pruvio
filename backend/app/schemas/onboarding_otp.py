@@ -6,6 +6,7 @@ class OTPStartRequest(BaseModel):
     display_name: str | None = None
     email: EmailStr | None = None
     accepted_terms: bool = Field(default=False)
+    accepted_privacy: bool = Field(default=False)
 
 
 class OTPVerifyPhoneRequest(BaseModel):

@@ -4,22 +4,10 @@ from email.message import EmailMessage
 
 
 def is_email_delivery_configured() -> bool:
-    return bool(
-        os.getenv("SMTP_HOST")
-        and os.getenv("SMTP_FROM_EMAIL")
-    )
+    return bool(os.getenv("SMTP_HOST") and os.getenv("SMTP_FROM_EMAIL"))
 
 
-def send_email_verification_code(
-    email: str,
-    code: str,
-    ttl_minutes: int,
-) -> dict:
-    """Send a verification code to the email address itself.
-
-    This is intentionally separate from WhatsApp: an email address is only
-    verified if the secret is delivered to the email channel.
-    """
+def send_email_verification_code(email: str, code: str, ttl_minutes: int) -> dict:
     host = os.getenv("SMTP_HOST")
     port = int(os.getenv("SMTP_PORT", "587"))
     username = os.getenv("SMTP_USERNAME")
@@ -30,27 +18,36 @@ def send_email_verification_code(
     if not host or not from_email:
         return {
             "sent": False,
-            "reason": "Email delivery is not configured.",
+            "provider": "smtp",
+            "status": "not_configured",
+            "to": email,
+            "reason": "SMTP delivery is not configured.",
         }
 
     message = EmailMessage()
-    message["Subject"] = "Codul tau de verificare Pruvio"
+    message["Subject"] = "Your Pruvio verification code"
     message["From"] = from_email
     message["To"] = email
     message.set_content(
-        "Codul tau de verificare Pruvio este: "
-        f"{code}\n\nCodul expira in {ttl_minutes} minute. "
-        "Daca nu ai solicitat acest cod, ignora acest mesaj."
+        f"Your Pruvio verification code is {code}.\n\n"
+        f"The code expires in {ttl_minutes} minutes. "
+        "If you did not request this code, you can ignore this email."
     )
 
-    with smtplib.SMTP(host, port, timeout=20) as server:
-        if use_tls:
-            server.starttls()
-        if username:
-            server.login(username, password or "")
-        server.send_message(message)
+    try:
+        with smtplib.SMTP(host, port, timeout=20) as server:
+            if use_tls:
+                server.starttls()
+            if username:
+                server.login(username, password or "")
+            server.send_message(message)
+    except Exception as error:
+        return {
+            "sent": False,
+            "provider": "smtp",
+            "status": "failed",
+            "to": email,
+            "reason": str(error),
+        }
 
-    return {
-        "sent": True,
-        "to": email,
-    }
+    return {"sent": True, "provider": "smtp", "status": "sent", "to": email}

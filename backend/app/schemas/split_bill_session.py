@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class SplitBillSessionCreateRequest(BaseModel):
     owner_user_id: int
-    expected_participants_count: int = Field(default=2, ge=1)
+    expected_participants_count: int = Field(default=2, ge=1, le=20)
 
 
 class SplitBillSessionCreateResponse(BaseModel):
@@ -27,8 +27,10 @@ class SplitBillSessionCreateResponse(BaseModel):
 
 
 class SplitBillJoinRequest(BaseModel):
-    phone_number: str
+    # Standalone mode only needs a display name. phone_number remains optional
+    # for backward compatibility with the previous WhatsApp/account flow.
     display_name: str | None = None
+    phone_number: str | None = None
 
 
 class SplitBillJoinResponse(BaseModel):
@@ -57,7 +59,11 @@ class SplitBillParticipantResponse(BaseModel):
 
 class SplitBillSessionSelectionRequest(BaseModel):
     participant_id: int
-    selected_item_ids: list[int]
+    # New standalone flow: quantity per receipt-item id.
+    selected_quantities: dict[int, float] = Field(default_factory=dict)
+    # Backward compatibility: selecting an item id means selecting the full
+    # currently available line quantity.
+    selected_item_ids: list[int] = Field(default_factory=list)
 
 
 class SplitBillSessionCloseRequest(BaseModel):

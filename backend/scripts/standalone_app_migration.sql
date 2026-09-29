@@ -1,0 +1,17 @@
+-- Pruvio standalone v3 compatibility migration.
+-- Run only if automatic startup migration is disabled.
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(512);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_version VARCHAR(50);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS accepted_privacy BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS accepted_privacy_at TIMESTAMP NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_version VARCHAR(50);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS marketing_opt_in BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS notifications_opt_in BOOLEAN DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(12) DEFAULT 'en';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NULL;
+
+ALTER TABLE receipt_items ADD COLUMN IF NOT EXISTS translated_name VARCHAR(255);
+ALTER TABLE receipt_items ADD COLUMN IF NOT EXISTS source_language VARCHAR(12);
+ALTER TABLE split_bill_item_assignments ADD COLUMN IF NOT EXISTS quantity DOUBLE PRECISION;

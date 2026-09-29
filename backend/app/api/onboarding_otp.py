@@ -35,7 +35,8 @@ def start_otp_verification(
             phone_number=otp_data.phone_number,
             display_name=otp_data.display_name,
             email=otp_data.email,
-            accepted_terms=otp_data.accepted_terms
+            accepted_terms=otp_data.accepted_terms,
+            accepted_privacy=otp_data.accepted_privacy
         )
 
     except ValueError as error:

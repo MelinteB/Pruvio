@@ -75,6 +75,8 @@ def debug_case_receipt_items(
                 "case_id": item.case_id,
                 "document_id": item.document_id,
                 "name": item.name,
+                "translated_name": item.translated_name,
+                "source_language": item.source_language,
                 "quantity": item.quantity,
                 "unit_price": item.unit_price,
                 "total_price": item.total_price,
@@ -232,6 +234,7 @@ def save_selection(
             db=db,
             session=session,
             participant_id=selection_data.participant_id,
+            selected_quantities=selection_data.selected_quantities,
             selected_item_ids=selection_data.selected_item_ids,
         )
 

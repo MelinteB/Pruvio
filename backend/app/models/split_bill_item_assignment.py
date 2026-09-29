@@ -14,23 +14,26 @@ class SplitBillItemAssignment(Base):
         Integer,
         ForeignKey("split_bill_sessions.id"),
         nullable=False,
-        index=True
+        index=True,
     )
 
     participant_id = Column(
         Integer,
         ForeignKey("split_bill_participants.id"),
         nullable=False,
-        index=True
+        index=True,
     )
 
     receipt_item_id = Column(
         Integer,
         ForeignKey("receipt_items.id"),
         nullable=False,
-        index=True
+        index=True,
     )
 
+    # Nullable for backward compatibility with assignments created before
+    # partial-quantity support. Old rows can infer quantity from amount/unit price.
+    quantity = Column(Float, nullable=True)
     amount = Column(Float, nullable=False)
 
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -1,39 +1,44 @@
 import hashlib
+import hmac
 import os
 import re
 import secrets
 from datetime import datetime, timedelta
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.legal_content import PRIVACY_VERSION, TERMS_VERSION
 from app.models.user import User
 from app.models.verification_code import VerificationCode
+from app.services.email_service import send_email_verification_code
+from app.services.sms_service import send_sms_verification_code
+
+
+EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
 
 def normalize_phone_number(phone_number: str) -> str:
     raw = (phone_number or "").strip()
     digits = re.sub(r"\D", "", raw)
-
     if not digits:
         raise ValueError("Phone number is required.")
-
     if raw.startswith("+"):
         return "+" + digits
-
     if digits.startswith("00"):
         return "+" + digits[2:]
-
     if digits.startswith("0") and len(digits) == 10:
         return "+40" + digits[1:]
-
     return "+" + digits
 
 
 def normalize_email(email: str | None) -> str | None:
-    if not email:
+    value = (email or "").strip().lower()
+    if not value:
         return None
-
-    return email.strip().lower()
+    if not EMAIL_RE.fullmatch(value):
+        raise ValueError("Enter a valid email address.")
+    return value
 
 
 def get_otp_ttl_minutes() -> int:
@@ -42,6 +47,14 @@ def get_otp_ttl_minutes() -> int:
 
 def get_otp_max_attempts() -> int:
     return int(os.getenv("OTP_MAX_ATTEMPTS", "5"))
+
+
+def get_otp_max_sends_per_hour() -> int:
+    return int(os.getenv("OTP_MAX_SENDS_PER_HOUR", "5"))
+
+
+def get_otp_resend_cooldown_seconds() -> int:
+    return int(os.getenv("OTP_RESEND_COOLDOWN_SECONDS", "60"))
 
 
 def should_return_debug_code() -> bool:
@@ -58,133 +71,82 @@ def hash_otp_code(destination: str, code: str) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
-def build_whatsapp_otp_delivery(phone_number: str, code: str) -> dict:
-    return {
-        "channel": "whatsapp",
-        "status": "mock_ready",
-        "to": phone_number,
-        "template_name": "pruvio_otp_login",
-        "message_to_send": (
-            f"Your Pruvio verification code is {code}. "
-            f"It expires in {get_otp_ttl_minutes()} minutes."
+def find_user_by_phone(db: Session, phone_number: str) -> User | None:
+    normalized = normalize_phone_number(phone_number)
+    return db.query(User).filter(User.phone_number == normalized).first()
+
+
+def find_user_by_email(db: Session, email: str) -> User | None:
+    normalized = normalize_email(email)
+    if not normalized:
+        return None
+    return db.query(User).filter(User.email == normalized).first()
+
+
+def find_user_by_identifier(db: Session, identifier: str) -> User | None:
+    value = (identifier or "").strip()
+    if not value:
+        return None
+    if "@" in value:
+        return find_user_by_email(db, value)
+    return find_user_by_phone(db, value)
+
+
+def _destination_for_identifier(identifier: str) -> tuple[str, str]:
+    value = (identifier or "").strip()
+    if "@" in value:
+        email = normalize_email(value)
+        if not email:
+            raise ValueError("Enter a valid email address.")
+        return "email", email
+    return "phone", normalize_phone_number(value)
+
+
+def _assert_send_allowed(db: Session, user: User, destination_type: str, purpose: str) -> None:
+    now = datetime.utcnow()
+    last = (
+        db.query(VerificationCode)
+        .filter(
+            VerificationCode.user_id == user.id,
+            VerificationCode.destination_type == destination_type,
+            VerificationCode.purpose == purpose,
         )
-    }
-
-
-def build_email_otp_delivery(email: str, code: str) -> dict:
-    return {
-        "channel": "email",
-        "status": "mock_ready",
-        "to": email,
-        "subject": "Your Pruvio verification code",
-        "message_to_send": (
-            f"Your Pruvio verification code is {code}. "
-            f"It expires in {get_otp_ttl_minutes()} minutes."
-        )
-    }
-
-
-def find_user_by_phone(
-    db: Session,
-    phone_number: str
-) -> User | None:
-    normalized_phone = normalize_phone_number(phone_number)
-
-    return (
-        db.query(User)
-        .filter(User.phone_number == normalized_phone)
+        .order_by(VerificationCode.created_at.desc())
         .first()
     )
+    cooldown = get_otp_resend_cooldown_seconds()
+    if last and last.created_at and (now - last.created_at).total_seconds() < cooldown:
+        remaining = cooldown - int((now - last.created_at).total_seconds())
+        raise ValueError(f"Please wait {max(1, remaining)} seconds before requesting another code.")
 
-
-def find_user_by_email(
-    db: Session,
-    email: str
-) -> User | None:
-    normalized_email = normalize_email(email)
-
-    return (
-        db.query(User)
-        .filter(User.email == normalized_email)
-        .first()
-    )
-
-
-def create_or_update_pending_user(
-    db: Session,
-    phone_number: str,
-    display_name: str | None = None,
-    email: str | None = None,
-    accepted_terms: bool = False
-) -> User:
-    normalized_phone = normalize_phone_number(phone_number)
-    normalized_email = normalize_email(email)
-
-    user = (
-        db.query(User)
-        .filter(User.phone_number == normalized_phone)
-        .first()
-    )
-
-    if not user:
-        user = User(
-            phone_number=normalized_phone,
-            name=display_name,
-            email=normalized_email,
-            status="pending_join",
-            accepted_terms=accepted_terms,
-            accepted_terms_at=datetime.utcnow() if accepted_terms else None,
-            is_phone_verified=False,
-            is_email_verified=False,
-            last_seen_at=datetime.utcnow()
+    hour_ago = now - timedelta(hours=1)
+    sent_count = (
+        db.query(VerificationCode)
+        .filter(
+            VerificationCode.user_id == user.id,
+            VerificationCode.destination_type == destination_type,
+            VerificationCode.purpose == purpose,
+            VerificationCode.created_at >= hour_ago,
         )
-
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-        return user
-
-    if display_name:
-        user.name = display_name
-
-    if normalized_email:
-        user.email = normalized_email
-
-    if accepted_terms:
-        user.accepted_terms = True
-        user.accepted_terms_at = datetime.utcnow()
-
-    user.last_seen_at = datetime.utcnow()
-
-    if user.status != "active":
-        user.status = "pending_join"
-
-    db.commit()
-    db.refresh(user)
-
-    return user
+        .count()
+    )
+    if sent_count >= get_otp_max_sends_per_hour():
+        raise ValueError("Too many verification codes requested. Please try again later.")
 
 
-def expire_previous_codes(
-    db: Session,
-    user_id: int,
-    destination_type: str,
-    purpose: str = "onboarding"
-):
-    previous_codes = (
+def expire_previous_codes(db: Session, user_id: int, destination_type: str, purpose: str) -> None:
+    rows = (
         db.query(VerificationCode)
         .filter(
             VerificationCode.user_id == user_id,
             VerificationCode.destination_type == destination_type,
             VerificationCode.purpose == purpose,
-            VerificationCode.status == "pending"
+            VerificationCode.status == "pending",
         )
         .all()
     )
-
-    for previous_code in previous_codes:
-        previous_code.status = "expired"
-
+    for row in rows:
+        row.status = "expired"
     db.commit()
 
 
@@ -193,18 +155,12 @@ def create_verification_code(
     user: User,
     destination_type: str,
     destination: str,
-    purpose: str = "onboarding"
+    purpose: str,
 ) -> tuple[VerificationCode, str]:
+    _assert_send_allowed(db, user, destination_type, purpose)
+    expire_previous_codes(db, user.id, destination_type, purpose)
     code = generate_otp_code()
-
-    expire_previous_codes(
-        db=db,
-        user_id=user.id,
-        destination_type=destination_type,
-        purpose=purpose
-    )
-
-    verification_code = VerificationCode(
+    row = VerificationCode(
         user_id=user.id,
         destination_type=destination_type,
         destination=destination,
@@ -213,278 +169,322 @@ def create_verification_code(
         status="pending",
         attempts=0,
         max_attempts=get_otp_max_attempts(),
-        expires_at=datetime.utcnow() + timedelta(minutes=get_otp_ttl_minutes())
+        expires_at=datetime.utcnow() + timedelta(minutes=get_otp_ttl_minutes()),
     )
-
-    db.add(verification_code)
+    db.add(row)
     db.commit()
-    db.refresh(verification_code)
-
-    return verification_code, code
-
-
-def is_email_verification_required() -> bool:
-    return os.getenv("REQUIRE_EMAIL_VERIFICATION", "true").lower() == "true"
+    db.refresh(row)
+    return row, code
 
 
-def activate_user_if_ready(
+def _deliver(destination_type: str, destination: str, code: str) -> dict:
+    ttl = get_otp_ttl_minutes()
+    if destination_type == "email":
+        return send_email_verification_code(destination, code, ttl)
+    return send_sms_verification_code(destination, code, ttl)
+
+
+def _debug_code(code: str) -> str | None:
+    return code if should_return_debug_code() else None
+
+
+def create_or_update_registration_user(
     db: Session,
-    user: User
-):
-    email_required = is_email_verification_required()
+    *,
+    phone_number: str,
+    display_name: str,
+    email: str,
+    accepted_terms: bool,
+    accepted_privacy: bool,
+    marketing_opt_in: bool = False,
+) -> User:
+    phone = normalize_phone_number(phone_number)
+    normalized_email = normalize_email(email)
+    if not normalized_email:
+        raise ValueError("Email is required.")
+    name = (display_name or "").strip()
+    if not name:
+        raise ValueError("Name is required.")
+    if not accepted_terms or not accepted_privacy:
+        raise ValueError("You must review and accept the Terms and Privacy Notice before registration.")
 
-    email_ready = (
-        not email_required
-        or (bool(user.email) and bool(user.is_email_verified))
-    )
+    phone_owner = db.query(User).filter(User.phone_number == phone).first()
+    email_owner = db.query(User).filter(User.email == normalized_email).first()
 
-    can_activate = (
-        bool(user.accepted_terms)
-        and bool(user.is_phone_verified)
-        and email_ready
-    )
+    if phone_owner and email_owner and phone_owner.id != email_owner.id:
+        raise ValueError("The phone number and email belong to different existing accounts.")
 
-    if can_activate:
-        user.status = "active"
-    else:
-        user.status = "pending_join"
+    user = phone_owner or email_owner
+    if user and user.status == "active":
+        raise ValueError("An account already exists. Use Sign in instead.")
 
+    if not user:
+        user = User(phone_number=phone)
+        db.add(user)
+
+    if email_owner and email_owner.id != user.id:
+        raise ValueError("This email is already registered.")
+    if phone_owner and phone_owner.id != user.id:
+        raise ValueError("This phone number is already registered.")
+
+    user.phone_number = phone
+    user.email = normalized_email
+    user.name = name
+    user.status = "pending_join"
+    user.accepted_terms = True
+    user.accepted_terms_at = datetime.utcnow()
+    user.terms_version = TERMS_VERSION
+    user.accepted_privacy = True
+    user.accepted_privacy_at = datetime.utcnow()
+    user.privacy_version = PRIVACY_VERSION
+    user.marketing_opt_in = bool(marketing_opt_in)
     user.last_seen_at = datetime.utcnow()
-
+    user.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(user)
+    return user
 
 
-def build_user_response(
-    user: User,
-    action: str,
-    message: str,
-    phone_delivery: dict | None = None,
-    email_delivery: dict | None = None,
-    debug_phone_otp: str | None = None,
-    debug_email_otp: str | None = None
+def start_registration(
+    db: Session,
+    *,
+    phone_number: str,
+    display_name: str,
+    email: str,
+    accepted_terms: bool,
+    accepted_privacy: bool,
+    marketing_opt_in: bool = False,
 ) -> dict:
+    user = create_or_update_registration_user(
+        db,
+        phone_number=phone_number,
+        display_name=display_name,
+        email=email,
+        accepted_terms=accepted_terms,
+        accepted_privacy=accepted_privacy,
+        marketing_opt_in=marketing_opt_in,
+    )
+
+    _, phone_code = create_verification_code(db, user, "phone", user.phone_number, "registration")
+    _, email_code = create_verification_code(db, user, "email", user.email, "registration")
+    phone_delivery = _deliver("phone", user.phone_number, phone_code)
+    email_delivery = _deliver("email", user.email, email_code)
+
     return {
-        "user_id": user.id,
-        "phone_number": user.phone_number,
-        "email": user.email,
-        "display_name": user.name,
-        "status": user.status,
-        "accepted_terms": bool(user.accepted_terms),
-        "is_phone_verified": bool(user.is_phone_verified),
-        "is_email_verified": bool(user.is_email_verified),
-        "action": action,
-        "message": message,
+        "user": user,
         "phone_delivery": phone_delivery,
         "email_delivery": email_delivery,
-        "debug_phone_otp": debug_phone_otp if should_return_debug_code() else None,
-        "debug_email_otp": debug_email_otp if should_return_debug_code() else None
+        "debug_phone_otp": _debug_code(phone_code),
+        "debug_email_otp": _debug_code(email_code),
     }
 
+
+def verify_code(
+    db: Session,
+    *,
+    destination_type: str,
+    destination: str,
+    code: str,
+    purpose: str,
+) -> User:
+    normalized = normalize_email(destination) if destination_type == "email" else normalize_phone_number(destination)
+    if not normalized:
+        raise ValueError("Verification destination is required.")
+
+    row = (
+        db.query(VerificationCode)
+        .filter(
+            VerificationCode.destination_type == destination_type,
+            VerificationCode.destination == normalized,
+            VerificationCode.purpose == purpose,
+            VerificationCode.status == "pending",
+        )
+        .order_by(VerificationCode.created_at.desc())
+        .first()
+    )
+    if not row:
+        raise ValueError("No active verification code found.")
+    if row.expires_at < datetime.utcnow():
+        row.status = "expired"
+        db.commit()
+        raise ValueError("Verification code expired.")
+    if row.attempts >= row.max_attempts:
+        row.status = "failed"
+        db.commit()
+        raise ValueError("Maximum verification attempts exceeded.")
+
+    row.attempts += 1
+    expected = hash_otp_code(normalized, (code or "").strip())
+    if not hmac.compare_digest(row.code_hash, expected):
+        db.commit()
+        raise ValueError("Invalid verification code.")
+
+    row.status = "verified"
+    row.verified_at = datetime.utcnow()
+    user = db.query(User).filter(User.id == row.user_id).first()
+    if not user:
+        raise ValueError("User not found for verification code.")
+
+    if purpose == "registration":
+        if destination_type == "phone":
+            user.is_phone_verified = True
+        else:
+            user.is_email_verified = True
+        if (
+            user.accepted_terms
+            and user.accepted_privacy
+            and user.is_phone_verified
+            and user.is_email_verified
+        ):
+            user.status = "active"
+    user.last_seen_at = datetime.utcnow()
+    user.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def verify_registration_phone(db: Session, phone_number: str, code: str) -> User:
+    return verify_code(
+        db,
+        destination_type="phone",
+        destination=phone_number,
+        code=code,
+        purpose="registration",
+    )
+
+
+def verify_registration_email(db: Session, email: str, code: str) -> User:
+    return verify_code(
+        db,
+        destination_type="email",
+        destination=email,
+        code=code,
+        purpose="registration",
+    )
+
+
+def resend_registration_code(db: Session, user: User, destination_type: str) -> dict:
+    if destination_type not in {"phone", "email"}:
+        raise ValueError("Unsupported verification channel.")
+    destination = user.phone_number if destination_type == "phone" else user.email
+    if not destination:
+        raise ValueError("Verification destination is missing.")
+    _, code = create_verification_code(db, user, destination_type, destination, "registration")
+    return {
+        "delivery": _deliver(destination_type, destination, code),
+        "debug_otp": _debug_code(code),
+    }
+
+
+def send_login_otp(db: Session, identifier: str) -> dict:
+    user = find_user_by_identifier(db, identifier)
+    if not user or user.status != "active":
+        raise ValueError("No active Pruvio account was found for these details.")
+    destination_type, destination = _destination_for_identifier(identifier)
+    if destination_type == "email" and not user.is_email_verified:
+        raise ValueError("This email address is not verified.")
+    if destination_type == "phone" and not user.is_phone_verified:
+        raise ValueError("This phone number is not verified.")
+
+    _, code = create_verification_code(db, user, destination_type, destination, "login")
+    delivery = _deliver(destination_type, destination, code)
+    return {
+        "user": user,
+        "destination_type": destination_type,
+        "destination": destination,
+        "delivery": delivery,
+        "debug_otp": _debug_code(code),
+    }
+
+
+def verify_login_otp(db: Session, identifier: str, code: str) -> User:
+    destination_type, destination = _destination_for_identifier(identifier)
+    user = verify_code(
+        db,
+        destination_type=destination_type,
+        destination=destination,
+        code=code,
+        purpose="login",
+    )
+    if user.status != "active":
+        raise ValueError("This account is not active.")
+    return user
+
+
+# Backward-compatible API wrappers
 
 def start_otp_onboarding(
     db: Session,
     phone_number: str,
     display_name: str | None = None,
     email: str | None = None,
-    accepted_terms: bool = False
+    accepted_terms: bool = False,
+    accepted_privacy: bool = False,
 ) -> dict:
-    if not accepted_terms:
-        raise ValueError("Terms must be accepted before starting verification.")
-
-    user = create_or_update_pending_user(
-        db=db,
+    result = start_registration(
+        db,
         phone_number=phone_number,
-        display_name=display_name,
-        email=email,
-        accepted_terms=accepted_terms
+        display_name=display_name or "Pruvio user",
+        email=email or "",
+        accepted_terms=accepted_terms,
+        accepted_privacy=accepted_privacy,
     )
-
-    phone_code_record, phone_code = create_verification_code(
-        db=db,
-        user=user,
-        destination_type="phone",
-        destination=user.phone_number
-    )
-
-    phone_delivery = build_whatsapp_otp_delivery(
-        phone_number=user.phone_number,
-        code=phone_code
-    )
-
-    email_delivery = None
-    email_code = None
-
-    if user.email:
-        email_code_record, email_code = create_verification_code(
-            db=db,
-            user=user,
-            destination_type="email",
-            destination=user.email
-        )
-
-        email_delivery = build_email_otp_delivery(
-            email=user.email,
-            code=email_code
-        )
-
-    return build_user_response(
-        user=user,
-        action="otp_sent",
-        message="Verification code sent. Complete OTP verification to activate your Pruvio account.",
-        phone_delivery=phone_delivery,
-        email_delivery=email_delivery,
-        debug_phone_otp=phone_code,
-        debug_email_otp=email_code
-    )
+    user = result["user"]
+    return {
+        "user_id": user.id,
+        "phone_number": user.phone_number,
+        "email": user.email,
+        "display_name": user.name,
+        "status": user.status,
+        "accepted_terms": user.accepted_terms,
+        "is_phone_verified": user.is_phone_verified,
+        "is_email_verified": user.is_email_verified,
+        "action": "otp_sent",
+        "message": "Verification codes sent.",
+        "phone_delivery": result["phone_delivery"],
+        "email_delivery": result["email_delivery"],
+        "debug_phone_otp": result["debug_phone_otp"],
+        "debug_email_otp": result["debug_email_otp"],
+    }
 
 
-def verify_code(
-    db: Session,
-    destination_type: str,
-    destination: str,
-    code: str
-) -> User:
-    normalized_destination = (
-        normalize_phone_number(destination)
-        if destination_type == "phone"
-        else normalize_email(destination)
-    )
-
-    if not normalized_destination:
-        raise ValueError("Verification destination is required.")
-
-    verification_code = (
-        db.query(VerificationCode)
-        .filter(
-            VerificationCode.destination_type == destination_type,
-            VerificationCode.destination == normalized_destination,
-            VerificationCode.status == "pending"
-        )
-        .order_by(VerificationCode.created_at.desc())
-        .first()
-    )
-
-    if not verification_code:
-        raise ValueError("No active verification code found.")
-
-    if verification_code.expires_at < datetime.utcnow():
-        verification_code.status = "expired"
-        db.commit()
-        raise ValueError("Verification code expired.")
-
-    if verification_code.attempts >= verification_code.max_attempts:
-        verification_code.status = "failed"
-        db.commit()
-        raise ValueError("Maximum verification attempts exceeded.")
-
-    verification_code.attempts += 1
-
-    expected_hash = hash_otp_code(
-        destination=normalized_destination,
-        code=code.strip()
-    )
-
-    if verification_code.code_hash != expected_hash:
-        db.commit()
-        raise ValueError("Invalid verification code.")
-
-    verification_code.status = "verified"
-    verification_code.verified_at = datetime.utcnow()
-
-    user = (
-        db.query(User)
-        .filter(User.id == verification_code.user_id)
-        .first()
-    )
-
-    if not user:
-        raise ValueError("User not found for verification code.")
-
-    if destination_type == "phone":
-        user.is_phone_verified = True
-
-    if destination_type == "email":
-        user.is_email_verified = True
-
-    activate_user_if_ready(
-        db=db,
-        user=user
-    )
-
-    db.commit()
-    db.refresh(user)
-
-    return user
+def _legacy_response(user: User, action: str, message: str) -> dict:
+    return {
+        "user_id": user.id,
+        "phone_number": user.phone_number,
+        "email": user.email,
+        "display_name": user.name,
+        "status": user.status,
+        "accepted_terms": user.accepted_terms,
+        "is_phone_verified": user.is_phone_verified,
+        "is_email_verified": user.is_email_verified,
+        "action": action,
+        "message": message,
+        "phone_delivery": None,
+        "email_delivery": None,
+        "debug_phone_otp": None,
+        "debug_email_otp": None,
+    }
 
 
-def verify_phone_otp(
-    db: Session,
-    phone_number: str,
-    code: str
-) -> dict:
-    user = verify_code(
-        db=db,
-        destination_type="phone",
-        destination=phone_number,
-        code=code
-    )
-
-    if user.status == "active":
-        message = "Phone verified. Your Pruvio account is now active."
-    elif user.email and not user.is_email_verified:
-        message = "Phone verified. Please verify your email to activate your Pruvio account."
-    else:
-        message = "Phone verified. Additional onboarding steps are required."
-
-    return build_user_response(
-        user=user,
-        action="phone_verified",
-        message=message
-    )
+def verify_phone_otp(db: Session, phone_number: str, code: str) -> dict:
+    user = verify_registration_phone(db, phone_number, code)
+    return _legacy_response(user, "phone_verified", "Phone verified.")
 
 
-def verify_email_otp(
-    db: Session,
-    email: str,
-    code: str
-) -> dict:
-    user = verify_code(
-        db=db,
-        destination_type="email",
-        destination=email,
-        code=code
-    )
+def verify_email_otp(db: Session, email: str, code: str) -> dict:
+    user = verify_registration_email(db, email, code)
+    return _legacy_response(user, "email_verified", "Email verified.")
 
-    if user.status == "active":
-        message = "Email verified. Your Pruvio account is now active."
-    elif not user.is_phone_verified:
-        message = "Email verified. Please verify your phone number to activate your Pruvio account."
-    else:
-        message = "Email verified. Additional onboarding steps are required."
 
-    return build_user_response(
-        user=user,
-        action="email_verified",
-        message=message
-    )
-
-def get_otp_onboarding_status(
-    db: Session,
-    phone_number: str
-) -> dict:
-    normalized_phone = normalize_phone_number(phone_number)
-
-    user = (
-        db.query(User)
-        .filter(User.phone_number == normalized_phone)
-        .first()
-    )
-
+def get_otp_onboarding_status(db: Session, phone_number: str) -> dict:
+    phone = normalize_phone_number(phone_number)
+    user = db.query(User).filter(User.phone_number == phone).first()
     if not user:
         return {
             "user_id": None,
-            "phone_number": normalized_phone,
+            "phone_number": phone,
             "email": None,
             "display_name": None,
             "status": "not_found",
@@ -493,31 +493,18 @@ def get_otp_onboarding_status(
             "is_email_verified": False,
             "can_create_split_bill": False,
             "action": "not_found",
-            "message": "User does not exist in Pruvio yet."
+            "message": "User does not exist in Pruvio yet.",
         }
-
-    email_ready = (
-        not is_email_verification_required()
-        or (bool(user.email) and bool(user.is_email_verified))
-    )
-
-    can_create_split_bill = (
-        user.status == "active"
-        and bool(user.accepted_terms)
-        and bool(user.is_phone_verified)
-        and email_ready
-    )
-
     return {
         "user_id": user.id,
         "phone_number": user.phone_number,
         "email": user.email,
         "display_name": user.name,
         "status": user.status,
-        "accepted_terms": bool(user.accepted_terms),
-        "is_phone_verified": bool(user.is_phone_verified),
-        "is_email_verified": bool(user.is_email_verified),
-        "can_create_split_bill": can_create_split_bill,
+        "accepted_terms": user.accepted_terms,
+        "is_phone_verified": user.is_phone_verified,
+        "is_email_verified": user.is_email_verified,
+        "can_create_split_bill": user.status == "active",
         "action": "status",
-        "message": f"User status is {user.status}."
+        "message": f"User status is {user.status}.",
     }

@@ -59,6 +59,7 @@ class AzureReceiptOCRProvider(ExternalOCRProvider):
             )
 
         result = poller.result()
+        self.last_raw_content = getattr(result, "content", "") or ""
 
         return self._normalize_azure_result(result)
 
@@ -82,10 +83,14 @@ class AzureReceiptOCRProvider(ExternalOCRProvider):
             raise ValueError("Azure did not detect receipt total.")
 
         currency = (
-                        self._get_currency(fields.get("Total"))
-                        or self._detect_currency_from_receipt(result)
-                        or "EUR"  # only as final emergency fallback if you prefer
-                    )
+            self._get_currency(fields.get("Total"))
+            or self._detect_currency_from_receipt(result)
+        )
+
+        if not currency:
+            raise ValueError(
+                "Azure did not provide a currency and Pruvio could not detect one from the receipt."
+            )
 
         items = self._extract_items(fields.get("Items"), currency)
 

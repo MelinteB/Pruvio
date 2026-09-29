@@ -10,6 +10,7 @@ from app.models.receipt_item import ReceiptItem
 from app.models.external_ocr_request import ExternalOCRRequest
 from app.models.split_bill_item_assignment import SplitBillItemAssignment
 from app.services.ocr_providers.azure_receipt_provider import AzureReceiptOCRProvider
+from app.services.receipt_translation_service import translate_receipt_item_names
 
 
 MONEY_TOLERANCE = 0.05
@@ -967,11 +968,20 @@ def process_document_with_azure_receipt_direct(
 
         saved_items = []
 
+        translation = translate_receipt_item_names(
+            [net_item["name"] for net_item in net_items]
+        )
+
+        if translation.error:
+            print(f"Receipt translation skipped: {translation.error}")
+
         for net_item in net_items:
             item = ReceiptItem(
                 case_id=document.case_id,
                 document_id=document.id,
                 name=net_item["name"],
+                translated_name=translation.translated_names.get(net_item["name"]),
+                source_language=translation.source_language,
                 quantity=net_item["quantity"],
                 unit_price=net_item["unit_price"],
                 total_price=net_item["total_price"],
@@ -1096,6 +1106,8 @@ def process_document_with_azure_receipt_direct(
                     "case_id": item.case_id,
                     "document_id": item.document_id,
                     "name": item.name,
+                    "translated_name": item.translated_name,
+                    "source_language": item.source_language,
                     "quantity": item.quantity,
                     "unit_price": item.unit_price,
                     "total_price": item.total_price,
