@@ -111,6 +111,67 @@ window.pruvioCroppedReceipt = async () => {
                     progress = ui.linear_progress(value=0).classes("w-full mt-2")
                     progress.visible = False
 
+                    async def on_upload(event):
+                        try:
+                            data, filename, mime = await _read_upload_event(event)
+                            state.update(original=data, filename=filename, mime_type=mime)
+                            progress.visible = False
+                            if _is_image(mime, filename):
+                                pdf_panel.visible = False
+                                editor.visible = True
+                                source = _data_uri(data, mime or "image/jpeg")
+                                ui.timer(.12, lambda: ui.run_javascript(f"window.pruvioCropperLoad({json.dumps(source)})"), once=True)
+                                status.set_text("Imagine încărcată. Ajustează cadrul și trimite versiunea finală." if lang == "ro" else "Image loaded. Adjust the frame, then send the final version.")
+                            else:
+                                editor.visible = False
+                                pdf_panel.visible = True
+                                encoded = base64.b64encode(data).decode('ascii')
+                                pdf_preview.set_content(f'<iframe src="data:application/pdf;base64,{encoded}" style="width:100%;height:68vh;border:1px solid #e5e7eb;border-radius:16px;background:white"></iframe>')
+                                status.set_text("PDF încărcat. Verifică documentul și trimite-l la OCR." if lang == "ro" else "PDF loaded. Review it before sending to OCR.")
+                        except Exception as error:
+                            status.set_text(str(error))
+
+                    def on_rejected():
+                        message = (
+                            "Alege o imagine JPG, PNG, WEBP sau un PDF de maximum 10 MB."
+                            if lang == "ro" else
+                            "Choose a JPG, PNG, WEBP image or PDF up to 10 MB."
+                        )
+                        status.set_text(message)
+                        ui.notify(message, type="warning", position="top")
+
+                    with ui.element("div").classes("pruvio-upload-zone w-full mt-4"):
+                        uploader = ui.upload(
+                            label=("Fotografiază sau alege un bon" if lang == "ro" else "Take photo or choose receipt"),
+                            on_upload=on_upload, on_rejected=on_rejected,
+                            auto_upload=True, max_file_size=10 * 1024 * 1024,
+                        ).props('accept="image/jpeg,image/png,image/webp,application/pdf" color="dark" bordered flat hide-upload-btn').classes("w-full")
+                        # Keep the picker on the browser's click gesture (including
+                        # mobile browsers), rather than invoking it via a round trip.
+                        # Explicit button colors avoid white icons on the light header.
+                        picker_label = "Alege fotografie sau PDF" if lang == "ro" else "Choose photo or PDF"
+                        picker_hint = (
+                            "JPG, PNG, WEBP sau PDF · maximum 10 MB"
+                            if lang == "ro" else "JPG, PNG, WEBP or PDF · up to 10 MB"
+                        )
+                        uploader.add_slot("header", f'''
+                            <div class="column items-start gap-2 w-full">
+                              <q-btn color="dark" text-color="white" no-caps unelevated
+                                icon="upload_file" label="{picker_label}"
+                                :disable="!props.canAddFiles || props.isUploading"
+                                style="min-height:44px;border-radius:12px">
+                                <q-uploader-add-trigger />
+                              </q-btn>
+                              <span class="text-xs text-slate-500">{picker_hint}</span>
+                              <q-linear-progress v-if="props.isUploading"
+                                :value="props.uploadProgress" color="dark" class="w-full" />
+                            </div>
+                        ''')
+                    ui.label(
+                        "Nimic nu este trimis către OCR până când confirmi imaginea finală."
+                        if lang == "ro" else "Nothing is sent to OCR until you confirm the final image."
+                    ).classes("text-[11px] text-slate-400 mt-2")
+
                     editor = ui.column().classes("w-full gap-3 mt-4")
                     editor.visible = False
                     with editor:
@@ -180,7 +241,9 @@ window.pruvioCroppedReceipt = async () => {
                     pdf_panel = ui.column().classes("w-full gap-3 mt-4")
                     pdf_panel.visible = False
                     with pdf_panel:
-                        pdf_preview = ui.html("").classes("w-full")
+                        # Only application-generated iframe markup is assigned below.
+                        # Sanitizing it removes the iframe and leaves the preview blank.
+                        pdf_preview = ui.html("", sanitize=False).classes("w-full")
                         async def send_pdf():
                             progress.visible = True
                             progress.set_value(.4)
@@ -200,34 +263,6 @@ window.pruvioCroppedReceipt = async () => {
                                 ui.notify(str(error), type="negative")
                         ui.button(t("Send to OCR", lang), icon="arrow_forward", on_click=send_pdf).classes("pruvio-primary self-end px-5")
 
-                    async def on_upload(event):
-                        try:
-                            data, filename, mime = await _read_upload_event(event)
-                            state.update(original=data, filename=filename, mime_type=mime)
-                            progress.visible = False
-                            if _is_image(mime, filename):
-                                pdf_panel.visible = False
-                                editor.visible = True
-                                source = _data_uri(data, mime or "image/jpeg")
-                                ui.timer(.12, lambda: ui.run_javascript(f"window.pruvioCropperLoad({json.dumps(source)})"), once=True)
-                                status.set_text("Imagine încărcată. Ajustează cadrul și trimite versiunea finală." if lang == "ro" else "Image loaded. Adjust the frame, then send the final version.")
-                            else:
-                                editor.visible = False
-                                pdf_panel.visible = True
-                                encoded = base64.b64encode(data).decode('ascii')
-                                pdf_preview.set_content(f'<iframe src="data:application/pdf;base64,{encoded}" style="width:100%;height:68vh;border:1px solid #e5e7eb;border-radius:16px;background:white"></iframe>')
-                                status.set_text("PDF încărcat. Verifică documentul și trimite-l la OCR." if lang == "ro" else "PDF loaded. Review it before sending to OCR.")
-                        except Exception as error:
-                            status.set_text(str(error))
 
-                    with ui.element("div").classes("pruvio-upload-zone w-full mt-4"):
-                        ui.upload(
-                            label=("Fotografiază sau alege un bon" if lang == "ro" else "Take photo or choose receipt"),
-                            on_upload=on_upload, auto_upload=True, max_file_size=10 * 1024 * 1024,
-                        ).props('accept="image/jpeg,image/png,image/webp,application/pdf" color="dark" bordered flat hide-upload-btn').classes("w-full")
-                    ui.label(
-                        "Nimic nu este trimis către OCR până când confirmi imaginea finală."
-                        if lang == "ro" else "Nothing is sent to OCR until you confirm the final image."
-                    ).classes("text-[11px] text-slate-400 mt-2")
 
         bottom_nav("upload", lang)
