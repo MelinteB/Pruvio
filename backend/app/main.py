@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(dotenv_path=ENV_PATH, override=False)
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from nicegui import ui
@@ -58,25 +58,34 @@ from app.ui.split_bill_widget_ui import setup_split_bill_widget_ui
 from app.ui.split_bill_session_widget_ui import setup_split_bill_session_widget_ui
 from app.services.passkey_service import passkeys_enabled
 from app.services.totp_debug_service import totp_debug_enabled
+from app.web_domain import canonical_browser_redirect
 
 
 Base.metadata.create_all(bind=engine)
 ensure_compatibility_schema()
 
 app = FastAPI(
-    title="Pruvio Core",
+    title="Pruvs Core",
     description="""
-Pruvio is a standalone mobile-first receipt assistant.
+Pruvs is a standalone mobile-first receipt assistant.
 
 Upload a receipt, extract and validate items with OCR, translate foreign item
-names to English, and create a shareable split-bill session. The standalone application supports email-only authentication OTP and does not mount the legacy WhatsApp receipt interface. Pruvio v6 adds account-required shared bills, owner tips, live participant status, mobile reminders, settlement payment options, email-confirmed account deletion, and a professional document-crop workspace.
+names to English, and create a shareable split-bill session. The standalone application supports email-only authentication OTP and does not mount the legacy WhatsApp receipt interface. Pruvs v6 adds account-required shared bills, owner tips, live participant status, mobile reminders, settlement payment options, email-confirmed account deletion, and a professional document-crop workspace.
 """,
-    version="6.3.0",
+    version="6.4.0",
 )
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.middleware("http")
+async def canonical_domain(request: Request, call_next):
+    redirect = canonical_browser_redirect(request)
+    if redirect is not None:
+        return redirect
+    return await call_next(request)
 
 # Public/current API surface shown in /docs.
 app.include_router(account_router, prefix="/auth", tags=["Authentication"])
@@ -107,13 +116,13 @@ def _enabled(name: str, default: str = "false") -> bool:
 def health():
     return {
         "status": "ok",
-        "app": "Pruvio Core",
+        "app": "Pruvs Core",
         "mode": "standalone",
         "whatsapp_enabled": False,
         "whatsapp_otp_enabled": False,
         "otp_channels": ["email"],
         "database": "connected",
-        "version": "6.3.0",
+        "version": "6.4.0",
         "passkeys_enabled": passkeys_enabled(),
         "developer_totp_enabled": totp_debug_enabled(),
     }

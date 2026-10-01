@@ -104,7 +104,7 @@ def send_whatsapp_otp_message(
         return send_whatsapp_text_message(
             to_phone_number=to_phone_number,
             message=(
-                f"Codul tau Pruvio este {code}. "
+                f"Codul tau Pruvs este {code}. "
                 f"Expira in {ttl_minutes} minute. "
                 "Nu comunica acest cod altor persoane."
             ),

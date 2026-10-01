@@ -1,6 +1,6 @@
 """Developer-only RFC 6238 TOTP helper.
 
-This deliberately uses only the Python standard library so Pruvio does not need
+This deliberately uses only the Python standard library so Pruvs does not need
 an additional TOTP dependency. The secret is supplied by Render/local env and is
 never stored in the user table.
 """
@@ -98,7 +98,7 @@ def verify_totp(
 
 def provisioning_uri(user: User) -> str:
     account = (user.email or user.phone_number or f"user-{user.id}").strip()
-    issuer = os.getenv("DEV_TOTP_ISSUER", "Pruvio Developer").strip() or "Pruvio Developer"
+    issuer = os.getenv("DEV_TOTP_ISSUER", "Pruvs Developer").strip() or "Pruvs Developer"
     label = quote(f"{issuer}:{account}")
     return (
         f"otpauth://totp/{label}?secret={quote(get_totp_secret(user))}"

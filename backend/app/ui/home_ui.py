@@ -175,7 +175,7 @@ def _login_view(device_token: str | None = None) -> None:
                         ui.button(t("Verify Authenticator", lang), on_click=verify_dev_authenticator).props("flat").classes("w-full text-slate-500 text-xs")
                     ui.separator().classes("my-3")
                     with ui.row().classes("w-full justify-center gap-1 text-sm"):
-                        ui.label(t("New to Pruvio?", lang)).classes("text-slate-500")
+                        ui.label(t("New to Pruvs?", lang)).classes("text-slate-500")
                         ui.label(t("Create account", lang)).classes("pruvio-link").on("click", lambda: ui.navigate.to("/register"))
                     with ui.row().classes("w-full justify-center gap-3 mt-2"):
                         for text, path in [("Terms", "/terms"), ("Privacy", "/privacy"), ("Help", "/support")]:
@@ -245,7 +245,7 @@ def _dashboard(user) -> None:
 def setup_home_ui() -> None:
     @ui.page("/")
     def home_page(request: Request):
-        setup_page_head("Pruvio")
+        setup_page_head("Pruvs")
         db = SessionLocal()
         try:
             user = get_logged_in_user(db)

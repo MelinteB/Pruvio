@@ -1,4 +1,5 @@
 from nicegui import ui
+from app.ui.app_shell import setup_page_head, brand_logo
 
 from app.db.database import SessionLocal
 from app.models.receipt_item import ReceiptItem
@@ -89,23 +90,15 @@ def setup_split_bill_widget_ui():
     def split_bill_widget(case_id: int):
         items = get_case_items(case_id)
 
-        ui.page_title("Pruvio Split Bill")
-
-        ui.colors(
-            primary="#0f172a",
-            secondary="#64748b",
-            accent="#0284c7",
-            positive="#047857",
-            negative="#b91c1c"
-        )
+        setup_page_head("Pruvs · Split Bill")
 
         ui.add_head_html(
             """
             <style>
                 body {
                     background:
-                        radial-gradient(circle at top left, rgba(14,165,233,.14), transparent 34%),
-                        linear-gradient(180deg, #ffffff 0%, #f5f7fb 42%, #e2e8f0 100%);
+                        radial-gradient(circle at top left, rgba(7,86,223,.08), transparent 34%),
+                        linear-gradient(180deg, #ffffff 0%, #f5f8ff 42%, #edf3ff 100%);
                 }
 
                 .pruvio-page {
@@ -206,18 +199,9 @@ def setup_split_bill_widget_ui():
                     "w-full items-center justify-between gap-3"
                 ):
                     with ui.row().classes("items-center gap-3"):
-                        ui.label("P").classes(
-                            "w-11 h-11 rounded-2xl bg-slate-900 text-white "
-                            "font-black text-xl flex items-center justify-center shadow-lg"
-                        )
-
                         with ui.column().classes("gap-0"):
-                            ui.label("Pruvio").classes(
-                                "text-lg font-black text-slate-900 leading-tight"
-                            )
-                            ui.label("Smart split bill assistant").classes(
-                                "text-xs text-slate-500"
-                            )
+                            brand_logo()
+                            ui.label("Smart split bill assistant").classes("text-xs text-slate-500 pl-4")
 
                     ui.label(f"Case #{case_id}").classes(
                         "hidden sm:block px-3 py-2 rounded-full bg-white "
@@ -385,7 +369,7 @@ def setup_split_bill_widget_ui():
                         )
 
                         ui.label(
-                            "Pruvio salveaza doar selectia pentru calcul. "
+                            "Pruvs salveaza doar selectia pentru calcul. "
                             "Nu se initiaza plata automat."
                         ).classes(
                             "text-xs text-slate-400 text-center mt-3 leading-relaxed"

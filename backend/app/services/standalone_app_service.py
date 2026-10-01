@@ -17,7 +17,7 @@ from app.services.receipt_translation_service import translate_receipt_item_name
 
 
 STANDALONE_OWNER_PHONE = "web:standalone-owner"
-STANDALONE_OWNER_NAME = "Pruvio User"
+STANDALONE_OWNER_NAME = "Pruvs User"
 
 
 def get_or_create_standalone_owner(db: Session) -> User:

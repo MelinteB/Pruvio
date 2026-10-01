@@ -1,3 +1,5 @@
+> Historical setup notes. For Pruvs v6.4 and pruvs.io, use **PRUVS_DOMAIN_SETUP_v6_4.md** instead.
+
 # Historical v6.2 setup — superseded
 
 Pruvio v6.3 uses email-only authentication. Do not follow the earlier WhatsApp/SMS setup instructions for authentication.

@@ -6,13 +6,13 @@ from app.i18n import t
 
 APP_CSS = r'''
 :root {
-  --pruvio-bg: #f6f7f9;
+  --pruvio-bg: #f5f8ff;
   --pruvio-card: #ffffff;
-  --pruvio-text: #111827;
-  --pruvio-muted: #6b7280;
-  --pruvio-border: #e5e7eb;
-  --pruvio-accent: #10b981;
-  --pruvio-accent-soft: #ecfdf5;
+  --pruvio-text: #0a1435;
+  --pruvio-muted: #61708b;
+  --pruvio-border: #e0e8f6;
+  --pruvio-accent: #0756df;
+  --pruvio-accent-soft: #eaf2ff;
   --pruvio-danger: #dc2626;
 }
 html, body { background: var(--pruvio-bg); color: var(--pruvio-text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
@@ -22,25 +22,25 @@ body { margin: 0; }
 .pruvio-shell { width: min(900px, 100%); margin: 0 auto; }
 .pruvio-card { background: rgba(255,255,255,.98); border: 1px solid var(--pruvio-border); border-radius: 20px; box-shadow: 0 8px 30px rgba(15,23,42,.045); }
 .pruvio-soft { background: #fafafa; border: 1px solid var(--pruvio-border); border-radius: 16px; }
-.pruvio-primary { background: #111827 !important; color: white !important; border-radius: 12px !important; font-weight: 700 !important; min-height: 40px !important; letter-spacing: -.01em; box-shadow: none !important; }
-.pruvio-secondary { background: white !important; color: #111827 !important; border: 1px solid #d1d5db !important; border-radius: 12px !important; font-weight: 650 !important; min-height: 40px !important; box-shadow: none !important; }
+.pruvio-primary { background: var(--pruvio-accent) !important; color: white !important; border-radius: 12px !important; font-weight: 700 !important; min-height: 40px !important; letter-spacing: -.01em; box-shadow: none !important; }
+.pruvio-secondary { background: white !important; color: var(--pruvio-text) !important; border: 1px solid #d1d5db !important; border-radius: 12px !important; font-weight: 650 !important; min-height: 40px !important; box-shadow: none !important; }
 .pruvio-ghost { background: transparent !important; color: #374151 !important; border-radius: 10px !important; min-height: 36px !important; box-shadow: none !important; }
 .pruvio-icon-button { width: 38px !important; height: 38px !important; min-height: 38px !important; border: 1px solid #e5e7eb !important; background: #fff !important; color: #374151 !important; box-shadow: 0 1px 2px rgba(0,0,0,.03) !important; }
-.pruvio-link { color: #111827; font-weight: 700; text-decoration: none; cursor: pointer; }
+.pruvio-link { color: var(--pruvio-accent); font-weight: 700; text-decoration: none; cursor: pointer; }
 .pruvio-link:hover { text-decoration: underline; text-underline-offset: 3px; }
 .metric-pill { padding: 6px 10px; border-radius: 999px; border: 1px solid #e5e7eb; background: white; font-size: 12px; font-weight: 700; color: #4b5563; }
-.metric-accent { color: #047857; background: #ecfdf5; border-color: #a7f3d0; }
+.metric-accent { color: #0756df; background: #eaf2ff; border-color: #c8dcff; }
 .item-row { border-bottom: 1px solid #f3f4f6; }
 .item-row:last-child { border-bottom: 0; }
 .pruvio-login-shell { width: min(1040px, 100%); margin: 0 auto; }
 .pruvio-login-card { width: min(430px, 100%); }
 .pruvio-bottom-nav { position: fixed; left: 50%; transform: translateX(-50%); bottom: 12px; width: min(560px, calc(100% - 24px)); z-index: 1200; background: rgba(255,255,255,.95); border: 1px solid #e5e7eb; border-radius: 18px; box-shadow: 0 14px 34px rgba(15,23,42,.12); backdrop-filter: blur(18px); padding: 5px; }
 .pruvio-bottom-button { min-width: 58px; color: #6b7280 !important; border-radius: 12px !important; }
-.pruvio-bottom-active { color: #111827 !important; background: #f3f4f6 !important; }
+.pruvio-bottom-active { color: var(--pruvio-accent) !important; background: #eaf2ff !important; }
 .legal-copy p { margin-bottom: 10px; line-height: 1.62; color: #4b5563; }
-.pruvio-logo-mark { width: 42px; height: 42px; display: block; filter: drop-shadow(0 4px 10px rgba(15,23,42,.12)); }
+.pruvio-logo-mark { width: 42px; height: 42px; display: block; object-fit: contain; }
 .pruvio-upload-zone .q-uploader { border: 1.5px dashed #cbd5e1 !important; border-radius: 18px !important; background: #fbfcfd !important; box-shadow: none !important; width: 100% !important; }
-.pruvio-upload-zone .q-uploader__header { background: transparent !important; color: #111827 !important; padding: 16px !important; }
+.pruvio-upload-zone .q-uploader__header { background: transparent !important; color: var(--pruvio-text) !important; padding: 16px !important; }
 .pruvio-upload-zone .q-uploader__list { min-height: 0 !important; padding: 0 14px 12px !important; }
 .scan-frame { background: #0b0f18; border-radius: 18px; padding: 12px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); overflow: hidden; }
 .scan-canvas { min-height: 340px; max-height: 70vh; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:12px; background: #090d14; }
@@ -50,7 +50,7 @@ body { margin: 0; }
 .claimed-item { background:#f3f4f6; opacity:.72; }
 .claimed-item .claim-name { text-decoration: line-through; color:#9ca3af; }
 .participant-badge { display:inline-flex; align-items:center; gap:4px; padding:4px 8px; border-radius:999px; background:#e5e7eb; color:#4b5563; font-size:11px; font-weight:700; }
-.live-dot { width:7px; height:7px; border-radius:999px; background:#10b981; display:inline-block; box-shadow:0 0 0 4px rgba(16,185,129,.12); }
+.live-dot { width:7px; height:7px; border-radius:999px; background:#0756df; display:inline-block; box-shadow:0 0 0 4px rgba(7,86,223,.12); }
 .mobile-only { display:none !important; }
 body.pruvio-mobile .mobile-only { display:flex !important; }
 @media (max-width: 640px) {
@@ -59,21 +59,36 @@ body.pruvio-mobile .mobile-only { display:flex !important; }
   .pruvio-bottom-nav { bottom: 8px; }
   .scan-canvas { min-height: 300px; }
 }
+
+.pruvs-brand-logo { display:block; max-width:100%; object-fit:contain; }
+.pruvio-page .text-slate-950, .pruvio-page .text-slate-900, .q-dialog .text-slate-950 { color:var(--pruvio-text) !important; }
+.pruvio-primary { transition:background .16s ease, box-shadow .16s ease; }
+.pruvio-primary:hover { background:#0649be !important; box-shadow:0 5px 16px rgba(7,86,223,.16) !important; }
+.pruvio-secondary:hover { background:#f0f5ff !important; border-color:#b5cdf8 !important; }
+.pruvio-page .q-field--outlined .q-field__control, .q-dialog .q-field--outlined .q-field__control { border-radius:12px; }
+.pruvio-page .q-field--outlined .q-field__control:before, .q-dialog .q-field--outlined .q-field__control:before { border-color:#d8e3f5; }
+.pruvio-page .q-field--focused .q-field__control:after, .q-dialog .q-field--focused .q-field__control:after { border-color:var(--pruvio-accent); }
+.pruvio-primary:focus-visible, .pruvio-secondary:focus-visible, .pruvio-link:focus-visible { outline:3px solid #8cb7ff; outline-offset:3px; }
+.pruvio-login-card { border-top:3px solid #0756df; }
+.pruvs-otp-card { border:1px solid #d9e6fb; box-shadow:0 24px 80px rgba(10,20,53,.16); }
+.pruvio-otp-code input { color:#0a1435; }
 '''
 
 
 def setup_page_head(title: str) -> None:
     ui.page_title(title)
+    ui.colors(primary='#0756df', secondary='#0a1435', accent='#1598ff',
+              positive='#0f766e', negative='#b91c1c', info='#0756df', warning='#b45309')
     ui.add_head_html(
         '''
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-        <meta name="theme-color" content="#111827">
+        <meta name="theme-color" content="#0a1435">
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="default">
-        <meta name="apple-mobile-web-app-title" content="Pruvio">
-        <link rel="manifest" href="/static/manifest.webmanifest">
-        <link rel="icon" type="image/svg+xml" href="/static/pruvio-mark.svg">
-        <link rel="apple-touch-icon" href="/static/pruvio-192.png">
+        <meta name="apple-mobile-web-app-title" content="Pruvs">
+        <link rel="manifest" href="/static/manifest.webmanifest?v=6.4.0">
+        <link rel="icon" type="image/svg+xml" href="/static/pruvs-192.svg">
+        <link rel="apple-touch-icon" href="/static/pruvs-mark.png">
         <script>
           (function(){
             const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900);
@@ -89,17 +104,20 @@ def setup_page_head(title: str) -> None:
 
 
 def logo_mark(size: int = 42) -> None:
-    ui.html(f'<img src="/static/pruvio-mark.svg" class="pruvio-logo-mark" style="width:{size}px;height:{size}px" alt="Pruvio">', sanitize=False)
+    ui.html(f'<img src="/static/pruvs-mark.png" class="pruvio-logo-mark" style="width:{size}px;height:{size}px" alt="Pruvs">', sanitize=False)
+
+
+def brand_logo(width: int = 164) -> None:
+    ui.html(f'<img src="/static/pruvs-logo.png" class="pruvs-brand-logo" style="width:{width}px;height:auto" alt="Pruvs" fetchpriority="high">', sanitize=False)
 
 
 def app_header(subtitle: str = "Receipt assistant", *, show_account: bool = True, language: str | None = None) -> None:
     lang = language or get_ui_language()
     with ui.row().classes("w-full items-center justify-between gap-3 px-1 py-1"):
         with ui.row().classes("items-center gap-3 cursor-pointer").on("click", lambda: ui.navigate.to("/")):
-            logo_mark(42)
             with ui.column().classes("gap-0"):
-                ui.label("Pruvio").classes("text-[19px] font-black text-slate-950 leading-tight tracking-tight")
-                ui.label(t(subtitle, lang)).classes("text-[10px] text-slate-400 uppercase tracking-[.12em]")
+                brand_logo()
+                ui.label(t(subtitle, lang)).classes("text-[10px] text-slate-500 uppercase tracking-[.12em] pl-4")
         if show_account and get_logged_in_user_id() is not None:
             ui.button(icon="account_circle", on_click=lambda: ui.navigate.to("/account")).props(
                 "flat round dense aria-label='Account'"

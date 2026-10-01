@@ -28,11 +28,11 @@ router = APIRouter()
 
 
 JOIN_MESSAGE = """
-Welcome to Pruvio 👋
+Welcome to Pruvs 👋
 
-Pruvio is a WhatsApp-first assistant that helps you process receipts, invoices, screenshots, QR codes, PDFs and claims.
+Pruvs is a WhatsApp-first assistant that helps you process receipts, invoices, screenshots, QR codes, PDFs and claims.
 
-To start using Pruvio, reply:
+To start using Pruvs, reply:
 
 YES - to join and accept processing of the documents you send
 STOP - to cancel
@@ -40,14 +40,14 @@ STOP - to cancel
 
 
 ACTIVE_MESSAGE = """
-You are now registered in Pruvio ✅
+You are now registered in Pruvs ✅
 
 Send me a receipt, invoice, screenshot, QR code, PDF or text message and I will help you process it.
 """
 
 
 BLOCKED_MESSAGE = """
-No problem. You will not receive messages from Pruvio.
+No problem. You will not receive messages from Pruvs.
 
 If you want to join later, send START.
 """

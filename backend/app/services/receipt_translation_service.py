@@ -113,7 +113,7 @@ def translate_names_to_english(
 
 def translate_receipt_item_names(item_names: list[str]) -> ReceiptTranslationResult:
     """
-    Translation policy for Pruvio:
+    Translation policy for Pruvs:
       * Romanian receipt (ro) -> keep original only.
       * English receipt (en) -> keep original only.
       * Any other detected language -> translate item names to English.

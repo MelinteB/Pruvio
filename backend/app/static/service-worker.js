@@ -1,5 +1,5 @@
-const CACHE = 'pruvio-shell-v6';
-const STATIC = ['/static/manifest.webmanifest', '/static/pruvio-192.png', '/static/pruvio-512.png', '/static/pruvio-mark.svg'];
+const CACHE = 'pruvs-shell-v6.4.0';
+const STATIC = ['/static/manifest.webmanifest', '/static/pruvs-logo.png', '/static/pruvs-mark.png', '/static/pruvs-192.svg', '/static/pruvs-512.svg'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(STATIC)).catch(() => undefined));
@@ -8,7 +8,7 @@ self.addEventListener('install', event => {
 
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))
+    caches.keys().then(keys => Promise.all(keys.filter(key => (key.startsWith('pruvio-shell-') || key.startsWith('pruvs-shell-')) && key !== CACHE).map(key => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });

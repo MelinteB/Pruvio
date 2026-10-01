@@ -29,7 +29,7 @@ EPS = 1e-6
 
 
 def _error_page(title: str, message: str) -> None:
-    setup_page_head(f"{title} · Pruvio")
+    setup_page_head(f"{title} · Pruvs")
     with ui.element("main").classes("pruvio-page"):
         with ui.column().classes("pruvio-shell gap-4"):
             app_header("Split bill")
@@ -41,11 +41,11 @@ def _error_page(title: str, message: str) -> None:
 
 def _owner_shared_link_page(token: str, language: str) -> None:
     ro = language == "ro"
-    setup_page_head("Pruvio · " + ("Ești proprietarul acestei note" if ro else "You own this bill"))
+    setup_page_head("Pruvs · " + ("Ești proprietarul acestei note" if ro else "You own this bill"))
     with ui.element("main").classes("pruvio-page"), ui.column().classes("pruvio-shell gap-4"):
         app_header("Split bill", language=language)
         with ui.card().classes("pruvio-card w-full max-w-xl mx-auto p-6 sm:p-8 gap-4"):
-            ui.icon("person_outline", size="40px").classes("text-emerald-600")
+            ui.icon("person_outline", size="40px").classes("text-blue-600")
             ui.label("Ești proprietarul acestei note" if ro else "You are the owner of this bill").classes("text-2xl font-black text-slate-950")
             ui.label("Nu te poți conecta prin linkul partajat. Acest link este destinat altor utilizatori. Deconectează-te sau folosește alt cont." if ro else
                      "You are the owner of this bill and cannot join through the shared link. This link is for other users. Sign out or use another account.").classes("text-sm text-slate-500 leading-relaxed").props("role=alert")
@@ -64,7 +64,7 @@ def _owner_shared_link_page(token: str, language: str) -> None:
 
 
 def _share_link(url: str, text: str) -> None:
-    ui.run_javascript(f"""return await (async()=>{{const d={{title:'Pruvio split bill',text:{json.dumps(text)},url:{json.dumps(url)}}};if(navigator.share){{try{{await navigator.share(d);return true}}catch(e){{}}}}await navigator.clipboard.writeText(d.text+'\\n'+d.url);return true;}})();""")
+    ui.run_javascript(f"""return await (async()=>{{const d={{title:'Pruvs split bill',text:{json.dumps(text)},url:{json.dumps(url)}}};if(navigator.share){{try{{await navigator.share(d);return true}}catch(e){{}}}}await navigator.clipboard.writeText(d.text+'\\n'+d.url);return true;}})();""")
 
 
 def _assignment_quantity_for_participant(item: dict, participant_id: int) -> float:
@@ -131,7 +131,7 @@ def setup_split_bill_session_widget_ui() -> None:
             if not session or not participant or participant.session_id != session.id:
                 _error_page("Invalid link", "This participant link is invalid or expired."); return
             if participant.user_id != user_id:
-                _error_page("Account mismatch", "This participant link belongs to another Pruvio account."); return
+                _error_page("Account mismatch", "This participant link belongs to another Pruvs account."); return
             participant_id = participant.id
         finally: db.close()
         _render_split_page(token, participant_id, user_id)
@@ -154,7 +154,7 @@ def _render_join_page(token: str) -> None:
         summary = get_split_bill_session_summary(db, session)
     finally: db.close()
 
-    setup_page_head(f"{t('Join split bill', lang)} · Pruvio")
+    setup_page_head(f"{t('Join split bill', lang)} · Pruvs")
     with ui.element("main").classes("pruvio-page"):
         with ui.column().classes("pruvio-shell gap-4"):
             app_header("Join split bill", language=lang)
@@ -194,7 +194,7 @@ def _render_split_page(token: str, participant_id: int, user_id: int) -> None:
         _error_page("Participant not found","This participant is not connected to your account."); return
 
     lang=user.preferred_language or "en"; currency=summary["currency"]; is_owner=current["role"]=="owner"
-    setup_page_head(f"{t('Split bill',lang)} · Pruvio")
+    setup_page_head(f"{t('Split bill',lang)} · Pruvs")
     dirty={"value":False}; digest={"value":_summary_digest(summary)}
     selected={i["item_id"]:_assignment_quantity_for_participant(i,participant_id) for i in summary["items"]}
 
@@ -206,9 +206,9 @@ def _render_split_page(token: str, participant_id: int, user_id: int) -> None:
             with ui.column().classes("gap-1"):
               ui.label((f"Salut, {current['display_name']}" if lang=='ro' else f"Hi, {current['display_name']}")).classes("text-2xl font-black tracking-tight")
               with ui.row().classes("items-center gap-2"):
-                ui.html('<span class="live-dot"></span>',sanitize=False); ui.label(t("Live",lang)).classes("text-xs font-bold text-emerald-700")
+                ui.html('<span class="live-dot"></span>',sanitize=False); ui.label(t("Live",lang)).classes("text-xs font-bold text-blue-700")
             if is_owner and summary["status"]=="open":
-              ui.button("Share" if lang=='en' else "Distribuie",icon="ios_share",on_click=lambda:_share_link(summary["share_url"],"Pruvio split bill")).classes("pruvio-secondary px-4")
+              ui.button("Share" if lang=='en' else "Distribuie",icon="ios_share",on_click=lambda:_share_link(summary["share_url"],"Pruvs split bill")).classes("pruvio-secondary px-4")
           with ui.row().classes("gap-2 flex-wrap mt-3"):
             ui.label(f"{summary['bill_total']:.2f} {currency} {'bon' if lang=='ro' else 'receipt'}").classes("metric-pill")
             if summary["tip_total"]>0: ui.label(f"+ {summary['tip_total']:.2f} {currency} {t('Tip',lang).lower()}").classes("metric-pill")
@@ -238,7 +238,7 @@ def _render_split_page(token: str, participant_id: int, user_id: int) -> None:
             header=ui.row().classes("w-full justify-between items-center px-4 sm:px-5 pt-5 pb-3")
             with header:
               ui.label("Produse" if lang=='ro' else "Items").classes("text-lg font-black")
-              my_total=ui.label("").classes("text-sm font-black text-emerald-700")
+              my_total=ui.label("").classes("text-sm font-black text-blue-700")
 
             qlabels={}; pluses={}; minuses={}
             def max_for_me(item): return max(0.0,float(item["quantity"])-_other_assignment_quantity(item,participant_id))
@@ -306,12 +306,12 @@ def _render_split_page(token: str, participant_id: int, user_id: int) -> None:
               if is_owner and p["role"]!="owner":
                 def remind(pid=p["participant_id"], name=p["display_name"]):
                   dbr=SessionLocal()
-                  try: ss=get_split_bill_session_by_token(dbr,token); send_participant_reminder(dbr,ss,user_id,pid,(f"{name}, completează plata pentru nota Pruvio." if lang=='ro' else f"{name}, please complete your Pruvio bill payment."))
+                  try: ss=get_split_bill_session_by_token(dbr,token); send_participant_reminder(dbr,ss,user_id,pid,(f"{name}, completează plata pentru nota Pruvs." if lang=='ro' else f"{name}, please complete your Pruvs bill payment."))
                   finally: dbr.close()
-                  ui.notify("Memento trimis în Pruvio." if lang=='ro' else "Pruvio reminder sent.",type="positive")
+                  ui.notify("Memento trimis în Pruvs." if lang=='ro' else "Pruvs reminder sent.",type="positive")
                 ui.button(icon="notifications",on_click=remind).props("flat round dense").classes("text-slate-500")
                 if p.get("phone_number"):
-                  phone=''.join(ch for ch in p["phone_number"] if ch.isdigit() or ch=='+'); msg=(f"Salut {p['display_name']}, ai de achitat {p['total']:.2f} {currency} pentru nota Pruvio: {summary['share_url']}")
+                  phone=''.join(ch for ch in p["phone_number"] if ch.isdigit() or ch=='+'); msg=(f"Salut {p['display_name']}, ai de achitat {p['total']:.2f} {currency} pentru nota Pruvs: {summary['share_url']}")
                   sms=f"sms:{phone}?body={urllib.parse.quote(msg)}"; wa=f"https://wa.me/{phone.lstrip('+')}?text={urllib.parse.quote(msg)}"
                   ui.html(f'<div class="mobile-only gap-1"><a href="{sms}" title="SMS" style="padding:7px;color:#4b5563"><span class="material-icons">sms</span></a><a href="{wa}" title="WhatsApp" style="padding:7px;color:#4b5563"><span class="material-icons">chat</span></a></div>',sanitize=False)
 
@@ -333,9 +333,9 @@ def _render_split_page(token: str, participant_id: int, user_id: int) -> None:
             ui.label("Plătește proprietarul" if lang=='ro' else "Pay the owner").classes("text-lg font-black")
             ui.label((f"De plată: {current['total']:.2f} {currency}" if lang=='ro' else f"Amount due: {current['total']:.2f} {currency}")).classes("text-2xl font-black mt-1")
             ui.label(
-              "Plata se face direct către proprietarul notei. Pruvio nu primește și nu redirecționează banii."
+              "Plata se face direct către proprietarul notei. Pruvs nu primește și nu redirecționează banii."
               if lang=='ro' else
-              "Payment goes directly to the bill owner. Pruvio does not receive or redirect the money."
+              "Payment goes directly to the bill owner. Pruvs does not receive or redirect the money."
             ).classes("text-xs text-slate-500 mt-1")
 
             if current.get("payment_status")=="paid":
@@ -347,7 +347,7 @@ def _render_split_page(token: str, participant_id: int, user_id: int) -> None:
               bank=details.get("bank_name")
               bic=details.get("bic")
               rev=details.get("revolut_payment_link")
-              note=details.get("payment_note") or (f"Pruvio {token}")
+              note=details.get("payment_note") or (f"Pruvs {token}")
 
               def copy_value(value, label):
                 ui.run_javascript(f"navigator.clipboard.writeText({json.dumps(value)});")

@@ -1,18 +1,13 @@
-# Pruvio standalone v6.3
+# Pruvs v6.4 — complete backend
 
-Pruvio provides receipt image/PDF uploads, OCR, translation, history, quantity-aware split bills, owner tips, settlement payments, passkeys and account management.
+This is the existing FastAPI + NiceGUI app, rebranded from Pruvio to Pruvs.
 
-Authentication uses unique usernames or email addresses. Signup verifies email only. A new or untrusted browser requires an email OTP in an on-demand popup; remembered browsers use a password or passkey. Phone changes and account deletion require email confirmation. Shared bill invitation links show an owner warning with sign-out/account-switch options when opened by the bill owner.
+Start with **PRUVS_DOMAIN_SETUP_v6_4.md** for the exact GoDaddy, Render, Resend and Azure instructions and Windows deployment commands.
 
-See [EMAIL_OTP_SETUP_v6_3.md](EMAIL_OTP_SETUP_v6_3.md) for installation, provider settings, migration and checks. Earlier version guides are historical.
+The backend entry point remains `app.main:app`. Keep the existing Render service, database, secrets and upload storage. `PRUVIO_` environment variable names and internal storage identifiers are retained for compatibility.
 
-## Local start
+The current app uses unique usernames/email login, email-only OTP dialogs, trusted browsers, passkeys, document uploads, Azure OCR/translation, and owner-protected shared bills. Branding includes the Pruvs logo, blue/navy theme, app icons and HTML OTP emails. Version `/health`: `6.4.0`.
 
-From `backend`, after creating/activating your Python environment and configuring `.env`:
+For local development, copy `.env.standalone.example` to `.env`, set your own local secrets and providers, and keep `CANONICAL_REDIRECT_ENABLED=false`. Never commit real credentials or databases.
 
-```powershell
-pip install -r requirements.txt
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
-```
-
-Keep the existing database when upgrading. Archives contain source code and an example environment file; they contain no actual credentials, database or user uploads. `/health` and `/docs` identify version `6.3.0`.
+For production, `RENDER_PRUVS_SETTINGS.env.example` contains only the public migration settings. Merge them into the existing Render configuration after the domain is verified. Add the Resend key privately in Render.

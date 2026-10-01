@@ -50,11 +50,11 @@ def setup_legal_ui() -> None:
     @ui.page("/terms")
     def terms_page():
         lang = _language()
-        setup_page_head("Termeni · Pruvio" if lang == "ro" else "Terms · Pruvio")
+        setup_page_head("Termeni · Pruvs" if lang == "ro" else "Terms · Pruvs")
         _render_legal(TERMS_TITLE_RO if lang == "ro" else TERMS_TITLE, TERMS_VERSION, TERMS_SECTIONS_RO if lang == "ro" else TERMS_SECTIONS, lang)
 
     @ui.page("/privacy")
     def privacy_page():
         lang = _language()
-        setup_page_head("Confidențialitate · Pruvio" if lang == "ro" else "Privacy · Pruvio")
+        setup_page_head("Confidențialitate · Pruvs" if lang == "ro" else "Privacy · Pruvs")
         _render_legal(PRIVACY_TITLE_RO if lang == "ro" else PRIVACY_TITLE, PRIVACY_VERSION, PRIVACY_SECTIONS_RO if lang == "ro" else PRIVACY_SECTIONS, lang)

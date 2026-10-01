@@ -29,7 +29,7 @@ def setup_receipt_ui() -> None:
             receipt = get_receipt_view(db, case_id, user_id=user_id)
         finally:
             db.close()
-        setup_page_head(f"{t('Receipt', lang)} · Pruvio")
+        setup_page_head(f"{t('Receipt', lang)} · Pruvs")
 
         if not receipt:
             with ui.element("main").classes("pruvio-page"):

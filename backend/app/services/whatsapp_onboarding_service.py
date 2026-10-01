@@ -75,7 +75,7 @@ def ensure_pending_whatsapp_user(
 
 def _registration_intro() -> str:
     return (
-        "Salut! Sunt Pruvio 👋\n\n"
+        "Salut! Sunt Pruvs 👋\n\n"
         "Nu gasesc inca un cont asociat acestui numar. "
         "Pentru inregistrare vom verifica numarul de WhatsApp si adresa de email.\n\n"
         "Raspunde cu ACCEPT pentru a continua."
@@ -138,7 +138,7 @@ def get_pending_user_prompt(user: User) -> str:
     if not user.email:
         return (
             "Numarul tau este verificat ✅\n"
-            "Scrie adresa de email pe care vrei sa o asociezi contului Pruvio."
+            "Scrie adresa de email pe care vrei sa o asociezi contului Pruvs."
         )
 
     if not user.is_email_verified:
@@ -147,7 +147,7 @@ def get_pending_user_prompt(user: User) -> str:
             "Introdu aici codul de 6 cifre primit pe email sau scrie RETRIMITE."
         )
 
-    return "Contul tau Pruvio este aproape gata. Incearca din nou."
+    return "Contul tau Pruvs este aproape gata. Incearca din nou."
 
 
 def handle_whatsapp_onboarding_text(
@@ -258,7 +258,7 @@ def handle_whatsapp_onboarding_text(
             return {
                 "handled": True,
                 "user": user,
-                "reply": "Aceasta adresa de email este deja asociata altui cont Pruvio.",
+                "reply": "Aceasta adresa de email este deja asociata altui cont Pruvs.",
             }
 
         user.email = email

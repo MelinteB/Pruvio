@@ -20,7 +20,7 @@ def setup_history_ui() -> None:
             receipts = list_recent_receipts(db, user_id=user_id, limit=100)
         finally:
             db.close()
-        setup_page_head(f"{t('History', lang)} · Pruvio")
+        setup_page_head(f"{t('History', lang)} · Pruvs")
 
         with ui.element("main").classes("pruvio-page"):
             with ui.column().classes("pruvio-shell gap-4"):

@@ -89,7 +89,7 @@ class AzureReceiptOCRProvider(ExternalOCRProvider):
 
         if not currency:
             raise ValueError(
-                "Azure did not provide a currency and Pruvio could not detect one from the receipt."
+                "Azure did not provide a currency and Pruvs could not detect one from the receipt."
             )
 
         items = self._extract_items(fields.get("Items"), currency)

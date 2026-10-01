@@ -1,8 +1,8 @@
-"""WebAuthn/passkey support for Pruvio.
+"""WebAuthn/passkey support for Pruvs.
 
-Biometric data never reaches Pruvio. The operating system / authenticator checks
+Biometric data never reaches Pruvs. The operating system / authenticator checks
 Face ID, fingerprint, Windows Hello, device PIN, or a security key locally and
-returns a signed WebAuthn assertion which Pruvio verifies cryptographically.
+returns a signed WebAuthn assertion which Pruvs verifies cryptographically.
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ def _rp_id() -> str:
 
 
 def _rp_name() -> str:
-    return os.getenv("PASSKEY_RP_NAME", "Pruvio").strip() or "Pruvio"
+    return os.getenv("PASSKEY_RP_NAME", "Pruvs").strip() or "Pruvs"
 
 
 def passkey_config_summary() -> dict:
@@ -121,7 +121,7 @@ def begin_passkey_registration(db: Session, user: User) -> tuple[object, str]:
         rp_name=_rp_name(),
         user_id=_stable_user_handle(user),
         user_name=user.email or user.phone_number or f"user-{user.id}",
-        user_display_name=user.name or user.email or user.phone_number or "Pruvio user",
+        user_display_name=user.name or user.email or user.phone_number or "Pruvs user",
         exclude_credentials=exclude,
         authenticator_selection=AuthenticatorSelectionCriteria(
             resident_key=ResidentKeyRequirement.REQUIRED,
@@ -204,7 +204,7 @@ def complete_passkey_authentication(
         except Exception:
             row = None
     if row is None:
-        raise ValueError("This passkey is not registered with Pruvio.")
+        raise ValueError("This passkey is not registered with Pruvs.")
 
     user = db.query(User).filter(User.id == row.user_id).first()
     if user is None or user.status != "active":

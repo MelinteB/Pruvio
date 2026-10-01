@@ -1,3 +1,5 @@
+> Historical setup notes. For Pruvs v6.4 and pruvs.io, use **PRUVS_DOMAIN_SETUP_v6_4.md** instead.
+
 # Pruvio v6.3 — email OTP popups and unique usernames
 
 ## Changes

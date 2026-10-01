@@ -1028,7 +1028,7 @@ def process_document_with_azure_receipt_direct(
         if not is_valid:
             warnings.append(
                 "Receipt total does not match the sum of resolved items. "
-                "Pruvio did not invent a missing discount or charge."
+                "Pruvs did not invent a missing discount or charge."
             )
 
         if structure["unresolved_adjustments"]:

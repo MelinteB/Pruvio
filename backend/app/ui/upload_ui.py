@@ -52,12 +52,12 @@ def setup_upload_ui() -> None:
         finally:
             db_user.close()
 
-        setup_page_head(f"{t('Scan receipt', lang)} · Pruvio")
+        setup_page_head(f"{t('Scan receipt', lang)} · Pruvs")
         ui.add_head_html("""
 <link href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
 <style>
-.cropper-view-box,.cropper-face{border-radius:2px}.cropper-line{background-color:#34d399}.cropper-point{background-color:#34d399;width:9px;height:9px;border-radius:50%}.cropper-modal{background:#05070b;opacity:.72}.cropper-bg{background-image:none;background:#0a0d14}
+.cropper-view-box,.cropper-face{border-radius:2px}.cropper-line{background-color:#1598ff}.cropper-point{background-color:#1598ff;width:9px;height:9px;border-radius:50%}.cropper-modal{background:#05070b;opacity:.72}.cropper-bg{background-image:none;background:#0a0d14}
 </style>
 <script>
 window.pruvioCropper = null;

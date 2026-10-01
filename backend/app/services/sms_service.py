@@ -11,7 +11,7 @@ def get_sms_provider() -> str:
 
 def send_sms_verification_code(phone_number: str, code: str, ttl_minutes: int) -> dict:
     provider = get_sms_provider()
-    message = f"Your Pruvio verification code is {code}. It expires in {ttl_minutes} minutes."
+    message = f"Your Pruvs verification code is {code}. It expires in {ttl_minutes} minutes."
 
     if provider == "mock":
         return {

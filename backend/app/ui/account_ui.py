@@ -58,14 +58,14 @@ def setup_account_ui() -> None:
             return
 
         lang = user.preferred_language or "en"
-        setup_page_head(f"{t('Account', lang)} · Pruvio")
+        setup_page_head(f"{t('Account', lang)} · Pruvs")
 
         with ui.element("main").classes("pruvio-page"):
             with ui.column().classes("pruvio-shell gap-4"):
                 app_header("Account", language=lang)
 
                 with ui.card().classes("pruvio-card w-full p-6 sm:p-8"):
-                    ui.label(user.name or "Pruvio user").classes("text-3xl font-black text-slate-950")
+                    ui.label(user.name or "Pruvs user").classes("text-3xl font-black text-slate-950")
                     ui.label(user.email or ("Fără email" if lang == "ro" else "No email")).classes("text-sm text-slate-500")
                     ui.label("@" + user.username).classes("text-sm font-semibold text-slate-700")
                     ui.label(user.phone_number).classes("text-sm text-slate-500")
@@ -197,9 +197,9 @@ def setup_account_ui() -> None:
                 with ui.card().classes("pruvio-card w-full p-5 sm:p-6"):
                     ui.label(t("Security", lang)).classes("text-xl font-black text-slate-950")
                     ui.label(
-                        "Folosește amprenta, Face ID, Windows Hello, blocarea dispozitivului sau o cheie de securitate prin passkey. Pruvio nu primește date biometrice."
+                        "Folosește amprenta, Face ID, Windows Hello, blocarea dispozitivului sau o cheie de securitate prin passkey. Pruvs nu primește date biometrice."
                         if lang == "ro"
-                        else "Use fingerprint, Face ID, Windows Hello, screen lock, or a security key through passkeys. Pruvio never receives biometric data."
+                        else "Use fingerprint, Face ID, Windows Hello, screen lock, or a security key through passkeys. Pruvs never receives biometric data."
                     ).classes("text-sm text-slate-500 mt-1")
 
                     config = passkey_config_summary()
@@ -293,9 +293,9 @@ def setup_account_ui() -> None:
                 with ui.card().classes("pruvio-card w-full p-5 sm:p-6"):
                     ui.label("Detalii pentru încasări" if lang == "ro" else "Payment details").classes("text-xl font-black text-slate-950")
                     ui.label(
-                        "Salvează doar datele pe care vrei să le vadă participanții după finalizarea împărțirii. Plata merge direct către tine; Pruvio nu încasează și nu redirecționează banii."
+                        "Salvează doar datele pe care vrei să le vadă participanții după finalizarea împărțirii. Plata merge direct către tine; Pruvs nu încasează și nu redirecționează banii."
                         if lang == "ro" else
-                        "Save only the details you want participants to see after the split is settled. Payments go directly to you; Pruvio does not collect or redirect the money."
+                        "Save only the details you want participants to see after the split is settled. Payments go directly to you; Pruvs does not collect or redirect the money."
                     ).classes("text-sm text-slate-500")
                     ui.label(
                         "Nu introduce numărul cardului, data expirării, PIN-ul sau CVV-ul."
@@ -394,9 +394,9 @@ def setup_account_ui() -> None:
                 with ui.card().classes("pruvio-card w-full p-5 sm:p-6 border-red-200"):
                     ui.label(t("Delete account", lang)).classes("text-xl font-black text-red-700")
                     ui.label(
-                        "Ștergerea elimină contul și datele asociate din baza de date Pruvio. Confirmarea prin OTP este obligatorie."
+                        "Ștergerea elimină contul și datele asociate din baza de date Pruvs. Confirmarea prin OTP este obligatorie."
                         if lang == "ro"
-                        else "Deletion removes your account and associated Pruvio data from the database. OTP confirmation is required."
+                        else "Deletion removes your account and associated Pruvs data from the database. OTP confirmation is required."
                     ).classes("text-sm text-slate-500")
                     delete_status = ui.label("").classes("text-xs text-red-600")
                     deletion_state = {}

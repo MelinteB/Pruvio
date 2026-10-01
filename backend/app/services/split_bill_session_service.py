@@ -343,7 +343,7 @@ def join_split_bill_session(
         user = create_pending_user_if_missing(db, normalized_phone, display_name)
         return {
             "status": "requires_onboarding",
-            "message": "This phone number is not active in Pruvio yet.",
+            "message": "This phone number is not active in Pruvs yet.",
             "user_status": user.status,
             "participant_id": None,
             "participant_token": None,
@@ -355,7 +355,7 @@ def join_split_bill_session(
     if user.status != "active":
         return {
             "status": "requires_onboarding",
-            "message": "Your Pruvio account is not active yet.",
+            "message": "Your Pruvs account is not active yet.",
             "user_status": user.status,
             "participant_id": None,
             "participant_token": None,
@@ -426,7 +426,7 @@ def join_split_bill_session_as_user(db: Session, session: SplitBillSession, user
     if session.status != "open":
         raise ValueError("This split bill session is no longer open.")
     if user.status != "active":
-        raise ValueError("Your Pruvio account must be active before joining a bill.")
+        raise ValueError("Your Pruvs account must be active before joining a bill.")
 
     existing = get_participant_by_session_and_user(db, session, user)
     if existing:
@@ -803,7 +803,7 @@ def send_participant_reminder(
     participant = get_split_bill_participant_by_id(db, participant_id)
     if not participant or participant.session_id != session.id:
         raise ValueError("Participant not found.")
-    participant.reminder_message = (message or "").strip()[:500] or "Please complete your Pruvio split bill."
+    participant.reminder_message = (message or "").strip()[:500] or "Please complete your Pruvs split bill."
     participant.reminder_at = datetime.utcnow()
     db.commit()
     db.refresh(participant)

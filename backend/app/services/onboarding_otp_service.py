@@ -383,7 +383,7 @@ def resend_registration_code(db: Session, user: User, destination_type: str = "e
 def send_login_otp(db: Session, identifier: str, *, device_token: str | None = None) -> dict:
     user = find_user_by_identifier(db, identifier)
     if not user or user.status != "active":
-        raise ValueError("No active Pruvio account was found for these details.")
+        raise ValueError("No active Pruvs account was found for these details.")
     if is_trusted_device(db, user, device_token):
         raise ValueError("This device is already verified. Sign in with password or passkey.")
     destination = normalize_email(user.email)
@@ -421,7 +421,7 @@ def start_otp_onboarding(
     result = start_registration(
         db,
         phone_number=phone_number,
-        display_name=display_name or "Pruvio user",
+        display_name=display_name or "Pruvs user",
         email=email or "",
         accepted_terms=accepted_terms,
         accepted_privacy=accepted_privacy,
@@ -485,7 +485,7 @@ def get_otp_onboarding_status(db: Session, identifier: str) -> dict:
         return {"user_id": None, "phone_number": "", "username": None, "email": None,
                 "display_name": None, "status": "not_found", "accepted_terms": False,
                 "is_phone_verified": False, "is_email_verified": False, "can_create_split_bill": False,
-                "action": "not_found", "message": "User does not exist in Pruvio yet."}
+                "action": "not_found", "message": "User does not exist in Pruvs yet."}
     result = _legacy_response(user, "status", f"User status is {user.status}.")
     result["can_create_split_bill"] = user.status == "active" and user.is_email_verified
     return result

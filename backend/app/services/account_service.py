@@ -145,7 +145,7 @@ def request_password_reset(db: Session, email: str) -> dict:
         raise ValueError("Enter a valid email address.")
     user = db.query(User).filter(func.lower(User.email) == destination).first()
     if not user or user.status != "active" or not user.is_email_verified:
-        raise ValueError("No active verified Pruvio account was found for this email.")
+        raise ValueError("No active verified Pruvs account was found for this email.")
     row, code = create_verification_code(db, user, "email", destination, "password_reset")
     delivery = _deliver("email", destination, code, db=db, row=row)
     return {

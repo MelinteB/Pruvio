@@ -65,8 +65,8 @@ def process_whatsapp_receipt(
         return {
             "status": "onboarding_required",
             "message": (
-                "Numarul tau nu este inca inregistrat in Pruvio. "
-                "Finalizeaza mai intai onboarding-ul Pruvio."
+                "Numarul tau nu este inca inregistrat in Pruvs. "
+                "Finalizeaza mai intai onboarding-ul Pruvs."
             ),
         }
 
@@ -74,7 +74,7 @@ def process_whatsapp_receipt(
         return {
             "status": "onboarding_required",
             "message": (
-                "Contul tau Pruvio nu este inca activ. "
+                "Contul tau Pruvs nu este inca activ. "
                 "Finalizeaza verificarea contului si incearca din nou."
             ),
         }
@@ -127,7 +127,7 @@ def process_whatsapp_receipt(
             "document_id": document.id,
             "message": (
                 "Am procesat bonul, dar totalul detectat nu se potriveste "
-                "cu suma produselor. Verifica rezultatul in Pruvio."
+                "cu suma produselor. Verifica rezultatul in Pruvs."
             ),
             "ocr": ocr_result,
         }

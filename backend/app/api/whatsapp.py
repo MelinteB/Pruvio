@@ -180,7 +180,7 @@ def _active_user_greeting(user: User) -> str:
     return (
         f"{greeting}\n\n"
         "Trimite-mi o poza sau un PDF cu bonul. "
-        "Dupa procesare deschizi nota in Pruvio, alegi numarul de participanti "
+        "Dupa procesare deschizi nota in Pruvs, alegi numarul de participanti "
         "si distribui invitatia direct din pagina notei."
     )
 
@@ -290,7 +290,7 @@ async def receive_whatsapp_webhook(
                     continue
 
                 # Important privacy boundary: media is downloaded only after the
-                # sender has been confirmed as an active Pruvio user.
+                # sender has been confirmed as an active Pruvs user.
                 result = process_whatsapp_receipt(
                     db=db,
                     sender_phone=sender,

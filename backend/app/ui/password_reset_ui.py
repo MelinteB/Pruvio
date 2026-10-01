@@ -13,7 +13,7 @@ def setup_password_reset_ui() -> None:
     @ui.page('/reset-password')
     def reset_password_page():
         lang = get_ui_language()
-        setup_page_head(f"{t('Reset password', lang)} · Pruvio")
+        setup_page_head(f"{t('Reset password', lang)} · Pruvs")
         state = {}
         with ui.element('main').classes('pruvio-page'), ui.column().classes('pruvio-shell gap-4'):
             app_header(t('Reset password', lang), show_account=False, language=lang)

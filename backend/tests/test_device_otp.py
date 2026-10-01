@@ -211,7 +211,8 @@ def test_email_https_delivery_and_failures(db, monkeypatch):
     from app.services import email_service
     monkeypatch.setenv("EMAIL_PROVIDER", "resend")
     monkeypatch.setenv("RESEND_API_KEY", "test-key")
-    monkeypatch.setenv("EMAIL_FROM", "Pruvio <verify@example.com>")
+    monkeypatch.setenv("EMAIL_FROM", "Pruvs <verify@example.com>")
+    monkeypatch.setenv("PUBLIC_BASE_URL", "https://pruvs.io")
     captured = []
     def reply(request):
         captured.append(request)
@@ -223,6 +224,9 @@ def test_email_https_delivery_and_failures(db, monkeypatch):
     assert captured[0].url == "https://api.resend.com/emails"
     payload = json.loads(captured[0].content)
     assert payload["to"] == ["test@example.com"] and "123456" in payload["text"]
+    assert "123456" in payload["html"]
+    assert 'https://pruvs.io/static/pruvs-logo.png' in payload["html"]
+    assert payload["subject"] == "Your Pruvs verification code"
     monkeypatch.delenv("RESEND_API_KEY")
     assert not email_service.send_email_verification_code("test@example.com", "123456", 10)["sent"]
 

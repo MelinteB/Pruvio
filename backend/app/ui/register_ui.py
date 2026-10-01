@@ -47,7 +47,7 @@ def setup_register_ui() -> None:
     @ui.page("/register")
     def register_page():
         lang = get_ui_language()
-        setup_page_head(f"{t('Create account', lang)} · Pruvio")
+        setup_page_head(f"{t('Create account', lang)} · Pruvs")
         state = {
             "terms_viewed": False,
             "privacy_viewed": False,
@@ -62,7 +62,7 @@ def setup_register_ui() -> None:
                 app_header("Create account", show_account=False, language=lang)
 
                 with ui.card().classes("pruvio-card w-full max-w-2xl mx-auto p-6 sm:p-8"):
-                    ui.label(t("Create your Pruvio account", lang)).classes("text-3xl font-black text-slate-950")
+                    ui.label(t("Create your Pruvs account", lang)).classes("text-3xl font-black text-slate-950")
                     ui.label(
                         "Verificăm adresa de email. Telefonul este folosit doar ca informație de contact. Autentificarea folosește numele de utilizator sau emailul."
                         if lang == "ro"
@@ -126,7 +126,7 @@ def setup_register_ui() -> None:
                             privacy_check = ui.checkbox(t("I acknowledge the Privacy Notice", lang))
                             terms_check.disable()
                             privacy_check.disable()
-                            marketing = ui.checkbox(t("Send me occasional Pruvio product news (optional)", lang))
+                            marketing = ui.checkbox(t("Send me occasional Pruvs product news (optional)", lang))
 
                         status = ui.label("").classes("text-xs text-red-600")
 

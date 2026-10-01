@@ -4,6 +4,7 @@ import re
 
 from nicegui import ui
 from app.services.phone_otp_service import delivery_message
+from app.ui.app_shell import logo_mark
 
 
 def mask_email(value: str) -> str:
@@ -22,9 +23,9 @@ class EmailOTPDialog:
         ro = language == 'ro'
         ui.add_css('.pruvio-otp-code input { text-align: center; font-size: 24px; letter-spacing: .32em; font-weight: 600; }')
         self.dialog = ui.dialog().props('persistent')
-        with self.dialog, ui.card().classes('w-full max-w-md p-6 sm:p-8 rounded-3xl gap-4').style('max-width: min(440px, calc(100vw - 32px))'):
+        with self.dialog, ui.card().classes('w-full max-w-md p-6 sm:p-8 rounded-3xl gap-4 pruvs-otp-card').style('max-width: min(440px, calc(100vw - 32px))'):
             with ui.row().classes('w-full items-center justify-between'):
-                ui.icon('mark_email_read', size='32px').classes('text-red-600' if danger else 'text-emerald-600')
+                logo_mark(48)
                 self.close_button = ui.button(icon='close', on_click=self.close).props('flat round aria-label=Close')
             ui.label(title).classes('text-2xl font-black text-slate-950')
             ui.label(description).classes('text-sm text-slate-500 leading-relaxed')
