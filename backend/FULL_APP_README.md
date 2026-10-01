@@ -1,58 +1,18 @@
-# Pruvio standalone v4
+# Pruvio standalone v6.3
 
-Pruvio v4 is the mobile-first standalone app with receipt OCR, translation, receipt history, quantity-aware split bills, OTP registration/login, legal review gates, passkeys/WebAuthn, and developer TOTP debug authentication.
+Pruvio provides receipt image/PDF uploads, OCR, translation, history, quantity-aware split bills, owner tips, settlement payments, passkeys and account management.
 
-## Authentication flow
+Authentication uses unique usernames or email addresses. Signup verifies email only. A new or untrusted browser requires an email OTP in an on-demand popup; remembered browsers use a password or passkey. Phone changes and account deletion require email confirmation. Shared bill invitation links show an owner warning with sign-out/account-switch options when opened by the bill owner.
 
-### Registration
-
-```text
-Name + email + phone
-→ View Terms
-→ View Privacy Notice
-→ Accept both
-→ Verify SMS OTP
-→ Verify email OTP
-→ Account active
-→ Account / Security
-→ Optional: add fingerprint / Face ID / passkey
-```
-
-### Returning user
-
-```text
-Preferred: fingerprint / Face ID / passkey
-Fallback: email or phone OTP
-Developer only: Authenticator TOTP when allow-listed
-```
+See [EMAIL_OTP_SETUP_v6_3.md](EMAIL_OTP_SETUP_v6_3.md) for installation, provider settings, migration and checks. Earlier version guides are historical.
 
 ## Local start
 
-From `backend`:
+From `backend`, after creating/activating your Python environment and configuring `.env`:
 
 ```powershell
-.pvenv\Scripts\activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Local passkey example environment:
-
-```env
-PUBLIC_BASE_URL=http://127.0.0.1:8000
-PASSKEY_ENABLED=true
-PASSKEY_RP_ID=127.0.0.1
-PASSKEY_RP_NAME=Pruvio
-PASSKEY_ORIGIN=http://127.0.0.1:8000
-```
-
-For Render use HTTPS and the Render hostname instead. See `V4_SECURITY_README.md`.
-
-## Version check
-
-```text
-/health
-/docs
-```
-
-Both should identify version `4.0.0` after deployment.
+Keep the existing database when upgrading. Archives contain source code and an example environment file; they contain no actual credentials, database or user uploads. `/health` and `/docs` identify version `6.3.0`.

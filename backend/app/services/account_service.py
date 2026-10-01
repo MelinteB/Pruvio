@@ -1,6 +1,8 @@
 from datetime import datetime
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.models.case import Case
 from app.models.document import Document
@@ -15,6 +17,8 @@ from app.models.split_bill_item_assignment import SplitBillItemAssignment
 from app.models.split_bill_participant import SplitBillParticipant
 from app.models.split_bill_session import SplitBillSession
 from app.models.user import User
+from app.models.trusted_device import TrustedDevice
+from app.services.trusted_device_service import revoke_trusted_devices
 from app.models.verification_code import VerificationCode
 from app.services.onboarding_otp_service import (
     create_verification_code,
@@ -59,59 +63,67 @@ def update_preferences(
 
 
 def request_contact_change(db: Session, user: User, channel: str, value: str) -> dict:
+    if not user or user.status != "active":
+        raise ValueError("Your session has expired. Sign in again.")
     if channel == "email":
-        destination = normalize_email(value)
-        if not destination:
+        requested_value = normalize_email(value)
+        if not requested_value:
             raise ValueError("Email is required.")
-        existing = db.query(User).filter(User.email == destination, User.id != user.id).first()
-        if existing:
-            raise ValueError("This email is already used by another account.")
+        existing = db.query(User).filter(func.lower(User.email) == requested_value, User.id != user.id).first()
+        destination = requested_value
         purpose = "change_email"
     elif channel == "phone":
-        destination = normalize_phone_number(value)
-        existing = db.query(User).filter(User.phone_number == destination, User.id != user.id).first()
-        if existing:
-            raise ValueError("This phone number is already used by another account.")
+        requested_value = normalize_phone_number(value)
+        existing = db.query(User).filter(User.phone_number == requested_value, User.id != user.id).first()
+        if not user.email or not user.is_email_verified:
+            raise ValueError("Verify your email before changing your phone number.")
+        destination = normalize_email(user.email)
         purpose = "change_phone"
     else:
-        raise ValueError("Unsupported verification channel.")
-
-    _, code = create_verification_code(db, user, channel, destination, purpose)
-    delivery = _deliver(channel, destination, code)
-    return {
-        "destination_type": channel,
-        "destination": destination,
-        "delivery": delivery,
-        "debug_otp": _debug_code(code),
-    }
+        raise ValueError("Unsupported contact type.")
+    if existing:
+        raise ValueError("This contact is already used by another account.")
+    row, code = create_verification_code(db, user, "email", destination, purpose,
+                                         context_value=requested_value)
+    return {"destination_type": "email", "destination": destination, "contact_type": channel,
+            "requested_value": requested_value, "challenge_id": row.challenge_id,
+            "delivery": _deliver("email", destination, code, db=db, row=row), "debug_otp": _debug_code(code)}
 
 
-def confirm_contact_change(db: Session, user: User, channel: str, value: str, code: str) -> User:
-    destination = normalize_email(value) if channel == "email" else normalize_phone_number(value)
-    purpose = "change_email" if channel == "email" else "change_phone"
-    verified_user = verify_code(
-        db,
-        destination_type=channel,
-        destination=destination,
-        code=code,
-        purpose=purpose,
-    )
-    if verified_user.id != user.id:
-        raise ValueError("Verification code does not belong to this account.")
+def confirm_contact_change(db: Session, user: User, channel: str, value: str, code: str,
+                           *, challenge_id: str | None = None) -> User:
+    if not user or user.status != "active":
+        raise ValueError("Your session has expired. Sign in again.")
     if channel == "email":
-        existing = db.query(User).filter(User.email == destination, User.id != user.id).first()
-        if existing:
-            raise ValueError("This email is already used by another account.")
-        user.email = destination
+        requested_value = normalize_email(value)
+        destination = requested_value
+        existing = db.query(User).filter(func.lower(User.email) == requested_value, User.id != user.id).first()
+    elif channel == "phone":
+        requested_value = normalize_phone_number(value)
+        if not user.email or not user.is_email_verified:
+            raise ValueError("Verify your email before changing your phone number.")
+        destination = normalize_email(user.email)
+        existing = db.query(User).filter(User.phone_number == requested_value, User.id != user.id).first()
+    else:
+        raise ValueError("Unsupported contact type.")
+    if existing:
+        raise ValueError("This contact is already used by another account.")
+    verify_code(db, destination_type="email", destination=destination, code=code,
+                purpose="change_email" if channel == "email" else "change_phone",
+                challenge_id=challenge_id, user_id=user.id, context_value=requested_value)
+    if channel == "email":
+        user.email = requested_value
         user.is_email_verified = True
     else:
-        existing = db.query(User).filter(User.phone_number == destination, User.id != user.id).first()
-        if existing:
-            raise ValueError("This phone number is already used by another account.")
-        user.phone_number = destination
-        user.is_phone_verified = True
+        user.phone_number = requested_value
+        user.is_phone_verified = False
     user.updated_at = datetime.utcnow()
-    db.commit()
+    revoke_trusted_devices(db, user.id)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise ValueError("This contact is already used by another account.")
     db.refresh(user)
     return user
 
@@ -121,6 +133,7 @@ def set_password(db: Session, user: User, new_password: str, current_password: s
         raise ValueError("Current password is incorrect.")
     user.password_hash = hash_password(new_password)
     user.updated_at = datetime.utcnow()
+    revoke_trusted_devices(db, user.id)
     db.commit()
     db.refresh(user)
     return user
@@ -130,55 +143,49 @@ def request_password_reset(db: Session, email: str) -> dict:
     destination = normalize_email(email)
     if not destination:
         raise ValueError("Enter a valid email address.")
-    user = db.query(User).filter(User.email == destination).first()
+    user = db.query(User).filter(func.lower(User.email) == destination).first()
     if not user or user.status != "active" or not user.is_email_verified:
         raise ValueError("No active verified Pruvio account was found for this email.")
-    _, code = create_verification_code(db, user, "email", destination, "password_reset")
-    delivery = _deliver("email", destination, code)
+    row, code = create_verification_code(db, user, "email", destination, "password_reset")
+    delivery = _deliver("email", destination, code, db=db, row=row)
     return {
         "destination": destination,
+        "challenge_id": row.challenge_id,
         "delivery": delivery,
         "debug_otp": _debug_code(code),
     }
 
 
-def confirm_password_reset(db: Session, email: str, code: str, new_password: str) -> User:
+def confirm_password_reset(db: Session, email: str, code: str, new_password: str, *, challenge_id: str | None = None) -> User:
     destination = normalize_email(email)
     if not destination:
         raise ValueError("Enter a valid email address.")
+    password_hash = hash_password(new_password)
     user = verify_code(
         db,
         destination_type="email",
         destination=destination,
         code=code,
         purpose="password_reset",
+        challenge_id=challenge_id,
     )
-    user.password_hash = hash_password(new_password)
+    user.password_hash = password_hash
     user.updated_at = datetime.utcnow()
+    revoke_trusted_devices(db, user.id)
     db.commit()
     db.refresh(user)
     return user
 
 
-def request_account_deletion_otp(db: Session, user: User, channel: str) -> dict:
-    if channel == "email":
-        if not user.email or not user.is_email_verified:
-            raise ValueError("A verified email is required for this channel.")
-        destination = user.email
-    elif channel == "phone":
-        if not user.phone_number or not user.is_phone_verified:
-            raise ValueError("A verified phone number is required for this channel.")
-        destination = user.phone_number
-    else:
-        raise ValueError("Channel must be email or phone.")
-    _, code = create_verification_code(db, user, channel, destination, "account_delete")
-    delivery = _deliver(channel, destination, code)
-    return {
-        "destination_type": channel,
-        "destination": destination,
-        "delivery": delivery,
-        "debug_otp": _debug_code(code),
-    }
+def request_account_deletion_otp(db: Session, user: User, channel: str = "email") -> dict:
+    if channel != "email":
+        raise ValueError("Account deletion can only be confirmed by email OTP.")
+    if not user or user.status != "active" or not user.email or not user.is_email_verified:
+        raise ValueError("A verified email is required to delete the account.")
+    destination = normalize_email(user.email)
+    row, code = create_verification_code(db, user, "email", destination, "account_delete")
+    return {"destination_type": "email", "destination": destination, "challenge_id": row.challenge_id,
+            "delivery": _deliver("email", destination, code, db=db, row=row), "debug_otp": _debug_code(code)}
 
 
 def _delete_session(db: Session, session_id: int) -> None:
@@ -227,30 +234,21 @@ def delete_user_completely(db: Session, user: User) -> None:
             db.query(Document).filter(Document.id.in_(document_ids)).delete(synchronize_session=False)
         db.query(Case).filter(Case.id == case_id).delete(synchronize_session=False)
 
+    db.query(TrustedDevice).filter(TrustedDevice.user_id == user_id).delete(synchronize_session=False)
     db.query(VerificationCode).filter(VerificationCode.user_id == user_id).delete(synchronize_session=False)
     db.query(PasskeyCredential).filter(PasskeyCredential.user_id == user_id).delete(synchronize_session=False)
     db.query(User).filter(User.id == user_id).delete(synchronize_session=False)
     db.commit()
 
 
-def confirm_and_delete_account(db: Session, user: User, channel: str, code: str) -> None:
-    if channel == "email":
-        destination = user.email
-    elif channel == "phone":
-        destination = user.phone_number
-    else:
-        raise ValueError("Channel must be email or phone.")
-    if not destination:
-        raise ValueError("Verification destination is unavailable.")
-    verified_user = verify_code(
-        db,
-        destination_type=channel,
-        destination=destination,
-        code=code,
-        purpose="account_delete",
-    )
-    if verified_user.id != user.id:
-        raise ValueError("Verification code does not belong to this account.")
+def confirm_and_delete_account(db: Session, user: User, channel: str, code: str,
+                               *, challenge_id: str | None = None) -> None:
+    if channel != "email":
+        raise ValueError("Account deletion can only be confirmed by email OTP.")
+    if not user or user.status != "active" or not user.email or not user.is_email_verified:
+        raise ValueError("A verified email is required to delete the account.")
+    verify_code(db, destination_type="email", destination=user.email, code=code,
+                purpose="account_delete", challenge_id=challenge_id, user_id=user.id)
     delete_user_completely(db, user)
 
 

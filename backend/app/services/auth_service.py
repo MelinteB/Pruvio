@@ -11,12 +11,13 @@ from app.services.onboarding_otp_service import (
 from app.services.password_service import verify_password
 
 
-def start_passwordless_login(db: Session, identifier: str) -> dict:
-    return send_login_otp(db, identifier)
+def start_passwordless_login(db: Session, identifier: str, *, device_token: str | None = None) -> dict:
+    return send_login_otp(db, identifier, device_token=device_token)
 
 
-def complete_passwordless_login(db: Session, identifier: str, code: str) -> User:
-    user = verify_login_otp(db, identifier, code)
+def complete_passwordless_login(db: Session, identifier: str, code: str, *, challenge_id: str,
+                                device_token: str | None = None) -> User:
+    user = verify_login_otp(db, identifier, code, challenge_id=challenge_id, device_token=device_token)
     if user.status == "blocked":
         raise ValueError("This account is currently unavailable.")
     user.last_seen_at = datetime.utcnow()

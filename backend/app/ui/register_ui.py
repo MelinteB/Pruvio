@@ -10,10 +10,13 @@ from app.services.onboarding_otp_service import (
     resend_registration_code,
     start_registration,
     verify_registration_email,
-    verify_registration_phone,
 )
+from app.ui.device_login import finish_verified_device_login
+from app.ui.email_otp_dialog import EmailOTPDialog
+from app.services.username_service import check_username_available
+from app.models.user import User
 from app.ui.app_shell import app_header, setup_page_head
-from app.ui.auth_state import get_ui_language, login_user
+from app.ui.auth_state import get_ui_language
 
 
 def _legal_dialog(title: str, sections: list[tuple[str, str]], on_viewed, lang: str):
@@ -49,10 +52,9 @@ def setup_register_ui() -> None:
             "terms_viewed": False,
             "privacy_viewed": False,
             "user_id": None,
-            "phone": None,
             "email": None,
-            "debug_phone": None,
-            "debug_email": None,
+            "challenge_id": None,
+            "username_edited": False,
         }
 
         with ui.element("main").classes("pruvio-page"):
@@ -62,19 +64,39 @@ def setup_register_ui() -> None:
                 with ui.card().classes("pruvio-card w-full max-w-2xl mx-auto p-6 sm:p-8"):
                     ui.label(t("Create your Pruvio account", lang)).classes("text-3xl font-black text-slate-950")
                     ui.label(
-                        "Verificăm atât telefonul, cât și adresa de email. Poți folosi apoi parolă, OTP sau passkey pentru autentificare."
+                        "Verificăm adresa de email. Telefonul este folosit doar ca informație de contact. Autentificarea folosește numele de utilizator sau emailul."
                         if lang == "ro"
-                        else "We verify both your phone number and email. You can then sign in with password, OTP, or passkey."
+                        else "We verify your email. Your phone is contact information. Sign in using your unique username or email."
                     ).classes("text-sm text-slate-500")
 
                     form_panel = ui.column().classes("w-full gap-3 mt-4")
-                    verify_panel = ui.column().classes("w-full gap-4 mt-4")
-                    verify_panel.visible = False
 
                     with form_panel:
                         name = ui.input(t("Full name", lang)).props("outlined autocomplete=name").classes("w-full")
+                        username = ui.input("Nume utilizator" if lang == "ro" else "Username").props("outlined autocomplete=username maxlength=80").classes("w-full")
+                        username_note = ui.label("Poți folosi numele complet dacă este disponibil." if lang == "ro" else "You can use your full name if it is available.").classes("text-xs text-slate-500")
+
+                        def fill_username(event):
+                            if not state["username_edited"]:
+                                username.set_value(event.value or "")
+
+                        def check_username(event):
+                            state["username_edited"] = bool(username.value and username.value != name.value)
+                            if not username.value:
+                                return
+                            db_check = SessionLocal()
+                            try:
+                                check_username_available(db_check, username.value, exclude_user_id=state["user_id"])
+                                username_note.set_text("Nume de utilizator disponibil." if lang == "ro" else "Username available.")
+                            except ValueError as error:
+                                username_note.set_text(str(error))
+                            finally:
+                                db_check.close()
+
+                        name.on_value_change(fill_username)
+                        username.on_value_change(check_username)
                         email = ui.input(t("Email address", lang)).props("outlined autocomplete=email").classes("w-full")
-                        phone = ui.input(t("Phone number", lang), placeholder="+40 7xx xxx xxx").props(
+                        phone = ui.input("Telefon (doar contact)" if lang == "ro" else "Phone number (contact only)", placeholder="+40 7xx xxx xxx").props(
                             "outlined autocomplete=tel inputmode=tel"
                         ).classes("w-full")
                         password = ui.input(t("Password", lang), password=True, password_toggle_button=True).props(
@@ -145,96 +167,59 @@ def setup_register_ui() -> None:
                                     accepted_privacy=True,
                                     marketing_opt_in=bool(marketing.value),
                                     password=password.value or "",
+                                    username=username.value or "",
                                 )
                                 state["user_id"] = result["user"].id
-                                state["phone"] = result["user"].phone_number
                                 state["email"] = result["user"].email
-                                state["debug_phone"] = result.get("debug_phone_otp")
-                                state["debug_email"] = result.get("debug_email_otp")
+                                state["challenge_id"] = result["challenge_id"]
                             except Exception as error:
                                 status.set_text(str(error))
                                 return
                             finally:
                                 db.close()
 
-                            phone_destination.set_text(
-                                f"Cod SMS trimis la: {state['phone']}" if lang == "ro" else f"SMS code sent to: {state['phone']}"
-                            )
-                            email_destination.set_text(
-                                f"Cod email trimis la: {state['email']}" if lang == "ro" else f"Email code sent to: {state['email']}"
-                            )
-                            debug_phone_label.set_text(f"OTP SMS debug: {state['debug_phone']}" if state.get("debug_phone") else "")
-                            debug_email_label.set_text(f"OTP email debug: {state['debug_email']}" if state.get("debug_email") else "")
-                            form_panel.visible = False
-                            verify_panel.visible = True
+                            try:
+                                otp_dialog.present({"destination": state["email"], "delivery": result["email_delivery"], "debug_otp": result.get("debug_email_otp")})
+                            except ValueError as error:
+                                status.set_text(str(error))
 
-                        ui.button(t("Send verification codes", lang), icon="mark_email_read", on_click=send_registration_codes).classes(
+                        ui.button("Creează contul" if lang == "ro" else "Create account", icon="mark_email_read", on_click=send_registration_codes).classes(
                             "pruvio-primary w-full py-3"
                         )
                         ui.label(t("Already have an account? Sign in", lang)).classes("pruvio-link text-sm self-center").on(
                             "click", lambda: ui.navigate.to("/")
                         )
 
-                    with verify_panel:
-                        ui.label(t("Verify your account", lang)).classes("text-2xl font-black text-slate-950")
-                        ui.label(
-                            "Introdu codurile trimise separat la telefon și email. Ambele trebuie verificate."
-                            if lang == "ro"
-                            else "Enter the codes sent separately to your phone and email. Both must be verified."
-                        ).classes("text-sm text-slate-500")
+                    async def finish_registration(code):
+                        db = SessionLocal()
+                        try:
+                            user = db.get(User, state["user_id"])
+                            if not user:
+                                raise ValueError("Registration session expired. Start again.")
+                            if not user.is_email_verified:
+                                verify_registration_email(db, state["email"], code, challenge_id=state["challenge_id"])
+                            db.refresh(user)
+                            if user.status != "active":
+                                raise ValueError("Verify your email to activate this account.")
+                            target = await finish_verified_device_login(db, user)
+                        finally:
+                            db.close()
+                        ui.navigate.to(target if target != "/" else "/account")
 
-                        phone_destination = ui.label("").classes("text-sm font-bold text-slate-700")
-                        email_destination = ui.label("").classes("text-sm font-bold text-slate-700")
-                        debug_phone_label = ui.label("").classes("text-xs text-amber-700")
-                        debug_email_label = ui.label("").classes("text-xs text-amber-700")
+                    def resend():
+                        db = SessionLocal()
+                        try:
+                            user = db.get(User, state["user_id"])
+                            if not user:
+                                raise ValueError("Registration session expired. Start again.")
+                            result = resend_registration_code(db, user, "email")
+                            state["challenge_id"] = result["challenge_id"]
+                            result["destination"] = user.email
+                            return result
+                        finally:
+                            db.close()
 
-                        phone_code = ui.input(t("SMS code", lang)).props(
-                            "outlined inputmode=numeric maxlength=6 autocomplete=one-time-code"
-                        ).classes("w-full")
-                        email_code = ui.input(t("Email code", lang)).props(
-                            "outlined inputmode=numeric maxlength=6 autocomplete=one-time-code"
-                        ).classes("w-full")
-                        verify_status = ui.label("").classes("text-xs text-red-600")
-                        debug_verify = ui.label("").classes("text-xs text-amber-700")
-
-                        def finish_registration():
-                            db = SessionLocal()
-                            try:
-                                user = verify_registration_phone(db, state["phone"], phone_code.value or "")
-                                user = verify_registration_email(db, state["email"], email_code.value or "")
-                                if user.status != "active":
-                                    raise ValueError("Both channels must be verified before the account becomes active.")
-                                login_user(user)
-                            except Exception as error:
-                                verify_status.set_text(str(error))
-                                return
-                            finally:
-                                db.close()
-                            ui.navigate.to("/account")
-
-                        ui.button(t("Verify and create account", lang), icon="verified", on_click=finish_registration).classes(
-                            "pruvio-primary w-full py-3"
-                        )
-
-                        with ui.row().classes("w-full gap-2 flex-wrap"):
-                            def resend(channel: str):
-                                db = SessionLocal()
-                                try:
-                                    from app.models.user import User
-                                    user = db.query(User).filter(User.id == state["user_id"]).first()
-                                    if not user:
-                                        raise ValueError("Registration session expired. Start again.")
-                                    result = resend_registration_code(db, user, channel)
-                                    if result.get("debug_otp"):
-                                        debug_verify.set_text(f"OTP debug {channel}: {result['debug_otp']}")
-                                    ui.notify(
-                                        f"Cod nou trimis prin {channel}." if lang == "ro" else f"New {channel} code requested.",
-                                        type="positive",
-                                    )
-                                except Exception as error:
-                                    verify_status.set_text(str(error))
-                                finally:
-                                    db.close()
-
-                            ui.button(t("Resend SMS", lang), on_click=lambda: resend("phone")).classes("pruvio-secondary flex-1")
-                            ui.button(t("Resend email", lang), on_click=lambda: resend("email")).classes("pruvio-secondary flex-1")
+                    otp_dialog = EmailOTPDialog(title="Verifică emailul" if lang == "ro" else "Verify your email",
+                        description="Introdu codul pentru a activa contul." if lang == "ro" else "Enter the code to activate your account.",
+                        on_verify=finish_registration, on_resend=resend, language=lang,
+                        confirm_label="Verifică și creează contul" if lang == "ro" else "Verify and create account")

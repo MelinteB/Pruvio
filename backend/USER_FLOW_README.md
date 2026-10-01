@@ -1,53 +1,24 @@
-# Pruvio v4 user flow
+# Pruvio v6.3 user flow
 
 ## New account
 
-1. `/register`
-2. Enter name, email and phone.
-3. Open Terms and Privacy before acceptance becomes available.
-4. Accept Terms and acknowledge Privacy.
-5. Verify phone OTP and email OTP.
-6. Account becomes active and the user is signed in.
-7. Pruvio opens `/account` so the user can add a passkey immediately.
+1. Enter full name, available unique username, email, contact phone and password.
+2. Review Terms and Privacy, then accept them.
+3. Create account; verify the email code in the popup.
+4. The account becomes active and the browser is remembered. Account settings can add a passkey.
 
 ## Returning user
 
-At `/` the preferred option is **Use fingerprint / Face ID / passkey**.
+Sign in with username or email and a password, or use a passkey. A new/untrusted browser requires an email OTP popup. On a remembered browser, the OTP option is hidden. Forgotten passwords are reset using an email confirmation popup.
 
-Fallback remains:
+## Receipt and shared bill
 
-```text
-email or phone
-→ send OTP
-→ verify OTP
-→ dashboard
-```
+Upload an image/PDF → review extracted items → start split → share the participant link.
 
-An allow-listed developer account can additionally use **Developer Authenticator** TOTP for debug testing.
+Other users sign in, join and select their quantities. When the owner opens the shared link, Pruvio explains that the link is for other users and offers sign-out/account switching. Account switching returns to the bill after sign-in. The owner manages the bill from their own receipt/history page.
 
-## App
+## Account
 
-```text
-Dashboard
-→ Scan/upload receipt
-→ OCR + validation + optional translation
-→ Receipt review
-→ Start split bill
-→ Share participant link
-→ Friends join without a Pruvio account
-→ Select item quantities
-```
+Full name and unique username can be edited separately. A new email is confirmed at the new address; phone changes are confirmed at the existing verified email. Account deletion requires an email OTP with an explicit permanent-deletion confirmation. OTP inputs appear only inside the requested popup.
 
-Bottom navigation:
-
-```text
-Home · Scan · History · Account
-```
-
-There are no custom Back/Forward buttons.
-
-## Security
-
-Passkeys use WebAuthn. The device/platform performs fingerprint/face/device-PIN verification locally. Pruvio stores the passkey public credential and signature counter, not biometric templates.
-
-See `V4_SECURITY_README.md` for Render settings.
+See [EMAIL_OTP_SETUP_v6_3.md](EMAIL_OTP_SETUP_v6_3.md) for deployment and validation.

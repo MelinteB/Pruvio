@@ -22,7 +22,8 @@ from app.services.split_bill_session_service import (
     update_session_tip,
 )
 from app.ui.app_shell import app_header, display_item_name, is_integer_quantity, quantity_text, setup_page_head
-from app.ui.auth_state import get_logged_in_user, require_login
+from app.ui.auth_state import get_logged_in_user, require_login, logout_user, get_ui_language, POST_LOGIN_PATH_KEY
+from nicegui import app as nicegui_app
 
 EPS = 1e-6
 
@@ -36,6 +37,30 @@ def _error_page(title: str, message: str) -> None:
                 ui.label(title).classes("text-xl font-black text-slate-950")
                 ui.label(message).classes("text-sm text-slate-500")
                 ui.button("Go home", on_click=lambda: ui.navigate.to("/")).classes("pruvio-primary mt-3 px-4")
+
+
+def _owner_shared_link_page(token: str, language: str) -> None:
+    ro = language == "ro"
+    setup_page_head("Pruvio · " + ("Ești proprietarul acestei note" if ro else "You own this bill"))
+    with ui.element("main").classes("pruvio-page"), ui.column().classes("pruvio-shell gap-4"):
+        app_header("Split bill", language=language)
+        with ui.card().classes("pruvio-card w-full max-w-xl mx-auto p-6 sm:p-8 gap-4"):
+            ui.icon("person_outline", size="40px").classes("text-emerald-600")
+            ui.label("Ești proprietarul acestei note" if ro else "You are the owner of this bill").classes("text-2xl font-black text-slate-950")
+            ui.label("Nu te poți conecta prin linkul partajat. Acest link este destinat altor utilizatori. Deconectează-te sau folosește alt cont." if ro else
+                     "You are the owner of this bill and cannot join through the shared link. This link is for other users. Sign out or use another account.").classes("text-sm text-slate-500 leading-relaxed").props("role=alert")
+
+            def sign_out():
+                logout_user()
+                ui.navigate.to("/")
+
+            def switch_account():
+                logout_user()
+                nicegui_app.storage.user[POST_LOGIN_PATH_KEY] = f"/split-bill/sessions/{token}/join"
+                ui.navigate.to("/")
+
+            ui.button("Folosește alt cont" if ro else "Use another account", icon="switch_account", on_click=switch_account).classes("pruvio-primary w-full py-3")
+            ui.button("Deconectare" if ro else "Sign out", icon="logout", on_click=sign_out).classes("pruvio-secondary w-full py-3")
 
 
 def _share_link(url: str, text: str) -> None:
@@ -100,6 +125,8 @@ def setup_split_bill_session_widget_ui() -> None:
         db = SessionLocal()
         try:
             session = get_split_bill_session_by_token(db, token)
+            if session and session.owner_user_id == user_id:
+                _owner_shared_link_page(token, get_ui_language()); return
             participant = get_split_bill_participant_by_token(db, participant_token)
             if not session or not participant or participant.session_id != session.id:
                 _error_page("Invalid link", "This participant link is invalid or expired."); return
@@ -120,6 +147,8 @@ def _render_join_page(token: str) -> None:
         user = get_logged_in_user(db)
         if not session or not user:
             _error_page("Split bill not found", "The shared link is invalid or expired."); return
+        if session.owner_user_id == user.id:
+            _owner_shared_link_page(token, user.preferred_language or "en"); return
         lang = user.preferred_language or "en"
         existing = get_participant_by_session_and_user(db, session, user)
         summary = get_split_bill_session_summary(db, session)
@@ -141,6 +170,8 @@ def _render_join_page(token: str) -> None:
                     dbj=SessionLocal()
                     try:
                         ss=get_split_bill_session_by_token(dbj,token); uu=get_logged_in_user(dbj)
+                        if ss and uu and ss.owner_user_id == uu.id:
+                            ui.navigate.to(f"/split-bill/sessions/{token}/join"); return
                         result=join_split_bill_session_as_user(dbj,ss,uu)
                     except Exception as e:
                         ui.notify(str(e),type="negative"); return

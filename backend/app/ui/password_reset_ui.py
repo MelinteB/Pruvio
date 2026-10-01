@@ -3,75 +3,63 @@ from nicegui import ui
 from app.db.database import SessionLocal
 from app.i18n import t
 from app.services.account_service import confirm_password_reset, request_password_reset
+from app.services.password_service import hash_password
 from app.ui.app_shell import app_header, setup_page_head
 from app.ui.auth_state import get_ui_language
+from app.ui.email_otp_dialog import EmailOTPDialog
 
 
 def setup_password_reset_ui() -> None:
-    @ui.page("/reset-password")
+    @ui.page('/reset-password')
     def reset_password_page():
         lang = get_ui_language()
         setup_page_head(f"{t('Reset password', lang)} · Pruvio")
-        state = {"email": None}
+        state = {}
+        with ui.element('main').classes('pruvio-page'), ui.column().classes('pruvio-shell gap-4'):
+            app_header(t('Reset password', lang), show_account=False, language=lang)
+            with ui.card().classes('pruvio-card w-full max-w-xl mx-auto p-6 sm:p-8'):
+                ui.label(t('Reset password', lang)).classes('text-3xl font-black text-slate-950')
+                ui.label('Confirmă noua parolă cu un cod trimis pe email.' if lang == 'ro' else 'Confirm your new password with a code sent to your email.').classes('text-sm text-slate-500')
+                email = ui.input(t('Email address', lang)).props('outlined autocomplete=email').classes('w-full mt-3')
+                password = ui.input(t('New password', lang), password=True, password_toggle_button=True).props('outlined autocomplete=new-password').classes('w-full')
+                confirmation = ui.input(t('Confirm new password', lang), password=True, password_toggle_button=True).props('outlined autocomplete=new-password').classes('w-full')
+                status = ui.label('').classes('text-xs text-red-600')
 
-        with ui.element("main").classes("pruvio-page"):
-            with ui.column().classes("pruvio-shell gap-4"):
-                app_header(t("Reset password", lang), show_account=False, language=lang)
-                with ui.card().classes("pruvio-card w-full max-w-xl mx-auto p-6 sm:p-8"):
-                    ui.label(t("Reset password", lang)).classes("text-3xl font-black text-slate-950")
-                    ui.label(
-                        "Vom trimite un cod OTP la adresa ta de email verificată."
-                        if lang == "ro"
-                        else "We will send an OTP to your verified email address."
-                    ).classes("text-sm text-slate-500")
-                    email = ui.input(t("Email address", lang)).props("outlined autocomplete=email").classes("w-full mt-3")
-                    status = ui.label("").classes("text-xs text-red-600")
-                    debug = ui.label("").classes("text-xs text-amber-700")
-                    confirm_panel = ui.column().classes("w-full gap-3")
-                    confirm_panel.visible = False
+                def request_code(resend=False):
+                    if not resend:
+                        if password.value != confirmation.value:
+                            raise ValueError('Parolele nu coincid.' if lang == 'ro' else 'Passwords do not match.')
+                        hash_password(password.value or '')  # Validate before sending a code.
+                        state['password'] = password.value
+                        state['email'] = email.value or ''
+                    db = SessionLocal()
+                    try:
+                        result = request_password_reset(db, state['email'])
+                        state['email'] = result['destination']
+                        state['challenge_id'] = result['challenge_id']
+                        return result
+                    finally:
+                        db.close()
 
-                    def send_code():
-                        status.set_text("")
-                        debug.set_text("")
-                        db = SessionLocal()
-                        try:
-                            result = request_password_reset(db, email.value or "")
-                            state["email"] = result["destination"]
-                        except Exception as error:
-                            status.set_text(str(error))
-                            return
-                        finally:
-                            db.close()
-                        status.classes("text-emerald-700", remove="text-red-600")
-                        status.set_text(
-                            f"Cod trimis la {result['destination']}." if lang == "ro" else f"Code sent to {result['destination']}."
-                        )
-                        if result.get("debug_otp"):
-                            debug.set_text(f"OTP debug: {result['debug_otp']}")
-                        confirm_panel.visible = True
+                def save(code):
+                    db = SessionLocal()
+                    try:
+                        confirm_password_reset(db, state['email'], code, state['password'], challenge_id=state['challenge_id'])
+                    finally:
+                        db.close()
+                    state.clear()
+                    ui.notify('Parola a fost actualizată.' if lang == 'ro' else 'Password updated.', type='positive')
+                    ui.navigate.to('/')
 
-                    ui.button(t("Send reset code", lang), icon="mail", on_click=send_code).classes("pruvio-primary w-full py-3")
+                popup = EmailOTPDialog(title='Confirmă resetarea' if lang == 'ro' else 'Confirm password reset',
+                    description='Introdu codul pentru a salva noua parolă.' if lang == 'ro' else 'Enter the code to save your new password.',
+                    on_verify=save, on_resend=lambda: request_code(True), language=lang, confirm_label=t('Save new password', lang))
 
-                    with confirm_panel:
-                        code = ui.input(t("Reset code", lang)).props("outlined inputmode=numeric maxlength=6").classes("w-full")
-                        new_password = ui.input(t("New password", lang), password=True, password_toggle_button=True).props("outlined").classes("w-full")
-                        confirm_password = ui.input(t("Confirm new password", lang), password=True, password_toggle_button=True).props("outlined").classes("w-full")
-
-                        def save_password():
-                            if (new_password.value or "") != (confirm_password.value or ""):
-                                status.set_text("Parolele nu coincid." if lang == "ro" else "Passwords do not match.")
-                                return
-                            db = SessionLocal()
-                            try:
-                                confirm_password_reset(db, state["email"] or email.value or "", code.value or "", new_password.value or "")
-                            except Exception as error:
-                                status.set_text(str(error))
-                                return
-                            finally:
-                                db.close()
-                            ui.notify("Parola a fost actualizată." if lang == "ro" else "Password updated.", type="positive")
-                            ui.navigate.to("/")
-
-                        ui.button(t("Save new password", lang), icon="lock_reset", on_click=save_password).classes("pruvio-primary w-full py-3")
-
-                    ui.label(t("Back to sign in", lang)).classes("pruvio-link text-sm self-center mt-2").on("click", lambda: ui.navigate.to("/"))
+                def send():
+                    status.set_text('')
+                    try:
+                        popup.present(request_code())
+                    except Exception as error:
+                        status.set_text(str(error))
+                ui.button(t('Send reset code', lang), icon='mail_outline', on_click=send).classes('pruvio-primary w-full py-3')
+                ui.label(t('Back to sign in', lang)).classes('pruvio-link text-sm self-center mt-2').on('click', lambda: ui.navigate.to('/'))

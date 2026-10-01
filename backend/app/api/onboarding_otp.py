@@ -4,15 +4,12 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.schemas.onboarding_otp import (
     OTPStartRequest,
-    OTPVerifyPhoneRequest,
     OTPVerifyEmailRequest,
     OTPResponse,
     OTPStatusResponse,
-    
 )
 from app.services.onboarding_otp_service import (
     start_otp_onboarding,
-    verify_phone_otp,
     verify_email_otp,
     get_otp_onboarding_status
 )
@@ -34,6 +31,7 @@ def start_otp_verification(
             db=db,
             phone_number=otp_data.phone_number,
             display_name=otp_data.display_name,
+            username=otp_data.username,
             email=otp_data.email,
             accepted_terms=otp_data.accepted_terms,
             accepted_privacy=otp_data.accepted_privacy,
@@ -47,26 +45,9 @@ def start_otp_verification(
         )
 
 
-@router.post(
-    "/verify-phone",
-    response_model=OTPResponse
-)
-def verify_phone(
-    otp_data: OTPVerifyPhoneRequest,
-    db: Session = Depends(get_db)
-):
-    try:
-        return verify_phone_otp(
-            db=db,
-            phone_number=otp_data.phone_number,
-            code=otp_data.code
-        )
-
-    except ValueError as error:
-        raise HTTPException(
-            status_code=400,
-            detail=str(error)
-        )
+@router.post("/verify-phone", include_in_schema=False)
+def verify_phone_disabled():
+    raise HTTPException(410, detail="Phone OTP is disabled. Verify your email instead.")
 
 
 @router.post(
@@ -81,7 +62,8 @@ def verify_email(
         return verify_email_otp(
             db=db,
             email=otp_data.email,
-            code=otp_data.code
+            code=otp_data.code,
+            challenge_id=otp_data.challenge_id
         )
 
     except ValueError as error:
@@ -95,13 +77,13 @@ def verify_email(
     response_model=OTPStatusResponse
 )
 def get_otp_status(
-    phone_number: str = Query(...),
+    identifier: str = Query(..., description="Username or email address"),
     db: Session = Depends(get_db)
 ):
     try:
         return get_otp_onboarding_status(
             db=db,
-            phone_number=phone_number
+            identifier=identifier
         )
 
     except ValueError as error:

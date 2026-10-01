@@ -1,4 +1,5 @@
 import base64
+import json
 import os
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -58,10 +59,12 @@ def send_sms_verification_code(phone_number: str, code: str, ttl_minutes: int) -
 
     try:
         with urlopen(request, timeout=20) as response:
+            data = json.load(response)
             return {
                 "sent": 200 <= response.status < 300,
                 "provider": "twilio",
-                "status": "sent" if 200 <= response.status < 300 else "failed",
+                "status": "queued" if 200 <= response.status < 300 else "failed",
+                "message_id": data.get("sid"),
                 "to": phone_number,
             }
     except Exception as error:
@@ -70,5 +73,5 @@ def send_sms_verification_code(phone_number: str, code: str, ttl_minutes: int) -
             "provider": "twilio",
             "status": "failed",
             "to": phone_number,
-            "reason": str(error),
+            "reason": "SMS delivery failed. Check the SMS provider settings.",
         }

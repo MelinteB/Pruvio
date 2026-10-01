@@ -350,6 +350,8 @@ def join_split_bill_session(
             "display_name": display_name,
             "widget_url": None,
         }
+    if session.owner_user_id == user.id:
+        raise ValueError("You are the owner of this bill and cannot join through the shared link. Sign out or use another account.")
     if user.status != "active":
         return {
             "status": "requires_onboarding",
@@ -417,6 +419,10 @@ def join_split_bill_session(
 
 
 def join_split_bill_session_as_user(db: Session, session: SplitBillSession, user: User) -> dict:
+    if not session or not user:
+        raise ValueError("Sign in to join this bill.")
+    if session.owner_user_id == user.id:
+        raise ValueError("You are the owner of this bill and cannot join through the shared link. Sign out or use another account.")
     if session.status != "open":
         raise ValueError("This split bill session is no longer open.")
     if user.status != "active":

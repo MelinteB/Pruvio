@@ -44,6 +44,8 @@ def ensure_compatibility_schema() -> None:
     if "users" in table_names:
         cols = {c["name"] for c in inspector.get_columns("users")}
         wanted = {
+            "username": "VARCHAR(80)",
+            "username_key": "VARCHAR(255)",
             "email": "VARCHAR(255)",
             "password_hash": "VARCHAR(512)",
             "revolut_payment_link": "VARCHAR(500)",
@@ -65,6 +67,18 @@ def ensure_compatibility_schema() -> None:
             if name not in cols:
                 migrations.append(f"ALTER TABLE users ADD COLUMN {name} {sql_type}")
 
+
+    if "verification_codes" in table_names:
+        cols = {c["name"] for c in inspector.get_columns("verification_codes")}
+        wanted = {
+            "challenge_id": "VARCHAR(64)", "code_ciphertext": "VARCHAR",
+            "context_value": "VARCHAR(255)",
+            "provider_message_id": "VARCHAR(255)", "delivery_channel": "VARCHAR(30)",
+            "delivery_status": "VARCHAR(30)", "fallback_at": "TIMESTAMP NULL",
+        }
+        for name, sql_type in wanted.items():
+            if name not in cols:
+                migrations.append(f"ALTER TABLE verification_codes ADD COLUMN {name} {sql_type}")
 
     if "split_bill_sessions" in table_names:
         cols = {c["name"] for c in inspector.get_columns("split_bill_sessions")}
@@ -102,9 +116,37 @@ def ensure_compatibility_schema() -> None:
         if "quantity" not in cols:
             migrations.append("ALTER TABLE split_bill_item_assignments ADD COLUMN quantity DOUBLE PRECISION")
 
-    if not migrations:
-        return
-
     with engine.begin() as connection:
         for statement in migrations:
             connection.execute(text(statement))
+        if "users" in table_names:
+            _backfill_usernames(connection)
+        if "verification_codes" in table_names:
+            code_cols = {c["name"] for c in inspect(connection).get_columns("verification_codes")}
+            if {"destination_type", "status", "code_ciphertext"}.issubset(code_cols):
+                connection.execute(text("UPDATE verification_codes SET status='expired', code_ciphertext=NULL "
+                                        "WHERE destination_type='phone' AND status='pending'"))
+
+
+def _backfill_usernames(connection) -> None:
+    from app.usernames import normalize_username, username_key
+    rows = connection.execute(text("SELECT id, name, username, username_key FROM users ORDER BY id")).mappings().all()
+    used = {row["username_key"] for row in rows if row["username"] and row["username_key"]}
+    for row in rows:
+        if row["username"] and row["username_key"]:
+            continue
+        try:
+            base = normalize_username(row["username"] or row["name"] or f"User {row['id']}")
+        except ValueError:
+            base = f"User {row['id']}"
+        candidate = base
+        suffix = 2
+        while username_key(candidate) in used:
+            ending = f" ({suffix})"
+            candidate = base[:80-len(ending)].rstrip() + ending
+            suffix += 1
+        key = username_key(candidate)
+        used.add(key)
+        connection.execute(text("UPDATE users SET username=:username, username_key=:key WHERE id=:id"),
+                           {"username": candidate, "key": key, "id": row["id"]})
+    connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username_key ON users (username_key)"))

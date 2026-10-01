@@ -28,6 +28,8 @@ from app.services.totp_debug_service import (
     totp_allowed_for_user,
     verify_totp,
 )
+from app.ui.email_otp_dialog import EmailOTPDialog
+from app.services.username_service import update_username
 from app.ui.app_shell import app_header, bottom_nav, setup_page_head
 from app.ui.auth_state import (
     get_logged_in_user,
@@ -65,13 +67,11 @@ def setup_account_ui() -> None:
                 with ui.card().classes("pruvio-card w-full p-6 sm:p-8"):
                     ui.label(user.name or "Pruvio user").classes("text-3xl font-black text-slate-950")
                     ui.label(user.email or ("Fără email" if lang == "ro" else "No email")).classes("text-sm text-slate-500")
+                    ui.label("@" + user.username).classes("text-sm font-semibold text-slate-700")
                     ui.label(user.phone_number).classes("text-sm text-slate-500")
                     with ui.row().classes("gap-2 flex-wrap mt-3"):
                         ui.label(t("Email verified" if user.is_email_verified else "Email not verified", lang)).classes(
                             "metric-pill metric-accent" if user.is_email_verified else "metric-pill"
-                        )
-                        ui.label(t("Phone verified" if user.is_phone_verified else "Phone not verified", lang)).classes(
-                            "metric-pill metric-accent" if user.is_phone_verified else "metric-pill"
                         )
                         ui.label(t("Active account", lang) if user.status == "active" else user.status).classes("metric-pill")
 
@@ -84,7 +84,7 @@ def setup_account_ui() -> None:
                     def save_name():
                         db_save = SessionLocal()
                         try:
-                            row = db_save.query(User).filter(User.id == user_id).first()
+                            row = current_account(db_save)
                             update_profile_name(db_save, row, name_input.value or "")
                         except Exception as error:
                             profile_status.set_text(str(error))
@@ -96,85 +96,68 @@ def setup_account_ui() -> None:
 
                     ui.button(t("Save name", lang), on_click=save_name).classes("pruvio-secondary")
 
-                    ui.separator().classes("my-5")
-                    ui.label(t("Current email", lang)).classes("text-xs font-bold text-slate-500")
-                    ui.label(user.email or "—").classes("text-sm font-black text-slate-900")
-                    new_email = ui.input(t("New email", lang), value=user.email or "").props("outlined autocomplete=email").classes("w-full")
-                    email_otp = ui.input(t("Email code", lang)).props("outlined inputmode=numeric maxlength=6").classes("w-full")
-                    email_status = ui.label("").classes("text-xs text-slate-500")
-                    email_debug = ui.label("").classes("text-xs text-amber-700")
+                    username_input = ui.input("Nume utilizator" if lang == "ro" else "Username", value=user.username).props("outlined maxlength=80").classes("w-full mt-3")
+                    def current_account(db):
+                        row = get_logged_in_user(db)
+                        if not row or row.id != user_id or row.status != "active":
+                            raise ValueError("Your session has changed. Sign in again.")
+                        return row
 
-                    def request_email_change():
-                        db_change = SessionLocal()
+                    def save_username():
+                        db_save = SessionLocal()
                         try:
-                            row = db_change.query(User).filter(User.id == user_id).first()
-                            result = request_contact_change(db_change, row, "email", new_email.value or "")
+                            update_username(db_save, current_account(db_save), username_input.value or "")
                         except Exception as error:
-                            email_status.set_text(str(error))
+                            profile_status.set_text(str(error))
                             return
                         finally:
-                            db_change.close()
-                        email_status.set_text(
-                            f"OTP trimis la {result['destination']}." if lang == "ro" else f"OTP sent to {result['destination']}."
-                        )
-                        email_debug.set_text(f"OTP debug: {result['debug_otp']}" if result.get("debug_otp") else "")
-
-                    def confirm_email_change():
-                        db_change = SessionLocal()
-                        try:
-                            row = db_change.query(User).filter(User.id == user_id).first()
-                            confirm_contact_change(db_change, row, "email", new_email.value or "", email_otp.value or "")
-                        except Exception as error:
-                            email_status.set_text(str(error))
-                            return
-                        finally:
-                            db_change.close()
-                        ui.notify("Email actualizat și verificat." if lang == "ro" else "Email updated and verified.", type="positive")
+                            db_save.close()
+                        ui.notify("Nume de utilizator salvat." if lang == "ro" else "Username saved.", type="positive")
                         ui.navigate.to("/account")
+                    ui.button("Salvează numele de utilizator" if lang == "ro" else "Save username", on_click=save_username).classes("pruvio-secondary")
 
-                    with ui.row().classes("gap-2 flex-wrap"):
-                        ui.button(t("Send email OTP", lang), icon="mail", on_click=request_email_change).classes("pruvio-secondary")
-                        ui.button(t("Confirm email change", lang), icon="verified", on_click=confirm_email_change).classes("pruvio-primary")
+                    def contact_editor(channel, label, initial):
+                        ui.separator().classes("my-5")
+                        value = ui.input(label, value=initial or "").props("outlined autocomplete=" + ("email" if channel == "email" else "tel")).classes("w-full")
+                        if channel == "phone":
+                            ui.label("Confirmarea telefonului se trimite la emailul verificat." if lang == "ro" else "Confirm phone changes through your verified email.").classes("text-xs text-slate-500")
+                        contact_status = ui.label("").classes("text-xs text-red-600")
+                        state = {}
 
-                    ui.separator().classes("my-5")
-                    ui.label(t("Current phone", lang)).classes("text-xs font-bold text-slate-500")
-                    ui.label(user.phone_number or "—").classes("text-sm font-black text-slate-900")
-                    new_phone = ui.input(t("New phone number", lang), value=user.phone_number or "").props("outlined autocomplete=tel").classes("w-full")
-                    phone_otp = ui.input(t("SMS code", lang)).props("outlined inputmode=numeric maxlength=6").classes("w-full")
-                    phone_status = ui.label("").classes("text-xs text-slate-500")
-                    phone_debug = ui.label("").classes("text-xs text-amber-700")
+                        def request_code(resend=False):
+                            db_change = SessionLocal()
+                            try:
+                                row = current_account(db_change)
+                                result = request_contact_change(db_change, row, channel, state["requested_value"] if resend else value.value or "")
+                                state.update(result)
+                                return result
+                            finally:
+                                db_change.close()
 
-                    def request_phone_change():
-                        db_change = SessionLocal()
-                        try:
-                            row = db_change.query(User).filter(User.id == user_id).first()
-                            result = request_contact_change(db_change, row, "phone", new_phone.value or "")
-                        except Exception as error:
-                            phone_status.set_text(str(error))
-                            return
-                        finally:
-                            db_change.close()
-                        phone_status.set_text(
-                            f"OTP trimis la {result['destination']}." if lang == "ro" else f"OTP sent to {result['destination']}."
-                        )
-                        phone_debug.set_text(f"OTP debug: {result['debug_otp']}" if result.get("debug_otp") else "")
+                        def confirm(code):
+                            db_change = SessionLocal()
+                            try:
+                                row = current_account(db_change)
+                                confirm_contact_change(db_change, row, channel, state["requested_value"], code, challenge_id=state["challenge_id"])
+                            finally:
+                                db_change.close()
+                            ui.notify("Contact actualizat." if lang == "ro" else "Contact updated.", type="positive")
+                            ui.navigate.to("/account")
 
-                    def confirm_phone_change():
-                        db_change = SessionLocal()
-                        try:
-                            row = db_change.query(User).filter(User.id == user_id).first()
-                            confirm_contact_change(db_change, row, "phone", new_phone.value or "", phone_otp.value or "")
-                        except Exception as error:
-                            phone_status.set_text(str(error))
-                            return
-                        finally:
-                            db_change.close()
-                        ui.notify("Telefon actualizat și verificat." if lang == "ro" else "Phone updated and verified.", type="positive")
-                        ui.navigate.to("/account")
+                        popup = EmailOTPDialog(title=("Confirmă noul email" if lang == "ro" else "Confirm new email") if channel == "email" else ("Confirmă telefonul" if lang == "ro" else "Confirm phone change"),
+                            description=("Introdu codul trimis la noul email." if lang == "ro" else "Enter the code sent to your new email.") if channel == "email" else ("Introdu codul trimis la emailul verificat pentru a salva noul telefon." if lang == "ro" else "Enter the code sent to your verified email to save the new phone number."),
+                            on_verify=confirm, on_resend=lambda: request_code(True), language=lang)
+                        def request_change():
+                            contact_status.set_text("")
+                            try:
+                                popup.present(request_code())
+                            except Exception as error:
+                                contact_status.set_text(str(error))
+                        ui.button(("Schimbă emailul" if lang == "ro" else "Change email") if channel == "email" else ("Schimbă telefonul" if lang == "ro" else "Change phone number"),
+                            icon="mail_outline", on_click=request_change).classes("pruvio-secondary")
 
-                    with ui.row().classes("gap-2 flex-wrap"):
-                        ui.button(t("Send phone OTP", lang), icon="sms", on_click=request_phone_change).classes("pruvio-secondary")
-                        ui.button(t("Confirm phone change", lang), icon="verified", on_click=confirm_phone_change).classes("pruvio-primary")
+                    contact_editor("email", t("New email", lang), user.email)
+                    contact_editor("phone", t("New phone number", lang), user.phone_number)
 
                 # Password
                 with ui.card().classes("pruvio-card w-full p-5 sm:p-6"):
@@ -195,7 +178,7 @@ def setup_account_ui() -> None:
                             return
                         db_password = SessionLocal()
                         try:
-                            row = db_password.query(User).filter(User.id == user_id).first()
+                            row = current_account(db_password)
                             set_password(db_password, row, new_password.value or "", current_password.value or None)
                         except Exception as error:
                             password_status.set_text(str(error))
@@ -229,7 +212,7 @@ def setup_account_ui() -> None:
                         async def add_passkey():
                             db_begin = SessionLocal()
                             try:
-                                current = get_logged_in_user(db_begin)
+                                current = current_account(db_begin)
                                 if current is None:
                                     raise ValueError("Your session has expired. Sign in again.")
                                 challenge, options_json = begin_passkey_registration(db_begin, current)
@@ -245,7 +228,7 @@ def setup_account_ui() -> None:
                                 return
                             db_finish = SessionLocal()
                             try:
-                                current = get_logged_in_user(db_finish)
+                                current = current_account(db_finish)
                                 complete_passkey_registration(
                                     db_finish,
                                     current,
@@ -278,7 +261,8 @@ def setup_account_ui() -> None:
                                             def remove_passkey(passkey_id=credential.id):
                                                 db_remove = SessionLocal()
                                                 try:
-                                                    delete_passkey(db_remove, user_id=user_id, passkey_id=passkey_id)
+                                                    current = current_account(db_remove)
+                                                    delete_passkey(db_remove, user_id=current.id, passkey_id=passkey_id)
                                                 finally:
                                                     db_remove.close()
                                                 ui.navigate.to("/account")
@@ -347,7 +331,7 @@ def setup_account_ui() -> None:
                     def save_payment_details():
                         db_pay = SessionLocal()
                         try:
-                            row = db_pay.query(User).filter(User.id == user_id).first()
+                            row = current_account(db_pay)
                             update_payment_details(
                                 db_pay,
                                 row,
@@ -381,7 +365,7 @@ def setup_account_ui() -> None:
                     def save_preferences():
                         db_pref = SessionLocal()
                         try:
-                            row = db_pref.query(User).filter(User.id == user_id).first()
+                            row = current_account(db_pref)
                             update_preferences(
                                 db_pref,
                                 row,
@@ -414,42 +398,39 @@ def setup_account_ui() -> None:
                         if lang == "ro"
                         else "Deletion removes your account and associated Pruvio data from the database. OTP confirmation is required."
                     ).classes("text-sm text-slate-500")
-                    channel = ui.select({"email": "Email", "phone": "SMS"}, value="email" if user.email else "phone", label="Canal OTP" if lang == "ro" else "OTP channel").props("outlined").classes("w-full mt-3")
-                    delete_code = ui.input("Cod OTP" if lang == "ro" else "OTP code").props("outlined inputmode=numeric maxlength=6").classes("w-full")
                     delete_status = ui.label("").classes("text-xs text-red-600")
-                    delete_debug = ui.label("").classes("text-xs text-amber-700")
+                    deletion_state = {}
 
-                    def request_delete_code():
+                    def request_deletion():
                         db_delete = SessionLocal()
                         try:
-                            row = db_delete.query(User).filter(User.id == user_id).first()
-                            result = request_account_deletion_otp(db_delete, row, channel.value)
-                        except Exception as error:
-                            delete_status.set_text(str(error))
-                            return
+                            result = request_account_deletion_otp(db_delete, current_account(db_delete), "email")
+                            deletion_state.update(result)
+                            return result
                         finally:
                             db_delete.close()
-                        delete_status.set_text(
-                            f"OTP trimis la {result['destination']}." if lang == "ro" else f"OTP sent to {result['destination']}."
-                        )
-                        delete_debug.set_text(f"OTP debug: {result['debug_otp']}" if result.get("debug_otp") else "")
 
-                    def delete_account():
+                    def delete_account(code):
                         db_delete = SessionLocal()
                         try:
-                            row = db_delete.query(User).filter(User.id == user_id).first()
-                            confirm_and_delete_account(db_delete, row, channel.value, delete_code.value or "")
-                        except Exception as error:
-                            delete_status.set_text(str(error))
-                            return
+                            confirm_and_delete_account(db_delete, current_account(db_delete), "email", code,
+                                challenge_id=deletion_state["challenge_id"])
                         finally:
                             db_delete.close()
                         logout_user()
                         ui.navigate.to("/")
 
-                    with ui.row().classes("gap-2 flex-wrap"):
-                        ui.button(t("Request deletion OTP", lang), icon="sms", on_click=request_delete_code).classes("pruvio-secondary")
-                        ui.button(t("Delete permanently", lang), icon="delete_forever", on_click=delete_account).classes("bg-red-700 text-white rounded-xl font-bold")
+                    deletion_popup = EmailOTPDialog(title="Șterge contul" if lang == "ro" else "Delete your account",
+                        description="Confirmă cu codul primit pe email. Contul și datele asociate vor fi șterse definitiv." if lang == "ro" else "Confirm with the code sent to your email. Your account and associated data will be permanently deleted.",
+                        on_verify=delete_account, on_resend=request_deletion, language=lang, danger=True,
+                        confirm_label=t("Delete permanently", lang))
+                    def request_delete_code():
+                        delete_status.set_text("")
+                        try:
+                            deletion_popup.present(request_deletion())
+                        except Exception as error:
+                            delete_status.set_text(str(error))
+                    ui.button(t("Delete account", lang), icon="delete_forever", on_click=request_delete_code).classes("text-red-700 border border-red-200 rounded-xl font-bold")
 
                 def sign_out():
                     logout_user()

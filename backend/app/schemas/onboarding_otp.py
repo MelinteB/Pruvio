@@ -3,6 +3,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 class OTPStartRequest(BaseModel):
     phone_number: str
+    username: str | None = Field(default=None, min_length=3, max_length=80)
     display_name: str | None = None
     email: EmailStr | None = None
     accepted_terms: bool = Field(default=False)
@@ -17,16 +18,19 @@ class OTPVerifyPhoneRequest(BaseModel):
 
 class OTPVerifyEmailRequest(BaseModel):
     email: EmailStr
-    code: str
+    code: str = Field(pattern=r"^[0-9]{6}$")
+    challenge_id: str = Field(min_length=30, max_length=64)
 
 
 class OTPResendRequest(BaseModel):
     phone_number: str
-    destination_type: str = "phone"
+    destination_type: str = "email"
 
 
 class OTPResponse(BaseModel):
     user_id: int
+    username: str | None = None
+    challenge_id: str | None = None
     phone_number: str
     email: str | None = None
     display_name: str | None = None
@@ -48,6 +52,7 @@ class OTPResponse(BaseModel):
 
 class OTPStatusResponse(BaseModel):
     user_id: int | None = None
+    username: str | None = None
     phone_number: str
     email: str | None = None
     display_name: str | None = None

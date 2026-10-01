@@ -30,6 +30,7 @@ from app.models.external_ocr_usage import ExternalOCRUsage
 from app.models.receipt_item import ReceiptItem
 from app.models.verification_code import VerificationCode
 from app.models.whatsapp_event import WhatsAppEvent
+from app.models.trusted_device import TrustedDevice
 
 from app.api.users import router as users_router
 from app.api.cases import router as cases_router
@@ -42,6 +43,7 @@ from app.api.external_ocr import router as external_ocr_router
 from app.api.onboarding_otp import router as onboarding_otp_router
 from app.api.standalone import router as standalone_router
 from app.api.account import router as account_router
+from app.api.trusted_device import router as device_router
 
 from app.ui.home_ui import setup_home_ui
 from app.ui.account_ui import setup_account_ui
@@ -67,9 +69,9 @@ app = FastAPI(
 Pruvio is a standalone mobile-first receipt assistant.
 
 Upload a receipt, extract and validate items with OCR, translate foreign item
-names to English, and create a shareable split-bill session. The standalone application does not mount the legacy WhatsApp interface. Pruvio v6 adds account-required shared bills, owner tips, live participant status, mobile reminders, settlement payment options, admin-key deletion, and a professional document-crop workspace.
+names to English, and create a shareable split-bill session. The standalone application supports email-only authentication OTP and does not mount the legacy WhatsApp receipt interface. Pruvio v6 adds account-required shared bills, owner tips, live participant status, mobile reminders, settlement payment options, email-confirmed account deletion, and a professional document-crop workspace.
 """,
-    version="6.1.0",
+    version="6.3.0",
 )
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -78,6 +80,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # Public/current API surface shown in /docs.
 app.include_router(account_router, prefix="/auth", tags=["Authentication"])
+app.include_router(device_router, prefix="/auth")
 app.include_router(users_router, prefix="/users", tags=["Users"])
 app.include_router(onboarding_otp_router, prefix="/onboarding/otp", tags=["Registration OTP"])
 app.include_router(split_bill_sessions_router, prefix="/split-bill", tags=["Split Bill Sessions"])
@@ -107,8 +110,10 @@ def health():
         "app": "Pruvio Core",
         "mode": "standalone",
         "whatsapp_enabled": False,
+        "whatsapp_otp_enabled": False,
+        "otp_channels": ["email"],
         "database": "connected",
-        "version": "6.1.0",
+        "version": "6.3.0",
         "passkeys_enabled": passkeys_enabled(),
         "developer_totp_enabled": totp_debug_enabled(),
     }

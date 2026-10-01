@@ -23,6 +23,13 @@ class VerificationCode(Base):
     purpose = Column(String, default="onboarding", index=True)
 
     code_hash = Column(String, nullable=False)
+    challenge_id = Column(String(64), nullable=True, index=True)
+    context_value = Column(String(255), nullable=True)
+    code_ciphertext = Column(String, nullable=True)
+    provider_message_id = Column(String(255), nullable=True, index=True)
+    delivery_channel = Column(String(30), nullable=True)
+    delivery_status = Column(String(30), nullable=True)
+    fallback_at = Column(DateTime, nullable=True)
 
     status = Column(String, default="pending", index=True)
 

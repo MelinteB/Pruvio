@@ -3,6 +3,9 @@ from sqlalchemy.orm import Session
 
 from app.models.user import User
 from app.schemas.user import UserCreate
+from app.services.username_service import check_username_available
+from app.usernames import username_key
+from sqlalchemy.exc import IntegrityError
 
 
 def get_users(db: Session):
@@ -18,7 +21,9 @@ def get_user_by_phone(db: Session, phone_number: str):
 
 
 def create_user(db: Session, user_data: UserCreate):
+    chosen = check_username_available(db, user_data.username or user_data.name or "User " + user_data.phone_number[-8:])
     user = User(
+        username=chosen, username_key=username_key(chosen),
         phone_number=user_data.phone_number,
         name=user_data.name,
         status="pending_join",
@@ -27,7 +32,11 @@ def create_user(db: Session, user_data: UserCreate):
     )
 
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise ValueError("Username or phone number is already in use.")
     db.refresh(user)
 
     return user
