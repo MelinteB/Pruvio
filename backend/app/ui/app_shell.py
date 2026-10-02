@@ -50,9 +50,12 @@ body { margin: 0; }
 .scan-canvas img { display:block; max-width:100%; }
 .scan-toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:center; padding: 10px 2px 0; }
 .scan-hint { color:#9ca3af; font-size:12px; text-align:center; margin-top:8px; }
-.claimed-item { background:#f3f4f6; opacity:.72; }
-.claimed-item .claim-name { text-decoration: line-through; color:#9ca3af; }
+.claimed-item { background:#f3f4f6; }
+.claimed-item .claim-name, .claimed-item .claim-price { text-decoration: line-through; color:#9ca3af !important; }
+.claimed-item .claim-meta, .claimed-item .claim-remaining { color:#9ca3af !important; }
+.claimed-item > .q-icon { color:#9ca3af !important; }
 .participant-badge { display:inline-flex; align-items:center; gap:4px; padding:4px 8px; border-radius:999px; background:#e5e7eb; color:#4b5563; font-size:11px; font-weight:700; }
+.participant-badge-mine { background:#eaf2ff; color:#0756df; border:1px solid #c8dcff; }
 .live-dot { width:7px; height:7px; border-radius:999px; background:#0756df; display:inline-block; box-shadow:0 0 0 4px rgba(7,86,223,.12); }
 .mobile-only { display:none !important; }
 body.pruvio-mobile .mobile-only { display:flex !important; }
@@ -84,7 +87,7 @@ def setup_page_head(title: str) -> None:
               positive='#0f766e', negative='#b91c1c', info='#0756df', warning='#b45309')
     safe_title = html.escape(title, quote=True)
     base_url = os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
-    share_image = html.escape(f"{base_url}/static/pruvs-512.png?v=6.5.0", quote=True)
+    share_image = html.escape(f"{base_url}/static/pruvs-512.png?v=6.6.0", quote=True)
     ui.add_head_html(
         f'''
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -104,11 +107,11 @@ def setup_page_head(title: str) -> None:
         <meta name="twitter:card" content="summary">
         <meta name="twitter:title" content="{safe_title}">
         <meta name="twitter:image" content="{share_image}">
-        <link rel="manifest" href="/static/manifest.webmanifest?v=6.5.0">
-        <link rel="icon" type="image/png" sizes="32x32" href="/static/pruvs-32.png?v=6.5.0">
-        <link rel="icon" type="image/png" sizes="192x192" href="/static/pruvs-192.png?v=6.5.0">
-        <link rel="shortcut icon" href="/static/pruvs-32.png?v=6.5.0">
-        <link rel="apple-touch-icon" sizes="180x180" href="/static/pruvs-180.png?v=6.5.0">
+        <link rel="manifest" href="/static/manifest.webmanifest?v=6.6.0">
+        <link rel="icon" type="image/png" sizes="32x32" href="/static/pruvs-32.png?v=6.6.0">
+        <link rel="icon" type="image/png" sizes="192x192" href="/static/pruvs-192.png?v=6.6.0">
+        <link rel="shortcut icon" href="/static/pruvs-32.png?v=6.6.0">
+        <link rel="apple-touch-icon" sizes="180x180" href="/static/pruvs-180.png?v=6.6.0">
         <script>
           (function(){{
             const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900);
@@ -116,7 +119,7 @@ def setup_page_head(title: str) -> None:
             window.addEventListener('DOMContentLoaded', () => {{ if (mobile) document.body.classList.add('pruvio-mobile'); }});
           }})();
           if ('serviceWorker' in navigator) {{
-            window.addEventListener('load', () => navigator.serviceWorker.register('/static/service-worker.js?v=6.5.0'));
+            window.addEventListener('load', () => navigator.serviceWorker.register('/static/service-worker.js?v=6.6.0'));
           }}
         </script>
         ''')

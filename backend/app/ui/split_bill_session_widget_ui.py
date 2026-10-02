@@ -94,6 +94,48 @@ def _summary_digest(summary: dict) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
+
+def _enable_single_browser_account_guard(user_id: int, language: str) -> None:
+    """Block an already-open split tab when this browser switches to another account."""
+    message = (
+        "Alt cont Pruvs este activ acum în acest browser. Pentru a evita două persoane conectate simultan de pe aceeași stație, această sesiune a fost blocată. Continuă din fila contului activ."
+        if language == "ro" else
+        "Another Pruvs account is now active in this browser. To prevent two people from using the same station at the same time, this split session has been blocked. Continue in the active account tab."
+    )
+    button = "Reîncarcă" if language == "ro" else "Reload"
+    ui.run_javascript(f"""
+    (() => {{
+      if (window.__pruvsSingleAccountGuard) return;
+      window.__pruvsSingleAccountGuard = true;
+      const expectedUserId = {int(user_id)};
+      const message = {json.dumps(message)};
+      const button = {json.dumps(button)};
+      let blocked = false;
+
+      const showBlock = () => {{
+        if (blocked) return;
+        blocked = true;
+        const overlay = document.createElement('div');
+        overlay.id = 'pruvs-station-lock';
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(245,248,255,.98);display:flex;align-items:center;justify-content:center;padding:24px;font-family:Inter,system-ui,sans-serif';
+        overlay.innerHTML = `<div style="max-width:520px;width:100%;background:white;border:1px solid #e0e8f6;border-radius:20px;padding:28px;box-shadow:0 18px 60px rgba(15,23,42,.14)"><div style="font-size:28px;font-weight:900;color:#0a1435;margin-bottom:10px">Pruvs</div><div style="font-size:15px;line-height:1.55;color:#4b5563">${{message}}</div><button id="pruvs-station-reload" style="margin-top:20px;background:#0756df;color:white;border:0;border-radius:12px;padding:11px 18px;font-weight:800;cursor:pointer">${{button}}</button></div>`;
+        document.body.appendChild(overlay);
+        document.getElementById('pruvs-station-reload').onclick = () => window.location.reload();
+      }};
+
+      const check = async () => {{
+        try {{
+          const response = await fetch('/auth/device/current', {{credentials:'same-origin', cache:'no-store'}});
+          if (!response.ok) return;
+          const data = await response.json();
+          if (Number(data.user_id || 0) !== expectedUserId) showBlock();
+        }} catch (_) {{}}
+      }};
+      check();
+      window.__pruvsSingleAccountTimer = window.setInterval(check, 1000);
+    }})();
+    """)
+
 def setup_split_bill_session_widget_ui() -> None:
     @ui.page("/split-bill/sessions/{token}/join")
     def split_bill_join_page(token: str):
@@ -196,7 +238,8 @@ def _render_split_page(token: str, participant_id: int, user_id: int) -> None:
 
     lang=user.preferred_language or "en"; currency=summary["currency"]; is_owner=current["role"]=="owner"
     setup_page_head(f"{t('Split bill',lang)} · Pruvs")
-    dirty={"value":False}; digest={"value":_summary_digest(summary)}
+    _enable_single_browser_account_guard(user_id, lang)
+    digest={"value":_summary_digest(summary)}
     selected={i["item_id"]:_assignment_quantity_for_participant(i,participant_id) for i in summary["items"]}
 
     with ui.element("main").classes("pruvio-page"):
@@ -249,7 +292,7 @@ def _render_split_page(token: str, participant_id: int, user_id: int) -> None:
               ui.label("Produse" if lang=='ro' else "Items").classes("text-lg font-black")
               my_total=ui.label("").classes("text-sm font-black text-blue-700")
 
-            qlabels={}; pluses={}; minuses={}; remaining_labels={}
+            qlabels={}; pluses={}; minuses={}; remaining_labels={}; save_status={"label":None}
             def max_for_me(item): return max(0.0,float(item["quantity"])-_other_assignment_quantity(item,participant_id))
             def refresh_local():
               lines=units=amt=0.0
@@ -273,12 +316,39 @@ def _render_split_page(token: str, participant_id: int, user_id: int) -> None:
               else:
                 tipshare=float(current.get("tip_share") or 0)
               my_total.set_text(f"{amt:.2f} + {tipshare:.2f} {t('Tip',lang).lower()} = {amt+tipshare:.2f} {currency}" if tipshare else f"{amt:.2f} {currency}")
-            def discrete(item,delta): dirty["value"]=True; iid=item["item_id"]; selected[iid]=max(0,min(max_for_me(item),float(selected.get(iid,0))+delta)); refresh_local()
-            def atomic(item,checked): dirty["value"]=True; selected[item["item_id"]]=max_for_me(item) if checked else 0; refresh_local()
+
+            def save_selection_live():
+              if summary["status"] != "open": return
+              if save_status["label"]:
+                save_status["label"].set_text("Se salvează…" if lang=='ro' else "Saving…")
+              dbs=SessionLocal()
+              try:
+                ss=get_split_bill_session_by_token(dbs,token)
+                save_participant_selection(dbs,ss,participant_id,selected_quantities=dict(selected))
+              except Exception as e:
+                if save_status["label"]:
+                  save_status["label"].set_text("Conflict de selecție — se reîncarcă" if lang=='ro' else "Selection conflict — reloading")
+                ui.notify(str(e),type="negative")
+                ui.run_javascript("window.setTimeout(()=>window.location.reload(),350)")
+                return
+              finally:
+                dbs.close()
+              if save_status["label"]:
+                save_status["label"].set_text("Salvat automat · sincronizare live" if lang=='ro' else "Saved automatically · live sync")
+
+            def discrete(item,delta):
+              iid=item["item_id"]
+              selected[iid]=max(0,min(max_for_me(item),float(selected.get(iid,0))+delta))
+              refresh_local(); save_selection_live()
+
+            def atomic(item,checked):
+              selected[item["item_id"]]=max_for_me(item) if checked else 0
+              refresh_local(); save_selection_live()
 
             for item in summary["items"]:
               iid=item["item_id"]; tq=float(item.get("quantity") or 1); mine=float(selected[iid]); other=_other_assignment_quantity(item,participant_id); discrete_multi=is_integer_quantity(tq) and tq>1
-              full_other=other>=tq-EPS and mine<=EPS; other_as=[a for a in item.get("assignments",[]) if a.get("participant_id")!=participant_id]
+              full_other=other>=tq-EPS and mine<=EPS
+              assignment_rows=list(item.get("assignments",[]) or [])
               cls="item-row w-full items-center gap-3 px-4 sm:px-5 py-4" + (" claimed-item" if full_other else "")
               with ui.row().classes(cls):
                 if full_other: ui.icon("close").classes("text-slate-400 shrink-0")
@@ -292,31 +362,34 @@ def _render_split_page(token: str, participant_id: int, user_id: int) -> None:
                   if max_for_me(item)<=EPS or summary["status"]!="open": cb.disable()
                 with ui.column().classes("gap-1 flex-1 min-w-0"):
                   ui.label(display_item_name(item)).classes("claim-name text-sm sm:text-base font-bold leading-snug")
-                  ui.label(f"{quantity_text(tq)} × {float(item['unit_price']):.2f} {currency}").classes("text-xs text-slate-400")
+                  ui.label(f"{quantity_text(tq)} × {float(item['unit_price']):.2f} {currency}").classes("claim-meta text-xs text-slate-400")
                   remaining=max(0.0,tq-other-mine)
                   remaining_amount=_selection_amount(item,remaining) if remaining>EPS else 0.0
                   rem=ui.label(
                     (f"Rămas de împărțit: {quantity_text(remaining)} · {remaining_amount:.2f} {currency}" if lang=='ro' else f"Remaining to split: {quantity_text(remaining)} · {remaining_amount:.2f} {currency}")
-                  ).classes("text-[11px] font-semibold text-blue-700")
+                  ).classes("claim-remaining text-[11px] font-semibold text-blue-700")
                   remaining_labels[iid]=rem
-                  if other_as:
-                    with ui.row().classes("gap-1 flex-wrap"):
-                      for a in other_as:
+                  if assignment_rows:
+                    with ui.row().classes("gap-1 flex-wrap mt-1"):
+                      for a in assignment_rows:
                         assigned_qty=float(a.get("quantity") or 0)
-                        show_qty = discrete_multi or assigned_qty < tq - EPS
-                        txt=f"✓ {a.get('assigned_to')}" + (f" ×{quantity_text(assigned_qty)}" if show_qty else "")
-                        ui.label(txt).classes("participant-badge")
-                ui.label(f"{float(item['total_price']):.2f} {currency}").classes("text-sm font-black whitespace-nowrap")
+                        mine_assignment=a.get("participant_id")==participant_id
+                        who=str(a.get("assigned_to") or ("Participant" if lang=='en' else "Participant"))
+                        suffix=(" · tu" if lang=='ro' else " · you") if mine_assignment else ""
+                        txt=f"✓ {who}{suffix} ×{quantity_text(assigned_qty)}"
+                        classes="participant-badge" + (" participant-badge-mine" if mine_assignment else "")
+                        ui.label(txt).classes(classes)
+                ui.label(f"{float(item['total_price']):.2f} {currency}").classes("claim-price text-sm font-black whitespace-nowrap")
 
-          def save_sel():
-            dbs=SessionLocal()
-            try: ss=get_split_bill_session_by_token(dbs,token); save_participant_selection(dbs,ss,participant_id,selected)
-            except Exception as e: ui.notify(str(e),type="negative"); return
-            finally: dbs.close()
-            dirty["value"]=False; ui.notify(t("Your selection was saved.",lang),type="positive"); ui.run_javascript("window.location.reload()")
-          with ui.row().classes("w-full justify-end gap-2 p-4 border-t border-slate-100"):
-            b=ui.button(t("Save my selection",lang),icon="check",on_click=save_sel).classes("pruvio-primary px-5")
-            if summary["status"]!="open": b.disable()
+          with ui.row().classes("w-full justify-between items-center gap-2 p-4 border-t border-slate-100"):
+            with ui.row().classes("items-center gap-2"):
+              ui.icon("sync").classes("text-blue-600")
+              status_label=ui.label(
+                "Salvat automat · sincronizare live" if lang=='ro' else "Saved automatically · live sync"
+              ).classes("text-xs font-semibold text-slate-500")
+              save_status["label"]=status_label
+            if summary["status"]!="open":
+              status_label.set_text("Nota este doar pentru vizualizare." if lang=='ro' else "This bill is read-only.")
           refresh_local()
 
         with ui.card().classes("pruvio-card w-full p-5"):
@@ -500,7 +573,6 @@ def _render_split_page(token: str, participant_id: int, user_id: int) -> None:
             ui.button("Redeschide împărțirea" if lang=='ro' else "Reopen split",icon="lock_open",on_click=reopen_dialog.open).classes("pruvio-secondary self-start px-4 mt-3")
 
         def poll():
-          if dirty["value"]: return
           dbp=SessionLocal()
           try:
             ss=get_split_bill_session_by_token(dbp,token)
@@ -508,5 +580,7 @@ def _render_split_page(token: str, participant_id: int, user_id: int) -> None:
             latest=get_split_bill_session_summary(dbp,ss)
           finally: dbp.close()
           d=_summary_digest(latest)
-          if d!=digest["value"]: digest["value"]=d; ui.run_javascript("window.location.reload()")
-        ui.timer(1.0,poll)
+          if d!=digest["value"]:
+            digest["value"]=d
+            ui.run_javascript("window.location.reload()")
+        ui.timer(0.6,poll)

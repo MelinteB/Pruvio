@@ -272,3 +272,15 @@ def test_registration_does_not_reactivate_blocked_or_trust_changed_phone(db, del
     otp.create_or_update_registration_user(db, phone_number="+40799999999", email=account.email,
                                           display_name="Test", accepted_terms=True, accepted_privacy=True)
     assert not account.is_phone_verified
+
+
+def test_current_device_account_route_tracks_the_browser_cookie(db):
+    account = user(db)
+    claim = devices.create_device_claim(db, account)
+    with client(db) as api:
+        assert api.get('/auth/device/current').json() == {'user_id': None}
+        remembered = api.post('/auth/device/remember', json={'claim': claim})
+        assert remembered.status_code == 200
+        assert api.get('/auth/device/current').json() == {'user_id': account.id}
+        api.cookies.set(devices.DEVICE_COOKIE, 'forged-cookie')
+        assert api.get('/auth/device/current').json() == {'user_id': None}

@@ -1,11 +1,9 @@
-# Pruvs v6.5 — complete backend
+# Pruvs v6.6 — complete backend
 
-This is the FastAPI + NiceGUI Pruvs backend. The backend entry point remains `app.main:app`. Keep the existing Render service, database, secrets and upload storage. `PRUVIO_` environment variable names and internal storage identifiers remain for compatibility.
+This archive contains the complete Pruvs standalone backend, including the v6.6 live split-bill update and all functionality from v6.5/v6.4.
 
-Version `/health`: `6.5.0`.
+Version `/health`: `6.6.0`.
 
-The current app includes email/password/passkey authentication, email OTP dialogs, trusted browsers, receipt image/PDF upload, Azure OCR/translation, quantity-aware split bills, per-person percentage tips, open/settled split history, owner-only reopening, direct owner payment details, automatically derived `first.surname` usernames, and Pruvs browser/PWA/share-preview branding.
+Keep your production environment variables, database and uploaded documents when replacing source files. Do not replace the production database with a fresh local database.
 
-For the v6.5 changes and deployment commands, see **PRUVS_UPDATE_v6_5.md**. For the existing `pruvs.io`, Render, Resend and Azure domain/provider setup, see **PRUVS_DOMAIN_SETUP_v6_4.md**; those environment settings remain applicable.
-
-For local development, copy `.env.standalone.example` to `.env`, set your own local secrets and providers, and keep `CANONICAL_REDIRECT_ENABLED=false`. Never commit real credentials or databases.
+For v6.6 deployment and verification, see **PRUVS_UPDATE_v6_6.md**. Existing `pruvs.io`, Render, Resend and Azure configuration remains applicable; see **PRUVS_DOMAIN_SETUP_v6_4.md** for those settings.

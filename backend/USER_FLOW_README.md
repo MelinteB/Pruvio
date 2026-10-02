@@ -1,12 +1,30 @@
-# Pruvs v6.5 user flow
+# Pruvs v6.6 user flow
 
-- Create an account with first name, surname, email, contact phone and password. Pruvs derives a unique username such as `ana.popescu`, then activates the account with email OTP.
-- Sign in with username/email and password or a passkey. A new/expired/revoked browser requires email verification; a trusted browser does not show the routine OTP form.
-- Upload a picture/PDF, check the crop/preview and OCR, review items and totals, and create a shared bill.
-- Other signed-in participants join with the shared link. Multi-quantity lines stay available until every unit is assigned, and the screen shows what remains to split.
-- A percentage tip is based on each person's own split amount. Fixed tips are divided equally.
-- History keeps both open and settled split bills for every account involved and identifies each entry as Owner or Participant.
-- Only the owner can settle or reopen a settled bill. Reopening keeps allocations but resets payment statuses so amounts can be recalculated safely.
-- Payment goes directly to the owner's saved Revolut or bank details. Pruvs coordinates the split and does not receive the money.
+## Split bill
 
-See `PRUVS_UPDATE_v6_5.md` for this release and `PRUVS_DOMAIN_SETUP_v6_4.md` for the existing production domain/provider configuration.
+```text
+Owner scans/uploads receipt
+→ OCR/review
+→ starts split bill
+→ shares invitation
+→ participants sign in
+→ selecting/unselecting quantities saves immediately
+→ all open participants receive near-real-time updates
+→ each item shows participant names + selected quantities
+→ fully claimed items are grey/struck for users who have no share in them
+→ owner settles bill
+→ split remains in owner and participant history
+→ owner may reopen; allocations stay visible and editable, payment state resets
+```
+
+Percentage tips are calculated from each person's own item total, including the owner.
+
+A split page is bound to the Pruvs account represented by the current trusted-device cookie. If the same browser profile switches to another Pruvs account, the older split page is blocked rather than allowing two different users to operate simultaneously in that browser session.
+
+## Navigation
+
+```text
+Home · Scan · History · Account
+```
+
+Existing email OTP, password/passkey, receipt OCR, history, payment-details and account flows remain unchanged.

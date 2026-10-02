@@ -729,6 +729,19 @@ def save_participant_selection(
     if session.status != "open":
         raise ValueError("This split bill session is closed.")
 
+    # Serialize assignment changes per split session. This prevents two live
+    # participants from claiming the same last unit at nearly the same moment
+    # on databases that support SELECT ... FOR UPDATE (for example PostgreSQL).
+    locked_session = (
+        db.query(SplitBillSession)
+        .filter(SplitBillSession.id == session.id)
+        .with_for_update()
+        .first()
+    )
+    if not locked_session or locked_session.status != "open":
+        raise ValueError("This split bill session is closed.")
+    session = locked_session
+
     participant = get_split_bill_participant_by_id(db, participant_id)
     if not participant or participant.session_id != session.id:
         raise ValueError("Participant does not belong to this split bill session.")

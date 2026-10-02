@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 from app.db.database import get_db
 from app.services.trusted_device_service import (
-    DEVICE_COOKIE, consume_device_claim, trusted_device_days,
+    DEVICE_COOKIE, consume_device_claim, trusted_device_days, trusted_device_user_id,
 )
 
 router = APIRouter()
@@ -29,3 +29,10 @@ def remember_device(payload: DeviceClaim, request: Request, response: Response, 
     response.headers["Cache-Control"] = "no-store"
     return {"remembered": True}
 
+
+
+@router.get("/device/current", include_in_schema=False)
+def current_device_account(request: Request, response: Response, db=Depends(get_db)):
+    """Small no-cache probe used by live split pages to enforce one browser account at a time."""
+    response.headers["Cache-Control"] = "no-store"
+    return {"user_id": trusted_device_user_id(db, request.cookies.get(DEVICE_COOKIE))}

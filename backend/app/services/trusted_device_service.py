@@ -29,6 +29,26 @@ def is_trusted_device(db, user, token: str | None) -> bool:
     ).first() is not None
 
 
+
+def trusted_device_user_id(db, token: str | None) -> int | None:
+    """Return the active account bound to the browser's current trusted-device token."""
+    if not token or len(token) > 128:
+        return None
+    now = datetime.utcnow()
+    row = (
+        db.query(TrustedDevice.user_id)
+        .join(User, User.id == TrustedDevice.user_id)
+        .filter(
+            TrustedDevice.token_hash == _hash(token),
+            TrustedDevice.revoked_at.is_(None),
+            TrustedDevice.expires_at > now,
+            User.status == "active",
+            User.is_email_verified.is_(True),
+        )
+        .first()
+    )
+    return int(row[0]) if row else None
+
 def create_device_claim(db, user) -> str:
     """Create a two-minute, single-use grant after successful OTP verification."""
     if user.status != "active" or not user.is_email_verified:
