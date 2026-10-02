@@ -16,8 +16,9 @@ class SplitBillSession(Base):
     currency = Column(String, default="RON")
     expected_participants_count = Column(Integer, nullable=False, default=2)
 
-    # Tip is set by the owner and shared equally by everyone in the session,
-    # including the owner. tip_mode: none | percent | fixed.
+    # Tip is set by the owner. Percentage tips are calculated from each
+    # participant's own split amount; a fixed tip is divided equally.
+    # tip_mode: none | percent | fixed.
     tip_mode = Column(String(20), nullable=False, default="none")
     tip_value = Column(Float, nullable=False, default=0.0)
 

@@ -2,7 +2,7 @@ import os
 import re
 import secrets
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -558,14 +558,11 @@ def get_close_state(
     }
 
 
-def _tip_total(session: SplitBillSession, bill_total: float) -> float:
+def _tip_settings(session: SplitBillSession) -> tuple[str, float]:
     mode = (session.tip_mode or "none").lower()
-    value = max(0.0, float(session.tip_value or 0))
-    if mode == "percent":
-        return round(bill_total * value / 100.0, 2)
-    if mode == "fixed":
-        return round(value, 2)
-    return 0.0
+    if mode not in {"none", "percent", "fixed"}:
+        mode = "none"
+    return mode, max(0.0, float(session.tip_value or 0))
 
 
 def get_split_bill_session_summary(db: Session, session: SplitBillSession) -> dict:
@@ -585,11 +582,6 @@ def get_split_bill_session_summary(db: Session, session: SplitBillSession) -> di
     bill_total = round(sum(float(item.total_price or 0) for item in items), 2)
     assigned_total = round(sum(float(assignment.amount or 0) for assignment in assignments), 2)
     remaining_total = round(max(0.0, bill_total - assigned_total), 2)
-    tip_total = _tip_total(session, bill_total)
-    people = max(len(participants), 1)
-    base_tip_share = round(tip_total / people, 2) if tip_total else 0.0
-    # Assign rounding residue to the owner so all shares add exactly to the tip total.
-    residue = round(tip_total - base_tip_share * people, 2)
 
     item_rows = []
     for index, item in enumerate(items, start=1):
@@ -610,18 +602,37 @@ def get_split_bill_session_summary(db: Session, session: SplitBillSession) -> di
             })
         assigned_quantity = min(total_quantity, assigned_quantity)
         remaining_quantity = max(0.0, total_quantity - assigned_quantity)
-        status = "available" if assigned_quantity <= QUANTITY_TOLERANCE else ("assigned" if remaining_quantity <= QUANTITY_TOLERANCE else "partial")
+        status = (
+            "available"
+            if assigned_quantity <= QUANTITY_TOLERANCE
+            else ("assigned" if remaining_quantity <= QUANTITY_TOLERANCE else "partial")
+        )
         sole_assignment = assignment_rows[0] if len(assignment_rows) == 1 else None
         item_rows.append({
-            "position": index, "item_id": item.id, "name": item.name, "original_name": item.name,
-            "translated_name": item.translated_name, "source_language": item.source_language,
-            "quantity": total_quantity, "unit_price": _item_unit_price(item), "total_price": float(item.total_price or 0),
-            "currency": item.currency or session.currency, "status": status,
-            "assigned_quantity": round(assigned_quantity, 3), "remaining_quantity": round(remaining_quantity, 3),
+            "position": index,
+            "item_id": item.id,
+            "name": item.name,
+            "original_name": item.name,
+            "translated_name": item.translated_name,
+            "source_language": item.source_language,
+            "quantity": total_quantity,
+            "unit_price": _item_unit_price(item),
+            "total_price": float(item.total_price or 0),
+            "currency": item.currency or session.currency,
+            "status": status,
+            "assigned_quantity": round(assigned_quantity, 3),
+            "remaining_quantity": round(remaining_quantity, 3),
+            "remaining_amount": _amount_for_quantity(item, remaining_quantity) if remaining_quantity > QUANTITY_TOLERANCE else 0.0,
             "assignments": assignment_rows,
             "assigned_to": sole_assignment["assigned_to"] if sole_assignment else None,
             "participant_id": sole_assignment["participant_id"] if sole_assignment else None,
         })
+
+    tip_mode, tip_value = _tip_settings(session)
+    people = max(len(participants), 1)
+    fixed_tip_total = round(tip_value, 2) if tip_mode == "fixed" else 0.0
+    base_fixed_share = round(fixed_tip_total / people, 2) if fixed_tip_total else 0.0
+    fixed_residue = round(fixed_tip_total - base_fixed_share * people, 2)
 
     participant_rows = []
     for participant in participants:
@@ -632,14 +643,32 @@ def get_split_bill_session_summary(db: Session, session: SplitBillSession) -> di
             item = item_by_id.get(assignment.receipt_item_id)
             if item:
                 units_count += _assignment_quantity(assignment, item)
-        tip_share = base_tip_share + (residue if participant.role == "owner" else 0.0)
-        tip_share = round(tip_share, 2)
+
+        # Percentage tips are calculated from each person's own split amount.
+        # This keeps the owner and every participant on the same rule and avoids
+        # allocating a receipt-wide percentage equally between people with very
+        # different shares.
+        if tip_mode == "percent":
+            tip_share = round(item_total * tip_value / 100.0, 2)
+        elif tip_mode == "fixed":
+            tip_share = base_fixed_share + (fixed_residue if participant.role == "owner" else 0.0)
+            tip_share = round(tip_share, 2)
+        else:
+            tip_share = 0.0
+
         linked_user = db.query(User).filter(User.id == participant.user_id).first() if participant.user_id else None
         participant_rows.append({
-            "participant_id": participant.id, "user_id": participant.user_id, "display_name": participant.display_name,
-            "phone_number": (linked_user.phone_number if linked_user else participant.phone_number), "role": participant.role, "status": participant.status,
-            "items_count": len(participant_assignments), "units_count": round(units_count, 3),
-            "item_total": item_total, "tip_share": tip_share, "total": round(item_total + tip_share, 2),
+            "participant_id": participant.id,
+            "user_id": participant.user_id,
+            "display_name": participant.display_name,
+            "phone_number": linked_user.phone_number if linked_user else participant.phone_number,
+            "role": participant.role,
+            "status": participant.status,
+            "items_count": len(participant_assignments),
+            "units_count": round(units_count, 3),
+            "item_total": item_total,
+            "tip_share": tip_share,
+            "total": round(item_total + tip_share, 2),
             "currency": session.currency,
             "reminder_message": participant.reminder_message,
             "reminder_at": participant.reminder_at.isoformat() if participant.reminder_at else None,
@@ -648,6 +677,7 @@ def get_split_bill_session_summary(db: Session, session: SplitBillSession) -> di
             "paid_at": participant.paid_at.isoformat() if participant.paid_at else None,
         })
 
+    tip_total = round(sum(float(row["tip_share"] or 0) for row in participant_rows), 2)
     close_state = get_close_state(db, session, remaining_total=remaining_total)
     owner = db.query(User).filter(User.id == session.owner_user_id).first() if session.owner_user_id else None
     session_language = owner.preferred_language if owner and owner.preferred_language else "en"
@@ -662,15 +692,29 @@ def get_split_bill_session_summary(db: Session, session: SplitBillSession) -> di
             "payment_note": owner.payment_note,
         }
     return {
-        "session_id": session.id, "case_id": session.case_id, "owner_user_id": session.owner_user_id, "token": session.token,
-        "status": session.status, "expected_participants_count": session.expected_participants_count,
-        "joined_participants_count": close_state["joined_participants_count"], "missing_participants_count": close_state["missing_participants_count"],
-        "bill_total": bill_total, "assigned_total": assigned_total, "remaining_total": remaining_total,
-        "tip_mode": session.tip_mode or "none", "tip_value": float(session.tip_value or 0), "tip_total": tip_total,
-        "grand_total": round(bill_total + tip_total, 2), "currency": session.currency,
-        "can_close": close_state["can_close"], "close_block_reason": close_state["close_block_reason"],
-        "participants": participant_rows, "items": item_rows,
-        "share_url": build_share_url(session.token), "qr_url": build_qr_url(session.token), "language": session_language,
+        "session_id": session.id,
+        "case_id": session.case_id,
+        "owner_user_id": session.owner_user_id,
+        "token": session.token,
+        "status": session.status,
+        "expected_participants_count": session.expected_participants_count,
+        "joined_participants_count": close_state["joined_participants_count"],
+        "missing_participants_count": close_state["missing_participants_count"],
+        "bill_total": bill_total,
+        "assigned_total": assigned_total,
+        "remaining_total": remaining_total,
+        "tip_mode": tip_mode,
+        "tip_value": tip_value,
+        "tip_total": tip_total,
+        "grand_total": round(bill_total + tip_total, 2),
+        "currency": session.currency,
+        "can_close": close_state["can_close"],
+        "close_block_reason": close_state["close_block_reason"],
+        "participants": participant_rows,
+        "items": item_rows,
+        "share_url": build_share_url(session.token),
+        "qr_url": build_qr_url(session.token),
+        "language": session_language,
         "settled_at": session.settled_at.isoformat() if session.settled_at else None,
         "owner_payment_details": owner_payment_details,
     }
@@ -699,12 +743,8 @@ def save_participant_selection(
         if quantity > QUANTITY_TOLERANCE:
             requested[item_id] = quantity
 
-    # Old API compatibility: item id means the whole line quantity.
-    for item_id in selected_item_ids or []:
-        if item_id in item_by_id and item_id not in requested:
-            requested[item_id] = _item_quantity(item_by_id[item_id])
-
-    invalid_ids = set(requested) - set(item_by_id)
+    legacy_ids = {int(item_id) for item_id in (selected_item_ids or [])}
+    invalid_ids = (set(requested) | legacy_ids) - set(item_by_id)
     if invalid_ids:
         raise ValueError(f"Invalid item IDs for this session: {sorted(invalid_ids)}")
 
@@ -716,6 +756,16 @@ def save_participant_selection(
         item = item_by_id.get(assignment.receipt_item_id)
         if item:
             other_quantity_by_item[item.id] += _assignment_quantity(assignment, item)
+
+    # Old API compatibility: an item id means take everything still available
+    # to this participant, not the original full line quantity. This is crucial
+    # when another participant already claimed only part of a multi-quantity line.
+    for item_id in legacy_ids:
+        if item_id not in requested:
+            requested[item_id] = max(
+                0.0,
+                _item_quantity(item_by_id[item_id]) - other_quantity_by_item[item_id],
+            )
 
     for item_id, quantity in requested.items():
         item = item_by_id[item_id]
@@ -749,7 +799,6 @@ def save_participant_selection(
     db.commit()
     return get_split_bill_session_summary(db, session)
 
-
 def close_split_bill_session(
     db: Session,
     session: SplitBillSession,
@@ -774,6 +823,91 @@ def close_split_bill_session(
         "message": "Split bill was settled successfully.",
     }
 
+
+
+def reopen_split_bill_session(
+    db: Session,
+    session: SplitBillSession,
+    owner_user_id: int,
+) -> dict:
+    if session.owner_user_id != owner_user_id:
+        raise ValueError("Only the bill owner can reopen this session.")
+    if session.status == "open":
+        raise ValueError("This split bill is already open.")
+    if session.status not in {"settled", "closed"}:
+        raise ValueError("Only a settled split bill can be reopened.")
+
+    session.status = "open"
+    session.settled_at = None
+    session.closed_at = None
+    session.expires_at = datetime.utcnow() + timedelta(days=7)
+
+    # A reopened split can change amounts, so previous payment state can no
+    # longer be treated as current. Reset it for all participants.
+    for participant in get_joined_participants(db, session):
+        participant.payment_status = "unpaid"
+        participant.payment_method = None
+        participant.paid_at = None
+
+    db.commit()
+    db.refresh(session)
+    return get_split_bill_session_summary(db, session)
+
+
+def list_split_bill_sessions_for_user(
+    db: Session,
+    user_id: int,
+    limit: int = 100,
+) -> list[dict]:
+    rows = (
+        db.query(SplitBillParticipant, SplitBillSession)
+        .join(SplitBillSession, SplitBillSession.id == SplitBillParticipant.session_id)
+        .filter(SplitBillParticipant.user_id == user_id)
+        .order_by(SplitBillSession.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    result: list[dict] = []
+    seen_session_ids: set[int] = set()
+    for participant, session in rows:
+        if session.id in seen_session_ids:
+            continue
+        seen_session_ids.add(session.id)
+        summary = get_split_bill_session_summary(db, session)
+        current = next(
+            (row for row in summary["participants"] if row["participant_id"] == participant.id),
+            None,
+        ) or {}
+        is_owner = session.owner_user_id == user_id or participant.role == "owner"
+        status = "settled" if session.status in {"settled", "closed"} else session.status
+        widget_url = (
+            build_widget_url(session.token, participant.id)
+            if is_owner
+            else build_participant_url(session.token, participant.participant_token)
+        )
+        result.append({
+            "session_id": session.id,
+            "case_id": session.case_id,
+            "token": session.token,
+            "status": status,
+            "role": "owner" if is_owner else "participant",
+            "participant_id": participant.id,
+            "participant_token": participant.participant_token,
+            "created_at": session.created_at,
+            "settled_at": session.settled_at,
+            "bill_total": summary["bill_total"],
+            "assigned_total": summary["assigned_total"],
+            "remaining_total": summary["remaining_total"],
+            "tip_total": summary["tip_total"],
+            "grand_total": summary["grand_total"],
+            "my_item_total": float(current.get("item_total") or 0),
+            "my_tip": float(current.get("tip_share") or 0),
+            "my_total": float(current.get("total") or 0),
+            "currency": summary["currency"],
+            "widget_url": widget_url,
+        })
+    return result
 
 def update_session_tip(
     db: Session, session: SplitBillSession, owner_user_id: int, mode: str, value: float

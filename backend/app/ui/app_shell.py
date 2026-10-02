@@ -1,3 +1,6 @@
+import html
+import os
+
 from nicegui import ui
 
 from app.ui.auth_state import get_logged_in_user_id, get_ui_language
@@ -79,25 +82,42 @@ def setup_page_head(title: str) -> None:
     ui.page_title(title)
     ui.colors(primary='#0756df', secondary='#0a1435', accent='#1598ff',
               positive='#0f766e', negative='#b91c1c', info='#0756df', warning='#b45309')
+    safe_title = html.escape(title, quote=True)
+    base_url = os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+    share_image = html.escape(f"{base_url}/static/pruvs-512.png?v=6.5.0", quote=True)
     ui.add_head_html(
-        '''
+        f'''
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
         <meta name="theme-color" content="#0a1435">
+        <meta name="application-name" content="Pruvs">
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="default">
         <meta name="apple-mobile-web-app-title" content="Pruvs">
-        <link rel="manifest" href="/static/manifest.webmanifest?v=6.4.0">
-        <link rel="icon" type="image/svg+xml" href="/static/pruvs-192.svg">
-        <link rel="apple-touch-icon" href="/static/pruvs-mark.png">
+        <meta name="description" content="Scan receipts and split bills with Pruvs.">
+        <meta property="og:site_name" content="Pruvs">
+        <meta property="og:title" content="{safe_title}">
+        <meta property="og:description" content="Scan receipts and split bills with Pruvs.">
+        <meta property="og:type" content="website">
+        <meta property="og:image" content="{share_image}">
+        <meta property="og:image:width" content="512">
+        <meta property="og:image:height" content="512">
+        <meta name="twitter:card" content="summary">
+        <meta name="twitter:title" content="{safe_title}">
+        <meta name="twitter:image" content="{share_image}">
+        <link rel="manifest" href="/static/manifest.webmanifest?v=6.5.0">
+        <link rel="icon" type="image/png" sizes="32x32" href="/static/pruvs-32.png?v=6.5.0">
+        <link rel="icon" type="image/png" sizes="192x192" href="/static/pruvs-192.png?v=6.5.0">
+        <link rel="shortcut icon" href="/static/pruvs-32.png?v=6.5.0">
+        <link rel="apple-touch-icon" sizes="180x180" href="/static/pruvs-180.png?v=6.5.0">
         <script>
-          (function(){
+          (function(){{
             const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900);
             if (mobile) document.documentElement.classList.add('pruvio-mobile-root');
-            window.addEventListener('DOMContentLoaded', () => { if (mobile) document.body.classList.add('pruvio-mobile'); });
-          })();
-          if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => navigator.serviceWorker.register('/static/service-worker.js'));
-          }
+            window.addEventListener('DOMContentLoaded', () => {{ if (mobile) document.body.classList.add('pruvio-mobile'); }});
+          }})();
+          if ('serviceWorker' in navigator) {{
+            window.addEventListener('load', () => navigator.serviceWorker.register('/static/service-worker.js?v=6.5.0'));
+          }}
         </script>
         ''')
     ui.add_head_html(f"<style>{APP_CSS}</style>")

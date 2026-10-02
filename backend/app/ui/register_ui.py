@@ -13,7 +13,7 @@ from app.services.onboarding_otp_service import (
 )
 from app.ui.device_login import finish_verified_device_login
 from app.ui.email_otp_dialog import EmailOTPDialog
-from app.services.username_service import check_username_available
+from app.services.username_service import derive_available_username
 from app.models.user import User
 from app.ui.app_shell import app_header, setup_page_head
 from app.ui.auth_state import get_ui_language
@@ -54,7 +54,6 @@ def setup_register_ui() -> None:
             "user_id": None,
             "email": None,
             "challenge_id": None,
-            "username_edited": False,
         }
 
         with ui.element("main").classes("pruvio-page"):
@@ -72,29 +71,50 @@ def setup_register_ui() -> None:
                     form_panel = ui.column().classes("w-full gap-3 mt-4")
 
                     with form_panel:
-                        name = ui.input(t("Full name", lang)).props("outlined autocomplete=name").classes("w-full")
-                        username = ui.input("Nume utilizator" if lang == "ro" else "Username").props("outlined autocomplete=username maxlength=80").classes("w-full")
-                        username_note = ui.label("Poți folosi numele complet dacă este disponibil." if lang == "ro" else "You can use your full name if it is available.").classes("text-xs text-slate-500")
+                        with ui.row().classes("w-full gap-3 flex-col sm:flex-row"):
+                            first_name = ui.input("Prenume" if lang == "ro" else "First name").props(
+                                "outlined autocomplete=given-name"
+                            ).classes("w-full")
+                            last_name = ui.input("Nume" if lang == "ro" else "Surname").props(
+                                "outlined autocomplete=family-name"
+                            ).classes("w-full")
 
-                        def fill_username(event):
-                            if not state["username_edited"]:
-                                username.set_value(event.value or "")
+                        username = ui.input("Nume utilizator" if lang == "ro" else "Username").props(
+                            "outlined readonly autocomplete=username maxlength=80"
+                        ).classes("w-full")
+                        username_note = ui.label(
+                            "Numele de utilizator este creat automat din prenume și nume (ex. ana.popescu)."
+                            if lang == "ro" else
+                            "Your username is created automatically from your first name and surname (for example ana.popescu)."
+                        ).classes("text-xs text-slate-500")
 
-                        def check_username(event):
-                            state["username_edited"] = bool(username.value and username.value != name.value)
-                            if not username.value:
+                        def refresh_username_preview(_event=None):
+                            first = " ".join((first_name.value or "").split())
+                            last = " ".join((last_name.value or "").split())
+                            if not first or not last:
+                                username.set_value("")
                                 return
                             db_check = SessionLocal()
                             try:
-                                check_username_available(db_check, username.value, exclude_user_id=state["user_id"])
-                                username_note.set_text("Nume de utilizator disponibil." if lang == "ro" else "Username available.")
+                                candidate = derive_available_username(
+                                    db_check,
+                                    f"{first} {last}",
+                                    exclude_user_id=state["user_id"],
+                                )
+                                username.set_value(candidate)
+                                username_note.set_text(
+                                    f"Numele tău de utilizator va fi: {candidate}"
+                                    if lang == "ro" else
+                                    f"Your username will be: {candidate}"
+                                )
                             except ValueError as error:
+                                username.set_value("")
                                 username_note.set_text(str(error))
                             finally:
                                 db_check.close()
 
-                        name.on_value_change(fill_username)
-                        username.on_value_change(check_username)
+                        first_name.on_value_change(refresh_username_preview)
+                        last_name.on_value_change(refresh_username_preview)
                         email = ui.input(t("Email address", lang)).props("outlined autocomplete=email").classes("w-full")
                         phone = ui.input("Telefon (doar contact)" if lang == "ro" else "Phone number (contact only)", placeholder="+40 7xx xxx xxx").props(
                             "outlined autocomplete=tel inputmode=tel"
@@ -156,22 +176,33 @@ def setup_register_ui() -> None:
                             if (password.value or "") != (confirm_password.value or ""):
                                 status.set_text("Parolele nu coincid." if lang == "ro" else "Passwords do not match.")
                                 return
+                            first = " ".join((first_name.value or "").split())
+                            last = " ".join((last_name.value or "").split())
+                            if not first or not last:
+                                status.set_text(
+                                    "Completează prenumele și numele."
+                                    if lang == "ro" else
+                                    "Enter both your first name and surname."
+                                )
+                                return
+                            full_name = f"{first} {last}"
                             db = SessionLocal()
                             try:
                                 result = start_registration(
                                     db,
                                     phone_number=phone.value or "",
-                                    display_name=name.value or "",
+                                    display_name=full_name,
                                     email=email.value or "",
                                     accepted_terms=True,
                                     accepted_privacy=True,
                                     marketing_opt_in=bool(marketing.value),
                                     password=password.value or "",
-                                    username=username.value or "",
+                                    username=None,
                                 )
                                 state["user_id"] = result["user"].id
                                 state["email"] = result["user"].email
                                 state["challenge_id"] = result["challenge_id"]
+                                username.set_value(result["user"].username or username.value or "")
                             except Exception as error:
                                 status.set_text(str(error))
                                 return

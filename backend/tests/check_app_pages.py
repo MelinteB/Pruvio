@@ -33,7 +33,7 @@ with tempfile.TemporaryDirectory(prefix='pruvs-page-check-') as temporary:
 
     with TestClient(app, base_url='https://pruvs.io') as client:
         health = client.get('/health').json()
-        assert health['app'] == 'Pruvs Core' and health['version'] == '6.4.0'
+        assert health['app'] == 'Pruvs Core' and health['version'] == '6.5.0'
         assert health['otp_channels'] == ['email']
         for path in ('/', '/register', '/reset-password', '/terms', '/privacy', '/support'):
             response = client.get(path)

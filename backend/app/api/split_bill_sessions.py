@@ -25,6 +25,7 @@ from app.services.split_bill_session_service import (
     join_split_bill_session,
     save_participant_selection,
     close_split_bill_session,
+    reopen_split_bill_session,
     build_share_url,
     build_qr_url,
     build_widget_url,
@@ -274,6 +275,39 @@ def close_session(
             owner_user_id=close_data.owner_user_id,
         )
 
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        )
+
+
+@router.post(
+    "/sessions/{token}/reopen",
+    response_model=SplitBillSessionSummaryResponse,
+)
+def reopen_session(
+    token: str,
+    reopen_data: SplitBillSessionCloseRequest,
+    db: Session = Depends(get_db),
+):
+    session = get_split_bill_session_by_token(
+        db=db,
+        token=token,
+    )
+
+    if not session:
+        raise HTTPException(
+            status_code=404,
+            detail="Split bill session not found.",
+        )
+
+    try:
+        return reopen_split_bill_session(
+            db=db,
+            session=session,
+            owner_user_id=reopen_data.owner_user_id,
+        )
     except ValueError as error:
         raise HTTPException(
             status_code=400,

@@ -70,9 +70,9 @@ app = FastAPI(
 Pruvs is a standalone mobile-first receipt assistant.
 
 Upload a receipt, extract and validate items with OCR, translate foreign item
-names to English, and create a shareable split-bill session. The standalone application supports email-only authentication OTP and does not mount the legacy WhatsApp receipt interface. Pruvs v6 adds account-required shared bills, owner tips, live participant status, mobile reminders, settlement payment options, email-confirmed account deletion, and a professional document-crop workspace.
+names to English, and create a shareable split-bill session. The standalone application supports email-only authentication OTP and does not mount the legacy WhatsApp receipt interface. Pruvs v6.5 adds quantity-aware shared allocations, per-person percentage tips, open/settled split-bill history, owner-only bill reopening, derived first-name/surname usernames, refreshed Pruvs app icons and share-preview branding, plus the existing email-authentication, passkey, OCR and payment flows.
 """,
-    version="6.4.0",
+    version="6.5.0",
 )
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -122,7 +122,7 @@ def health():
         "whatsapp_otp_enabled": False,
         "otp_channels": ["email"],
         "database": "connected",
-        "version": "6.4.0",
+        "version": "6.5.0",
         "passkeys_enabled": passkeys_enabled(),
         "developer_totp_enabled": totp_debug_enabled(),
     }

@@ -1,13 +1,11 @@
-# Pruvs v6.4 — complete backend
+# Pruvs v6.5 — complete backend
 
-This is the existing FastAPI + NiceGUI app, rebranded from Pruvio to Pruvs.
+This is the FastAPI + NiceGUI Pruvs backend. The backend entry point remains `app.main:app`. Keep the existing Render service, database, secrets and upload storage. `PRUVIO_` environment variable names and internal storage identifiers remain for compatibility.
 
-Start with **PRUVS_DOMAIN_SETUP_v6_4.md** for the exact GoDaddy, Render, Resend and Azure instructions and Windows deployment commands.
+Version `/health`: `6.5.0`.
 
-The backend entry point remains `app.main:app`. Keep the existing Render service, database, secrets and upload storage. `PRUVIO_` environment variable names and internal storage identifiers are retained for compatibility.
+The current app includes email/password/passkey authentication, email OTP dialogs, trusted browsers, receipt image/PDF upload, Azure OCR/translation, quantity-aware split bills, per-person percentage tips, open/settled split history, owner-only reopening, direct owner payment details, automatically derived `first.surname` usernames, and Pruvs browser/PWA/share-preview branding.
 
-The current app uses unique usernames/email login, email-only OTP dialogs, trusted browsers, passkeys, document uploads, Azure OCR/translation, and owner-protected shared bills. Branding includes the Pruvs logo, blue/navy theme, app icons and HTML OTP emails. Version `/health`: `6.4.0`.
+For the v6.5 changes and deployment commands, see **PRUVS_UPDATE_v6_5.md**. For the existing `pruvs.io`, Render, Resend and Azure domain/provider setup, see **PRUVS_DOMAIN_SETUP_v6_4.md**; those environment settings remain applicable.
 
 For local development, copy `.env.standalone.example` to `.env`, set your own local secrets and providers, and keep `CANONICAL_REDIRECT_ENABLED=false`. Never commit real credentials or databases.
-
-For production, `RENDER_PRUVS_SETTINGS.env.example` contains only the public migration settings. Merge them into the existing Render configuration after the domain is verified. Add the Resend key privately in Render.

@@ -16,6 +16,7 @@ from app.services.split_bill_session_service import (
     get_split_bill_session_summary,
     join_split_bill_session_as_user,
     record_participant_payment_status,
+    reopen_split_bill_session,
     save_participant_selection,
     send_participant_reminder,
     update_expected_participants_count,
@@ -213,6 +214,10 @@ def _render_split_page(token: str, participant_id: int, user_id: int) -> None:
             ui.label(f"{summary['bill_total']:.2f} {currency} {'bon' if lang=='ro' else 'receipt'}").classes("metric-pill")
             if summary["tip_total"]>0: ui.label(f"+ {summary['tip_total']:.2f} {currency} {t('Tip',lang).lower()}").classes("metric-pill")
             ui.label(f"{summary['grand_total']:.2f} {currency} {'total' if lang=='ro' else 'total'}").classes("metric-pill metric-accent")
+            if summary["status"] == "open":
+              ui.label(
+                (f"Rămas de împărțit {summary['remaining_total']:.2f} {currency}" if lang=='ro' else f"Remaining to split {summary['remaining_total']:.2f} {currency}")
+              ).classes("metric-pill")
 
           if current.get("reminder_message"):
             with ui.element("div").classes("w-full mt-4 p-3 rounded-xl bg-amber-50 border border-amber-200"):
@@ -221,7 +226,11 @@ def _render_split_page(token: str, participant_id: int, user_id: int) -> None:
         if is_owner and summary["status"]=="open":
           with ui.card().classes("pruvio-card w-full p-5"):
             ui.label(t("Tip",lang)).classes("text-lg font-black")
-            ui.label("Bacșișul se împarte egal între toți participanții, inclusiv proprietarul." if lang=='ro' else "Tip is divided equally among everyone, including the owner.").classes("text-xs text-slate-500")
+            ui.label(
+              "Pentru procent, bacșișul se calculează separat din valoarea aleasă de fiecare persoană, inclusiv proprietarul. O sumă fixă se împarte egal."
+              if lang=='ro' else
+              "For a percentage tip, each person's tip is calculated from that person's own split amount, including the owner. A fixed tip is divided equally."
+            ).classes("text-xs text-slate-500")
             with ui.row().classes("w-full gap-2 items-end flex-wrap mt-3"):
               mode=ui.select({"none":t("No tip",lang),"percent":t("Percent",lang),"fixed":t("Fixed amount",lang)},value=summary["tip_mode"],label=t("Tip",lang)).props("outlined dense").classes("w-44")
               val=ui.number(label=("Valoare" if lang=='ro' else "Value"),value=summary["tip_value"],min=0,step=.5).props("outlined dense").classes("w-36")
@@ -240,19 +249,29 @@ def _render_split_page(token: str, participant_id: int, user_id: int) -> None:
               ui.label("Produse" if lang=='ro' else "Items").classes("text-lg font-black")
               my_total=ui.label("").classes("text-sm font-black text-blue-700")
 
-            qlabels={}; pluses={}; minuses={}
+            qlabels={}; pluses={}; minuses={}; remaining_labels={}
             def max_for_me(item): return max(0.0,float(item["quantity"])-_other_assignment_quantity(item,participant_id))
             def refresh_local():
               lines=units=amt=0.0
               for item in summary["items"]:
-                iid=item["item_id"]; qty=float(selected.get(iid,0));
+                iid=item["item_id"]; qty=float(selected.get(iid,0)); tq=float(item.get("quantity") or 1)
+                other=_other_assignment_quantity(item,participant_id)
                 if qty>EPS: lines+=1; units+=qty; amt+=_selection_amount(item,qty)
                 if iid in qlabels: qlabels[iid].set_text(quantity_text(qty))
+                if iid in remaining_labels:
+                  remaining=max(0.0,tq-other-qty)
+                  remaining_amount=_selection_amount(item,remaining) if remaining>EPS else 0.0
+                  remaining_labels[iid].set_text(
+                    (f"Rămas de împărțit: {quantity_text(remaining)} · {remaining_amount:.2f} {currency}" if lang=='ro' else f"Remaining to split: {quantity_text(remaining)} · {remaining_amount:.2f} {currency}")
+                  )
                 if iid in minuses:
                   (minuses[iid].enable() if qty>EPS and summary["status"]=="open" else minuses[iid].disable())
                 if iid in pluses:
                   (pluses[iid].enable() if qty+1<=max_for_me(item)+EPS and summary["status"]=="open" else pluses[iid].disable())
-              tipshare=float(current.get("tip_share") or 0)
+              if summary.get("tip_mode") == "percent":
+                tipshare=round(amt*float(summary.get("tip_value") or 0)/100.0,2)
+              else:
+                tipshare=float(current.get("tip_share") or 0)
               my_total.set_text(f"{amt:.2f} + {tipshare:.2f} {t('Tip',lang).lower()} = {amt+tipshare:.2f} {currency}" if tipshare else f"{amt:.2f} {currency}")
             def discrete(item,delta): dirty["value"]=True; iid=item["item_id"]; selected[iid]=max(0,min(max_for_me(item),float(selected.get(iid,0))+delta)); refresh_local()
             def atomic(item,checked): dirty["value"]=True; selected[item["item_id"]]=max_for_me(item) if checked else 0; refresh_local()
@@ -270,14 +289,22 @@ def _render_split_page(token: str, participant_id: int, user_id: int) -> None:
                     b=ui.button(icon="add",on_click=lambda item=item:discrete(item,1)).props("flat round dense").classes("text-slate-500"); pluses[iid]=b
                 else:
                   cb=ui.checkbox(value=mine>EPS,on_change=lambda e,item=item:atomic(item,bool(e.value))).props("dense")
-                  if (other>EPS and mine<=EPS) or summary["status"]!="open": cb.disable()
+                  if max_for_me(item)<=EPS or summary["status"]!="open": cb.disable()
                 with ui.column().classes("gap-1 flex-1 min-w-0"):
                   ui.label(display_item_name(item)).classes("claim-name text-sm sm:text-base font-bold leading-snug")
                   ui.label(f"{quantity_text(tq)} × {float(item['unit_price']):.2f} {currency}").classes("text-xs text-slate-400")
+                  remaining=max(0.0,tq-other-mine)
+                  remaining_amount=_selection_amount(item,remaining) if remaining>EPS else 0.0
+                  rem=ui.label(
+                    (f"Rămas de împărțit: {quantity_text(remaining)} · {remaining_amount:.2f} {currency}" if lang=='ro' else f"Remaining to split: {quantity_text(remaining)} · {remaining_amount:.2f} {currency}")
+                  ).classes("text-[11px] font-semibold text-blue-700")
+                  remaining_labels[iid]=rem
                   if other_as:
                     with ui.row().classes("gap-1 flex-wrap"):
                       for a in other_as:
-                        txt=f"✓ {a.get('assigned_to')}" + (f" ×{quantity_text(float(a.get('quantity') or 0))}" if discrete_multi else "")
+                        assigned_qty=float(a.get("quantity") or 0)
+                        show_qty = discrete_multi or assigned_qty < tq - EPS
+                        txt=f"✓ {a.get('assigned_to')}" + (f" ×{quantity_text(assigned_qty)}" if show_qty else "")
                         ui.label(txt).classes("participant-badge")
                 ui.label(f"{float(item['total_price']):.2f} {currency}").classes("text-sm font-black whitespace-nowrap")
 
@@ -442,6 +469,35 @@ def _render_split_page(token: str, participant_id: int, user_id: int) -> None:
               if lang=='ro' else
               "The owner's share is included in the calculation; you do not need to pay yourself. Participants receive your saved payment details directly."
             ).classes("text-xs text-slate-500 mt-1")
+            ui.separator().classes("my-4")
+            ui.label(
+              "Poți redeschide nota pentru a modifica alocările. Doar proprietarul poate face acest lucru. Statusurile de plată existente vor fi resetate deoarece sumele se pot schimba."
+              if lang=='ro' else
+              "You can reopen this bill to change allocations. Only the owner can do this. Existing payment statuses will be reset because amounts may change."
+            ).classes("text-xs text-slate-500")
+
+            reopen_dialog=ui.dialog()
+            with reopen_dialog, ui.card().classes("w-full max-w-md p-5 rounded-2xl"):
+              ui.label("Redeschide nota?" if lang=='ro' else "Reopen split bill?").classes("text-lg font-black")
+              ui.label(
+                "Alocările curente sunt păstrate, dar stările de plată ale participanților vor fi resetate."
+                if lang=='ro' else
+                "Current allocations are kept, but participant payment states will be reset."
+              ).classes("text-sm text-slate-500")
+              with ui.row().classes("w-full justify-end gap-2 mt-3"):
+                ui.button("Anulează" if lang=='ro' else "Cancel",on_click=reopen_dialog.close).classes("pruvio-secondary")
+                def reopen_now():
+                  dbr=SessionLocal()
+                  try:
+                    ss=get_split_bill_session_by_token(dbr,token)
+                    reopen_split_bill_session(dbr,ss,user_id)
+                  except Exception as e:
+                    ui.notify(str(e),type="negative"); return
+                  finally:
+                    dbr.close()
+                  ui.run_javascript("window.location.reload()")
+                ui.button("Redeschide" if lang=='ro' else "Reopen",icon="lock_open",on_click=reopen_now).classes("pruvio-primary")
+            ui.button("Redeschide împărțirea" if lang=='ro' else "Reopen split",icon="lock_open",on_click=reopen_dialog.open).classes("pruvio-secondary self-start px-4 mt-3")
 
         def poll():
           if dirty["value"]: return

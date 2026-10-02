@@ -14,7 +14,7 @@ from app.models.user import User
 from app.models.verification_code import VerificationCode
 from app.services.email_service import send_email_verification_code
 from app.services.phone_otp_service import record_delivery
-from app.services.username_service import check_username_available
+from app.services.username_service import check_username_available, derive_available_username
 from app.usernames import username_key
 from app.services.trusted_device_service import is_trusted_device
 from app.services.password_service import hash_password
@@ -225,7 +225,11 @@ def create_or_update_registration_user(
     # An unverified phone is contact information, not proof that somebody owns an account.
     if phone_owner and phone_owner.email and normalize_email(phone_owner.email) != normalized_email:
         raise ValueError("This phone number is already used by another account.")
-    clean_username = check_username_available(db, username or name, exclude_user_id=user.id if user else None)
+    clean_username = (
+        check_username_available(db, username, exclude_user_id=user.id if user else None)
+        if username
+        else derive_available_username(db, name, exclude_user_id=user.id if user else None)
+    )
     if not user:
         user = User(phone_number=phone)
         db.add(user)
