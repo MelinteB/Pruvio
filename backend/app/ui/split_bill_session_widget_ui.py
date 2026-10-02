@@ -95,47 +95,6 @@ def _summary_digest(summary: dict) -> str:
 
 
 
-def _enable_single_browser_account_guard(user_id: int, language: str) -> None:
-    """Block an already-open split tab when this browser switches to another account."""
-    message = (
-        "Alt cont Pruvs este activ acum în acest browser. Pentru a evita două persoane conectate simultan de pe aceeași stație, această sesiune a fost blocată. Continuă din fila contului activ."
-        if language == "ro" else
-        "Another Pruvs account is now active in this browser. To prevent two people from using the same station at the same time, this split session has been blocked. Continue in the active account tab."
-    )
-    button = "Reîncarcă" if language == "ro" else "Reload"
-    ui.run_javascript(f"""
-    (() => {{
-      if (window.__pruvsSingleAccountGuard) return;
-      window.__pruvsSingleAccountGuard = true;
-      const expectedUserId = {int(user_id)};
-      const message = {json.dumps(message)};
-      const button = {json.dumps(button)};
-      let blocked = false;
-
-      const showBlock = () => {{
-        if (blocked) return;
-        blocked = true;
-        const overlay = document.createElement('div');
-        overlay.id = 'pruvs-station-lock';
-        overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(245,248,255,.98);display:flex;align-items:center;justify-content:center;padding:24px;font-family:Inter,system-ui,sans-serif';
-        overlay.innerHTML = `<div style="max-width:520px;width:100%;background:white;border:1px solid #e0e8f6;border-radius:20px;padding:28px;box-shadow:0 18px 60px rgba(15,23,42,.14)"><div style="font-size:28px;font-weight:900;color:#0a1435;margin-bottom:10px">Pruvs</div><div style="font-size:15px;line-height:1.55;color:#4b5563">${{message}}</div><button id="pruvs-station-reload" style="margin-top:20px;background:#0756df;color:white;border:0;border-radius:12px;padding:11px 18px;font-weight:800;cursor:pointer">${{button}}</button></div>`;
-        document.body.appendChild(overlay);
-        document.getElementById('pruvs-station-reload').onclick = () => window.location.reload();
-      }};
-
-      const check = async () => {{
-        try {{
-          const response = await fetch('/auth/device/current', {{credentials:'same-origin', cache:'no-store'}});
-          if (!response.ok) return;
-          const data = await response.json();
-          if (Number(data.user_id || 0) !== expectedUserId) showBlock();
-        }} catch (_) {{}}
-      }};
-      check();
-      window.__pruvsSingleAccountTimer = window.setInterval(check, 1000);
-    }})();
-    """)
-
 def setup_split_bill_session_widget_ui() -> None:
     @ui.page("/split-bill/sessions/{token}/join")
     def split_bill_join_page(token: str):
@@ -238,7 +197,6 @@ def _render_split_page(token: str, participant_id: int, user_id: int) -> None:
 
     lang=user.preferred_language or "en"; currency=summary["currency"]; is_owner=current["role"]=="owner"
     setup_page_head(f"{t('Split bill',lang)} · Pruvs")
-    _enable_single_browser_account_guard(user_id, lang)
     digest={"value":_summary_digest(summary)}
     selected={i["item_id"]:_assignment_quantity_for_participant(i,participant_id) for i in summary["items"]}
 
