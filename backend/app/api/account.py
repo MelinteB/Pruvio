@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
@@ -10,17 +10,14 @@ from app.schemas.account import (
 from app.services.account_service import confirm_password_reset, request_password_reset
 from app.services.auth_service import authenticate_with_password
 from app.services.username_service import check_username_available
-from app.services.trusted_device_service import DEVICE_COOKIE, is_trusted_device
 
 router = APIRouter()
 
 
 @router.post("/password/login")
-def password_login(payload: PasswordLoginRequest, request: Request, db: Session = Depends(get_db)):
+def password_login(payload: PasswordLoginRequest, db: Session = Depends(get_db)):
     try:
         user = authenticate_with_password(db, payload.identifier, payload.password)
-        if not is_trusted_device(db, user, request.cookies.get(DEVICE_COOKIE)):
-            return {"otp_required": True, "message": "Verify this new browser with OTP on the sign-in page."}
         return {
             "otp_required": False,
             "user_id": user.id,

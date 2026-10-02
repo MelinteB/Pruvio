@@ -1,16 +1,8 @@
-from datetime import datetime
-
 from nicegui import ui
-from fastapi import Request
 
 from app.db.database import SessionLocal
 from app.i18n import t
-from app.services.auth_service import (
-    authenticate_with_password,
-    complete_passwordless_login,
-    get_account_for_identifier,
-    start_passwordless_login,
-)
+from app.services.auth_service import authenticate_with_password
 from app.services.passkey_service import (
     authentication_browser_javascript,
     begin_passkey_authentication,
@@ -18,21 +10,12 @@ from app.services.passkey_service import (
     passkeys_enabled,
 )
 from app.services.standalone_app_service import list_recent_receipts
-from app.services.totp_debug_service import (
-    totp_allowed_for_user,
-    totp_debug_enabled,
-    verify_totp,
-)
-from app.services.trusted_device_service import DEVICE_COOKIE, is_trusted_device, trusted_device_days
-from app.ui.device_login import finish_verified_device_login
-from app.ui.email_otp_dialog import EmailOTPDialog
 from app.ui.app_shell import app_header, bottom_nav, setup_page_head
 from app.ui.auth_state import get_logged_in_user, get_ui_language, login_user
 
 
-def _login_view(device_token: str | None = None) -> None:
+def _login_view() -> None:
     lang = get_ui_language()
-    state = {"challenge_id": None, "challenge_identifier": None, "verified_user_id": None}
     with ui.element("main").classes("pruvio-page"):
         with ui.column().classes("pruvio-login-shell gap-6"):
             app_header("Smart receipt assistant", show_account=False, language=lang)
@@ -41,20 +24,12 @@ def _login_view(device_token: str | None = None) -> None:
                     ui.label(t("Receipts, simplified.", lang)).classes("text-4xl sm:text-5xl font-black text-slate-950 tracking-tight")
                     ui.label(t("Upload receipts, review OCR results, translate foreign item names and split bills with friends.", lang)).classes("text-base sm:text-lg text-slate-500 max-w-2xl leading-relaxed")
                     with ui.row().classes("gap-2 flex-wrap"):
-                        for text in ["Receipt OCR", "English translation", "Split bills", "OTP security"]:
+                        for text in ["Receipt OCR", "English translation", "Split bills"]:
                             ui.label(t(text, lang)).classes("metric-pill")
                 with ui.card().classes("pruvio-card pruvio-login-card p-6 sm:p-7"):
                     ui.label(t("Sign in", lang)).classes("text-2xl font-black text-slate-950")
-                    ui.label("Parolă sau passkey. Solicităm OTP doar într-un browser nou sau expirat." if lang == "ro" else "Password or passkey. OTP is requested only in a new or expired browser.").classes("text-sm text-slate-500")
+                    ui.label("Autentifică-te cu un passkey sau cu numele de utilizator / emailul și parola." if lang == "ro" else "Sign in with a passkey or your username / email and password.").classes("text-sm text-slate-500")
                     status = ui.label("").classes("text-xs text-red-600")
-
-                    async def finish_credential_login(db, user):
-                        if is_trusted_device(db, user, device_token):
-                            ui.navigate.to(login_user(user))
-                            return
-                        identifier.set_value(user.username or user.email)
-                        refresh_device_options()
-                        send_code()
 
                     async def sign_in_with_passkey():
                         status.set_text("")
@@ -67,13 +42,14 @@ def _login_view(device_token: str | None = None) -> None:
                             db = SessionLocal()
                             try:
                                 user = complete_passkey_authentication(db, challenge=challenge, browser_credential=credential)
-                                await finish_credential_login(db, user)
+                                ui.navigate.to(login_user(user))
                             finally:
                                 db.close()
                         except Exception as error:
                             status.set_text(str(error) or "Passkey sign-in failed.")
 
-                    ui.button(t("Use fingerprint / Face ID / passkey", lang), icon="fingerprint", on_click=sign_in_with_passkey).classes("pruvio-primary w-full py-3 mt-3")
+                    passkey_button = ui.button(t("Use fingerprint / Face ID / passkey", lang), icon="fingerprint", on_click=sign_in_with_passkey).classes("pruvio-primary w-full py-3 mt-3")
+                    passkey_button.visible = passkeys_enabled()
                     ui.label("Amprenta și datele Face ID rămân pe dispozitiv." if lang == "ro" else "Your fingerprint and Face ID data stay on your device.").classes("text-[11px] text-slate-400")
                     identifier = ui.input("Nume utilizator sau email" if lang == "ro" else "Username or email").props("outlined autocomplete=username debounce=350").classes("w-full")
                     password = ui.input(t("Password", lang), password=True, password_toggle_button=True).props("outlined autocomplete=current-password").classes("w-full")
@@ -83,7 +59,7 @@ def _login_view(device_token: str | None = None) -> None:
                         db = SessionLocal()
                         try:
                             user = authenticate_with_password(db, identifier.value or "", password.value or "")
-                            await finish_credential_login(db, user)
+                            ui.navigate.to(login_user(user))
                         except Exception as error:
                             status.set_text(str(error))
                         finally:
@@ -91,88 +67,6 @@ def _login_view(device_token: str | None = None) -> None:
 
                     ui.button(t("Sign in with password", lang), icon="lock_open", on_click=password_login).classes("pruvio-primary w-full py-3")
                     ui.label(t("Forgot password?", lang)).classes("pruvio-link text-xs self-end").on("click", lambda: ui.navigate.to("/reset-password"))
-                    device_note = ui.label("").classes("text-xs text-slate-500")
-                    async def verify_login(code):
-                        db = SessionLocal()
-                        try:
-                            if not state["challenge_id"]:
-                                raise ValueError("Request a code from this sign-in screen first.")
-                            if state["verified_user_id"]:
-                                from app.models.user import User
-                                user = db.get(User, state["verified_user_id"])
-                                if not user or user.status != "active" or not user.is_email_verified:
-                                    raise ValueError("Your account has changed. Start sign-in again.")
-                            else:
-                                user = complete_passwordless_login(db, state["challenge_identifier"], code,
-                                    challenge_id=state["challenge_id"], device_token=device_token)
-                                state["verified_user_id"] = user.id
-                            target = await finish_verified_device_login(db, user)
-                            state["challenge_id"] = None
-                        finally:
-                            db.close()
-                        ui.navigate.to(target)
-
-                    def request_login_code():
-                        db = SessionLocal()
-                        try:
-                            result = start_passwordless_login(db, identifier.value or "", device_token=device_token)
-                            state["verified_user_id"] = None
-                            state["challenge_id"] = result["challenge_id"]
-                            state["challenge_identifier"] = identifier.value
-                            return result
-                        finally:
-                            db.close()
-
-                    otp_dialog = EmailOTPDialog(
-                        title="Verifică acest browser" if lang == "ro" else "Verify this browser",
-                        description=(f"Confirmă emailul pentru a memora acest browser timp de {trusted_device_days()} zile." if lang == "ro"
-                            else f"Confirm your email to remember this browser for {trusted_device_days()} days."),
-                        on_verify=verify_login, on_resend=request_login_code, language=lang,
-                        confirm_label="Verifică și autentifică" if lang == "ro" else "Verify and sign in")
-
-                    def send_code():
-                        status.set_text("")
-                        try:
-                            otp_dialog.present(request_login_code())
-                        except Exception as error:
-                            status.set_text(str(error))
-
-                    otp_button = ui.button("Autentificare cu un cod pe email" if lang == "ro" else "Sign in with email code",
-                        icon="mail_outline", on_click=send_code).classes("pruvio-secondary w-full py-3")
-                    otp_button.visible = False
-
-                    def refresh_device_options():
-                        state["challenge_id"] = None
-                        state["challenge_identifier"] = None
-                        state["verified_user_id"] = None
-                        otp_dialog.close()
-                        db = SessionLocal()
-                        try:
-                            user = get_account_for_identifier(db, identifier.value or "") if identifier.value else None
-                            trusted = is_trusted_device(db, user, device_token)
-                            otp_button.visible = bool(user and user.status == "active" and not trusted)
-                            device_note.set_text(("Browser verificat. Folosește parola sau passkey." if lang == "ro" else "Verified browser. Use your password or passkey.") if trusted else "")
-                        except ValueError:
-                            otp_button.visible = False
-                            device_note.set_text("")
-                        finally:
-                            db.close()
-
-                    identifier.on_value_change(lambda _: refresh_device_options())
-                    if totp_debug_enabled():
-                        dev_code = ui.input(t("Authenticator code", lang)).props("outlined inputmode=numeric maxlength=6").classes("w-full")
-                        async def verify_dev_authenticator():
-                            db = SessionLocal()
-                            try:
-                                user = get_account_for_identifier(db, identifier.value or "")
-                                if not totp_allowed_for_user(user) or not verify_totp(dev_code.value or "", user=user):
-                                    raise ValueError("Invalid developer Authenticator code.")
-                                await finish_credential_login(db, user)
-                            except Exception as error:
-                                status.set_text(str(error))
-                            finally:
-                                db.close()
-                        ui.button(t("Verify Authenticator", lang), on_click=verify_dev_authenticator).props("flat").classes("w-full text-slate-500 text-xs")
                     ui.separator().classes("my-3")
                     with ui.row().classes("w-full justify-center gap-1 text-sm"):
                         ui.label(t("New to Pruvs?", lang)).classes("text-slate-500")
@@ -244,7 +138,7 @@ def _dashboard(user) -> None:
 
 def setup_home_ui() -> None:
     @ui.page("/")
-    def home_page(request: Request):
+    def home_page():
         setup_page_head("Pruvs")
         db = SessionLocal()
         try:
@@ -252,6 +146,6 @@ def setup_home_ui() -> None:
         finally:
             db.close()
         if user is None:
-            _login_view(request.cookies.get(DEVICE_COOKIE))
+            _login_view()
             return
         _dashboard(user)

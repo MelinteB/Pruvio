@@ -207,7 +207,7 @@ def complete_passkey_authentication(
         raise ValueError("This passkey is not registered with Pruvs.")
 
     user = db.query(User).filter(User.id == row.user_id).first()
-    if user is None or user.status != "active":
+    if user is None or user.status != "active" or not user.is_email_verified:
         raise ValueError("The account linked to this passkey is unavailable.")
 
     verification = verify_authentication_response(

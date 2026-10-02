@@ -27,7 +27,7 @@ def setup_support_ui() -> None:
                     ui.label("Întrebări frecvente pentru versiunea curentă Pruvs." if lang == "ro" else "Common questions for the current Pruvs test version.").classes("text-sm text-slate-500")
                     if lang == "ro":
                         faqs = [
-                            ("Când este necesar codul OTP?", "Confirmi emailul la înregistrare și când te autentifici într-un browser nou sau expirat. Schimbarea telefonului și ștergerea contului se confirmă tot prin email."),
+                            ("Când este necesar codul OTP?", "Confirmi emailul la înregistrare. Resetarea parolei, schimbarea datelor de contact și ștergerea contului folosesc confirmare prin email. Autentificarea cu parolă sau passkey nu cere OTP pentru browser."),
                             ("Cum îmi resetez parola?", "Folosește opțiunea Ai uitat parola? și confirmă resetarea cu OTP trimis la emailul verificat."),
                             ("De ce poate greși OCR-ul?", "Extragerea și traducerea sunt automate. Verifică întotdeauna cantitățile, prețurile, moneda și totalul."),
                             ("Prietenii au nevoie de cont pentru split?", "Da. Participanții se autentifică sau creează un cont înainte să se alăture. Proprietarul gestionează nota din propriul cont."),
@@ -36,7 +36,7 @@ def setup_support_ui() -> None:
                         ]
                     else:
                         faqs = [
-                            ("When do I need an OTP?", "Verify your email at signup and when signing in from a new or expired browser. Phone changes and account deletion are also confirmed by email."),
+                            ("When do I need an OTP?", "Verify your email at signup. Password recovery, contact changes and account deletion use email confirmation. Password and passkey sign-in do not require a browser OTP."),
                             ("How do I reset my password?", "Use Forgot password and confirm the reset with an OTP sent to your verified email."),
                             ("Why can OCR be wrong?", "Receipt extraction and translation are automated. Always review quantities, prices, currency and totals before splitting a bill."),
                             ("Do friends need accounts to join a split?", "Yes. Participants sign in or create an account before joining. The bill owner manages the bill from their own account."),

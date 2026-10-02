@@ -163,9 +163,9 @@ def setup_account_ui() -> None:
                 with ui.card().classes("pruvio-card w-full p-5 sm:p-6"):
                     ui.label(t("Set / change password", lang)).classes("text-xl font-black text-slate-950")
                     ui.label(
-                        "Poți folosi parola împreună cu OTP și passkey. Dacă ai uitat parola, folosește resetarea prin email."
+                        "Te poți autentifica prin parolă sau passkey. Dacă ai uitat parola, folosește resetarea prin email."
                         if lang == "ro"
-                        else "Password is available alongside OTP and passkeys. If you forget it, reset it by email OTP."
+                        else "Sign in with a password or passkey. If you forget your password, reset it by email OTP."
                     ).classes("text-sm text-slate-500")
                     current_password = ui.input(t("Current password", lang), password=True, password_toggle_button=True).props("outlined").classes("w-full mt-3")
                     new_password = ui.input(t("New password", lang), password=True, password_toggle_button=True).props("outlined").classes("w-full")

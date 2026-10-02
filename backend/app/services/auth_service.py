@@ -28,7 +28,7 @@ def complete_passwordless_login(db: Session, identifier: str, code: str, *, chal
 
 def authenticate_with_password(db: Session, identifier: str, password: str) -> User:
     user = find_user_by_identifier(db, identifier)
-    if not user or user.status != "active":
+    if not user or user.status != "active" or not user.is_email_verified:
         raise ValueError("Invalid sign-in details.")
     if not verify_password(password or "", user.password_hash):
         raise ValueError("Invalid sign-in details.")
