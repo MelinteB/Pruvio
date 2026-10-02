@@ -411,9 +411,42 @@ def _render_split_page(token: str, participant_id: int, user_id: int) -> None:
                   ui.notify("Memento trimis în Pruvs." if lang=='ro' else "Pruvs reminder sent.",type="positive")
                 ui.button(icon="notifications",on_click=remind).props("flat round dense").classes("text-slate-500")
                 if p.get("phone_number"):
-                  phone=''.join(ch for ch in p["phone_number"] if ch.isdigit() or ch=='+'); msg=(f"Salut {p['display_name']}, ai de achitat {p['total']:.2f} {currency} pentru nota Pruvs: {summary['share_url']}")
-                  sms=f"sms:{phone}?body={urllib.parse.quote(msg)}"; wa=f"https://wa.me/{phone.lstrip('+')}?text={urllib.parse.quote(msg)}"
-                  ui.html(f'<div class="mobile-only gap-1"><a href="{sms}" title="SMS" style="padding:7px;color:#4b5563"><span class="material-icons">sms</span></a><a href="{wa}" title="WhatsApp" style="padding:7px;color:#4b5563"><span class="material-icons">chat</span></a></div>',sanitize=False)
+                  phone = ''.join(
+                      ch for ch in p["phone_number"]
+                      if ch.isdigit() or ch == '+'
+                  )
+
+                  msg = (
+                      f"Salut {p['display_name']}, ai de achitat "
+                      f"{p['total']:.2f} {currency} pentru nota Pruvs: "
+                      f"{summary['share_url']}"
+                  )
+
+                  sms = f"sms:{phone}?body={urllib.parse.quote(msg)}"
+                  wa = (
+                      f"https://wa.me/{phone.lstrip('+')}"
+                      f"?text={urllib.parse.quote(msg)}"
+                  )
+
+                  ui.html(
+                      f'''
+                      <div style="display:flex;align-items:center;gap:4px;">
+                          <a href="{sms}"
+                            title="SMS"
+                            style="padding:7px;color:#4b5563;text-decoration:none;">
+                              <span class="material-icons">sms</span>
+                          </a>
+
+                          <a href="{wa}"
+                            title="WhatsApp"
+                            target="_blank"
+                            style="padding:7px;color:#4b5563;text-decoration:none;">
+                              <span class="material-icons">chat</span>
+                          </a>
+                      </div>
+                      ''',
+                      sanitize=False,
+                  )
 
         if is_owner and summary["status"]=="open":
           with ui.card().classes("pruvio-card w-full p-5"):
