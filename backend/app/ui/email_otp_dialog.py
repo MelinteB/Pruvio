@@ -19,6 +19,8 @@ class EmailOTPDialog:
         self.on_verify = on_verify
         self.on_resend = on_resend
         self.busy = False
+        self.recovery = None
+        self.recovery_action = None
         self.destination = ''
         ro = language == 'ro'
         ui.add_css('.pruvio-otp-code input { text-align: center; font-size: 24px; letter-spacing: .32em; font-weight: 600; }')
@@ -32,6 +34,7 @@ class EmailOTPDialog:
             self.recipient = ui.label('').classes('text-sm font-bold text-slate-800')
             self.action_detail = ui.label('').classes('text-sm text-slate-700')
             self.action_detail.visible = False
+            self.extra = ui.column().classes('w-full gap-3')
             self.code = ui.input('Cod de verificare' if ro else 'Verification code').props(
                 'outlined inputmode=numeric maxlength=6 autocomplete=one-time-code autofocus'
             ).classes('w-full pruvio-otp-code')
@@ -50,8 +53,10 @@ class EmailOTPDialog:
         if not self.busy:
             self.code.set_value('')
             self.dialog.close()
+            if self.recovery:
+                self.recovery.clear()
 
-    def present(self, result: dict) -> bool:
+    def present(self, result: dict, *, recovering: bool = False) -> bool:
         delivery = result.get('delivery') or {}
         if not delivery.get('sent') and not result.get('debug_otp'):
             raise ValueError(delivery_message(delivery, result.get('destination', self.destination), self.language))
@@ -64,6 +69,8 @@ class EmailOTPDialog:
         self.error.set_text('')
         self.debug.set_text(f"Local debug OTP: {result['debug_otp']}" if result.get('debug_otp') else '')
         self.debug.visible = bool(result.get('debug_otp'))
+        if self.recovery and not recovering:
+            self.recovery.save(self.recovery_action, result)
         self.dialog.open()
         return True
 
@@ -86,6 +93,8 @@ class EmailOTPDialog:
             result = self.on_verify(code)
             if inspect.isawaitable(result):
                 await result
+            if self.recovery:
+                self.recovery.clear(clear_fields=True)
             self.code.set_value('')
             self.dialog.close()
         except Exception as error:

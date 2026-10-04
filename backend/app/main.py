@@ -159,5 +159,6 @@ setup_split_bill_session_widget_ui()
 
 ui.run_with(
     app,
+    reconnect_timeout=60.0,
     storage_secret=os.getenv("PRUVIO_STORAGE_SECRET", "pruvio-local-dev-secret-change-me"),
 )

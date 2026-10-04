@@ -29,6 +29,7 @@ from app.services.totp_debug_service import (
     verify_totp,
 )
 from app.ui.email_otp_dialog import EmailOTPDialog
+from app.ui.otp_recovery import OTPRecovery
 from app.services.username_service import update_username
 from app.ui.app_shell import app_header, bottom_nav, setup_page_head
 from app.ui.auth_state import (
@@ -63,6 +64,7 @@ def setup_account_ui() -> None:
         with ui.element("main").classes("pruvio-page"):
             with ui.column().classes("pruvio-shell gap-4"):
                 app_header("Account", language=lang)
+                recovery = OTPRecovery(f"account:{user_id}", lang)
 
                 with ui.card().classes("pruvio-card w-full p-6 sm:p-8"):
                     ui.label(user.name or "Pruvs user").classes("text-3xl font-black text-slate-950")
@@ -147,6 +149,9 @@ def setup_account_ui() -> None:
                         popup = EmailOTPDialog(title=("Confirmă noul email" if lang == "ro" else "Confirm new email") if channel == "email" else ("Confirmă telefonul" if lang == "ro" else "Confirm phone change"),
                             description=("Introdu codul trimis la noul email." if lang == "ro" else "Enter the code sent to your new email.") if channel == "email" else ("Introdu codul trimis la emailul verificat pentru a salva noul telefon." if lang == "ro" else "Enter the code sent to your verified email to save the new phone number."),
                             on_verify=confirm, on_resend=lambda: request_code(True), language=lang)
+                        recovery.field(channel, value)
+                        recovery.action(channel, popup, state,
+                            ("challenge_id", "requested_value", "destination", "contact_type"))
                         def request_change():
                             contact_status.set_text("")
                             try:
@@ -424,6 +429,7 @@ def setup_account_ui() -> None:
                         description="Confirmă cu codul primit pe email. Contul și datele asociate vor fi șterse definitiv." if lang == "ro" else "Confirm with the code sent to your email. Your account and associated data will be permanently deleted.",
                         on_verify=delete_account, on_resend=request_deletion, language=lang, danger=True,
                         confirm_label=t("Delete permanently", lang))
+                    recovery.action("delete", deletion_popup, deletion_state, ("challenge_id",))
                     def request_delete_code():
                         delete_status.set_text("")
                         try:
@@ -437,4 +443,5 @@ def setup_account_ui() -> None:
                     ui.navigate.to("/")
 
                 ui.button(t("Sign out", lang), icon="logout", on_click=sign_out).classes("pruvio-secondary")
+        recovery.start()
         bottom_nav("account", lang)

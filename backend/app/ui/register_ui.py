@@ -11,8 +11,9 @@ from app.services.onboarding_otp_service import (
     start_registration,
     verify_registration_email,
 )
-from app.ui.device_login import finish_verified_device_login
+from app.ui.auth_state import login_user
 from app.ui.email_otp_dialog import EmailOTPDialog
+from app.ui.otp_recovery import OTPRecovery
 from app.services.username_service import derive_available_username
 from app.models.user import User
 from app.ui.app_shell import app_header, setup_page_head
@@ -68,6 +69,7 @@ def setup_register_ui() -> None:
                         else "We verify your email. Your phone is contact information. Sign in using your unique username or email."
                     ).classes("text-sm text-slate-500")
 
+                    recovery = OTPRecovery("registration", lang)
                     form_panel = ui.column().classes("w-full gap-3 mt-4")
 
                     with form_panel:
@@ -224,15 +226,14 @@ def setup_register_ui() -> None:
                     async def finish_registration(code):
                         db = SessionLocal()
                         try:
-                            user = db.get(User, state["user_id"])
-                            if not user:
-                                raise ValueError("Registration session expired. Start again.")
-                            if not user.is_email_verified:
-                                verify_registration_email(db, state["email"], code, challenge_id=state["challenge_id"])
-                            db.refresh(user)
+                            if not state.get("challenge_id") or not state.get("email"):
+                                raise ValueError("Registration session expired. Request a new code.")
+                            # A recovered page must ALWAYS prove the OTP. Never treat an
+                            # already-verified account or a saved user ID as authentication.
+                            user = verify_registration_email(db, state["email"], code, challenge_id=state["challenge_id"])
                             if user.status != "active":
                                 raise ValueError("Verify your email to activate this account.")
-                            target = await finish_verified_device_login(db, user)
+                            target = login_user(user)
                         finally:
                             db.close()
                         ui.navigate.to(target if target != "/" else "/account")
@@ -254,3 +255,15 @@ def setup_register_ui() -> None:
                         description="Introdu codul pentru a activa contul." if lang == "ro" else "Enter the code to activate your account.",
                         on_verify=finish_registration, on_resend=resend, language=lang,
                         confirm_label="Verifică și creează contul" if lang == "ro" else "Verify and create account")
+
+                    recovery.action("registration", otp_dialog, state,
+                        ("user_id", "email", "challenge_id", "terms_viewed", "privacy_viewed"))
+                    for key, element in (("first_name", first_name), ("last_name", last_name),
+                                         ("email", email), ("phone", phone),
+                                         ("terms", terms_check), ("privacy", privacy_check),
+                                         ("marketing", marketing)):
+                        recovery.field(key, element)
+                    def restore_form():
+                        if terms_check.value: mark_terms()
+                        if privacy_check.value: mark_privacy()
+                    recovery.start(restore_form)
