@@ -176,7 +176,7 @@ def _parse_ocr_metadata(request: ExternalOCRRequest | None) -> dict[str, Any]:
     return {
         "merchant_name": provider_result.get("merchant_name"),
         "receipt_total": validation.get("receipt_total") or provider_result.get("receipt_total"),
-        "currency": provider_result.get("currency"),
+        "currency": payload.get("currency_override") or provider_result.get("currency"),
         "provider_confidence": provider_result.get("provider_confidence"),
         "validation_status": validation.get("status"),
     }

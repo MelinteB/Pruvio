@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from app.services.receipt_currency_service import UNKNOWN_CURRENCY, normalize_currency
 
 from azure.core.credentials import AzureKeyCredential
 from azure.ai.documentintelligence import DocumentIntelligenceClient
@@ -87,10 +88,8 @@ class AzureReceiptOCRProvider(ExternalOCRProvider):
             or self._detect_currency_from_receipt(result)
         )
 
-        if not currency:
-            raise ValueError(
-                "Azure did not provide a currency and Pruvs could not detect one from the receipt."
-            )
+        # Preserve OCR amounts/items while the owner confirms the missing currency.
+        currency = normalize_currency(currency) or UNKNOWN_CURRENCY
 
         items = self._extract_items(fields.get("Items"), currency)
 
@@ -119,7 +118,6 @@ class AzureReceiptOCRProvider(ExternalOCRProvider):
         currency_markers = {
             "€": "EUR",
             " EUR": "EUR",
-            "$": "USD",
             " USD": "USD",
             "£": "GBP",
             " GBP": "GBP",
@@ -134,18 +132,6 @@ class AzureReceiptOCRProvider(ExternalOCRProvider):
         for marker, currency in currency_markers.items():
             if marker in content:
                 return currency
-
-        # Country/language fallback
-        greek_markers = [
-            "ΣΥΝΟΛΟ",
-            "ΤΡΑΠΕΖΙΟΥ",
-            "ΠΕΛΑΤΗΣ",
-            "ΗΜΕΡΟΜΗΝΙΑ",
-            "ΤΙΜΗ",
-        ]
-
-        if any(marker in content for marker in greek_markers):
-            return "EUR"
 
         return None
 

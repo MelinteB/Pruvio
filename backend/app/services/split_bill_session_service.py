@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.models.case import Case
+from app.services.receipt_currency_service import normalize_currency
 from app.models.user import User
 from app.models.receipt_item import ReceiptItem
 from app.models.split_bill_session import SplitBillSession
@@ -189,9 +191,17 @@ def create_split_bill_session(
     if owner.status != "active":
         raise ValueError("Owner user must be active before creating a split bill session.")
 
+    case = db.query(Case).filter(Case.id == case_id).with_for_update().first()
+    if not case or case.user_id != owner_user_id:
+        raise ValueError("Only the receipt owner can start this split bill.")
+
     items = db.query(ReceiptItem).filter(ReceiptItem.case_id == case_id).all()
     if not items:
         raise ValueError("No receipt items found for this case.")
+
+    currencies = {normalize_currency(item.currency) for item in items}
+    if None in currencies or len(currencies) != 1:
+        raise ValueError("Choose and save the receipt currency on the receipt review page first.")
 
     existing = (
         db.query(SplitBillSession)

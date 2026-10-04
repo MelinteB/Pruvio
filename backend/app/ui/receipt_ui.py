@@ -4,6 +4,7 @@ from app.db.database import SessionLocal
 from app.i18n import t
 from app.services.split_bill_session_service import create_split_bill_session, get_owner_participant
 from app.services.standalone_app_service import get_receipt_view
+from app.services.receipt_currency_service import CURRENCY_OPTIONS, normalize_currency, set_receipt_currency
 from app.ui.app_shell import (
     app_header,
     bottom_nav,
@@ -62,6 +63,40 @@ def setup_receipt_ui() -> None:
                                 f"{len(items)} {'linii' if lang == 'ro' else 'lines'} · {total_units} {'unități' if lang == 'ro' else 'units'}"
                             ).classes("text-xs font-bold text-slate-500")
 
+                needs_currency = not normalize_currency(currency)
+                if needs_currency:
+                    with ui.card().classes("pruvio-card w-full p-5 gap-3"):
+                        ui.label("Alege moneda bonului" if lang == "ro" else "Choose the receipt currency").classes("text-lg font-bold")
+                        ui.label(
+                            "Moneda nu a fost detectată. Produsele sunt salvate. Alege moneda înainte de împărțire."
+                            if lang == "ro" else
+                            "The currency could not be detected. Your items are saved. Choose the currency before splitting."
+                        ).classes("text-sm text-slate-600")
+                        currency_select = ui.select(
+                            CURRENCY_OPTIONS, value=None, with_input=True,
+                            label="Monedă" if lang == "ro" else "Currency",
+                        ).props("outlined").classes("w-full")
+
+                        def save_currency():
+                            actor_id = require_login(f"/receipt/{case_id}")
+                            if actor_id is None:
+                                return
+                            db_currency = SessionLocal()
+                            try:
+                                set_receipt_currency(db_currency, case_id, actor_id, currency_select.value)
+                            except ValueError as error:
+                                ui.notify(str(error), type="warning")
+                                return
+                            except Exception:
+                                db_currency.rollback()
+                                ui.notify("Could not save the currency. Please try again.", type="negative")
+                                return
+                            finally:
+                                db_currency.close()
+                            ui.navigate.to(f"/receipt/{case_id}")
+
+                        ui.button("Salvează moneda" if lang == "ro" else "Save currency", on_click=save_currency).classes("pruvio-primary")
+
                 with ui.card().classes("pruvio-card w-full p-0 overflow-hidden"):
                     with ui.row().classes("w-full items-center justify-between px-5 py-4 border-b border-slate-100"):
                         with ui.column().classes("gap-0"):
@@ -108,6 +143,9 @@ def setup_receipt_ui() -> None:
                         ).props("outlined dense").classes("w-32")
 
                     def start_split():
+                        actor_id = require_login(f"/receipt/{case_id}")
+                        if actor_id is None:
+                            return
                         try:
                             expected = int(participant_count.value or 2)
                         except (TypeError, ValueError):
@@ -117,7 +155,7 @@ def setup_receipt_ui() -> None:
                             session = create_split_bill_session(
                                 db=db_split,
                                 case_id=case_id,
-                                owner_user_id=receipt["user_id"],
+                                owner_user_id=actor_id,
                                 expected_participants_count=expected,
                             )
                             owner = get_owner_participant(db_split, session)
@@ -131,6 +169,8 @@ def setup_receipt_ui() -> None:
                             db_split.close()
                         ui.navigate.to(target)
 
-                    ui.button(t("Start split bill", lang), icon="groups", on_click=start_split).classes("pruvio-primary w-full mt-4 py-3")
+                    split_button = ui.button(t("Start split bill", lang), icon="groups", on_click=start_split).classes("pruvio-primary w-full mt-4 py-3")
+                    if needs_currency:
+                        split_button.disable()
 
         bottom_nav("history", lang)
