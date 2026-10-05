@@ -3,6 +3,8 @@ from dataclasses import dataclass, field
 
 import requests
 
+from app.services.openai_translation_service import translate_receipt_item_names_with_openai
+
 
 SKIP_TRANSLATION_LANGUAGES = {"ro", "en"}
 
@@ -46,6 +48,37 @@ def _translation_enabled() -> bool:
         "1", "true", "yes", "on"
     }
 
+
+
+
+def _openai_translation_fallback_enabled() -> bool:
+    return os.getenv(
+        "OPENAI_TRANSLATION_FALLBACK_ENABLED",
+        "false",
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _run_openai_translation_fallback(
+    item_names: list[str],
+    azure_error: Exception | str | None = None,
+) -> ReceiptTranslationResult:
+    try:
+        outcome = translate_receipt_item_names_with_openai(item_names)
+        return ReceiptTranslationResult(
+            source_language=outcome.source_language,
+            translated_names=outcome.translated_names,
+            skipped=outcome.skipped,
+            error=outcome.error,
+        )
+    except Exception as openai_error:
+        parts = []
+        if azure_error:
+            parts.append(f"Azure Translator: {azure_error}")
+        parts.append(f"OpenAI translation fallback: {openai_error}")
+        return ReceiptTranslationResult(
+            skipped=True,
+            error="; ".join(parts),
+        )
 
 def detect_receipt_language(item_names: list[str]) -> str | None:
     clean_names = [name.strip() for name in item_names if name and name.strip()]
@@ -125,6 +158,12 @@ def translate_receipt_item_names(item_names: list[str]) -> ReceiptTranslationRes
         return ReceiptTranslationResult(skipped=True)
 
     if not os.getenv("AZURE_TRANSLATOR_KEY"):
+        if _openai_translation_fallback_enabled():
+            return _run_openai_translation_fallback(
+                item_names=item_names,
+                azure_error="Azure Translator is not configured.",
+            )
+
         return ReceiptTranslationResult(
             skipped=True,
             error="Azure Translator is not configured."
@@ -158,6 +197,12 @@ def translate_receipt_item_names(item_names: list[str]) -> ReceiptTranslationRes
 
     except Exception as error:
         # Translation must never make receipt OCR fail.
+        if _openai_translation_fallback_enabled():
+            return _run_openai_translation_fallback(
+                item_names=item_names,
+                azure_error=error,
+            )
+
         return ReceiptTranslationResult(
             skipped=True,
             error=str(error),

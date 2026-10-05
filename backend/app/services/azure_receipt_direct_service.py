@@ -1,4 +1,6 @@
 import json
+import logging
+import os
 import re
 from datetime import datetime
 from difflib import SequenceMatcher
@@ -50,6 +52,51 @@ SURCHARGE_KEYWORDS = [
     "garantie",
 ]
 
+
+
+logger = logging.getLogger(__name__)
+
+
+def _openai_receipt_fallback_enabled() -> bool:
+    return os.getenv(
+        "OPENAI_RECEIPT_FALLBACK_ENABLED",
+        "false",
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _run_openai_receipt_fallback(
+    db: Session,
+    document_id: int,
+    azure_error: Exception | str,
+) -> dict:
+    logger.warning(
+        "Azure receipt OCR failed for document_id=%s; trying OpenAI fallback. "
+        "Azure error: %s",
+        document_id,
+        azure_error,
+    )
+
+    try:
+        # Lazy import avoids a circular import: the OpenAI direct service
+        # deliberately reuses this module's existing normalization helpers.
+        from app.services.openai_receipt_direct_service import (
+            process_document_with_openai_receipt_direct,
+        )
+
+        result = process_document_with_openai_receipt_direct(
+            db=db,
+            document_id=document_id,
+            reason="azure_receipt_ocr_fallback",
+        )
+        result["primary_provider"] = "azure_receipt"
+        result["fallback_used"] = True
+        return result
+
+    except Exception as openai_error:
+        raise ValueError(
+            "Azure Receipt OCR failed and OpenAI fallback also failed. "
+            f"Azure: {azure_error}; OpenAI: {openai_error}"
+        ) from openai_error
 
 def model_to_dict(model):
     if hasattr(model, "model_dump"):
@@ -888,11 +935,20 @@ def process_document_with_azure_receipt_direct(
     provider = AzureReceiptOCRProvider()
 
     if not provider.is_configured():
-        raise ValueError(
+        azure_error = (
             "Azure Receipt OCR provider is not configured. "
             "Check AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and "
             "AZURE_DOCUMENT_INTELLIGENCE_KEY."
         )
+
+        if _openai_receipt_fallback_enabled():
+            return _run_openai_receipt_fallback(
+                db=db,
+                document_id=document_id,
+                azure_error=azure_error,
+            )
+
+        raise ValueError(azure_error)
 
     external_request = ExternalOCRRequest(
         document_id=document.id,
@@ -1124,5 +1180,12 @@ def process_document_with_azure_receipt_direct(
         external_request.error_message = str(error)
 
         db.commit()
+
+        if _openai_receipt_fallback_enabled():
+            return _run_openai_receipt_fallback(
+                db=db,
+                document_id=document_id,
+                azure_error=error,
+            )
 
         raise ValueError(f"Azure Receipt OCR failed: {error}")
