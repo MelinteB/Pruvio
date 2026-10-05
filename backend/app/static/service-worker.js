@@ -1,12 +1,12 @@
-const CACHE = 'pruvs-shell-v6.6.0';
+const CACHE = 'pruvs-shell-v6.8.0';
 const STATIC = [
-  '/static/manifest.webmanifest?v=6.6.0',
+  '/static/manifest.webmanifest?v=6.8.0',
   '/static/pruvs-logo.png',
   '/static/pruvs-mark.png',
-  '/static/pruvs-32.png?v=6.6.0',
-  '/static/pruvs-180.png?v=6.6.0',
-  '/static/pruvs-192.png?v=6.6.0',
-  '/static/pruvs-512.png?v=6.6.0'
+  '/static/pruvs-32.png?v=6.8.0',
+  '/static/pruvs-180.png?v=6.8.0',
+  '/static/pruvs-192.png?v=6.8.0',
+  '/static/pruvs-512.png?v=6.8.0'
 ];
 
 self.addEventListener('install', event => {

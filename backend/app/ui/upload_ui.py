@@ -1,42 +1,12 @@
-import base64
-import inspect
 import json
 
 from nicegui import ui
 
 from app.db.database import SessionLocal
 from app.i18n import t
-from app.services.standalone_app_service import create_standalone_receipt_case
+from app.services.browser_upload_token_service import create_browser_upload_token
 from app.ui.app_shell import app_header, bottom_nav, setup_page_head
 from app.ui.auth_state import get_logged_in_user, require_login
-
-
-async def _read_upload_event(event) -> tuple[bytes, str, str | None]:
-    filename = getattr(event, "name", None)
-    mime_type = getattr(event, "type", None)
-    content = getattr(event, "content", None)
-    if content is not None and hasattr(content, "read"):
-        data = content.read()
-        if inspect.isawaitable(data):
-            data = await data
-        return bytes(data), filename or "receipt.jpg", mime_type
-    file_obj = getattr(event, "file", None)
-    if file_obj is not None:
-        filename = filename or getattr(file_obj, "name", None)
-        mime_type = mime_type or getattr(file_obj, "content_type", None) or getattr(file_obj, "type", None)
-        data = file_obj.read()
-        if inspect.isawaitable(data):
-            data = await data
-        return bytes(data), filename or "receipt.jpg", mime_type
-    raise ValueError("Could not read the uploaded file.")
-
-
-def _data_uri(data: bytes, mime: str) -> str:
-    return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
-
-
-def _is_image(mime: str | None, filename: str | None) -> bool:
-    return (mime or "").startswith("image/") or (filename or "").lower().endswith((".jpg", ".jpeg", ".png", ".webp"))
 
 
 def setup_upload_ui() -> None:
@@ -45,6 +15,7 @@ def setup_upload_ui() -> None:
         user_id = require_login("/upload")
         if user_id is None:
             return
+
         db_user = SessionLocal()
         try:
             user = get_logged_in_user(db_user)
@@ -52,45 +23,291 @@ def setup_upload_ui() -> None:
         finally:
             db_user.close()
 
+        upload_token = create_browser_upload_token(user_id)
+        ro = lang == "ro"
+        messages = {
+            "choose": "Alege fotografie sau PDF" if ro else "Choose photo or PDF",
+            "hint": "JPG, PNG, WEBP sau PDF · maximum 10 MB" if ro else "JPG, PNG, WEBP or PDF · up to 10 MB",
+            "nothing_sent": (
+                "Nimic nu este trimis către OCR până când confirmi imaginea finală."
+                if ro else
+                "Nothing is sent to OCR until you confirm the final image."
+            ),
+            "image_loaded": (
+                "Imagine încărcată. Ajustează cadrul și trimite versiunea finală."
+                if ro else
+                "Image loaded. Adjust the frame, then send the final version."
+            ),
+            "pdf_loaded": (
+                "PDF încărcat. Verifică documentul și trimite-l la OCR."
+                if ro else
+                "PDF loaded. Review it before sending to OCR."
+            ),
+            "invalid_type": (
+                "Alege o imagine JPG, PNG, WEBP sau un PDF."
+                if ro else
+                "Choose a JPG, PNG, WEBP image or PDF."
+            ),
+            "too_large": (
+                "Fișierul este prea mare. Limita este 10 MB."
+                if ro else
+                "The file is too large. Maximum size is 10 MB."
+            ),
+            "preparing": "Se pregătește imaginea…" if ro else "Preparing final image…",
+            "uploading": "Se încarcă bonul în siguranță…" if ro else "Uploading receipt securely…",
+            "reading": "Se citește bonul…" if ro else "Reading receipt…",
+            "processed": "Bon procesat." if ro else "Receipt processed.",
+            "select_first": "Alege mai întâi un bon." if ro else "Choose a receipt first.",
+            "crop_failed": (
+                "Imaginea decupată nu a putut fi pregătită."
+                if ro else
+                "The cropped image could not be prepared."
+            ),
+            "network_error": (
+                "Încărcarea nu a reușit. Verifică conexiunea și încearcă din nou."
+                if ro else
+                "Upload failed. Check your connection and try again."
+            ),
+            "send": t("Send to OCR", lang),
+            "crop_hint": (
+                "Trage colțurile pentru decupare · deplasează imaginea pentru aliniere · cadrul luminos este exact zona trimisă la OCR"
+                if ro else
+                "Drag the corners to crop · move the image to align · the bright frame is exactly what will be sent to OCR"
+            ),
+        }
+
+        config = {
+            "token": upload_token,
+            "endpoint": "/app/receipts/browser-upload",
+            "maxBytes": 10 * 1024 * 1024,
+            "maxDimension": 2400,
+            "jpegQuality": 0.86,
+            "messages": messages,
+        }
+
         setup_page_head(f"{t('Scan receipt', lang)} · Pruvs")
         ui.add_head_html("""
 <link href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
 <style>
 .cropper-view-box,.cropper-face{border-radius:2px}.cropper-line{background-color:#1598ff}.cropper-point{background-color:#1598ff;width:9px;height:9px;border-radius:50%}.cropper-modal{background:#05070b;opacity:.72}.cropper-bg{background-image:none;background:#0a0d14}
+.pruvs-browser-upload-zone{border:1.5px dashed #cbd5e1;border-radius:18px;background:#fbfcfd;padding:16px;width:100%}
+.pruvs-browser-picker{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border:0;border-radius:12px;background:#0a1435;color:white;font-weight:700;cursor:pointer;user-select:none}
+.pruvs-browser-picker:hover{background:#16234a}.pruvs-browser-picker:focus-within{outline:3px solid #8cb7ff;outline-offset:3px}
+.pruvs-file-meta{font-size:12px;color:#61708b;margin-top:9px;word-break:break-word}
+.pruvs-browser-panel{display:none;width:100%;margin-top:16px}
+.pruvs-browser-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;padding:10px 2px 0}
+.pruvs-browser-icon{width:40px;height:40px;border-radius:999px;border:1px solid #e5e7eb;background:#fff;color:#374151;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.pruvs-browser-icon:hover{background:#f0f5ff;border-color:#b5cdf8}.pruvs-browser-icon:focus-visible{outline:3px solid #8cb7ff;outline-offset:2px}
+.pruvs-browser-send-row{display:flex;justify-content:flex-end;margin-top:12px}
+.pruvs-browser-send{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 18px;border:0;border-radius:12px;background:#0756df;color:#fff;font-weight:700;cursor:pointer}
+.pruvs-browser-send:hover{background:#0649be}.pruvs-browser-send:disabled{opacity:.55;cursor:wait}
+.pruvs-browser-status{font-size:12px;color:#61708b;margin-top:12px;min-height:18px}
+.pruvs-progress-track{display:none;width:100%;height:6px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin-top:10px}
+.pruvs-progress-bar{height:100%;width:0;background:#0756df;border-radius:999px;transition:width .25s ease}
+.pruvs-browser-note{font-size:11px;color:#94a3b8;margin-top:8px}
+.pruvs-pdf-frame{width:100%;height:68vh;border:1px solid #e5e7eb;border-radius:16px;background:#fff}
 </style>
+""")
+        ui.add_head_html(f"""
 <script>
-window.pruvioCropper = null;
-window.pruvioCropperLoad = (src) => {
-  const img = document.getElementById('pruvio-crop-image');
-  if (!img) return;
-  if (window.pruvioCropper) { window.pruvioCropper.destroy(); window.pruvioCropper = null; }
-  img.src = src;
-  img.onload = () => {
-    window.pruvioCropper = new Cropper(img, {
-      viewMode: 1, dragMode: 'move', autoCropArea: 0.94, background: false,
-      responsive: true, restore: true, guides: true, center: true,
-      highlight: false, cropBoxMovable: true, cropBoxResizable: true,
-      toggleDragModeOnDblclick: false
-    });
-  };
-};
-window.pruvioCropperAction = (action) => {
-  const c = window.pruvioCropper; if (!c) return;
-  if (action === 'left') c.rotate(-90);
-  if (action === 'right') c.rotate(90);
-  if (action === 'zin') c.zoom(0.1);
-  if (action === 'zout') c.zoom(-0.1);
-  if (action === 'reset') c.reset();
-};
-window.pruvioCroppedReceipt = async () => {
-  const c = window.pruvioCropper; if (!c) return null;
-  const canvas = c.getCroppedCanvas({maxWidth:4096,maxHeight:4096,imageSmoothingEnabled:true,imageSmoothingQuality:'high',fillColor:'#fff'});
-  return canvas ? canvas.toDataURL('image/jpeg',0.93) : null;
-};
-</script>""")
+(() => {{
+  const CONFIG = {json.dumps(config, ensure_ascii=False)};
+  const state = {{ file: null, objectUrl: null, cropper: null, busy: false, initialized: false }};
 
-        state = {"original": None, "filename": None, "mime_type": None}
+  const byId = id => document.getElementById(id);
+  const msg = key => (CONFIG.messages && CONFIG.messages[key]) || key;
+  const setStatus = text => {{ const el = byId('pruvs-browser-status'); if (el) el.textContent = text || ''; }};
+  const setProgress = value => {{
+    const track = byId('pruvs-progress-track');
+    const bar = byId('pruvs-progress-bar');
+    if (!track || !bar) return;
+    if (value === null) {{ track.style.display = 'none'; bar.style.width = '0%'; return; }}
+    track.style.display = 'block';
+    bar.style.width = `${{Math.max(0, Math.min(100, value))}}%`;
+  }};
+  const setBusy = busy => {{
+    state.busy = busy;
+    const buttons = document.querySelectorAll('[data-pruvs-upload-action]');
+    buttons.forEach(button => button.disabled = !!busy);
+    const input = byId('pruvs-file-input');
+    if (input) input.disabled = !!busy;
+  }};
+  const humanSize = size => size < 1024 * 1024
+    ? `${{Math.max(1, Math.round(size / 1024))}} KB`
+    : `${{(size / (1024 * 1024)).toFixed(2)}} MB`;
+  const isPdf = file => file && (file.type === 'application/pdf' || /\\.pdf$/i.test(file.name || ''));
+  const isImage = file => file && ((file.type || '').startsWith('image/') || /\\.(jpe?g|png|webp)$/i.test(file.name || ''));
+
+  const clearObjectUrl = () => {{
+    if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
+    state.objectUrl = null;
+  }};
+
+  const destroyCropper = () => {{
+    if (state.cropper) {{ state.cropper.destroy(); state.cropper = null; }}
+  }};
+
+  const showPanel = name => {{
+    const imagePanel = byId('pruvs-image-panel');
+    const pdfPanel = byId('pruvs-pdf-panel');
+    if (imagePanel) imagePanel.style.display = name === 'image' ? 'block' : 'none';
+    if (pdfPanel) pdfPanel.style.display = name === 'pdf' ? 'block' : 'none';
+  }};
+
+  const loadSelectedFile = file => {{
+    if (!file) return;
+    if (file.size > CONFIG.maxBytes) {{
+      setStatus(msg('too_large'));
+      if (window.Quasar && Quasar.Notify) Quasar.Notify.create({{message: msg('too_large'), type: 'warning', position: 'top'}});
+      const input = byId('pruvs-file-input'); if (input) input.value = '';
+      return;
+    }}
+    if (!isImage(file) && !isPdf(file)) {{
+      setStatus(msg('invalid_type'));
+      if (window.Quasar && Quasar.Notify) Quasar.Notify.create({{message: msg('invalid_type'), type: 'warning', position: 'top'}});
+      const input = byId('pruvs-file-input'); if (input) input.value = '';
+      return;
+    }}
+
+    state.file = file;
+    destroyCropper();
+    clearObjectUrl();
+    state.objectUrl = URL.createObjectURL(file);
+    const meta = byId('pruvs-file-meta');
+    if (meta) meta.textContent = `${{file.name || 'receipt'}} · ${{humanSize(file.size)}}`;
+    setProgress(null);
+
+    if (isPdf(file)) {{
+      showPanel('pdf');
+      const frame = byId('pruvs-pdf-preview');
+      if (frame) frame.src = state.objectUrl;
+      setStatus(msg('pdf_loaded'));
+      return;
+    }}
+
+    showPanel('image');
+    const image = byId('pruvs-crop-image');
+    if (!image) return;
+    image.onload = () => {{
+      destroyCropper();
+      if (typeof Cropper === 'undefined') {{
+        setStatus('Cropper.js could not be loaded. Reload the page and try again.');
+        return;
+      }}
+      state.cropper = new Cropper(image, {{
+        viewMode: 1,
+        dragMode: 'move',
+        autoCropArea: 0.94,
+        background: false,
+        responsive: true,
+        restore: true,
+        guides: true,
+        center: true,
+        highlight: false,
+        cropBoxMovable: true,
+        cropBoxResizable: true,
+        toggleDragModeOnDblclick: false,
+      }});
+    }};
+    image.src = state.objectUrl;
+    setStatus(msg('image_loaded'));
+  }};
+
+  const cropAction = action => {{
+    const c = state.cropper;
+    if (!c || state.busy) return;
+    if (action === 'left') c.rotate(-90);
+    if (action === 'right') c.rotate(90);
+    if (action === 'zin') c.zoom(0.1);
+    if (action === 'zout') c.zoom(-0.1);
+    if (action === 'reset') c.reset();
+  }};
+
+  const croppedFile = async () => {{
+    const original = state.file;
+    if (!original || !isImage(original)) return original;
+    if (!state.cropper) throw new Error(msg('crop_failed'));
+
+    const canvas = state.cropper.getCroppedCanvas({{
+      maxWidth: CONFIG.maxDimension,
+      maxHeight: CONFIG.maxDimension,
+      imageSmoothingEnabled: true,
+      imageSmoothingQuality: 'high',
+      fillColor: '#fff',
+    }});
+    if (!canvas) throw new Error(msg('crop_failed'));
+
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', CONFIG.jpegQuality));
+    if (!blob) throw new Error(msg('crop_failed'));
+    if (blob.size > CONFIG.maxBytes) throw new Error(msg('too_large'));
+
+    const sourceName = original.name || 'receipt.jpg';
+    const stem = sourceName.replace(/\\.[^.]+$/, '') || 'receipt';
+    return new File([blob], `${{stem}}-scan.jpg`, {{type: 'image/jpeg', lastModified: Date.now()}});
+  }};
+
+  const parseResponse = async response => {{
+    const text = await response.text();
+    if (!text) return {{}};
+    try {{ return JSON.parse(text); }} catch (_) {{ return {{detail: text}}; }}
+  }};
+
+  const submit = async () => {{
+    if (state.busy) return;
+    if (!state.file) {{ setStatus(msg('select_first')); return; }}
+
+    try {{
+      setBusy(true);
+      setProgress(15);
+      setStatus(msg('preparing'));
+      const prepared = await croppedFile();
+
+      setProgress(38);
+      setStatus(msg('uploading'));
+      const form = new FormData();
+      form.append('file', prepared, prepared.name || 'receipt');
+
+      const response = await fetch(CONFIG.endpoint, {{
+        method: 'POST',
+        headers: {{'X-Pruvs-Upload-Token': CONFIG.token}},
+        body: form,
+        credentials: 'same-origin',
+      }});
+
+      setProgress(72);
+      setStatus(msg('reading'));
+      const result = await parseResponse(response);
+      if (!response.ok) throw new Error(result.detail || `Upload failed (${{response.status}})`);
+      if (!result.receipt_url) throw new Error('Receipt processing returned no receipt URL.');
+
+      setProgress(100);
+      setStatus(msg('processed'));
+      if (window.Quasar && Quasar.Notify) Quasar.Notify.create({{message: msg('processed'), type: 'positive', position: 'top'}});
+      window.location.assign(result.receipt_url);
+    }} catch (error) {{
+      setProgress(null);
+      const message = (error && error.message) ? error.message : msg('network_error');
+      setStatus(message);
+      if (window.Quasar && Quasar.Notify) Quasar.Notify.create({{message, type: 'negative', position: 'top'}});
+      setBusy(false);
+    }}
+  }};
+
+  const init = () => {{
+    const input = byId('pruvs-file-input');
+    if (!input) {{ window.setTimeout(init, 100); return; }}
+    if (state.initialized) return;
+    state.initialized = true;
+    input.addEventListener('change', event => loadSelectedFile(event.target.files && event.target.files[0]));
+    window.addEventListener('beforeunload', clearObjectUrl, {{once: true}});
+  }};
+
+  window.pruvsReceiptUpload = {{ submit, cropAction }};
+  window.setTimeout(init, 0);
+}})();
+</script>
+""")
 
         with ui.element("main").classes("pruvio-page"):
             with ui.column().classes("pruvio-shell gap-4"):
@@ -102,167 +319,11 @@ window.pruvioCroppedReceipt = async () => {
                             ui.label(t("Receipt workspace", lang)).classes("text-2xl font-black tracking-tight text-slate-950")
                             ui.label(
                                 "Fotografiază sau alege bonul. Îl poți alinia și decupa înainte ca imaginea finală să fie trimisă la OCR."
-                                if lang == "ro" else
+                                if ro else
                                 "Take a photo or choose a receipt. Align and crop it first; only the final frame is sent to OCR."
                             ).classes("text-sm text-slate-500 max-w-2xl")
                         ui.icon("document_scanner").classes("text-3xl text-slate-300")
 
-                    status = ui.label("").classes("text-xs text-slate-500 mt-2")
-                    progress = ui.linear_progress(value=0).classes("w-full mt-2")
-                    progress.visible = False
-
-                    async def on_upload(event):
-                        try:
-                            data, filename, mime = await _read_upload_event(event)
-                            state.update(original=data, filename=filename, mime_type=mime)
-                            progress.visible = False
-                            if _is_image(mime, filename):
-                                pdf_panel.visible = False
-                                editor.visible = True
-                                source = _data_uri(data, mime or "image/jpeg")
-                                ui.timer(.12, lambda: ui.run_javascript(f"window.pruvioCropperLoad({json.dumps(source)})"), once=True)
-                                status.set_text("Imagine încărcată. Ajustează cadrul și trimite versiunea finală." if lang == "ro" else "Image loaded. Adjust the frame, then send the final version.")
-                            else:
-                                editor.visible = False
-                                pdf_panel.visible = True
-                                encoded = base64.b64encode(data).decode('ascii')
-                                pdf_preview.set_content(f'<iframe src="data:application/pdf;base64,{encoded}" style="width:100%;height:68vh;border:1px solid #e5e7eb;border-radius:16px;background:white"></iframe>')
-                                status.set_text("PDF încărcat. Verifică documentul și trimite-l la OCR." if lang == "ro" else "PDF loaded. Review it before sending to OCR.")
-                        except Exception as error:
-                            status.set_text(str(error))
-
-                    def on_rejected():
-                        message = (
-                            "Alege o imagine JPG, PNG, WEBP sau un PDF de maximum 10 MB."
-                            if lang == "ro" else
-                            "Choose a JPG, PNG, WEBP image or PDF up to 10 MB."
-                        )
-                        status.set_text(message)
-                        ui.notify(message, type="warning", position="top")
-
-                    with ui.element("div").classes("pruvio-upload-zone w-full mt-4"):
-                        uploader = ui.upload(
-                            label=("Fotografiază sau alege un bon" if lang == "ro" else "Take photo or choose receipt"),
-                            on_upload=on_upload, on_rejected=on_rejected,
-                            auto_upload=True, max_file_size=10 * 1024 * 1024,
-                        ).props('accept="image/jpeg,image/png,image/webp,application/pdf" color="dark" bordered flat hide-upload-btn').classes("w-full")
-                        # Keep the picker on the browser's click gesture (including
-                        # mobile browsers), rather than invoking it via a round trip.
-                        # Explicit button colors avoid white icons on the light header.
-                        picker_label = "Alege fotografie sau PDF" if lang == "ro" else "Choose photo or PDF"
-                        picker_hint = (
-                            "JPG, PNG, WEBP sau PDF · maximum 10 MB"
-                            if lang == "ro" else "JPG, PNG, WEBP or PDF · up to 10 MB"
-                        )
-                        uploader.add_slot("header", f'''
-                            <div class="column items-start gap-2 w-full">
-                              <q-btn color="dark" text-color="white" no-caps unelevated
-                                icon="upload_file" label="{picker_label}"
-                                :disable="!props.canAddFiles || props.isUploading"
-                                style="min-height:44px;border-radius:12px">
-                                <q-uploader-add-trigger />
-                              </q-btn>
-                              <span class="text-xs text-slate-500">{picker_hint}</span>
-                              <q-linear-progress v-if="props.isUploading"
-                                :value="props.uploadProgress" color="dark" class="w-full" />
-                            </div>
-                        ''')
-                    ui.label(
-                        "Nimic nu este trimis către OCR până când confirmi imaginea finală."
-                        if lang == "ro" else "Nothing is sent to OCR until you confirm the final image."
-                    ).classes("text-[11px] text-slate-400 mt-2")
-
-                    editor = ui.column().classes("w-full gap-3 mt-4")
-                    editor.visible = False
-                    with editor:
-                        with ui.element("div").classes("scan-frame w-full"):
-                            ui.html('<div class="scan-canvas"><img id="pruvio-crop-image" alt="Receipt editor"></div>', sanitize=False).classes("w-full")
-                            with ui.row().classes("scan-toolbar"):
-                                for icon, title, action in [
-                                    ("rotate_left", t("Rotate left", lang), "left"),
-                                    ("rotate_right", t("Rotate right", lang), "right"),
-                                    ("zoom_out", t("Zoom out", lang), "zout"),
-                                    ("zoom_in", t("Zoom in", lang), "zin"),
-                                    ("restart_alt", t("Reset image", lang), "reset"),
-                                ]:
-                                    ui.button(icon=icon, on_click=lambda action=action: ui.run_javascript(f"window.pruvioCropperAction('{action}')")).props(
-                                        f"flat round dense title={json.dumps(title)} aria-label={json.dumps(title)}"
-                                    ).classes("pruvio-icon-button")
-                            ui.label(
-                                "Trage colțurile pentru decupare · deplasează imaginea pentru aliniere · cadrul luminos este exact zona trimisă la OCR"
-                                if lang == "ro" else
-                                "Drag the corners to crop · move the image to align · the bright frame is exactly what will be sent to OCR"
-                            ).classes("scan-hint")
-
-                        async def send_to_ocr():
-                            if not state["original"]:
-                                return
-                            progress.visible = True
-                            progress.set_value(.25)
-                            status.set_text("Se pregătește imaginea…" if lang == "ro" else "Preparing final image…")
-                            payload = state["original"]
-                            mime = state["mime_type"] or "application/octet-stream"
-                            filename = state["filename"] or "receipt.jpg"
-                            if _is_image(mime, filename):
-                                try:
-                                    data_uri = await ui.run_javascript("return await window.pruvioCroppedReceipt();", timeout=25.0)
-                                    if data_uri and ',' in data_uri:
-                                        payload = base64.b64decode(data_uri.split(',', 1)[1])
-                                        mime = "image/jpeg"
-                                        stem = filename.rsplit('.', 1)[0]
-                                        filename = f"{stem}-scan.jpg"
-                                except Exception as error:
-                                    progress.visible = False
-                                    status.set_text(str(error))
-                                    ui.notify(str(error), type="negative")
-                                    return
-                            progress.set_value(.45)
-                            status.set_text("Se citește bonul…" if lang == "ro" else "Reading receipt…")
-                            try:
-                                db = SessionLocal()
-                                try:
-                                    result = create_standalone_receipt_case(
-                                        db=db, file_bytes=payload, original_filename=filename,
-                                        mime_type=mime, user_id=user_id,
-                                    )
-                                    case_id = result["case"].id
-                                finally:
-                                    db.close()
-                                progress.set_value(1)
-                                ui.notify("Bon procesat." if lang == "ro" else "Receipt processed.", type="positive", position="top")
-                                ui.navigate.to(f"/receipt/{case_id}")
-                            except Exception as error:
-                                progress.visible = False
-                                status.set_text(str(error))
-                                ui.notify(str(error), type="negative", position="top")
-
-                        ui.button(t("Send to OCR", lang), icon="arrow_forward", on_click=send_to_ocr).classes("pruvio-primary self-end px-5")
-
-                    pdf_panel = ui.column().classes("w-full gap-3 mt-4")
-                    pdf_panel.visible = False
-                    with pdf_panel:
-                        # Only application-generated iframe markup is assigned below.
-                        # Sanitizing it removes the iframe and leaves the preview blank.
-                        pdf_preview = ui.html("", sanitize=False).classes("w-full")
-                        async def send_pdf():
-                            progress.visible = True
-                            progress.set_value(.4)
-                            try:
-                                db = SessionLocal()
-                                try:
-                                    result = create_standalone_receipt_case(
-                                        db=db, file_bytes=state["original"], original_filename=state["filename"],
-                                        mime_type=state["mime_type"], user_id=user_id,
-                                    )
-                                    case_id = result["case"].id
-                                finally:
-                                    db.close()
-                                ui.navigate.to(f"/receipt/{case_id}")
-                            except Exception as error:
-                                progress.visible = False
-                                ui.notify(str(error), type="negative")
-                        ui.button(t("Send to OCR", lang), icon="arrow_forward", on_click=send_pdf).classes("pruvio-primary self-end px-5")
-
-
+                    ui.html(f'''\n<div class="pruvs-browser-upload-zone" style="margin-top:16px">\n  <label class="pruvs-browser-picker" for="pruvs-file-input">\n    <span class="material-icons" aria-hidden="true">upload_file</span>\n    <span>{messages["choose"]}</span>\n    <input id="pruvs-file-input" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" style="display:none">\n  </label>\n  <div class="pruvs-file-meta" id="pruvs-file-meta">{messages["hint"]}</div>\n</div>\n<div class="pruvs-browser-note">{messages["nothing_sent"]}</div>\n<div class="pruvs-browser-status" id="pruvs-browser-status"></div>\n<div class="pruvs-progress-track" id="pruvs-progress-track"><div class="pruvs-progress-bar" id="pruvs-progress-bar"></div></div>\n\n<div class="pruvs-browser-panel" id="pruvs-image-panel">\n  <div class="scan-frame">\n    <div class="scan-canvas"><img id="pruvs-crop-image" alt="Receipt editor"></div>\n    <div class="pruvs-browser-toolbar">\n      <button type="button" class="pruvs-browser-icon" data-pruvs-upload-action onclick="window.pruvsReceiptUpload.cropAction('left')" title="{t('Rotate left', lang)}"><span class="material-icons">rotate_left</span></button>\n      <button type="button" class="pruvs-browser-icon" data-pruvs-upload-action onclick="window.pruvsReceiptUpload.cropAction('right')" title="{t('Rotate right', lang)}"><span class="material-icons">rotate_right</span></button>\n      <button type="button" class="pruvs-browser-icon" data-pruvs-upload-action onclick="window.pruvsReceiptUpload.cropAction('zout')" title="{t('Zoom out', lang)}"><span class="material-icons">zoom_out</span></button>\n      <button type="button" class="pruvs-browser-icon" data-pruvs-upload-action onclick="window.pruvsReceiptUpload.cropAction('zin')" title="{t('Zoom in', lang)}"><span class="material-icons">zoom_in</span></button>\n      <button type="button" class="pruvs-browser-icon" data-pruvs-upload-action onclick="window.pruvsReceiptUpload.cropAction('reset')" title="{t('Reset image', lang)}"><span class="material-icons">restart_alt</span></button>\n    </div>\n    <div class="scan-hint">{messages["crop_hint"]}</div>\n  </div>\n  <div class="pruvs-browser-send-row">\n    <button type="button" class="pruvs-browser-send" data-pruvs-upload-action onclick="window.pruvsReceiptUpload.submit()"><span>{messages["send"]}</span><span class="material-icons">arrow_forward</span></button>\n  </div>\n</div>\n\n<div class="pruvs-browser-panel" id="pruvs-pdf-panel">\n  <iframe id="pruvs-pdf-preview" class="pruvs-pdf-frame" title="Receipt PDF preview"></iframe>\n  <div class="pruvs-browser-send-row">\n    <button type="button" class="pruvs-browser-send" data-pruvs-upload-action onclick="window.pruvsReceiptUpload.submit()"><span>{messages["send"]}</span><span class="material-icons">arrow_forward</span></button>\n  </div>\n</div>\n''', sanitize=False).classes("w-full")
 
         bottom_nav("upload", lang)

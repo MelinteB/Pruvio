@@ -87,7 +87,7 @@ def setup_page_head(title: str) -> None:
               positive='#0f766e', negative='#b91c1c', info='#0756df', warning='#b45309')
     safe_title = html.escape(title, quote=True)
     base_url = os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
-    share_image = html.escape(f"{base_url}/static/pruvs-512.png?v=6.6.0", quote=True)
+    share_image = html.escape(f"{base_url}/static/pruvs-512.png?v=6.8.0", quote=True)
     ui.add_head_html(
         f'''
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -107,11 +107,11 @@ def setup_page_head(title: str) -> None:
         <meta name="twitter:card" content="summary">
         <meta name="twitter:title" content="{safe_title}">
         <meta name="twitter:image" content="{share_image}">
-        <link rel="manifest" href="/static/manifest.webmanifest?v=6.6.0">
-        <link rel="icon" type="image/png" sizes="32x32" href="/static/pruvs-32.png?v=6.6.0">
-        <link rel="icon" type="image/png" sizes="192x192" href="/static/pruvs-192.png?v=6.6.0">
-        <link rel="shortcut icon" href="/static/pruvs-32.png?v=6.6.0">
-        <link rel="apple-touch-icon" sizes="180x180" href="/static/pruvs-180.png?v=6.6.0">
+        <link rel="manifest" href="/static/manifest.webmanifest?v=6.8.0">
+        <link rel="icon" type="image/png" sizes="32x32" href="/static/pruvs-32.png?v=6.8.0">
+        <link rel="icon" type="image/png" sizes="192x192" href="/static/pruvs-192.png?v=6.8.0">
+        <link rel="shortcut icon" href="/static/pruvs-32.png?v=6.8.0">
+        <link rel="apple-touch-icon" sizes="180x180" href="/static/pruvs-180.png?v=6.8.0">
         <script>
           (function(){{
             const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900);
@@ -119,7 +119,7 @@ def setup_page_head(title: str) -> None:
             window.addEventListener('DOMContentLoaded', () => {{ if (mobile) document.body.classList.add('pruvio-mobile'); }});
           }})();
           if ('serviceWorker' in navigator) {{
-            window.addEventListener('load', () => navigator.serviceWorker.register('/static/service-worker.js?v=6.6.0'));
+            window.addEventListener('load', () => navigator.serviceWorker.register('/static/service-worker.js?v=6.8.0'));
           }}
         </script>
         ''')
