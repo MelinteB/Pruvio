@@ -8,7 +8,7 @@ from fastapi.responses import RedirectResponse
 
 
 _PAGES = {"/", "/register", "/account", "/upload", "/history", "/support",
-          "/terms", "/privacy", "/reset-password"}
+          "/terms", "/privacy", "/reset-password", "/docs", "/redoc"}
 _PAGE_PATTERNS = (
     r"/receipt/[0-9]+",
     r"/s/[^/]+",

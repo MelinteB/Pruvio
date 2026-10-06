@@ -1,4 +1,5 @@
 import hashlib
+import html
 import json
 import urllib.parse
 
@@ -117,7 +118,7 @@ def setup_split_bill_session_widget_ui() -> None:
             if not session or session.owner_user_id != user_id or not participant or participant.id != participant_id:
                 _error_page("Owner access required", "Sign in with the account that created this bill."); return
         finally: db.close()
-        _render_split_page(token, participant_id, user_id)
+        _render_split_page(token, participant_id, user_id, None)
 
     @ui.page("/split-bill/sessions/{token}/p/{participant_token}/widget-ui")
     def split_bill_participant_page(token: str, participant_token: str):
@@ -136,7 +137,7 @@ def setup_split_bill_session_widget_ui() -> None:
                 _error_page("Account mismatch", "This participant link belongs to another Pruvs account."); return
             participant_id = participant.id
         finally: db.close()
-        _render_split_page(token, participant_id, user_id)
+        _render_split_page(token, participant_id, user_id, participant_token)
 
 
 def _render_join_page(token: str) -> None:
@@ -184,7 +185,7 @@ def _render_join_page(token: str) -> None:
                 ui.button(label, icon="arrow_forward", on_click=join).classes("pruvio-primary self-start px-5 mt-3")
 
 
-def _render_split_page(token: str, participant_id: int, user_id: int) -> None:
+def _render_split_page(token: str, participant_id: int, user_id: int, participant_token: str | None = None) -> None:
     db=SessionLocal()
     try:
         session=get_split_bill_session_by_token(db,token); summary=get_split_bill_session_summary(db,session) if session else None; user=get_logged_in_user(db)
@@ -473,16 +474,54 @@ def _render_split_page(token: str, participant_id: int, user_id: int) -> None:
                       ui.label(note).classes("text-sm text-slate-700 break-all")
                     ui.button(icon="content_copy",on_click=lambda v=note:copy_value(v,"Referință" if lang=='ro' else "Reference")).props("flat round dense")
 
-                  def start_bank_transfer():
-                    dbp=SessionLocal()
-                    try:
-                      ss=get_split_bill_session_by_token(dbp,token)
-                      record_participant_payment_status(dbp,ss,participant_id,"bank_transfer",False)
-                    finally:
-                      dbp.close()
-                    ui.notify("Detaliile sunt gata pentru transfer." if lang=='ro' else "Bank details are ready to use.",type="positive")
-                  if not is_owner:
-                    ui.button("Folosesc transfer bancar" if lang=='ro' else "Use bank transfer",icon="account_balance",on_click=start_bank_transfer).classes("pruvio-secondary self-start px-4 mt-2")
+                  if not is_owner and participant_token:
+                    bank_text_lines = []
+                    if recipient:
+                      bank_text_lines.append(("Beneficiar: " if lang=='ro' else "Recipient: ") + recipient)
+                    if iban:
+                      bank_text_lines.append("IBAN: " + iban)
+                    if bank:
+                      bank_text_lines.append(("Bancă: " if lang=='ro' else "Bank: ") + bank)
+                    if bic:
+                      bank_text_lines.append("BIC / SWIFT: " + bic)
+                    bank_text_lines.append(("Referință: " if lang=='ro' else "Reference: ") + note)
+                    bank_text_lines.append(("Sumă: " if lang=='ro' else "Amount: ") + f"{current['total']:.2f} {currency}")
+                    bank_text = "\n".join(bank_text_lines)
+                    bank_start_url = (
+                      f"/split-bill/sessions/{urllib.parse.quote(token, safe='')}/p/"
+                      f"{urllib.parse.quote(participant_token, safe='')}/payment/start?method=bank_transfer"
+                    )
+                    status_id = f"bank-copy-status-{participant_id}"
+                    status_text = (
+                      "Detaliile bancare au fost copiate. Deschide aplicația băncii și lipește-le."
+                      if lang=='ro' else
+                      "Bank details copied. Open your banking app and paste them."
+                    )
+                    bank_js = (
+                      "(async()=>{"
+                      f"const text={json.dumps(bank_text)};"
+                      f"const status=document.getElementById({json.dumps(status_id)});"
+                      "const fallbackCopy=()=>{"
+                      "const ta=document.createElement('textarea');"
+                      "ta.value=text;ta.style.position='fixed';ta.style.opacity='0';"
+                      "document.body.appendChild(ta);ta.focus();ta.select();"
+                      "document.execCommand('copy');ta.remove();};"
+                      "try{if(navigator.clipboard&&navigator.clipboard.writeText)"
+                      "await navigator.clipboard.writeText(text);else fallbackCopy();}"
+                      "catch(e){fallbackCopy();}"
+                      f"fetch({json.dumps(bank_start_url)},{{method:'POST',keepalive:true}}).catch(()=>{{}});"
+                      f"if(status)status.textContent={json.dumps(status_text)};"
+                      "})()"
+                    )
+                    ui.html(
+                      f'<button type="button" onclick="{html.escape(bank_js, quote=True)}" '
+                      'class="pruvio-secondary inline-flex items-center gap-2 px-4 py-2 mt-2 rounded-xl font-bold cursor-pointer">'
+                      '<span class="material-icons" style="font-size:20px">account_balance</span>'
+                      f'{html.escape("Folosesc transfer bancar" if lang=="ro" else "Use bank transfer")}'
+                      '</button>'
+                      f'<div id="{status_id}" class="text-xs text-emerald-700 mt-2"></div>',
+                      sanitize=False,
+                    )
 
               if rev:
                 with ui.card().classes("w-full bg-slate-50 border border-slate-200 shadow-none rounded-2xl p-4 mt-3"):
@@ -490,15 +529,27 @@ def _render_split_page(token: str, participant_id: int, user_id: int) -> None:
                     with ui.column().classes("gap-0 min-w-0"):
                       ui.label("Revolut").classes("font-black text-slate-900")
                       ui.label(rev).classes("text-xs text-slate-500 break-all")
-                    def open_revolut():
-                      dbp=SessionLocal()
-                      try:
-                        ss=get_split_bill_session_by_token(dbp,token)
-                        record_participant_payment_status(dbp,ss,participant_id,"revolut",False)
-                      finally:
-                        dbp.close()
-                      ui.run_javascript(f"window.open({json.dumps(rev)},'_blank')")
-                    ui.button("Deschide Revolut" if lang=='ro' else "Open Revolut",icon="open_in_new",on_click=open_revolut).classes("pruvio-secondary px-4")
+                    if participant_token:
+                      revolut_start_url = (
+                        f"/split-bill/sessions/{urllib.parse.quote(token, safe='')}/p/"
+                        f"{urllib.parse.quote(participant_token, safe='')}/payment/start?method=revolut"
+                      )
+                      revolut_js = (
+                        f"fetch({json.dumps(revolut_start_url)},"
+                        "{method:'POST',keepalive:true}).catch(()=>{});"
+                      )
+                      # A real HTTPS anchor preserves the iOS user gesture so the
+                      # Revolut universal link can open the app instead of being
+                      # blocked as a popup after a server callback.
+                      ui.html(
+                        f'<a href="{html.escape(rev, quote=True)}" '
+                        f'onclick="{html.escape(revolut_js, quote=True)}" '
+                        'class="pruvio-secondary inline-flex items-center gap-2 px-4 py-2 rounded-xl font-bold no-underline cursor-pointer">'
+                        '<span class="material-icons" style="font-size:20px">open_in_new</span>'
+                        f'{html.escape("Deschide Revolut" if lang=="ro" else "Open Revolut")}'
+                        '</a>',
+                        sanitize=False,
+                      )
 
               if not any([recipient, iban, bank, bic, rev]):
                 ui.label(

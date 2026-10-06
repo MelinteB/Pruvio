@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse, UserDeletionConfirmRequest
-from app.services.account_service import confirm_and_delete_account, request_account_deletion_otp
+from app.schemas.user import UserCreate, UserResponse
+from app.services.account_service import delete_user_completely, request_account_deletion_otp
 from app.services.user_service import create_user, get_user_by_phone, get_users
 
 router = APIRouter()
@@ -44,20 +44,38 @@ def add_user(user_data: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.delete("/{user_id}", dependencies=[Depends(require_admin_api_key)])
-def delete_user_by_id(user_id: int, payload: UserDeletionConfirmRequest, db: Session = Depends(get_db)):
-    """The admin key alone cannot delete an account: its email OTP is required."""
+def delete_user_by_id(user_id: int, db: Session = Depends(get_db)):
+    """
+    Permanently delete a user and the user's Pruvs data using the admin API key.
+
+    This administrative operation intentionally does not require an OTP, an
+    active account, or a verified email address. End-user account deletion from
+    the Account UI continues to require email OTP confirmation.
+    """
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
+
     try:
-        confirm_and_delete_account(db, user, "email", payload.code, challenge_id=payload.challenge_id)
-    except ValueError as error:
-        raise HTTPException(400, detail=str(error))
-    return {"deleted": True, "user_id": user_id}
+        delete_user_completely(db, user)
+    except Exception as error:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"User deletion failed: {error}")
+
+    return {
+        "deleted": True,
+        "user_id": user_id,
+        "verification_required": False,
+    }
 
 
-@router.post("/{user_id}/deletion-otp", dependencies=[Depends(require_admin_api_key)])
+@router.post(
+    "/{user_id}/deletion-otp",
+    dependencies=[Depends(require_admin_api_key)],
+    include_in_schema=False,
+)
 def request_deletion_otp(user_id: int, db: Session = Depends(get_db)):
+    """Legacy endpoint retained for compatibility; admin deletion no longer uses OTP."""
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(404, detail="User not found.")

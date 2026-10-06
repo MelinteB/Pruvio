@@ -31,6 +31,8 @@ from app.services.split_bill_session_service import (
     build_widget_url,
     build_participant_url,
     get_owner_participant,
+    get_split_bill_participant_by_token,
+    record_participant_payment_status,
     update_session_tip,
 )
 
@@ -322,6 +324,39 @@ def set_session_tip(token: str, payload: SplitBillTipRequest, db: Session = Depe
         raise HTTPException(status_code=404, detail="Split bill session not found.")
     try:
         return update_session_tip(db, session, payload.owner_user_id, payload.mode, payload.value)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+
+@router.post("/sessions/{token}/p/{participant_token}/payment/start")
+def start_participant_payment(
+    token: str,
+    participant_token: str,
+    method: str,
+    db: Session = Depends(get_db),
+):
+    """Record that a participant started a direct payment to the bill owner."""
+    session = get_split_bill_session_by_token(db=db, token=token)
+    if not session:
+        raise HTTPException(status_code=404, detail="Split bill session not found.")
+
+    participant = get_split_bill_participant_by_token(db, participant_token)
+    if not participant or participant.session_id != session.id:
+        raise HTTPException(status_code=404, detail="Participant not found.")
+
+    try:
+        record_participant_payment_status(
+            db=db,
+            session=session,
+            participant_id=participant.id,
+            method=method,
+            paid=False,
+        )
+        return {
+            "status": "initiated",
+            "method": method,
+            "participant_id": participant.id,
+        }
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
 

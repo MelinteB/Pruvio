@@ -44,6 +44,7 @@ from app.api.onboarding_otp import router as onboarding_otp_router
 from app.api.standalone import router as standalone_router
 from app.api.account import router as account_router
 from app.api.trusted_device import router as device_router
+from app.api.openai_api import router as openai_router
 
 from app.ui.home_ui import setup_home_ui
 from app.ui.account_ui import setup_account_ui
@@ -64,15 +65,18 @@ from app.web_domain import canonical_browser_redirect
 Base.metadata.create_all(bind=engine)
 ensure_compatibility_schema()
 
+API_PUBLIC_BASE_URL = os.getenv("PRUVS_API_BASE_URL", "https://pruvs.io").strip().rstrip("/") or "https://pruvs.io"
+
 app = FastAPI(
     title="Pruvs Core",
     description="""
 Pruvs is a standalone mobile-first receipt assistant.
 
 Upload a receipt, extract and validate items with OCR, translate foreign item
-names to English, and create a shareable split-bill session. The standalone application supports email-only authentication OTP and does not mount the legacy WhatsApp receipt interface. Pruvs v6.8 keeps the v6.7 Azure-to-OpenAI OCR and translation fallback and moves cropped receipt upload to browser HTTP multipart/form-data instead of transporting large base64 images through NiceGUI WebSockets. Images are cropped and compressed in the browser before upload, while PDFs are uploaded directly. It retains the v6.6 live split, account, branding, authentication, OCR and payment flows.
+names to English, and create a shareable split-bill session. The standalone application supports email-only authentication OTP and does not mount the legacy WhatsApp receipt interface. Pruvs v6.9 adds admin-key-only user deletion, documented OpenAI administration endpoints, production API documentation on pruvs.io, and mobile-safe payment actions for Revolut and bank transfer. It retains the v6.8 HTTP receipt upload flow and the Azure-to-OpenAI OCR and translation fallback.
 """,
-    version="6.8.0",
+    version="6.9.0",
+    servers=[{"url": API_PUBLIC_BASE_URL, "description": "Pruvs API"}],
 )
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -94,6 +98,7 @@ app.include_router(users_router, prefix="/users", tags=["Users"])
 app.include_router(onboarding_otp_router, prefix="/onboarding/otp", tags=["Registration OTP"])
 app.include_router(split_bill_sessions_router, prefix="/split-bill", tags=["Split Bill Sessions"])
 app.include_router(standalone_router, prefix="/app", tags=["Receipts"])
+app.include_router(openai_router, prefix="/openai", tags=["OpenAI"])
 
 # Legacy/internal endpoints remain available for compatibility but are hidden from OpenAPI docs.
 app.include_router(cases_router, prefix="/cases", tags=["Cases"], include_in_schema=False)
@@ -122,7 +127,7 @@ def health():
         "whatsapp_otp_enabled": False,
         "otp_channels": ["email"],
         "database": "connected",
-        "version": "6.8.0",
+        "version": "6.9.0",
         "passkeys_enabled": passkeys_enabled(),
         "developer_totp_enabled": totp_debug_enabled(),
     }

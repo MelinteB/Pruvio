@@ -7,14 +7,37 @@ from app.models.document import Document
 from app.models.external_ocr_request import ExternalOCRRequest
 from app.models.receipt_item import ReceiptItem
 from app.models.split_bill_item_assignment import SplitBillItemAssignment
-from app.services.azure_receipt_direct_service import build_net_receipt_items, model_to_dict
+from app.services.azure_receipt_direct_service import (
+    MONEY_TOLERANCE,
+    _validation_status,
+    apply_basket_adjustments_proportionally,
+    build_receipt_structure,
+    finalize_receipt_items,
+    model_to_dict,
+)
 from app.services.ocr_providers.openai_receipt_provider import OpenAIReceiptOCRProvider
+from app.services.receipt_translation_service import translate_receipt_item_names
+
+
+def _retag_openai_adjustment_sources(structure: dict) -> None:
+    """Keep audit metadata provider-neutral when Azure normalization is reused."""
+    for key in ("applied_adjustments", "basket_adjustments", "unresolved_adjustments"):
+        for adjustment in structure.get(key, []):
+            if adjustment.get("source") == "azure_structured":
+                adjustment["source"] = "openai_structured"
+
+    for item in structure.get("items", []):
+        for adjustment in item.get("applied_adjustments", []):
+            if adjustment.get("source") == "azure_structured":
+                adjustment["source"] = "openai_structured"
 
 
 def process_document_with_openai_receipt_direct(
     db: Session,
     document_id: int,
     reason: str = "azure_receipt_ocr_fallback",
+    *,
+    fallback_used: bool = True,
 ) -> dict:
     """Persist OpenAI receipt extraction using Pruvs' existing receipt models."""
 
@@ -69,10 +92,22 @@ def process_document_with_openai_receipt_direct(
             ReceiptItem.document_id == document.id
         ).delete(synchronize_session=False)
 
-        net_items = build_net_receipt_items(
+        # Reuse the same normalization and reconciliation path as Azure.
+        # OpenAI already receives instructions to return purchased lines only,
+        # but these helpers safely handle any explicit adjustment lines too.
+        structure = build_receipt_structure(
             raw_items=result.items,
             default_currency=result.currency or "RON",
         )
+        _retag_openai_adjustment_sources(structure)
+        apply_basket_adjustments_proportionally(structure=structure)
+        net_items = finalize_receipt_items(structure=structure)
+
+        translation = translate_receipt_item_names(
+            [net_item["name"] for net_item in net_items]
+        )
+        if translation.error:
+            print(f"Receipt translation skipped: {translation.error}")
 
         saved_items = []
         for net_item in net_items:
@@ -80,6 +115,8 @@ def process_document_with_openai_receipt_direct(
                 case_id=document.case_id,
                 document_id=document.id,
                 name=net_item["name"],
+                translated_name=translation.translated_names.get(net_item["name"]),
+                source_language=translation.source_language,
                 quantity=net_item["quantity"],
                 unit_price=net_item["unit_price"],
                 total_price=net_item["total_price"],
@@ -89,12 +126,31 @@ def process_document_with_openai_receipt_direct(
             db.add(item)
             saved_items.append(item)
 
-        receipt_total = float(result.receipt_total or 0)
+        receipt_total = round(float(result.receipt_total or 0), 2)
         items_total = round(
-            sum(float(item.total_price or 0) for item in saved_items), 2
+            sum(float(item.total_price or 0) for item in saved_items),
+            2,
         )
-        total_difference = round(abs(items_total - receipt_total), 2)
-        is_valid = total_difference <= 0.05
+        signed_difference = round(items_total - receipt_total, 2)
+        total_difference = round(abs(signed_difference), 2)
+        is_valid = total_difference <= MONEY_TOLERANCE
+        validation_status = _validation_status(
+            items_total=items_total,
+            receipt_total=receipt_total,
+            unresolved_adjustments=structure["unresolved_adjustments"],
+        )
+
+        warnings = []
+        if not is_valid:
+            warnings.append(
+                "OpenAI OCR total does not match the sum of resolved items. "
+                "Pruvs did not invent a missing discount or charge."
+            )
+        if structure["unresolved_adjustments"]:
+            warnings.append(
+                f"{len(structure['unresolved_adjustments'])} adjustment(s) "
+                "could not be associated safely."
+            )
 
         document.document_type = "receipt"
         document.ocr_text = "\n".join(
@@ -102,9 +158,27 @@ def process_document_with_openai_receipt_direct(
             for item in saved_items
         )
 
+        audit_payload = {
+            "provider_result": result_dict,
+            "openai_usage": provider.last_usage,
+            "adjustments": {
+                "applied": structure["applied_adjustments"],
+                "basket": structure["basket_adjustments"],
+                "unresolved": structure["unresolved_adjustments"],
+            },
+            "validation": {
+                "receipt_total": receipt_total,
+                "items_total": items_total,
+                "signed_difference": signed_difference,
+                "status": validation_status,
+            },
+        }
+
         external_request.provider_status = "completed"
         external_request.external_result_json = json.dumps(
-            result_dict, ensure_ascii=False
+            audit_payload,
+            ensure_ascii=False,
+            default=str,
         )
         external_request.error_message = None
         db.commit()
@@ -112,9 +186,7 @@ def process_document_with_openai_receipt_direct(
         for item in saved_items:
             db.refresh(item)
 
-        duration_ms = int(
-            (datetime.utcnow() - started_at).total_seconds() * 1000
-        )
+        duration_ms = int((datetime.utcnow() - started_at).total_seconds() * 1000)
 
         return {
             "document_id": document.id,
@@ -128,21 +200,28 @@ def process_document_with_openai_receipt_direct(
             "items_count": len(saved_items),
             "receipt_total": receipt_total,
             "items_total": items_total,
+            "signed_difference": signed_difference,
             "total_difference": total_difference,
             "is_valid": is_valid,
+            "validation_status": validation_status,
             "currency": result.currency or "RON",
             "provider_confidence": result.provider_confidence,
-            "fallback_used": True,
+            "fallback_used": bool(fallback_used),
             "openai_usage": provider.last_usage,
-            "warnings": [] if is_valid else [
-                "OpenAI OCR total does not match the sum of extracted items."
-            ],
+            "warnings": warnings,
+            "adjustments": {
+                "applied": structure["applied_adjustments"],
+                "basket": structure["basket_adjustments"],
+                "unresolved": structure["unresolved_adjustments"],
+            },
             "items": [
                 {
                     "id": item.id,
                     "case_id": item.case_id,
                     "document_id": item.document_id,
                     "name": item.name,
+                    "translated_name": item.translated_name,
+                    "source_language": item.source_language,
                     "quantity": item.quantity,
                     "unit_price": item.unit_price,
                     "total_price": item.total_price,
@@ -158,6 +237,4 @@ def process_document_with_openai_receipt_direct(
         external_request.provider_status = "failed"
         external_request.error_message = str(error)
         db.commit()
-        raise ValueError(
-            f"OpenAI Receipt OCR fallback failed: {error}"
-        ) from error
+        raise ValueError(f"OpenAI Receipt OCR fallback failed: {error}") from error
