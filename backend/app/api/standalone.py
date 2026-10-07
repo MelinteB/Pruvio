@@ -59,7 +59,7 @@ async def upload_receipt(
     except Exception as error:
         raise HTTPException(status_code=500, detail=f"Receipt processing failed: {error}")
 
-@router.post("/receipts/browser-upload")
+@router.post("/receipts/browser-upload", include_in_schema=False)
 async def browser_upload_receipt(
     file: UploadFile = File(...),
     x_pruvs_upload_token: str | None = Header(

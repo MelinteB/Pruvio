@@ -1,0 +1,966 @@
+{
+  "info": {
+    "_postman_id": "a6b8c7d2-6100-4c10-9a10-pruvs6100000",
+    "name": "Pruvs API v6.10",
+    "description": "Clean public/admin API collection for Pruvs v6.10. Production base URL defaults to https://pruvs.io. Admin operations use X-Pruvs-Admin-Key.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://pruvs.io"
+    },
+    {
+      "key": "adminKey",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": "1"
+    },
+    {
+      "key": "caseId",
+      "value": "1"
+    },
+    {
+      "key": "documentId",
+      "value": "1"
+    },
+    {
+      "key": "sessionToken",
+      "value": ""
+    },
+    {
+      "key": "participantToken",
+      "value": ""
+    },
+    {
+      "key": "participantId",
+      "value": "1"
+    },
+    {
+      "key": "ownerUserId",
+      "value": "1"
+    },
+    {
+      "key": "challengeId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Password login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/password/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "password",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"user@example.com\",\n  \"password\": \"example-password\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Request password reset",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/password-reset/request",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "password-reset",
+                "request"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Confirm password reset",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/password-reset/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "password-reset",
+                "confirm"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"code\": \"123456\",\n  \"challenge_id\": \"{{challengeId}}\",\n  \"new_password\": \"new-password-123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Username availability",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/username/available?username=ana.popescu",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "username",
+                "available"
+              ],
+              "query": [
+                {
+                  "key": "username",
+                  "value": "ana.popescu",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Registration",
+      "item": [
+        {
+          "name": "Start registration",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/onboarding/otp/start",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "onboarding",
+                "otp",
+                "start"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone_number\": \"+40722123456\",\n  \"username\": \"ana.popescu\",\n  \"display_name\": \"Ana Popescu\",\n  \"email\": \"ana@example.com\",\n  \"accepted_terms\": true,\n  \"accepted_privacy\": true,\n  \"password\": \"example-password\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/onboarding/otp/verify-email",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "onboarding",
+                "otp",
+                "verify-email"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"ana@example.com\",\n  \"code\": \"123456\",\n  \"challenge_id\": \"{{challengeId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Registration status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/onboarding/otp/status?identifier=ana@example.com",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "onboarding",
+                "otp",
+                "status"
+              ],
+              "query": [
+                {
+                  "key": "identifier",
+                  "value": "ana@example.com",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Receipts",
+      "item": [
+        {
+          "name": "List receipts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/app/receipts?limit=8",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "app",
+                "receipts"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "8",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get receipt",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/app/receipts/{{caseId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "app",
+                "receipts",
+                "{{caseId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upload receipt",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/app/receipts/upload",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "app",
+                "receipts",
+                "upload"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Split Bill",
+      "item": [
+        {
+          "name": "Create session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/split-bill/cases/{{caseId}}/sessions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "split-bill",
+                "cases",
+                "{{caseId}}",
+                "sessions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"owner_user_id\": 1,\n  \"expected_participants_count\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get session",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/split-bill/sessions/{{sessionToken}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "split-bill",
+                "sessions",
+                "{{sessionToken}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Join session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/split-bill/sessions/{{sessionToken}}/join",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "split-bill",
+                "sessions",
+                "{{sessionToken}}",
+                "join"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"display_name\": \"Participant\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Save selection",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/split-bill/sessions/{{sessionToken}}/selection",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "split-bill",
+                "sessions",
+                "{{sessionToken}}",
+                "selection"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"participant_id\": 1,\n  \"selected_quantities\": {\n    \"1\": 1\n  },\n  \"selected_item_ids\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Set tip",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/split-bill/sessions/{{sessionToken}}/tip",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "split-bill",
+                "sessions",
+                "{{sessionToken}}",
+                "tip"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"owner_user_id\": 1,\n  \"mode\": \"percent\",\n  \"value\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Start participant payment",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/split-bill/sessions/{{sessionToken}}/p/{{participantToken}}/payment/start?method=revolut",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "split-bill",
+                "sessions",
+                "{{sessionToken}}",
+                "p",
+                "{{participantToken}}",
+                "payment",
+                "start"
+              ],
+              "query": [
+                {
+                  "key": "method",
+                  "value": "revolut",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Close session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/split-bill/sessions/{{sessionToken}}/close",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "split-bill",
+                "sessions",
+                "{{sessionToken}}",
+                "close"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"owner_user_id\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reopen session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/split-bill/sessions/{{sessionToken}}/reopen",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "split-bill",
+                "sessions",
+                "{{sessionToken}}",
+                "reopen"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"owner_user_id\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Session QR",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/split-bill/sessions/{{sessionToken}}/qr",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "split-bill",
+                "sessions",
+                "{{sessionToken}}",
+                "qr"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin - Users",
+      "auth": {
+        "type": "noauth"
+      },
+      "item": [
+        {
+          "name": "List users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Pruvs-Admin-Key",
+                "value": "{{adminKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/?limit=100&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "active",
+                  "disabled": true
+                },
+                {
+                  "key": "email_verified",
+                  "value": "true",
+                  "disabled": true
+                },
+                {
+                  "key": "q",
+                  "value": "ana",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "disabled": false
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User statistics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Pruvs-Admin-Key",
+                "value": "{{adminKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "stats"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get user",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Pruvs-Admin-Key",
+                "value": "{{adminKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Pruvs-Admin-Key",
+                "value": "{{adminKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"ana.popescu\",\n  \"phone_number\": \"+40722123456\",\n  \"name\": \"Ana Popescu\",\n  \"email\": \"ana@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Edit user",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Pruvs-Admin-Key",
+                "value": "{{adminKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ana Popescu\",\n  \"email\": \"ana@example.com\",\n  \"status\": \"active\",\n  \"is_email_verified\": true,\n  \"preferred_language\": \"ro\",\n  \"notifications_opt_in\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete user",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Pruvs-Admin-Key",
+                "value": "{{adminKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin - OpenAI",
+      "item": [
+        {
+          "name": "OpenAI status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Pruvs-Admin-Key",
+                "value": "{{adminKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/openai/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "openai",
+                "status"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Process receipt with OpenAI",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Pruvs-Admin-Key",
+                "value": "{{adminKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/openai/receipts/{{documentId}}/process",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "openai",
+                "receipts",
+                "{{documentId}}",
+                "process"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Translate item names with OpenAI",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Pruvs-Admin-Key",
+                "value": "{{adminKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/openai/translate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "openai",
+                "translate"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"item_names\": [\n    \"PAINE ALBA\",\n    \"LAPTE\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

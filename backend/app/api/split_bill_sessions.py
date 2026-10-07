@@ -40,7 +40,7 @@ from app.services.split_bill_session_service import (
 router = APIRouter()
 
 
-@router.get("/s/{token}")
+@router.get("/s/{token}", include_in_schema=False)
 def short_split_bill_link(token: str):
     return RedirectResponse(
         url=f"/split-bill/sessions/{token}/join",

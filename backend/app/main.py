@@ -67,16 +67,28 @@ ensure_compatibility_schema()
 
 API_PUBLIC_BASE_URL = os.getenv("PRUVS_API_BASE_URL", "https://pruvs.io").strip().rstrip("/") or "https://pruvs.io"
 
+OPENAPI_TAGS = [
+    {"name": "System", "description": "Service health and runtime status."},
+    {"name": "Authentication", "description": "Login, password reset and username availability."},
+    {"name": "Registration", "description": "Email OTP onboarding and registration status."},
+    {"name": "Receipts", "description": "Receipt listing, details and upload processing."},
+    {"name": "Split Bill", "description": "Create, join, update and settle split-bill sessions."},
+    {"name": "Admin - Users", "description": "Admin-key protected user management."},
+    {"name": "Admin - OpenAI", "description": "Admin-key protected OpenAI diagnostics and direct processing."},
+]
+
+
 app = FastAPI(
     title="Pruvs Core",
     description="""
 Pruvs is a standalone mobile-first receipt assistant.
 
 Upload a receipt, extract and validate items with OCR, translate foreign item
-names to English, and create a shareable split-bill session. The standalone application supports email-only authentication OTP and does not mount the legacy WhatsApp receipt interface. Pruvs v6.9 adds admin-key-only user deletion, documented OpenAI administration endpoints, production API documentation on pruvs.io, and mobile-safe payment actions for Revolut and bank transfer. It retains the v6.8 HTTP receipt upload flow and the Azure-to-OpenAI OCR and translation fallback.
+names to English, and create a shareable split-bill session. The standalone application supports email-only authentication OTP and does not mount the legacy WhatsApp receipt interface. Pruvs v6.10 cleans the public API collection and expands admin user management. Administrators can list, search, inspect, create, edit and delete users with the admin API key, without OTP or verified-email requirements for administrative changes. OpenAI administration endpoints, pruvs.io API documentation, mobile-safe payments, HTTP receipt upload and Azure-to-OpenAI OCR/translation fallback remain available.
 """,
-    version="6.9.0",
+    version="6.10.0",
     servers=[{"url": API_PUBLIC_BASE_URL, "description": "Pruvs API"}],
+    openapi_tags=OPENAPI_TAGS,
 )
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -94,11 +106,11 @@ async def canonical_domain(request: Request, call_next):
 # Public/current API surface shown in /docs.
 app.include_router(account_router, prefix="/auth", tags=["Authentication"])
 app.include_router(device_router, prefix="/auth")
-app.include_router(users_router, prefix="/users", tags=["Users"])
-app.include_router(onboarding_otp_router, prefix="/onboarding/otp", tags=["Registration OTP"])
-app.include_router(split_bill_sessions_router, prefix="/split-bill", tags=["Split Bill Sessions"])
+app.include_router(users_router, prefix="/users", tags=["Admin - Users"])
+app.include_router(onboarding_otp_router, prefix="/onboarding/otp", tags=["Registration"])
+app.include_router(split_bill_sessions_router, prefix="/split-bill", tags=["Split Bill"])
 app.include_router(standalone_router, prefix="/app", tags=["Receipts"])
-app.include_router(openai_router, prefix="/openai", tags=["OpenAI"])
+app.include_router(openai_router, prefix="/openai", tags=["Admin - OpenAI"])
 
 # Legacy/internal endpoints remain available for compatibility but are hidden from OpenAPI docs.
 app.include_router(cases_router, prefix="/cases", tags=["Cases"], include_in_schema=False)
@@ -117,7 +129,7 @@ def _enabled(name: str, default: str = "false") -> bool:
 # Legacy WhatsApp modules remain in the repository for reference only.
 
 
-@app.get("/health")
+@app.get("/health", tags=["System"], summary="Health check")
 def health():
     return {
         "status": "ok",
@@ -127,7 +139,7 @@ def health():
         "whatsapp_otp_enabled": False,
         "otp_channels": ["email"],
         "database": "connected",
-        "version": "6.9.0",
+        "version": "6.10.0",
         "passkeys_enabled": passkeys_enabled(),
         "developer_totp_enabled": totp_debug_enabled(),
     }
@@ -142,7 +154,7 @@ def debug_database():
     }
 
 
-@app.get("/s/{token}")
+@app.get("/s/{token}", include_in_schema=False)
 def short_split_bill_link(token: str):
     return RedirectResponse(
         url=f"/split-bill/sessions/{token}/join",
