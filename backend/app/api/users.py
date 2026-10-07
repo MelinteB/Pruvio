@@ -185,6 +185,10 @@ def add_user(user_data: UserCreate, db: Session = Depends(get_db)):
     response_model=UserAdminResponse,
     dependencies=[Depends(require_admin_api_key)],
     summary="Edit user",
+    responses={
+        404: {"description": "User not found"},
+        409: {"description": "Username, email, phone number, or another unique value conflicts with another user"},
+    },
 )
 def edit_user(
     user_id: int,

@@ -87,6 +87,34 @@ class AdminUserUpdateTests(unittest.TestCase):
         self.assertEqual(user.phone_number, "+40722123456")
         self.assertFalse(user.is_phone_verified)
 
+    def test_unchanged_username_does_not_trigger_uniqueness_lookup(self):
+        user = self._user()
+        db = self._db_without_conflicts()
+        payload = UserAdminUpdate(username="old.user", name="Renamed User")
+
+        update_user_admin(db, user, payload)
+
+        self.assertEqual(user.username, "old.user")
+        self.assertEqual(user.name, "Renamed User")
+        db.query.assert_not_called()
+
+    def test_unchanged_email_and_phone_do_not_trigger_conflict_lookup(self):
+        user = self._user()
+        db = self._db_without_conflicts()
+        payload = UserAdminUpdate(
+            email="old@example.com",
+            phone_number="+40700000000",
+            name="Renamed User",
+        )
+
+        update_user_admin(db, user, payload)
+
+        self.assertEqual(user.email, "old@example.com")
+        self.assertEqual(user.phone_number, "+40700000000")
+        self.assertTrue(user.is_email_verified)
+        self.assertTrue(user.is_phone_verified)
+        db.query.assert_not_called()
+
     def test_sensitive_fields_are_not_accepted_by_admin_patch_schema(self):
         with self.assertRaises(ValidationError):
             UserAdminUpdate(password_hash="should-never-be-editable")

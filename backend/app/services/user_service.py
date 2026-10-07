@@ -8,7 +8,7 @@ from app.models.user import User
 from app.schemas.user import UserAdminUpdate, UserCreate
 from app.services.onboarding_otp_service import normalize_email, normalize_phone_number
 from app.services.username_service import check_username_available
-from app.usernames import username_key
+from app.usernames import normalize_username, username_key
 
 
 def get_users(db: Session):
@@ -61,38 +61,59 @@ def update_user_admin(db: Session, user: User, payload: UserAdminUpdate) -> User
         value = data["username"]
         if value is None:
             raise ValueError("Username cannot be cleared.")
-        user.username = check_username_available(db, value, exclude_user_id=user.id)
-        user.username_key = username_key(user.username)
+
+        normalized_username = normalize_username(value)
+        requested_key = username_key(normalized_username)
+        current_key = (
+            user.username_key
+            or username_key(user.username)
+        )
+
+        # PATCH must be idempotent: sending the user's existing username
+        # must not trigger a uniqueness conflict.
+        if requested_key != current_key:
+            normalized_username = check_username_available(
+                db,
+                normalized_username,
+                exclude_user_id=user.id,
+            )
+
+        user.username = normalized_username
+        user.username_key = requested_key
 
     if "phone_number" in data:
         value = data["phone_number"]
         if value is None:
             raise ValueError("Phone number cannot be cleared.")
         normalized_phone = normalize_phone_number(value)
-        existing = (
-            db.query(User.id)
-            .filter(User.phone_number == normalized_phone, User.id != user.id)
-            .first()
-        )
-        if existing:
-            raise ValueError("Phone number is already in use.")
+
         if normalized_phone != user.phone_number:
+            existing = (
+                db.query(User.id)
+                .filter(User.phone_number == normalized_phone, User.id != user.id)
+                .first()
+            )
+            if existing:
+                raise ValueError("Phone number is already in use.")
+
             user.phone_number = normalized_phone
             if "is_phone_verified" not in explicit_fields:
                 user.is_phone_verified = False
 
     if "email" in data:
         normalized_email = normalize_email(data["email"])
-        if normalized_email:
-            existing = (
-                db.query(User.id)
-                .filter(func.lower(User.email) == normalized_email, User.id != user.id)
-                .first()
-            )
-            if existing:
-                raise ValueError("Email address is already in use.")
         current_email = (user.email or "").strip().lower() or None
+
         if normalized_email != current_email:
+            if normalized_email:
+                existing = (
+                    db.query(User.id)
+                    .filter(func.lower(User.email) == normalized_email, User.id != user.id)
+                    .first()
+                )
+                if existing:
+                    raise ValueError("Email address is already in use.")
+
             user.email = normalized_email
             if "is_email_verified" not in explicit_fields:
                 user.is_email_verified = False
