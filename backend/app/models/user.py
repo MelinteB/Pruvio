@@ -24,6 +24,8 @@ class User(Base):
     payment_bic: Mapped[str | None] = mapped_column(String(32), nullable=True)
     payment_note: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+
     status: Mapped[str] = mapped_column(String(50), default="pending_join")
     accepted_terms: Mapped[bool] = mapped_column(Boolean, default=False)
     accepted_terms_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

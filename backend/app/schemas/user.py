@@ -14,6 +14,11 @@ class UserCreate(BaseModel):
     email: EmailStr | None = None
 
 
+class UserAdminCreate(UserCreate):
+    model_config = ConfigDict(extra="forbid")
+    is_admin: bool = False
+
+
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -34,6 +39,7 @@ class UserResponse(BaseModel):
 class UserAdminResponse(UserResponse):
     """Administrative user view. Secrets such as password hashes are never exposed."""
 
+    is_admin: bool = False
     accepted_terms_at: datetime | None = None
     terms_version: str | None = None
     accepted_privacy_at: datetime | None = None
@@ -60,6 +66,7 @@ class UserAdminUpdate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    is_admin: bool | None = None
     username: str | None = Field(default=None, min_length=3, max_length=80)
     phone_number: str | None = Field(default=None, min_length=5, max_length=50)
     name: str | None = Field(default=None, max_length=255)

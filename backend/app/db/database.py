@@ -44,6 +44,7 @@ def ensure_compatibility_schema() -> None:
     if "users" in table_names:
         cols = {c["name"] for c in inspector.get_columns("users")}
         wanted = {
+            "is_admin": "BOOLEAN NOT NULL DEFAULT FALSE",
             "username": "VARCHAR(80)",
             "username_key": "VARCHAR(255)",
             "email": "VARCHAR(255)",

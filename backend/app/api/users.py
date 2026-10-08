@@ -11,7 +11,7 @@ from app.models.user import User
 from app.schemas.user import (
     UserAdminResponse,
     UserAdminUpdate,
-    UserCreate,
+    UserAdminCreate,
     UserStatus,
 )
 from app.services.account_service import delete_user_completely, request_account_deletion_otp
@@ -69,6 +69,7 @@ def require_admin_api_key(
 def list_users(
     status: UserStatus | None = Query(default=None),
     email_verified: bool | None = Query(default=None),
+    is_admin: bool | None = Query(default=None),
     q: str | None = Query(default=None, max_length=100, description="Search username, name, email or phone."),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
@@ -77,6 +78,8 @@ def list_users(
     """Admin-only user list with optional filtering and pagination."""
     query = db.query(User)
 
+    if is_admin is not None:
+        query = query.filter(User.is_admin.is_(is_admin))
     if status is not None:
         query = query.filter(User.status == status)
     if email_verified is not None:
@@ -119,6 +122,7 @@ def user_stats(db: Session = Depends(get_db)):
     )
     return {
         "total": total,
+        "administrators": db.query(func.count(User.id)).filter(User.is_admin.is_(True)).scalar() or 0,
         "active": active,
         "pending_join": pending,
         "blocked": blocked,
@@ -147,7 +151,7 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
     dependencies=[Depends(require_admin_api_key)],
     summary="Create user",
 )
-def add_user(user_data: UserCreate, db: Session = Depends(get_db)):
+def add_user(user_data: UserAdminCreate, db: Session = Depends(get_db)):
     try:
         normalized_phone = normalize_phone_number(user_data.phone_number)
         normalized_email = normalize_email(str(user_data.email)) if user_data.email else None
@@ -168,6 +172,8 @@ def add_user(user_data: UserCreate, db: Session = Depends(get_db)):
         normalized_data = user_data.model_copy(
             update={"phone_number": normalized_phone, "email": normalized_email}
         )
+        from app.services.admin_dashboard_service import add_audit
+        add_audit(db, None, "api_key", "create", "users", None, ["is_admin"] if user_data.is_admin else [])
         user = create_user(db, normalized_data)
         if normalized_email:
             user.email = normalized_email
@@ -208,6 +214,8 @@ def edit_user(
         raise HTTPException(status_code=404, detail="User not found.")
 
     try:
+        from app.services.admin_dashboard_service import add_audit
+        add_audit(db, None, "api_key", "update", "users", user_id, sorted(payload.model_fields_set))
         return update_user_admin(db, user, payload)
     except ValueError as error:
         raise HTTPException(status_code=409, detail=str(error))
@@ -231,6 +239,8 @@ def delete_user_by_id(user_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="User not found.")
 
     try:
+        from app.services.admin_dashboard_service import add_audit
+        add_audit(db, None, "api_key", "delete", "users", user_id)
         delete_user_completely(db, user)
     except Exception as error:
         db.rollback()

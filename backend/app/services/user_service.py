@@ -34,6 +34,7 @@ def create_user(db: Session, user_data: UserCreate):
         phone_number=user_data.phone_number,
         name=user_data.name,
         status="pending_join",
+        is_admin=bool(getattr(user_data, "is_admin", False)),
         accepted_terms=False,
         last_seen_at=datetime.utcnow(),
     )
@@ -56,6 +57,11 @@ def update_user_admin(db: Session, user: User, payload: UserAdminUpdate) -> User
 
     if not data:
         return user
+
+    if "is_admin" in data:
+        if data["is_admin"] is None:
+            raise ValueError("Administrator role cannot be null.")
+        user.is_admin = data["is_admin"]
 
     if "username" in data:
         value = data["username"]
