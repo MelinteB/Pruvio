@@ -86,8 +86,8 @@ def setup_page_head(title: str) -> None:
     ui.colors(primary='#0756df', secondary='#0a1435', accent='#1598ff',
               positive='#0f766e', negative='#b91c1c', info='#0756df', warning='#b45309')
     safe_title = html.escape(title, quote=True)
-    base_url = os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
-    share_image = html.escape(f"{base_url}/static/pruvs-512.png?v=6.11.1", quote=True)
+    base_url = os.getenv("PUBLIC_BASE_URL", "https://pruvs.io").rstrip("/")
+    share_image = html.escape(f"{base_url}/static/pruvs-social-1200x630.png?v=20261009", quote=True)
     ui.add_head_html(
         f'''
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -102,16 +102,19 @@ def setup_page_head(title: str) -> None:
         <meta property="og:description" content="Scan receipts and split bills with Pruvs.">
         <meta property="og:type" content="website">
         <meta property="og:image" content="{share_image}">
-        <meta property="og:image:width" content="512">
-        <meta property="og:image:height" content="512">
-        <meta name="twitter:card" content="summary">
+        <meta property="og:image:type" content="image/png">
+        <meta property="og:image:alt" content="Pruvs receipt and bill splitting app">
+        <meta property="og:image:width" content="1200">
+        <meta property="og:image:height" content="630">
+        <meta name="twitter:card" content="summary_large_image">
         <meta name="twitter:title" content="{safe_title}">
         <meta name="twitter:image" content="{share_image}">
-        <link rel="manifest" href="/static/manifest.webmanifest?v=6.11.1">
-        <link rel="icon" type="image/png" sizes="32x32" href="/static/pruvs-32.png?v=6.11.1">
-        <link rel="icon" type="image/png" sizes="192x192" href="/static/pruvs-192.png?v=6.11.1">
-        <link rel="shortcut icon" href="/static/pruvs-32.png?v=6.11.1">
-        <link rel="apple-touch-icon" sizes="180x180" href="/static/pruvs-180.png?v=6.11.1">
+        <link rel="manifest" href="/static/manifest.webmanifest?v=20261009">
+        <link rel="icon" type="image/x-icon" href="/static/favicon.ico?v=20261009">
+        <link rel="icon" type="image/png" sizes="48x48" href="/static/pruvs-brand-48.png?v=20261009">
+        <link rel="icon" type="image/png" sizes="192x192" href="/static/pruvs-brand-192.png?v=20261009">
+        <link rel="shortcut icon" href="/static/favicon.ico?v=20261009">
+        <link rel="apple-touch-icon" sizes="180x180" href="/static/pruvs-brand-180.png?v=20261009">
         <script>
           (function(){{
             const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900);
