@@ -38,7 +38,7 @@ body { margin: 0; }
 .pruvio-login-shell { width: min(1040px, 100%); margin: 0 auto; }
 .pruvio-login-card { width: min(430px, 100%); }
 .pruvio-bottom-nav { position: fixed; left: 50%; transform: translateX(-50%); bottom: 12px; width: min(560px, calc(100% - 24px)); z-index: 1200; background: rgba(255,255,255,.95); border: 1px solid #e5e7eb; border-radius: 18px; box-shadow: 0 14px 34px rgba(15,23,42,.12); backdrop-filter: blur(18px); padding: 5px; }
-.pruvio-bottom-button { min-width: 58px; color: #6b7280 !important; border-radius: 12px !important; }
+.pruvio-bottom-button { min-width: 46px; color: #6b7280 !important; border-radius: 12px !important; }
 .pruvio-bottom-active { color: var(--pruvio-accent) !important; background: #eaf2ff !important; }
 .legal-copy p { margin-bottom: 10px; line-height: 1.62; color: #4b5563; }
 .pruvio-logo-mark { width: 42px; height: 42px; display: block; object-fit: contain; }
@@ -122,7 +122,7 @@ def setup_page_head(title: str) -> None:
             window.addEventListener('DOMContentLoaded', () => {{ if (mobile) document.body.classList.add('pruvio-mobile'); }});
           }})();
           if ('serviceWorker' in navigator) {{
-            window.addEventListener('load', () => navigator.serviceWorker.register('/service-worker.js?v=6.12.0', {{scope: '/'}}).then(async () => {{
+            window.addEventListener('load', () => navigator.serviceWorker.register('/service-worker.js?v=6.12.2', {{scope: '/'}}).then(async () => {{
               for (const reg of await navigator.serviceWorker.getRegistrations()) {{
                 if (new URL(reg.scope).pathname === '/static/') await reg.unregister();
               }}
@@ -149,7 +149,7 @@ def app_header(subtitle: str = "Receipt assistant", *, show_account: bool = True
                 brand_logo()
                 ui.label(t(subtitle, lang)).classes("text-[10px] text-slate-500 uppercase tracking-[.12em] pl-4")
         if show_account and get_logged_in_user_id() is not None:
-            ui.button(icon="notifications", on_click=lambda: ui.navigate.to("/notifications")).props("flat round dense aria-label=Notifications").classes("text-slate-500")
+            pass  # PRUVS_6122_NOTIFICATIONS: settings moved to Account, Inbox in navigation
             ui.button(icon="account_circle", on_click=lambda: ui.navigate.to("/account")).props(
                 "flat round dense aria-label='Account'"
             ).classes("text-slate-500")
@@ -163,6 +163,7 @@ def bottom_nav(active: str = "home", language: str | None = None) -> None:
         ("home", "home", "Home", "/"),
         ("upload", "document_scanner", "Scan", "/upload"),
         ("history", "receipt_long", "History", "/history"),
+        ("inbox", "inbox", "Inbox", "/inbox"),  # PRUVS_6122_NOTIFICATIONS
         ("account", "person", "Account", "/account"),
     ]
     from app.services.admin_dashboard_service import current_admin_id

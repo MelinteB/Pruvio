@@ -90,7 +90,7 @@ window.PruvsPush = (() => {
       await refresh(); status('Push notifications are unavailable in this browser. Use email fallback or a supported browser over HTTPS.'); return;
     }
     try {
-      registration = await navigator.serviceWorker.register('/service-worker.js?v=6.12.0', {scope:'/'});
+      registration = await navigator.serviceWorker.register('/service-worker.js?v=6.12.2', {scope:'/'});
       await navigator.serviceWorker.ready;
       if (localGet('pruvs-push-account') !== config.account) {
         const old = await registration.pushManager.getSubscription(); if (old) await old.unsubscribe();

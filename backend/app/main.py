@@ -194,6 +194,10 @@ setup_receipt_ui()
 setup_split_bill_widget_ui()  # legacy single-case view kept for compatibility
 setup_split_bill_session_widget_ui()
 
+# PRUVS_6122_NOTIFICATIONS: durable per-account Inbox.
+from app.extensions.notifications_inbox import setup_notifications_inbox
+setup_notifications_inbox()
+
 ui.run_with(
     app,
     reconnect_timeout=60.0,

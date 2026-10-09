@@ -119,6 +119,12 @@ def register_device(db, grant, subscription, label):
     row.label = label[:120]
     row.active = True
     row.updated_at = datetime.utcnow()
+    # PRUVS_6122_DEVICE_OPT_IN: enabling browser push is explicit user consent.
+    # This allows a user who initially unchecked signup consent to opt in later.
+    user = db.get(User, grant.user_id)
+    if user is None or user.status != 'active':
+        raise ValueError('Sign in with an active account.')
+    user.notifications_opt_in = True
     db.commit()
     return row
 

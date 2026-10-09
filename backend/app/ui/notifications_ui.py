@@ -59,7 +59,7 @@ def setup_notifications_ui():
                 ui.button('Continue to Pruvs', on_click=lambda: ui.navigate.to(target)).classes('pruvio-primary')
                 ui.label('You can skip device setup and use email fallback. Change these choices here at any time.').classes('text-sm text-slate-500')
         bottom_nav('account')
-        ui.add_head_html('<script src="/static/pruvs-push.js?v=6.12.0"></script>')
+        ui.add_head_html('<script src="/static/pruvs-push.js?v=6.12.2"></script>')
         async def initialise():
             await ui.run_javascript('return window.PruvsPush.init(' + json.dumps({'token': token, 'account': str(uid)}) + ')', timeout=20)
         ui.timer(0.2, initialise, once=True)

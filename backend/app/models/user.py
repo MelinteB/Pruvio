@@ -39,7 +39,7 @@ class User(Base):
     is_email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
 
     marketing_opt_in: Mapped[bool] = mapped_column(Boolean, default=False)
-    notifications_opt_in: Mapped[bool] = mapped_column(Boolean, default=True)
+    notifications_opt_in: Mapped[bool] = mapped_column(Boolean, default=False)
     preferred_language: Mapped[str] = mapped_column(String(12), default="en")
 
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

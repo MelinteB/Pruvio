@@ -149,6 +149,18 @@ def setup_register_ui() -> None:
                             terms_check.disable()
                             privacy_check.disable()
                             marketing = ui.checkbox(t("Send me occasional Pruvs product news (optional)", lang))
+                            # PRUVS_6122_SIGNUP_NOTIFICATIONS: optional, explicitly unchecked.
+                            notification_opt_in = ui.checkbox(
+                                "Vreau notificări Pruvs pentru bonuri, facturi și mementouri (opțional)"
+                                if lang == "ro" else
+                                "Send me Pruvs notifications for receipts, bills, and payment reminders (optional)",
+                                value=False,
+                            )
+                            ui.label(
+                                "După verificarea emailului, notificările pe dispozitiv se activează separat din Cont."
+                                if lang == "ro" else
+                                "After email verification, enable alerts on this device in Account → Notification settings."
+                            ).classes("text-xs text-slate-500")
 
                         status = ui.label("").classes("text-xs text-red-600")
 
@@ -201,6 +213,12 @@ def setup_register_ui() -> None:
                                     password=password.value or "",
                                     username=None,
                                 )
+                                # Save user-level preference before the email OTP step.
+                                # This does not grant browser device permissions.
+                                registered_user = result["user"]
+                                registered_user.notifications_opt_in = bool(notification_opt_in.value)
+                                db.add(registered_user)
+                                db.commit()
                                 state["user_id"] = result["user"].id
                                 state["email"] = result["user"].email
                                 state["challenge_id"] = result["challenge_id"]
@@ -261,7 +279,8 @@ def setup_register_ui() -> None:
                     for key, element in (("first_name", first_name), ("last_name", last_name),
                                          ("email", email), ("phone", phone),
                                          ("terms", terms_check), ("privacy", privacy_check),
-                                         ("marketing", marketing)):
+                                         ("marketing", marketing),
+                                         ("notification_opt_in", notification_opt_in)):
                         recovery.field(key, element)
                     def restore_form():
                         if terms_check.value: mark_terms()

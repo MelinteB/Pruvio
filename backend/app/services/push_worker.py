@@ -117,9 +117,16 @@ def deliver(db, event):
             continue
         delivery.attempts += 1
         db.commit()
-        # No bill content or user identity is exposed on a shared lock screen.
-        payload = {'title': 'Pruvs', 'body': 'You have an update in Pruvs. Tap to view.',
-                   'tag': event.id, 'url': f'/notifications/open/{event.id}'}
+        # PRUVS_6122_NOTIFICATIONS: specific messages; private mode is available.
+        # The browser user may disable previews at OS level as well.
+        private_preview = os.getenv('PRUVS_PUSH_PREVIEW_MODE', 'details').strip().lower() == 'private'
+        payload = {
+            'title': 'Pruvs' if private_preview else (event.title or 'Pruvs notification')[:120],
+            'body': ('You have a new notification. Open Pruvs to view.' if private_preview
+                     else (event.body or 'Open Pruvs to see the details.')[:240]),
+            'tag': event.id,
+            'url': f'/notifications/open/{event.id}',
+        }
         if event.kind == 'test':
             payload.update(title=event.title, body=event.body,
                            url=f'/notifications#confirm={event.confirmation}')
@@ -132,6 +139,7 @@ def deliver(db, event):
             delivery.status = 'accepted'; delivery.error_code = None
         else:
             delivery.error_code = f'http_{code}' if code else 'transport_error'
+            log.warning('Push delivery failed for event=%s device=%s status=%s', event.id, device.id, delivery.error_code)
             permanent = code in (400, 401, 403, 404, 410, 413) or 300 <= code < 400
             if code in (404, 410):
                 device.active = False

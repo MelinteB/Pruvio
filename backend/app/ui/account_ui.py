@@ -444,4 +444,9 @@ def setup_account_ui() -> None:
 
                 ui.button(t("Sign out", lang), icon="logout", on_click=sign_out).classes("pruvio-secondary")
         recovery.start()
+        # PRUVS_6122_ACCOUNT_NOTIFICATIONS
+        with ui.card().classes('pruvio-card w-full p-4'):
+            ui.label('Device notifications').classes('font-bold text-lg')
+            ui.label('Choose which notifications you receive and manage this device.').classes('text-sm text-slate-600')
+            ui.button('Notification settings', icon='notifications_active', on_click=lambda: ui.navigate.to('/notifications')).props('outline no-caps')
         bottom_nav("account", lang)
