@@ -186,6 +186,7 @@ def get_receipt_view(
     db: Session,
     case_id: int,
     user_id: int | None = None,
+    *, ensure_translations: bool = True,
 ) -> dict[str, Any] | None:
     case = db.query(Case).filter(Case.id == case_id).first()
     if not case:
@@ -200,7 +201,8 @@ def get_receipt_view(
         .all()
     )
 
-    ensure_receipt_translations(db, items)
+    if ensure_translations:
+        ensure_receipt_translations(db, items)
 
     document = _latest_document_for_case(db, case_id)
     ocr_request = _latest_ocr_for_case(db, case_id)

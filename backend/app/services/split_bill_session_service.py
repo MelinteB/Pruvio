@@ -575,9 +575,10 @@ def _tip_settings(session: SplitBillSession) -> tuple[str, float]:
     return mode, max(0.0, float(session.tip_value or 0))
 
 
-def get_split_bill_session_summary(db: Session, session: SplitBillSession) -> dict:
+def get_split_bill_session_summary(db: Session, session: SplitBillSession, *, ensure_translations: bool = True) -> dict:
     items = get_session_items(db, session)
-    _ensure_item_translations(db, items)
+    if ensure_translations:
+        _ensure_item_translations(db, items)
     assignments = get_session_assignments(db, session)
     participants = get_joined_participants(db, session)
 

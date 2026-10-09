@@ -83,6 +83,9 @@ def setup_admin_dashboard_ui():
                 with ui.row().classes('w-full items-center justify-between'):
                     ui.label(f'{labels[entity]} · #{record_id}').classes('text-2xl font-bold')
                     ui.button(icon='close', on_click=dialog.close).props('flat round aria-label=Close')
+                if entity == 'users':
+                    from app.ui.admin_user_bills_ui import open_user_bills
+                    ui.button('View user bills', icon='receipt_long', on_click=lambda: open_user_bills(record_id, run, actor_id, dialogs)).props('no-caps')
                 ui.label('Edit the available fields, then review and save. Grey fields are managed by the application.').classes('text-sm text-slate-500')
                 with ui.scroll_area().classes('w-full').style('height:55vh'):
                     with ui.column().classes('w-full gap-4 pr-3'):

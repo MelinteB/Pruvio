@@ -152,3 +152,43 @@ def test_existing_database_role_migration_is_idempotent(monkeypatch):
     with engine.connect() as connection:
         assert connection.execute(text('SELECT is_admin FROM users WHERE id=99')).scalar()==0
     engine.dispose()
+
+
+def test_user_bills_include_unsplit_owned_and_participating_without_mutations(db, monkeypatch):
+    from app.models.case import Case
+    from app.models.document import Document
+    from app.models.receipt_item import ReceiptItem
+    from app.models.split_bill_session import SplitBillSession
+    from app.models.split_bill_participant import SplitBillParticipant
+    from app.models.split_bill_item_assignment import SplitBillItemAssignment
+    from app.services import standalone_app_service as receipts
+    from app.services import split_bill_session_service as splits
+    def unexpected(*args,**kwargs):
+        raise AssertionError('Inspection must not trigger translation or commit')
+    monkeypatch.setattr(receipts,'ensure_receipt_translations',unexpected)
+    monkeypatch.setattr(splits,'_ensure_item_translations',unexpected)
+    db.add_all([Case(id=1,user_id=2,status='ocr_failed'),Case(id=2,user_id=1,status='processed'),Case(id=3,user_id=1,status='created')]);db.flush()
+    db.add(Document(id=1,case_id=2,stored_filename='receipt.jpg',original_filename='Receipt.jpg',path='/test/receipt.jpg',ocr_text='Coffee 20'));db.flush()
+    db.add(ReceiptItem(id=1,case_id=2,document_id=1,name='Coffee',quantity=2,total_price=20,currency='RON'));db.flush()
+    db.add(SplitBillSession(id=1,case_id=2,owner_user_id=1,token='SECRET_SHARE_TOKEN',status='settled',tip_mode='percent',tip_value=10));db.flush()
+    db.add(SplitBillParticipant(id=1,session_id=1,user_id=2,display_name='Member',participant_token='SECRET_PARTICIPANT_TOKEN',status='joined',payment_status='paid',payment_method='bank_transfer'));db.flush()
+    db.add(SplitBillItemAssignment(session_id=1,participant_id=1,receipt_item_id=1,quantity=2,amount=20));db.commit()
+    monkeypatch.setattr(db,'commit',unexpected)
+    total,rows=svc.list_user_bills(db,1,2)
+    assert total==2
+    assert len({r['case_id'] for r in rows})==2
+    own=next(r for r in rows if r['case_id']==1)
+    assert own['split_status']=='Not split' and own['receipt_status']=='ocr_failed'
+    joined=next(r for r in rows if r['case_id']==2)
+    assert joined['role']=='Participant' and 'settled' in joined['split_status'] and 'paid' in joined['payment_status']
+    details=svc.user_bill_details(db,1,2,2)
+    assert details['splits'][0]['participants'][0]['total']==22
+    assert details['splits'][0]['items'][0]['assignments'][0]['assigned_to']=='Member'
+    assert details['documents'][0]['ocr_text']=='Coffee 20'
+    import json
+    assert 'SECRET_' not in json.dumps(details)
+    with pytest.raises(ValueError):svc.user_bill_details(db,1,2,3)
+    with pytest.raises(PermissionError):svc.user_bill_details(db,2,2,2)
+    with pytest.raises(PermissionError):svc.list_user_bills(db,2,2)
+    assert svc.list_user_bills(db,1,2,offset=1,limit=1)[0]==2
+    assert len(svc.list_user_bills(db,1,2,offset=1,limit=1)[1])==1

@@ -250,3 +250,75 @@ def export_csv(db, actor_id, entity, **filters):
     add_audit(db, actor_id, "dashboard", "export", entity, None)
     db.commit()
     return output.getvalue().encode("utf-8-sig")
+
+
+def user_bill_query(db, user_id):
+    case = model_for('cases')
+    session = model_for('split_bill_sessions')
+    participant = model_for('split_bill_participants')
+    participant_sessions = db.query(participant.session_id).filter(participant.user_id == user_id)
+    linked_cases = db.query(session.case_id).filter(or_(session.owner_user_id == user_id, session.id.in_(participant_sessions)))
+    return db.query(case).filter(or_(case.user_id == user_id, case.id.in_(linked_cases)))
+
+
+def list_user_bills(db, actor_id, user_id, offset=0, limit=20):
+    """One row per saved receipt case; include failed/empty receipts and participation."""
+    require_admin(db, actor_id)
+    if not db.get(User, user_id):
+        raise ValueError('User no longer exists.')
+    from app.services.standalone_app_service import get_receipt_view
+    query = user_bill_query(db, user_id)
+    case_model = model_for('cases')
+    session_model = model_for('split_bill_sessions')
+    participant_model = model_for('split_bill_participants')
+    rows = []
+    for case in query.order_by(case_model.created_at.desc(), case_model.id.desc()).offset(max(0,offset)).limit(min(100,max(1,limit))):
+        receipt = get_receipt_view(db, case.id, ensure_translations=False)
+        sessions = db.query(session_model).filter(session_model.case_id == case.id).order_by(session_model.id).all()
+        mine = db.query(participant_model).filter(participant_model.user_id == user_id, participant_model.session_id.in_([s.id for s in sessions])).all() if sessions else []
+        roles = []
+        if case.user_id == user_id:
+            roles.append('Receipt owner')
+        if any(s.owner_user_id == user_id for s in sessions):
+            roles.append('Bill owner')
+        elif mine:
+            roles.append('Participant')
+        rows.append({
+            'case_id':case.id, 'merchant':receipt['merchant_name'], 'role':', '.join(roles),
+            'receipt_status':case.status, 'split_status':', '.join(f"#{s.id}: {s.status}" for s in sessions) or 'Not split',
+            'payment_status':', '.join(f"#{p.session_id}: {p.payment_status or 'unpaid'}" for p in mine) or '—',
+            'total':receipt['receipt_total'], 'currency':receipt['currency'],
+            'created_at':case.created_at.isoformat() if case.created_at else None,
+        })
+    return query.count(), rows
+
+
+def user_bill_details(db, actor_id, user_id, case_id):
+    require_admin(db, actor_id)
+    case = user_bill_query(db,user_id).filter(model_for('cases').id == case_id).first()
+    if case is None:
+        raise ValueError('This bill is not linked to the selected user.')
+    from app.services.standalone_app_service import get_receipt_view
+    from app.services.split_bill_session_service import get_split_bill_session_summary
+    session_model = model_for('split_bill_sessions')
+    splits = []
+    for session in db.query(session_model).filter(session_model.case_id == case_id).order_by(session_model.id):
+        summary = get_split_bill_session_summary(db, session, ensure_translations=False)
+        for key in ('token','share_url','qr_url'):
+            summary.pop(key,None)
+        summary['record'] = serialize(session)
+        # Include invited/left/non-joined participants as well as the calculated joined summaries.
+        participant_model = model_for('split_bill_participants')
+        summary['all_participant_records'] = [serialize(p) for p in db.query(participant_model).filter(participant_model.session_id == session.id).order_by(participant_model.id)]
+        names = {p['id']:p['display_name'] for p in summary['all_participant_records']}
+        for item in summary['items']:
+            for assignment in item['assignments']:
+                assignment['assigned_to'] = names.get(assignment['participant_id'], assignment['assigned_to'])
+        assignment_model = model_for('split_bill_item_assignments')
+        summary['assignment_records'] = [serialize(a) for a in db.query(assignment_model).filter(assignment_model.session_id == session.id).order_by(assignment_model.id)]
+        splits.append(summary)
+    result = {'case':serialize(case), 'receipt':get_receipt_view(db,case_id,ensure_translations=False), 'splits':splits}
+    for entity in ('receipt_items','documents','external_ocr_requests','external_ocr_usage','receipt_corrections','messages','reminders'):
+        model = model_for(entity)
+        result[entity] = [serialize(r) for r in db.query(model).filter(model.case_id == case_id).order_by(model.id)]
+    return result

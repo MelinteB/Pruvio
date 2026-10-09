@@ -29,6 +29,8 @@ async def main():
             db.add(User(id=1,username='admin',username_key='admin',phone_number='+40700000001',status='active',is_admin=True))
             db.add(User(id=2,username='member',username_key='member',phone_number='+40700000002',status='active'))
             db.commit()
+            from app.models.case import Case
+            db.add(Case(id=1,user_id=2,status='created'));db.commit()
         with patch.object(dashboard,'SessionLocal',session),patch.object(svc,'SessionLocal',session):
             async with user_simulation() as user:
                 @ui.page('/test-login/{uid}')
@@ -49,6 +51,19 @@ async def main():
                 listener = next(x for x in table._event_listeners.values() if x.type == 'inspect')
                 table._handle_event({'listener_id':listener.id, 'args':2})
                 await user.should_see('Users · #2')
+                user.find(kind=ui.button,content='View user bills').click()
+                await user.should_see('Bills for user #2')
+                bills_table=next(x for x in user.find(ui.table).elements if x.props.get('row-key')=='case_id')
+                bills_listener=next(x for x in bills_table._event_listeners.values() if x.type=='billdetails')
+                bills_table._handle_event({'listener_id':bills_listener.id,'args':1})
+                await user.should_see('Receipt #1')
+                await user.should_see('Not split — this receipt has no split-bill session.')
+                user.find(kind=ui.button,content='Close details').click()
+                # Close only the history dialog; keep the user editor open.
+                history_close=next(x for x in user.find(ui.button).elements if x.props.get('label')=='Close' and x.props.get('icon')=='close')
+                from nicegui.events import ClickEventArguments,handle_event
+                listener=next(x for x in history_close._event_listeners.values() if x.type=='click')
+                history_close._handle_event({'listener_id':listener.id,'args':[]})
                 next(x for x in user.find(ui.input).elements if x.props['label'] == 'Name').set_value('Admin edited name')
                 user.find(kind=ui.button,content='Review changes').click()
                 await user.should_see('Save changes')

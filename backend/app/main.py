@@ -88,7 +88,7 @@ Pruvs is a standalone mobile-first receipt assistant.
 Upload a receipt, extract and validate items with OCR, translate foreign item
 names to English, and create a shareable split-bill session. The standalone application supports email-only authentication OTP and does not mount the legacy WhatsApp receipt interface. Pruvs v6.11 adds a login-protected administration dashboard at /admin. Admin roles are managed exclusively by the admin-key users API. Administrators can list, search, inspect, create, edit and delete users with the admin API key, without OTP or verified-email requirements for administrative changes. OpenAI administration endpoints, pruvs.io API documentation, mobile-safe payments, HTTP receipt upload and Azure-to-OpenAI OCR/translation fallback remain available.
 """,
-    version="6.11.0",
+    version="6.11.1",
     servers=[{"url": API_PUBLIC_BASE_URL, "description": "Pruvs API"}],
     openapi_tags=OPENAPI_TAGS,
 )
@@ -144,7 +144,7 @@ def health():
         "whatsapp_otp_enabled": False,
         "otp_channels": ["email"],
         "database": "connected",
-        "version": "6.11.0",
+        "version": "6.11.1",
         "passkeys_enabled": passkeys_enabled(),
         "developer_totp_enabled": totp_debug_enabled(),
     }
