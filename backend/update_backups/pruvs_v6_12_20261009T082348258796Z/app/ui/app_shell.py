@@ -119,11 +119,7 @@ def setup_page_head(title: str) -> None:
             window.addEventListener('DOMContentLoaded', () => {{ if (mobile) document.body.classList.add('pruvio-mobile'); }});
           }})();
           if ('serviceWorker' in navigator) {{
-            window.addEventListener('load', () => navigator.serviceWorker.register('/service-worker.js?v=6.12.0', {{scope: '/'}}).then(async () => {{
-              for (const reg of await navigator.serviceWorker.getRegistrations()) {{
-                if (new URL(reg.scope).pathname === '/static/') await reg.unregister();
-              }}
-            }}).catch(() => undefined));
+            window.addEventListener('load', () => navigator.serviceWorker.register('/static/service-worker.js?v=6.11.1'));
           }}
         </script>
         ''')
@@ -146,7 +142,6 @@ def app_header(subtitle: str = "Receipt assistant", *, show_account: bool = True
                 brand_logo()
                 ui.label(t(subtitle, lang)).classes("text-[10px] text-slate-500 uppercase tracking-[.12em] pl-4")
         if show_account and get_logged_in_user_id() is not None:
-            ui.button(icon="notifications", on_click=lambda: ui.navigate.to("/notifications")).props("flat round dense aria-label=Notifications").classes("text-slate-500")
             ui.button(icon="account_circle", on_click=lambda: ui.navigate.to("/account")).props(
                 "flat round dense aria-label='Account'"
             ).classes("text-slate-500")

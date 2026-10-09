@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Pruvio">
-<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#111827"/><stop offset="1" stop-color="#020617"/></linearGradient></defs>
-<rect x="5" y="5" width="54" height="54" rx="18" fill="url(#g)"/>
-<path d="M20 45V20h14.2c8.7 0 14.3 4.4 14.3 11.4 0 7.1-5.6 11.6-14.3 11.6H28v2H20zm8-9.3h6.2c4.1 0 6.4-1.6 6.4-4.3 0-2.6-2.3-4.2-6.4-4.2H28v8.5z" fill="#fff"/>
-<path d="M37 42.2l4.1 4.1L50 36.8" fill="none" stroke="#34d399" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>

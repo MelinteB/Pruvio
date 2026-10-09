@@ -18,7 +18,6 @@ from app.models.split_bill_session import SplitBillSession
 from app.models.split_bill_participant import SplitBillParticipant
 from app.models.split_bill_item_assignment import SplitBillItemAssignment
 from app.models.admin_audit import AdminAudit
-from app.models.push_notification import PushGrant, PushDevice, PushPreference, PushEvent, PushDelivery
 from app.models.user import User
 from app.models.passkey_credential import PasskeyCredential
 from app.models.case import Case
@@ -48,9 +47,6 @@ from app.api.account import router as account_router
 from app.api.trusted_device import router as device_router
 from app.api.openai_api import router as openai_router
 
-from app.api.push_notifications import router as push_router
-from app.ui.notifications_ui import setup_notifications_ui
-from app.services.push_worker import install_worker
 from app.ui.admin_dashboard_ui import setup_admin_dashboard_ui
 from app.ui.home_ui import setup_home_ui
 from app.ui.account_ui import setup_account_ui
@@ -92,7 +88,7 @@ Pruvs is a standalone mobile-first receipt assistant.
 Upload a receipt, extract and validate items with OCR, translate foreign item
 names to English, and create a shareable split-bill session. The standalone application supports email-only authentication OTP and does not mount the legacy WhatsApp receipt interface. Pruvs v6.11 adds a login-protected administration dashboard at /admin. Admin roles are managed exclusively by the admin-key users API. Administrators can list, search, inspect, create, edit and delete users with the admin API key, without OTP or verified-email requirements for administrative changes. OpenAI administration endpoints, pruvs.io API documentation, mobile-safe payments, HTTP receipt upload and Azure-to-OpenAI OCR/translation fallback remain available.
 """,
-    version="6.12.0",
+    version="6.11.1",
     servers=[{"url": API_PUBLIC_BASE_URL, "description": "Pruvs API"}],
     openapi_tags=OPENAPI_TAGS,
 )
@@ -113,15 +109,6 @@ async def canonical_domain(request: Request, call_next):
     return response
 
 # Public/current API surface shown in /docs.
-app.include_router(push_router)
-install_worker(app)
-
-@app.get("/service-worker.js", include_in_schema=False)
-def root_service_worker():
-    from fastapi.responses import FileResponse
-    return FileResponse(STATIC_DIR / "service-worker.js", media_type="application/javascript",
-                        headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"})
-
 app.include_router(account_router, prefix="/auth", tags=["Authentication"])
 app.include_router(device_router, prefix="/auth")
 app.include_router(users_router, prefix="/users", tags=["Admin - Users"])
@@ -157,7 +144,7 @@ def health():
         "whatsapp_otp_enabled": False,
         "otp_channels": ["email"],
         "database": "connected",
-        "version": "6.12.0",
+        "version": "6.11.1",
         "passkeys_enabled": passkeys_enabled(),
         "developer_totp_enabled": totp_debug_enabled(),
     }
@@ -180,7 +167,6 @@ def short_split_bill_link(token: str):
     )
 
 
-setup_notifications_ui()
 setup_admin_dashboard_ui()
 setup_home_ui()
 setup_register_ui()

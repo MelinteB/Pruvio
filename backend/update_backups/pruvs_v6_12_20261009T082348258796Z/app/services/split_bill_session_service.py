@@ -838,8 +838,6 @@ def close_split_bill_session(
     session.status = "settled"
     session.settled_at = datetime.utcnow()
     session.closed_at = session.settled_at
-    from app.services.push_service import bill_event
-    bill_event(db, session, "bill_settled", "Bill settled", "Your split bill has been settled. Open Pruvs for details.")
     db.commit()
     db.refresh(session)
     return {
@@ -875,8 +873,6 @@ def reopen_split_bill_session(
         participant.payment_method = None
         participant.paid_at = None
 
-    from app.services.push_service import bill_event
-    bill_event(db, session, "bill_reopened", "Bill reopened", "The owner reopened your split bill. Review your selection in Pruvs.")
     db.commit()
     db.refresh(session)
     return get_split_bill_session_summary(db, session)
@@ -965,13 +961,8 @@ def send_participant_reminder(
     participant = get_split_bill_participant_by_id(db, participant_id)
     if not participant or participant.session_id != session.id:
         raise ValueError("Participant not found.")
-    if participant.reminder_at and datetime.utcnow() - participant.reminder_at < timedelta(seconds=60):
-        raise ValueError("Wait one minute before sending another reminder to this participant.")
     participant.reminder_message = (message or "").strip()[:500] or "Please complete your Pruvs split bill."
     participant.reminder_at = datetime.utcnow()
-    if participant.user_id:
-        from app.services.push_service import enqueue
-        enqueue(db, participant.user_id, "reminder", "Payment reminder", participant.reminder_message, f"/split-bill/sessions/{session.token}/join")
     db.commit()
     db.refresh(participant)
     return {"participant_id": participant.id, "reminder_at": participant.reminder_at.isoformat()}

@@ -6,16 +6,17 @@ backend/.pvenv/
 backend/*.db
 backend/__pycache__/
 
+# Environment variables
+.env
+*.env
 
 # Python
 **/__pycache__/
 __pycache__/
 *.pyc
+*.py[cod]
+*.zip
 .DS_Store
-
-# Environment variables
-.env
-*.env
 
 # Databases
 *.db

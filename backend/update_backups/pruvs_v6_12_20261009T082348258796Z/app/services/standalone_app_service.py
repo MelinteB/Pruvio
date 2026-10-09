@@ -93,8 +93,6 @@ def create_standalone_receipt_case(
         )
 
         case.status = "needs_confirmation" if ocr_result.get("is_valid") else "needs_review"
-        from app.services.push_service import enqueue
-        enqueue(db, owner.id, "receipt_ready", "Receipt processed", "Your receipt is ready to review in Pruvs.", f"/receipt/{case.id}")
         db.commit()
         db.refresh(case)
 
@@ -105,10 +103,7 @@ def create_standalone_receipt_case(
         }
 
     except Exception:
-        db.rollback()
         case.status = "processing_failed"
-        from app.services.push_service import enqueue
-        enqueue(db, owner.id, "receipt_failed", "Receipt processing failed", "Open Pruvs to review the receipt or upload it again.", f"/receipt/{case.id}")
         db.commit()
         raise
 

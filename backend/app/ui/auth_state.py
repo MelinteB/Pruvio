@@ -34,13 +34,19 @@ def set_ui_language(language: str) -> None:
 
 
 def login_user(user: User) -> str:
+    from app.services.push_service import revoke_grant
+    revoke_grant(nicegui_app.storage.user.pop("push_grant", None))
     nicegui_app.storage.user[USER_ID_KEY] = user.id
     set_ui_language(user.preferred_language or "en")
     target = nicegui_app.storage.user.pop(POST_LOGIN_PATH_KEY, None)
-    return str(target or "/")
+    nicegui_app.storage.user["push_next"] = str(target or "/")
+    return "/notifications"
 
 
 def logout_user() -> None:
+    from app.services.push_service import revoke_grant
+    revoke_grant(nicegui_app.storage.user.get("push_grant"))
+    ui.run_javascript("navigator.serviceWorker?.getRegistration('/').then(async r => { if (r) { for (const n of await r.getNotifications()) n.close(); } }).catch(() => {});")
     language = get_ui_language()
     nicegui_app.storage.user.clear()
     nicegui_app.storage.user[UI_LANGUAGE_KEY] = language

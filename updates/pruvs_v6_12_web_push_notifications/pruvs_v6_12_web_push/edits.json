@@ -1,0 +1,92 @@
+[
+  {
+    "path": "app/main.py",
+    "old": "from app.models.user import User",
+    "new": "from app.models.push_notification import PushGrant, PushDevice, PushPreference, PushEvent, PushDelivery\nfrom app.models.user import User"
+  },
+  {
+    "path": "app/main.py",
+    "old": "from app.ui.admin_dashboard_ui import setup_admin_dashboard_ui",
+    "new": "from app.api.push_notifications import router as push_router\nfrom app.ui.notifications_ui import setup_notifications_ui\nfrom app.services.push_worker import install_worker\nfrom app.ui.admin_dashboard_ui import setup_admin_dashboard_ui"
+  },
+  {
+    "path": "app/main.py",
+    "old": "app.include_router(account_router,",
+    "new": "app.include_router(push_router)\ninstall_worker(app)\n\n@app.get(\"/service-worker.js\", include_in_schema=False)\ndef root_service_worker():\n    from fastapi.responses import FileResponse\n    return FileResponse(STATIC_DIR / \"service-worker.js\", media_type=\"application/javascript\",\n                        headers={\"Cache-Control\": \"no-cache\", \"Service-Worker-Allowed\": \"/\"})\n\napp.include_router(account_router,"
+  },
+  {
+    "path": "app/main.py",
+    "old": "setup_admin_dashboard_ui()",
+    "new": "setup_notifications_ui()\nsetup_admin_dashboard_ui()"
+  },
+  {
+    "path": "app/main.py",
+    "old": "    version=\"6.11.1\",",
+    "new": "    version=\"6.12.0\","
+  },
+  {
+    "path": "app/main.py",
+    "old": "        \"version\": \"6.11.1\",",
+    "new": "        \"version\": \"6.12.0\","
+  },
+  {
+    "path": "app/ui/app_shell.py",
+    "old": "window.addEventListener('load', () => navigator.serviceWorker.register('/static/service-worker.js?v=6.11.1'));",
+    "new": "window.addEventListener('load', () => navigator.serviceWorker.register('/service-worker.js?v=6.12.0', {{scope: '/'}}).then(async () => {{\n              for (const reg of await navigator.serviceWorker.getRegistrations()) {{\n                if (new URL(reg.scope).pathname === '/static/') await reg.unregister();\n              }}\n            }}).catch(() => undefined));"
+  },
+  {
+    "path": "app/ui/app_shell.py",
+    "old": "        if show_account and get_logged_in_user_id() is not None:\n",
+    "new": "        if show_account and get_logged_in_user_id() is not None:\n            ui.button(icon=\"notifications\", on_click=lambda: ui.navigate.to(\"/notifications\")).props(\"flat round dense aria-label=Notifications\").classes(\"text-slate-500\")\n"
+  },
+  {
+    "path": "app/ui/auth_state.py",
+    "old": "    nicegui_app.storage.user[USER_ID_KEY] = user.id",
+    "new": "    from app.services.push_service import revoke_grant\n    revoke_grant(nicegui_app.storage.user.pop(\"push_grant\", None))\n    nicegui_app.storage.user[USER_ID_KEY] = user.id"
+  },
+  {
+    "path": "app/ui/auth_state.py",
+    "old": "    return str(target or \"/\")",
+    "new": "    nicegui_app.storage.user[\"push_next\"] = str(target or \"/\")\n    return \"/notifications\""
+  },
+  {
+    "path": "app/ui/auth_state.py",
+    "old": "def logout_user() -> None:\n    language",
+    "new": "def logout_user() -> None:\n    from app.services.push_service import revoke_grant\n    revoke_grant(nicegui_app.storage.user.get(\"push_grant\"))\n    ui.run_javascript(\"navigator.serviceWorker?.getRegistration('/').then(async r => { if (r) { for (const n of await r.getNotifications()) n.close(); } }).catch(() => {});\")\n    language"
+  },
+  {
+    "path": "app/services/standalone_app_service.py",
+    "old": "        case.status = \"needs_confirmation\" if ocr_result.get(\"is_valid\") else \"needs_review\"\n        db.commit()",
+    "new": "        case.status = \"needs_confirmation\" if ocr_result.get(\"is_valid\") else \"needs_review\"\n        from app.services.push_service import enqueue\n        enqueue(db, owner.id, \"receipt_ready\", \"Receipt processed\", \"Your receipt is ready to review in Pruvs.\", f\"/receipt/{case.id}\")\n        db.commit()"
+  },
+  {
+    "path": "app/services/standalone_app_service.py",
+    "old": "        case.status = \"processing_failed\"\n        db.commit()",
+    "new": "        db.rollback()\n        case.status = \"processing_failed\"\n        from app.services.push_service import enqueue\n        enqueue(db, owner.id, \"receipt_failed\", \"Receipt processing failed\", \"Open Pruvs to review the receipt or upload it again.\", f\"/receipt/{case.id}\")\n        db.commit()"
+  },
+  {
+    "path": "app/services/split_bill_session_service.py",
+    "old": "    session.closed_at = session.settled_at\n    db.commit()",
+    "new": "    session.closed_at = session.settled_at\n    from app.services.push_service import bill_event\n    bill_event(db, session, \"bill_settled\", \"Bill settled\", \"Your split bill has been settled. Open Pruvs for details.\")\n    db.commit()"
+  },
+  {
+    "path": "app/services/split_bill_session_service.py",
+    "old": "        participant.paid_at = None\n\n    db.commit()",
+    "new": "        participant.paid_at = None\n\n    from app.services.push_service import bill_event\n    bill_event(db, session, \"bill_reopened\", \"Bill reopened\", \"The owner reopened your split bill. Review your selection in Pruvs.\")\n    db.commit()"
+  },
+  {
+    "path": "app/services/split_bill_session_service.py",
+    "old": "    participant.reminder_message = (message or \"\").strip()[:500]",
+    "new": "    if participant.reminder_at and datetime.utcnow() - participant.reminder_at < timedelta(seconds=60):\n        raise ValueError(\"Wait one minute before sending another reminder to this participant.\")\n    participant.reminder_message = (message or \"\").strip()[:500]"
+  },
+  {
+    "path": "app/services/split_bill_session_service.py",
+    "old": "    participant.reminder_at = datetime.utcnow()\n    db.commit()",
+    "new": "    participant.reminder_at = datetime.utcnow()\n    if participant.user_id:\n        from app.services.push_service import enqueue\n        enqueue(db, participant.user_id, \"reminder\", \"Payment reminder\", participant.reminder_message, f\"/split-bill/sessions/{session.token}/join\")\n    db.commit()"
+  },
+  {
+    "path": "app/static/service-worker.js",
+    "old": "const CACHE = 'pruvs-shell-v6.11.1';",
+    "new": "const CACHE = 'pruvs-shell-v6.12.0';\n\n// v6.12: device notifications also work when no Pruvs page is open.\nself.addEventListener('push', event => {\n  event.waitUntil((async () => {\n    let data = {};\n    try { data = event.data ? event.data.json() : {}; } catch (_) {}\n    let url = '/notifications';\n    try {\n      const candidate = new URL(data.url || url, self.location.origin);\n      if (candidate.origin === self.location.origin && candidate.pathname.startsWith('/notifications')) url = candidate.href;\n    } catch (_) {}\n    await self.registration.showNotification(data.title || 'Pruvs', {\n      body: data.body || 'You have an update in Pruvs.',\n      icon: '/static/pruvs-192.png', badge: '/static/pruvs-192.png',\n      tag: data.tag || 'pruvs-update', data: {url}\n    });\n  })());\n});\nself.addEventListener('notificationclick', event => {\n  event.notification.close();\n  event.waitUntil((async () => {\n    let url = new URL(event.notification.data?.url || '/notifications', self.location.origin);\n    if (url.origin !== self.location.origin || !url.pathname.startsWith('/notifications')) url = new URL('/notifications', self.location.origin);\n    const windows = await self.clients.matchAll({type:'window', includeUncontrolled:true});\n    for (const client of windows) {\n      if (new URL(client.url).origin === self.location.origin) {\n        await client.navigate(url.href); await client.focus(); return;\n      }\n    }\n    await self.clients.openWindow(url.href);\n  })());\n});\n"
+  }
+]

@@ -1,4 +1,37 @@
-const CACHE = 'pruvs-shell-v6.11.1';
+const CACHE = 'pruvs-shell-v6.12.0';
+
+// v6.12: device notifications also work when no Pruvs page is open.
+self.addEventListener('push', event => {
+  event.waitUntil((async () => {
+    let data = {};
+    try { data = event.data ? event.data.json() : {}; } catch (_) {}
+    let url = '/notifications';
+    try {
+      const candidate = new URL(data.url || url, self.location.origin);
+      if (candidate.origin === self.location.origin && candidate.pathname.startsWith('/notifications')) url = candidate.href;
+    } catch (_) {}
+    await self.registration.showNotification(data.title || 'Pruvs', {
+      body: data.body || 'You have an update in Pruvs.',
+      icon: '/static/pruvs-192.png', badge: '/static/pruvs-192.png',
+      tag: data.tag || 'pruvs-update', data: {url}
+    });
+  })());
+});
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil((async () => {
+    let url = new URL(event.notification.data?.url || '/notifications', self.location.origin);
+    if (url.origin !== self.location.origin || !url.pathname.startsWith('/notifications')) url = new URL('/notifications', self.location.origin);
+    const windows = await self.clients.matchAll({type:'window', includeUncontrolled:true});
+    for (const client of windows) {
+      if (new URL(client.url).origin === self.location.origin) {
+        await client.navigate(url.href); await client.focus(); return;
+      }
+    }
+    await self.clients.openWindow(url.href);
+  })());
+});
+
 const STATIC = [
   '/static/manifest.webmanifest?v=6.11.1',
   '/static/pruvs-logo.png',

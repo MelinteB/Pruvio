@@ -1,0 +1,9 @@
+[
+  "app\\api\\push_notifications.py",
+  "app\\models\\push_notification.py",
+  "app\\services\\push_service.py",
+  "app\\services\\push_worker.py",
+  "app\\static\\pruvs-push.js",
+  "app\\ui\\notifications_ui.py",
+  "tests\\test_web_push_v6_12.py"
+]
