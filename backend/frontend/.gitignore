@@ -1,0 +1,4 @@
+node_modules/
+.vite/
+coverage/
+# Commit dist: Render serves the verified prebuilt frontend.

@@ -1,0 +1,320 @@
+import base64
+import csv
+import io
+import json
+import math
+import os
+import secrets
+from datetime import datetime,timedelta
+from pathlib import Path
+from fastapi import APIRouter,Depends,HTTPException,Request,Response,UploadFile,File,Query
+from fastapi.responses import FileResponse
+from pydantic import BaseModel,Field
+from sqlalchemy import String,cast,or_
+from app.db.database import get_db
+from app.models.user import User
+from app.models.case import Case
+from app.models.document import Document
+from app.models.receipt_item import ReceiptItem
+from app.models.split_bill_session import SplitBillSession
+from app.models.split_bill_participant import SplitBillParticipant
+from app.models.react_session import ReactChallenge
+from app.models.push_notification import PushEvent
+from app.services import account_service as accounts,onboarding_otp_service as onboarding,passkey_service as passkeys
+from app.services import standalone_app_service as receipts
+from app.react_app import bill_service as bills
+from app.services import admin_dashboard_service as dashboard
+from app.services.auth_service import authenticate_with_password
+from app.services.username_service import update_username
+from app.react_app.auth import current,admin,profile,issue,revoke,revoke_user,limit,digest,secure,COOKIE,CSRF_COOKIE
+router=APIRouter(prefix='/api/v1')
+
+class Payload(BaseModel):
+    data:dict=Field(default_factory=dict)
+
+@router.get('/config')
+def config():
+    from app.services.receipt_currency_service import CURRENCY_OPTIONS
+    return {'version':'7.0.0','passkeys':passkeys.passkeys_enabled(),'currencies':CURRENCY_OPTIONS,
+            'support_email':os.getenv('PRUVIO_SUPPORT_EMAIL','')}
+
+@router.get('/me')
+def me(request:Request,identity=Depends(current)):
+    return {'user':profile(identity[0]),'csrf':request.cookies.get(CSRF_COOKIE,'')}
+
+@router.post('/auth/login')
+def login(body:dict,request:Request,response:Response,db=Depends(get_db)):
+    limit(db,request,'login')
+    user=authenticate_with_password(db,str(body.get('identifier',''))[:255],str(body.get('password',''))[:1024])
+    return issue(db,user,request,response)
+
+@router.post('/auth/logout')
+def logout(response:Response,identity=Depends(current),db=Depends(get_db)):
+    revoke(db,identity[1].token_hash);db.commit()
+    response.delete_cookie(COOKIE,path='/');response.delete_cookie(CSRF_COOKIE,path='/')
+    return {'ok':True}
+
+@router.post('/auth/register')
+def register(body:dict,request:Request,db=Depends(get_db)):
+    limit(db,request,'registration',10)
+    if not body.get('password'):raise ValueError('Password is required.')
+    result=onboarding.start_registration(db,phone_number=body.get('phone_number',''),display_name=body.get('name',''),
+        email=body.get('email',''),username=body.get('username',''),password=body.get('password'),
+        accepted_terms=body.get('accepted_terms') is True,accepted_privacy=body.get('accepted_privacy') is True,
+        marketing_opt_in=body.get('marketing_opt_in') is True)
+    result['user'].notifications_opt_in=body.get('notifications_opt_in') is True
+    db.commit()
+    return {'challenge_id':result['challenge_id'],'delivery':result['email_delivery'],'email':result['user'].email}
+
+@router.post('/auth/register/resend')
+def resend(body:dict,request:Request,db=Depends(get_db)):
+    limit(db,request,'registration',10)
+    user=onboarding.find_user_by_email(db,str(body.get('email','')))
+    if not user or user.status!='pending_join':raise ValueError('No pending registration found.')
+    result=onboarding.resend_registration_code(db,user)
+    return {k:v for k,v in result.items() if k not in ('user','debug_otp','debug_email_otp')}
+
+@router.post('/auth/register/verify')
+def verify_registration(body:dict,request:Request,response:Response,db=Depends(get_db)):
+    limit(db,request,'verify',30)
+    user=onboarding.verify_registration_email(db,body.get('email',''),body.get('code',''),challenge_id=body.get('challenge_id',''))
+    return issue(db,user,request,response)
+
+@router.post('/auth/reset')
+def reset(body:dict,request:Request,db=Depends(get_db)):
+    limit(db,request,'reset',10)
+    result=accounts.request_password_reset(db,body.get('email',''))
+    return {k:v for k,v in result.items() if k!='debug_otp'}
+
+@router.post('/auth/reset/confirm')
+def reset_confirm(body:dict,request:Request,db=Depends(get_db)):
+    limit(db,request,'verify',30)
+    user=accounts.confirm_password_reset(db,body.get('email',''),body.get('code',''),body.get('password',''),challenge_id=body.get('challenge_id',''))
+    revoke_user(db,user.id);db.commit();return {'ok':True}
+
+@router.post('/auth/passkey/options')
+def passkey_login_options(request:Request,response:Response,db=Depends(get_db)):
+    limit(db,request,'passkey',30)
+    challenge,options=passkeys.begin_passkey_authentication()
+    return store_challenge(db,challenge,options,'login',None,response)
+
+def store_challenge(db,challenge,options,purpose,user_id,response):
+    binding=secrets.token_urlsafe(32);key=secrets.token_urlsafe(24)
+    db.add(ReactChallenge(id=key,purpose=purpose,user_id=user_id,challenge=base64.b64encode(challenge).decode(),
+        binding_hash=digest(binding),expires_at=datetime.utcnow()+timedelta(minutes=5)));db.commit()
+    response.set_cookie('pruvs_webauthn',binding,httponly=True,secure=secure(),samesite='strict',max_age=300,path='/')
+    return {'challenge_id':key,'options':json.loads(options)}
+
+def consume(db,request,key,purpose,uid=None):
+    row=db.query(ReactChallenge).filter_by(id=key).with_for_update().first()
+    if not row or row.purpose!=purpose or row.user_id!=uid or row.expires_at<datetime.utcnow() or not secrets.compare_digest(row.binding_hash,digest(request.cookies.get('pruvs_webauthn',''))):
+        raise ValueError('Passkey challenge expired. Please try again.')
+    challenge=base64.b64decode(row.challenge);db.delete(row);db.commit();return challenge
+
+@router.post('/auth/passkey/verify')
+def passkey_login_verify(body:dict,request:Request,response:Response,db=Depends(get_db)):
+    limit(db,request,'verify',30)
+    user=passkeys.complete_passkey_authentication(db,challenge=consume(db,request,body.get('challenge_id'),'login'),browser_credential=body.get('credential',{}))
+    return issue(db,user,request,response)
+
+@router.get('/account/passkeys')
+def list_passkeys(identity=Depends(current),db=Depends(get_db)):
+    return [{'id':p.id,'name':p.device_name,'created_at':p.created_at,'last_used_at':p.last_used_at} for p in passkeys.list_user_passkeys(db,identity[0].id)]
+
+@router.post('/account/passkeys/options')
+def passkey_add_options(response:Response,identity=Depends(current),db=Depends(get_db)):
+    challenge,options=passkeys.begin_passkey_registration(db,identity[0]);return store_challenge(db,challenge,options,'register',identity[0].id,response)
+
+@router.post('/account/passkeys')
+def passkey_add(body:dict,request:Request,identity=Depends(current),db=Depends(get_db)):
+    passkeys.complete_passkey_registration(db,identity[0],challenge=consume(db,request,body.get('challenge_id'),'register',identity[0].id),browser_credential=body.get('credential',{}),device_name=str(body.get('name','Passkey'))[:120]);return {'ok':True}
+
+@router.delete('/account/passkeys/{key_id}')
+def passkey_delete(key_id:int,identity=Depends(current),db=Depends(get_db)):
+    passkeys.delete_passkey(db,user_id=identity[0].id,passkey_id=key_id);return {'ok':True}
+
+@router.patch('/account')
+def update_account(body:dict,identity=Depends(current),db=Depends(get_db)):
+    u=identity[0]
+    if 'name' in body:accounts.update_profile_name(db,u,str(body['name'])[:255])
+    if 'username' in body:update_username(db,u,str(body['username'])[:80])
+    if 'preferred_language' in body:
+        accounts.update_preferences(db,u,preferred_language=body['preferred_language'],notifications_opt_in=body.get('notifications_opt_in') is True,marketing_opt_in=body.get('marketing_opt_in') is True)
+    return profile(u)
+
+@router.put('/account/payment')
+def payment_details(body:dict,identity=Depends(current),db=Depends(get_db)):
+    fields=['recipient_name','iban','bank_name','bic','revolut_link','payment_note']
+    return profile(accounts.update_payment_details(db,identity[0],**{k:str(body.get(k) or '')[:500] for k in fields}))
+
+@router.post('/account/password')
+def password(body:dict,request:Request,response:Response,identity=Depends(current),db=Depends(get_db)):
+    u=accounts.set_password(db,identity[0],body.get('new_password',''),body.get('current_password',''))
+    revoke_user(db,u.id);db.commit();return issue(db,u,request,response)
+
+@router.post('/account/contact')
+def contact(body:dict,identity=Depends(current),db=Depends(get_db)):
+    r=accounts.request_contact_change(db,identity[0],body.get('channel'),body.get('value',''));return {k:v for k,v in r.items() if k!='debug_otp'}
+
+@router.post('/account/contact/confirm')
+def contact_confirm(body:dict,request:Request,response:Response,identity=Depends(current),db=Depends(get_db)):
+    u=accounts.confirm_contact_change(db,identity[0],body.get('channel'),body.get('value',''),body.get('code',''),challenge_id=body.get('challenge_id',''))
+    revoke_user(db,u.id);db.commit();return issue(db,u,request,response)
+
+@router.post('/account/delete/request')
+def delete_request(identity=Depends(current),db=Depends(get_db)):
+    r=accounts.request_account_deletion_otp(db,identity[0]);return {k:v for k,v in r.items() if k!='debug_otp'}
+
+@router.post('/account/delete/confirm')
+def delete_confirm(body:dict,response:Response,identity=Depends(current),db=Depends(get_db)):
+    u=identity[0]
+    # Verify before deleting notification/session data.
+    onboarding.verify_code(db,destination_type='email',destination=u.email,code=body.get('code',''),purpose='account_delete',challenge_id=body.get('challenge_id',''),user_id=u.id)
+    revoke_user(db,u.id)
+    from app.models.push_notification import PushDelivery,PushPreference,PushDevice,PushGrant
+    ids=db.query(PushEvent.id).filter_by(user_id=u.id)
+    db.query(PushDelivery).filter(PushDelivery.event_id.in_(ids)).delete(synchronize_session=False)
+    db.query(PushEvent).filter_by(user_id=u.id).delete();db.query(PushPreference).filter_by(user_id=u.id).delete()
+    db.query(PushDevice).filter_by(user_id=u.id).delete();db.query(PushGrant).filter_by(user_id=u.id).delete()
+    from app.react_app.inbox import PruvsInboxRead
+    db.query(PruvsInboxRead).filter_by(user_id=u.id).delete()
+    accounts.delete_user_completely(db,u)
+    response.delete_cookie(COOKIE,path='/');response.delete_cookie(CSRF_COOKIE,path='/');return {'ok':True}
+
+@router.get('/history')
+def history(offset:int=Query(0,ge=0),identity=Depends(current),db=Depends(get_db)):
+    uid=identity[0].id;cases=db.query(Case).filter_by(user_id=uid).order_by(Case.created_at.desc()).offset(offset).limit(30).all()
+    return {'receipts':[receipts.get_receipt_view(db,c.id,user_id=uid,ensure_translations=False) for c in cases],
+            'receipt_count':db.query(Case).filter_by(user_id=uid).count(),'bills':bills.list_split_bill_sessions_for_user(db,uid,500)}
+
+@router.post('/receipts/upload')
+def upload(file:UploadFile=File(...),identity=Depends(current),db=Depends(get_db)):
+    from app.services.document_service import MAX_FILE_SIZE_BYTES
+    data=file.file.read(MAX_FILE_SIZE_BYTES+1)
+    if len(data)>MAX_FILE_SIZE_BYTES:raise HTTPException(413,'Maximum upload size is 10 MB.')
+    result=receipts.create_standalone_receipt_case(db,file_bytes=data,original_filename=file.filename or 'receipt.jpg',mime_type=file.content_type,user_id=identity[0].id)
+    return {'case_id':result['case'].id}
+
+def owned_case(db,case_id,uid):
+    c=db.get(Case,case_id)
+    if not c or c.user_id!=uid:raise HTTPException(404,'Receipt not found.')
+    return c
+
+@router.get('/receipts/{case_id}')
+def receipt(case_id:int,identity=Depends(current),db=Depends(get_db)):
+    owned_case(db,case_id,identity[0].id)
+    result=receipts.get_receipt_view(db,case_id,user_id=identity[0].id)
+    result['has_split']=db.query(SplitBillSession).filter_by(case_id=case_id).first() is not None
+    return result
+
+@router.get('/receipts/{case_id}/original')
+def original(case_id:int,identity=Depends(current),db=Depends(get_db)):
+    owned_case(db,case_id,identity[0].id)
+    doc=db.query(Document).filter_by(case_id=case_id).order_by(Document.id.desc()).first()
+    if not doc or not Path(doc.path).is_file():raise HTTPException(404,'Original file is unavailable.')
+    return FileResponse(doc.path,filename=doc.original_filename or 'receipt',media_type=doc.mime_type or 'application/octet-stream',headers={'Cache-Control':'no-store'})
+
+@router.put('/receipts/{case_id}/currency')
+def currency(case_id:int,body:dict,identity=Depends(current),db=Depends(get_db)):
+    from app.services.receipt_currency_service import set_receipt_currency
+    return {'currency':set_receipt_currency(db,case_id,identity[0].id,body.get('currency',''))}
+
+@router.post('/receipts/{case_id}/split')
+def create_split(case_id:int,body:dict,identity=Depends(current),db=Depends(get_db)):
+    owned_case(db,case_id,identity[0].id)
+    session=bills.create_split_bill_session(db,case_id,identity[0].id,int(body.get('people',2)))
+    return {'token':session.token}
+
+def member(db,token,uid,owner=False,lock=False):
+    query=db.query(SplitBillSession).filter_by(token=token)
+    s=(query.with_for_update() if lock else query).first()
+    if not s:raise HTTPException(404,'Bill not found.')
+    p=db.query(SplitBillParticipant).filter_by(session_id=s.id,user_id=uid,status='joined').first()
+    if not p or (owner and s.owner_user_id!=uid):raise HTTPException(403,'You do not have access to this bill action.')
+    return s,p
+
+def summary(db,s,uid):
+    result=bills.get_split_bill_session_summary(db,s,ensure_translations=False)
+    result['my_participant_id']=next(p['participant_id'] for p in result['participants'] if p['user_id']==uid)
+    if s.owner_user_id!=uid:
+        for p in result['participants']:
+            if p['user_id']!=uid:p.pop('phone_number',None)
+    return result
+
+@router.get('/bills/{token}/invite')
+def invitation(token:str,identity=Depends(current),db=Depends(get_db)):
+    s=bills.get_split_bill_session_by_token(db,token)
+    if not s:raise HTTPException(404,'Invitation not found.')
+    mine=db.query(SplitBillParticipant).filter_by(session_id=s.id,user_id=identity[0].id,status='joined').first()
+    owner=db.get(User,s.owner_user_id)
+    return {'token':token,'owner':owner.name if owner else 'Pruvs user','status':s.status,'joined':bool(mine),'is_owner':s.owner_user_id==identity[0].id}
+
+@router.post('/bills/{token}/join')
+def join(token:str,identity=Depends(current),db=Depends(get_db)):
+    s=db.query(SplitBillSession).filter_by(token=token).with_for_update().first()
+    if not s:raise HTTPException(404,'Invitation not found.')
+    if s.owner_user_id==identity[0].id:raise ValueError('The owner is already part of this bill.')
+    bills.join_split_bill_session_as_user(db,s,identity[0]);return summary(db,s,identity[0].id)
+
+@router.get('/bills/{token}')
+def bill(token:str,identity=Depends(current),db=Depends(get_db)):
+    s,p=member(db,token,identity[0].id);return summary(db,s,identity[0].id)
+
+@router.put('/bills/{token}/selection')
+def selection(token:str,body:dict,identity=Depends(current),db=Depends(get_db)):
+    s,p=member(db,token,identity[0].id,lock=True)
+    quantities={int(k):float(v) for k,v in body.get('quantities',{}).items()}
+    if len(quantities)>500 or any(not math.isfinite(v) or v<0 for v in quantities.values()):raise ValueError('Invalid item quantities.')
+    bills.save_participant_selection(db,s,p.id,selected_quantities=quantities);return summary(db,s,identity[0].id)
+
+@router.post('/bills/{token}/action/{action}')
+def bill_action(token:str,action:str,body:dict,identity=Depends(current),db=Depends(get_db)):
+    uid=identity[0].id;s,p=member(db,token,uid,owner=action!='payment',lock=True)
+    if action=='settle':bills.close_split_bill_session(db,s,uid)
+    elif action=='reopen':bills.reopen_split_bill_session(db,s,uid)
+    elif action=='tip':
+        value=float(body.get('value',0))
+        if not math.isfinite(value) or not 0<=value<=1000000:raise ValueError('Invalid tip amount.')
+        bills.update_session_tip(db,s,uid,str(body.get('mode','none')),value)
+    elif action=='people':bills.update_expected_participants_count(db,s,uid,int(body.get('people',2)))
+    elif action=='remind':
+        if int(body.get('participant_id',0))==p.id:raise ValueError('Reminders are for other participants.')
+        bills.send_participant_reminder(db,s,uid,int(body.get('participant_id',0)),str(body.get('message','Please complete your Pruvs bill payment.'))[:500])
+    elif action=='payment':bills.record_participant_payment_status(db,s,p.id,str(body.get('method','bank_transfer')),paid=body.get('paid') is True)
+    else:raise HTTPException(404,'Unknown bill action.')
+    return summary(db,s,uid)
+
+@router.post('/device/subscribe')
+def device_subscribe(body:dict,identity=Depends(current),db=Depends(get_db)):
+    from app.services import push_service as push
+    from app.models.push_notification import PushGrant
+    if not push.enabled():raise HTTPException(503,'Device notifications are not configured yet.')
+    grant=db.get(PushGrant,identity[1].token_hash)
+    if not grant or not grant.active:raise HTTPException(401,'Sign in again to enable notifications.')
+    subscription=push.validate_subscription(body.get('subscription'))
+    identity[0].notifications_opt_in=True
+    device=push.register_device(db,grant,subscription,str(body.get('label','Browser'))[:120])
+    return {'device_id':device.id}
+
+@router.get('/notifications/{event_id}/target')
+def notification_target(event_id:str,identity=Depends(current),db=Depends(get_db)):
+    from app.react_app.inbox import destination,mark,KINDS
+    e=db.get(PushEvent,event_id);uid=identity[0].id
+    if not e or e.user_id!=uid:raise HTTPException(404,'This notification is not available in your Inbox.')
+    target='/inbox';message=None
+    if e.kind in KINDS:
+        target=destination(db,uid,e.url) or '/inbox'
+        mark(db,uid,e)
+        if target=='/inbox':message='Message marked read. This bill is no longer available to your account.'
+    elif e.url.startswith('/receipt/'):
+        try:
+            cid=int(e.url.split('/')[2]);owned_case(db,cid,uid);target=f'/receipt/{cid}'
+        except (ValueError,HTTPException):target='/history'
+    e.read_at=datetime.utcnow();db.commit();return {'url':target,'message':message}
+
+@router.get('/legal/{kind}')
+def legal(kind:str,lang:str='en'):
+    from app import legal_content as content
+    if kind not in ('terms','privacy'):raise HTTPException(404,'Not found')
+    prefix=kind.upper();suffix='_RO' if lang=='ro' else ''
+    return {'title':getattr(content,prefix+'_TITLE'+suffix),'version':getattr(content,prefix+'_VERSION'),'sections':getattr(content,prefix+'_SECTIONS'+suffix)}

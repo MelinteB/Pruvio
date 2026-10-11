@@ -1,0 +1,27 @@
+{
+  "version": "7.0.0",
+  "source": {
+    "src/Account.jsx": "2408ac0849bfdae104bbfcd8e3d2b8429a16468b5599aae100cd528de58c4c6d",
+    "src/Admin.jsx": "b84e70459a1077b5f23ea8d013d263ac9c2f74b385521d3eb40441c368a79578",
+    "src/Auth.jsx": "c6619edc476621caec4b0bc97ed37252b1262f0523df50cda3b0cf6f2def41df",
+    "src/Bill.jsx": "0ff09f73fcf8d486b8e7a9ac1ea777e8e5a6dd567e3ef9dda72bc64ce5fdd06d",
+    "src/Inbox.jsx": "2447e6d569d1aa26a790345da729a92f964e6d87a5abc00ce633c63e5ac8bf08",
+    "src/Notifications.jsx": "820046021f2d7078a7e1aa60a17e6d9159b61626f54da4dddfccc559e48e624e",
+    "src/Receipts.jsx": "89c2b2ab821633097d2e47893d9a9c2957328203ef44181ee8edd56dd2bec50a",
+    "src/api.js": "421db792022fa569cfb10dec4eba138313d13ea74a15f931f696b751744ebb17",
+    "src/common.jsx": "e49b74484960a597acf88929f9f76ac8a889d9e630d320254090e2b08fbbdad2",
+    "src/i18n.js": "f34c09e0a5479880111efd7945c9e70912a27fcff089d4a59eb4a9435c0086d5",
+    "src/main.jsx": "e0e1ced474e7567bfc2238fca76c6a3f3fa8bed07fe141b24f7c8b7795625b03",
+    "src/style.css": "51148e6a1b24e77fc509ca424704f675ce89de4dc72da963dad42bb4efa259cc",
+    "index.html": "3ae6bf190a5228d5c764112d079fc92aafcc423cc9d9ea89d0e351e137f58bbb",
+    "vite.config.js": "23391e83cf79211d11ce62897d5548e6ea6fb7bce8f50d0ea327daa9ae3b9ab3",
+    "package.json": "b3dcac3685a9eea1af1d0a3c92f8baa2baec4070436d6915933ce134ce8e478e",
+    "package-lock.json": "e18feb31007772208370d8207170d9eebc5ea7851a54196fd0a33ab8a4c15813",
+    "scripts/stamp-build.mjs": "dbea502f70ea1e864cdc48a7c66ca0cfe056de5dd23e3fb193706794894f9ca1"
+  },
+  "assets": {
+    "dist/assets/index-C95ba1yh.js": "db1f5b20232dee87b30d6781914ac7684bea2151d784c686fae1eaee26f8cf8a",
+    "dist/assets/index-CEI-9aOf.css": "eef43743b67d06642fd8792a845e84cc9d9877044efaa012690bd78c901c6f52",
+    "dist/index.html": "fd0ddf0c3c8117159c89fa6325c5fde3cccd5cc0b1120f5773a6ccc208e2aea9"
+  }
+}
