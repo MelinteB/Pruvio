@@ -5,3 +5,18 @@
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
 .inbox-list{display:grid;gap:16px}.inbox-message.unread{border-left:4px solid var(--blue,#0756df);background:#f5f8ff}.inbox-message h2{margin-bottom:0}.inbox-message .row.wrap{margin-top:18px}
+
+/* Expenses and per-user history controls */
+.expense-source{border-top:1px solid var(--border);padding:10px 0}
+.expense-source>.check{margin:5px 0}.expense-fields{padding:12px 18px;margin:7px 0 12px 27px;border-left:3px solid #d7e5ff;background:#f9fbff;border-radius:0 12px 12px 0}
+.history-item{border-bottom:1px solid var(--border)}.history-item:last-child{border-bottom:0}.history-item>.row{margin:0 0 10px}.history-item button,.bill-card button{font-size:11px;min-height:30px;padding:5px 9px}.bill-card>.row{margin-bottom:0}.signatures{display:flex;gap:25px;flex-wrap:wrap;margin-top:25px;font-size:12px}
+.expense-print td{white-space:normal;overflow-wrap:anywhere;max-width:none}.expense-print .table-scroll{overflow-x:auto}
+@media(max-width:760px){.expense-fields{margin-left:4px;padding:10px}.mobile-nav a{min-width:38px;padding:6px 4px;font-size:8px}.mobile-nav svg{width:18px;height:18px}}
+@media print{
+ @page{size:A4 landscape;margin:12mm}
+ body{background:#fff;color:#111}.topbar,.sidebar,.mobile-nav,footer,.no-print,.expense-print button{display:none!important}
+ .app,.content,.with-sidebar .content{margin:0!important;padding:0!important;max-width:none!important;width:100%!important}
+ .page-title{margin:0 0 12px}.page-title h1{font-size:23px}.panel{box-shadow:none;border:1px solid #ddd;padding:10px;margin-bottom:9px;break-inside:avoid}
+ .expense-print .table-scroll{overflow:visible;margin:0}.expense-print table{font-size:9px;table-layout:fixed}.expense-print th,.expense-print td{white-space:normal;word-break:break-word;padding:5px;border:1px solid #ddd}
+ .expense-print .two-column{grid-template-columns:1fr 1fr;gap:10px}.expense-print .muted{color:#444}
+}

@@ -5,6 +5,7 @@ import { Fingerprint, Trash2 } from 'lucide-react';
 import { request, send, credential } from './api';
 import { useApp, useLoad, Title, Panel, Field, Check, Message } from './common';
 import Notifications from './Notifications';
+import CompanyProfiles from './CompanyProfiles';
 export default function Account() {
   const {
       user,
@@ -106,7 +107,7 @@ export default function Account() {
             }, 'PATCH');
             await refresh();
           })}>{t("Save preferences")}</button></Panel><Notifications embedded /></div>
- </div><div><Panel title={t("Receive payments")}><p className="muted">{t("These details are shared with your participants after you settle a bill. Pruvs does not collect the payment.")}</p><form onSubmit={e => {
+ </div><div><CompanyProfiles /><Panel title={t("Receive payments")}><p className="muted">{t("These details are shared with your participants after you settle a bill. Pruvs does not collect the payment.")}</p><form onSubmit={e => {
             e.preventDefault();
             run(async () => {
               await send('/account/payment', payment, 'PUT');

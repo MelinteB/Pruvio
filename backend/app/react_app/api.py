@@ -35,7 +35,7 @@ class Payload(BaseModel):
 @router.get('/config')
 def config():
     from app.services.receipt_currency_service import CURRENCY_OPTIONS
-    return {'version':'7.0.0','passkeys':passkeys.passkeys_enabled(),'currencies':CURRENCY_OPTIONS,
+    return {'version':'7.1.0','passkeys':passkeys.passkeys_enabled(),'currencies':CURRENCY_OPTIONS,
             'support_email':os.getenv('PRUVIO_SUPPORT_EMAIL','')}
 
 @router.get('/me')
@@ -178,14 +178,29 @@ def delete_confirm(body:dict,response:Response,identity=Depends(current),db=Depe
     db.query(PushDevice).filter_by(user_id=u.id).delete();db.query(PushGrant).filter_by(user_id=u.id).delete()
     from app.react_app.inbox import PruvsInboxRead
     db.query(PruvsInboxRead).filter_by(user_id=u.id).delete()
+    from app.models.expense import ExpenseCompany,ExpenseReport
+    from app.models.history_visibility import HistoryVisibility
+    db.query(ExpenseReport).filter_by(user_id=u.id).delete()
+    db.query(ExpenseCompany).filter_by(user_id=u.id).delete()
+    db.query(HistoryVisibility).filter_by(user_id=u.id).delete()
     accounts.delete_user_completely(db,u)
     response.delete_cookie(COOKIE,path='/');response.delete_cookie(CSRF_COOKIE,path='/');return {'ok':True}
 
 @router.get('/history')
-def history(offset:int=Query(0,ge=0),identity=Depends(current),db=Depends(get_db)):
-    uid=identity[0].id;cases=db.query(Case).filter_by(user_id=uid).order_by(Case.created_at.desc()).offset(offset).limit(30).all()
-    return {'receipts':[receipts.get_receipt_view(db,c.id,user_id=uid,ensure_translations=False) for c in cases],
-            'receipt_count':db.query(Case).filter_by(user_id=uid).count(),'bills':bills.list_split_bill_sessions_for_user(db,uid,500)}
+def history(offset:int=Query(0,ge=0),view:str='active',identity=Depends(current),db=Depends(get_db)):
+    from app.models.history_visibility import HistoryVisibility
+    if view not in ('active','archived','removed'):raise ValueError('Unknown history view.')
+    uid=identity[0].id
+    states={(r.kind,r.source_id):r for r in db.query(HistoryVisibility).filter_by(user_id=uid).all()}
+    def include(kind,source_id):return (states.get((kind,source_id)).state if (kind,source_id) in states else 'active')==view
+    case_query=db.query(Case).filter_by(user_id=uid).order_by(Case.created_at.desc())
+    selected=[c for c in case_query.all() if include('receipt',c.id)]
+    cases=selected[offset:offset+30]
+    receipt_rows=[{**receipts.get_receipt_view(db,c.id,user_id=uid,ensure_translations=False),
+                   'history_note':states.get(('receipt',c.id)).note if ('receipt',c.id) in states else ''} for c in cases]
+    bill_rows=[{**b,'history_note':states.get(('bill',b['session_id'])).note if ('bill',b['session_id']) in states else ''}
+               for b in bills.list_split_bill_sessions_for_user(db,uid,None) if include('bill',b['session_id'])]
+    return {'receipts':receipt_rows,'receipt_count':len(selected),'bills':bill_rows}
 
 @router.post('/receipts/upload')
 def upload(file:UploadFile=File(...),identity=Depends(current),db=Depends(get_db)):
