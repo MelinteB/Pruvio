@@ -15,12 +15,21 @@ class PruvsInboxRead(Base):
     read_at=Column(DateTime,nullable=False,default=datetime.utcnow)
 
 router=APIRouter(prefix='/api/v1/inbox')
-KINDS=('split_settled','split_reopened','reminder','bill_settled','bill_reopened')
+KINDS=('split_settled','split_reopened','reminder','bill_settled','bill_reopened','payment_marked')
 
 def incoming(db,uid):
     # Includes historical v6.12 kind names. Current membership is checked on opening.
     own=exists().where(and_(SplitBillSession.owner_user_id==uid,or_(PushEvent.url=='/bill/'+SplitBillSession.token,PushEvent.url=='/split-bill/sessions/'+SplitBillSession.token+'/join',PushEvent.url=='/split-bill/sessions/'+SplitBillSession.token+'/widget-ui')))
-    return db.query(PushEvent).filter(PushEvent.user_id==uid,PushEvent.kind.in_(KINDS),~own)
+    return db.query(PushEvent).filter(PushEvent.user_id==uid,PushEvent.kind.in_(KINDS),or_(PushEvent.kind=='payment_marked',~own))
+
+def count_unread(db, uid):
+    return (incoming(db, uid)
+            .outerjoin(PruvsInboxRead, and_(PruvsInboxRead.user_id==uid, PruvsInboxRead.event_id==PushEvent.id))
+            .filter(PruvsInboxRead.event_id.is_(None), PushEvent.read_at.is_(None)).count())
+
+@router.get('/unread-count')
+def unread_count(identity=Depends(current),db=Depends(get_db)):
+    return {'unread_count': count_unread(db, identity[0].id)}
 
 def mark(db,uid,e):
     if db.get(PruvsInboxRead,(uid,e.id)) is None:db.add(PruvsInboxRead(user_id=uid,event_id=e.id))
@@ -39,7 +48,7 @@ def messages(unread:bool=False,offset:int=Query(0,ge=0),identity=Depends(current
     uid=identity[0].id;q=incoming(db,uid)
     q=q.outerjoin(PruvsInboxRead,and_(PruvsInboxRead.user_id==uid,PruvsInboxRead.event_id==PushEvent.id))
     unread_filter=and_(PruvsInboxRead.event_id.is_(None),PushEvent.read_at.is_(None))
-    unread_count=q.filter(unread_filter).count()
+    unread_count=count_unread(db,uid)
     if unread:q=q.filter(unread_filter)
     total=q.count();rows=q.order_by(PushEvent.created_at.desc(),PushEvent.id.desc()).offset(offset).limit(30).all()
     result=[]

@@ -45,12 +45,12 @@ def state(response: Response, grant=Depends(authenticate), db: Session = Depends
     db.commit()
     devices = db.query(PushDevice).filter_by(user_id=grant.user_id).order_by(PushDevice.updated_at.desc()).limit(50).all()
     events = db.query(PushEvent).filter_by(user_id=grant.user_id).order_by(PushEvent.created_at.desc()).limit(50).all()
-    return {'enabled': service.enabled(), 'public_key': os.getenv('PRUVS_VAPID_PUBLIC_KEY', ''),
+    return {'enabled': service.enabled(), 'worker_enabled': os.getenv('PRUVS_PUSH_WORKER_ENABLED', 'true').lower() == 'true', 'public_key': os.getenv('PRUVS_VAPID_PUBLIC_KEY', ''),
             'preferences': {key: bool(getattr(pref, key)) for key in PreferenceRequest.model_fields},
             'devices': [{'id': d.id, 'label': d.label, 'active': d.active,
                          'current_login': d.grant_hash == grant.token_hash,
                          'confirmed_at': d.confirmed_at.isoformat() if d.confirmed_at else None} for d in devices],
-            'events': [{'id': e.id, 'title': e.title, 'body': e.body, 'status': e.status,
+            'events': [{'id': e.id, 'title': e.title, 'body': e.body, 'status': e.status, 'email_status': e.email_status,
                         'created_at': e.created_at.isoformat(), 'url': f'/notifications/open/{e.id}'} for e in events]}
 
 

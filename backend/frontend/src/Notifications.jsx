@@ -124,9 +124,9 @@ export default function Notifications({ embedded = false }) {
   }
   const names = {
     push_enabled: t("Device notifications"),
-    email_enabled: t("Email fallback"),
+    email_enabled: t("Email notifications"),
     receipts: t("Receipt processing results"),
-    bills: t("Bills settled or reopened"),
+    bills: t("Split bill activity"),
     reminders: t("Payment reminders")
   };
   return <>{!embedded && <Title eyebrow="STAY IN THE LOOP" title={t("Device notifications")} action={<button onClick={() => run(load)}>{t("Refresh status")}</button>}>{t("Important updates, even when Pruvs is closed.")}</Title>}{error && <Message error={error} />} {notice && <Message>{notice}</Message>}<div className={embedded ? '' : 'two-column'}><div><Panel><span className="large-icon"><Bell size={28} /></span><h2>{t("This device")}</h2><p>{permission === 'denied' ? t("Notifications are blocked in device or browser settings. Follow the steps below, then return here.") : !user.notifications_opt_in || prefs.push_enabled === false ? t("Notifications are turned off for this account. You can reactivate them here in Account preferences.") : current?.confirmed_at ? t("Test confirmed. This device is ready.") : current ? t("Permission granted. Confirm receipt by tapping the test notification.") : t("This device is not receiving notifications. Enable it here and confirm the test notification.")}</p>{!state ? <Spinner /> : !state.enabled ? <Message error={t("Push is not configured on the server yet. Email fallback remains available.")} /> : !supported ? <p>{t("Your browser does not support push notifications. Use a supported browser over HTTPS.")}</p> : ios && !standalone ? <Message>{t("Add Pruvs to your iPhone/iPad Home Screen: Safari → Share → Add to Home Screen. Open that icon and sign in. Requires iOS/iPadOS 16.4+.")}</Message> : <div className="row wrap">{(embedded || params.has('enrol')) && <button className="primary" disabled={!ready || busy || permission === 'denied'} onClick={enable}>{t("Enable on this device")}</button>}<button disabled={!current || busy} onClick={() => run(async () => {
@@ -143,7 +143,7 @@ export default function Notifications({ embedded = false }) {
           })} />)}<button disabled={busy || !state} onClick={() => run(async () => {
             await send('/notifications-api/preferences', prefs, 'PUT');
             setNotice(t("Preferences saved."));
-          })}>{t("Save preferences")}</button><p className="muted">{t("Email is used when push is unavailable or fails. Provider acceptance does not confirm you saw the notification.")}</p></Panel>
+          })}>{t("Save preferences")}</button><p className="muted">{t("Split bill activity is emailed when enabled, even when a device push is accepted. A verified email address and an active notification worker are required.")}</p>{state && !state.worker_enabled && <Message error={t("Notification delivery worker is disabled on the server. Ask the administrator to enable it in Render.")} />}</Panel>
  {params.has('enrol') && <button className="primary full" onClick={() => {
           const next = safeNext(sessionStorage.getItem('pruvs-next'));
           sessionStorage.removeItem('pruvs-next');
@@ -162,5 +162,5 @@ export default function Notifications({ embedded = false }) {
                 setDevice('');
               }
               await load();
-            })}>{t("Disable")}</button>}</div>)}{state && !state.devices.length && <p className="muted">{t("No devices registered yet.")}</p>}</Panel><details className="panel"><summary>{t("Delivery activity")}</summary>{state?.events.map(e => <Link className="notification-row" key={e.id} to={'/notifications/open/' + e.id}><strong>{e.title}</strong><p>{e.body}</p><small>{date(e.created_at)} · {e.status.replaceAll('_', ' ')}</small></Link>)}{state && !state.events.length && <p className="muted">{t("You're all caught up.")}</p>}</details></div></div></>;
+            })}>{t("Disable")}</button>}</div>)}{state && !state.devices.length && <p className="muted">{t("No devices registered yet.")}</p>}</Panel><details className="panel"><summary>{t("Delivery activity")}</summary>{state?.events.map(e => <Link className="notification-row" key={e.id} to={'/notifications/open/' + e.id}><strong>{e.title}</strong><p>{e.body}</p><small>{date(e.created_at)} · {e.status.replaceAll('_', ' ')}{e.email_status && ` · ${t('Email')}: ${e.email_status.replaceAll('_', ' ')}`}</small></Link>)}{state && !state.events.length && <p className="muted">{t("You're all caught up.")}</p>}</details></div></div></>;
 }

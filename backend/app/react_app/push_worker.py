@@ -147,25 +147,31 @@ def deliver(db, event):
             retry = retry or delivery.status == 'pending'
         db.commit()
     accepted = db.query(PushDelivery).filter_by(event_id=event.id, status='accepted').count() > 0
-    if retry:
-        event.status = 'pending'; event.available_at = datetime.utcnow() + timedelta(seconds=60)
+    # Provider acceptance does not prove display. An opted-in verified email
+    # receives split activity independently, even if a push was accepted.
+    split_activity = event.kind in ('reminder', 'split_settled', 'split_reopened',
+                                    'bill_settled', 'bill_reopened', 'payment_marked')
+    send_email_for_event = (event.kind != 'test' and pref.email_enabled and user.email
+                            and user.is_email_verified and (split_activity or (not accepted and not retry)))
+    if send_email_for_event and event.email_status != 'accepted' and event.email_attempts < 3:
+        event.email_attempts += 1
+        db.commit()
+        try:
+            ok = send_email(user, event)
+        except Exception:
+            ok = False
+            log.exception('Email delivery failed for event=%s', event.id)
+        event.email_status = 'accepted' if ok else 'failed'
+        if not ok:
+            log.warning('Email delivery was not accepted for event=%s', event.id)
+        db.commit()
+    email_retry = send_email_for_event and event.email_status != 'accepted' and event.email_attempts < 3
+    if retry or email_retry:
+        event.status = 'pending'; event.available_at = datetime.utcnow() + timedelta(seconds=60 if retry else 120)
     elif accepted:
         event.status = 'accepted'
-    elif event.kind != 'test' and pref.email_enabled and user.email and user.is_email_verified:
-        if event.email_status != 'accepted' and event.email_attempts < 3:
-            event.email_attempts += 1
-            db.commit()
-            try:
-                ok = send_email(user, event)
-            except Exception:
-                ok = False
-            event.email_status = 'accepted' if ok else 'failed'
-        if event.email_status == 'accepted':
-            event.status = 'email_accepted'
-        elif event.email_attempts < 3:
-            event.status = 'pending'; event.available_at = datetime.utcnow() + timedelta(seconds=120)
-        else:
-            event.status = 'failed'
+    elif event.email_status == 'accepted':
+        event.status = 'email_accepted'
     else:
         event.status = 'in_app_only' if event.kind != 'test' else 'failed'
     event.lease_until = None

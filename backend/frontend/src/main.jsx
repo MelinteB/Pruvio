@@ -63,7 +63,8 @@ class ErrorBoundary extends React.Component {
 function App() {
   const [session, setSession] = useState(null),
     [loading, setLoading] = useState(true),
-    [config, setConfig] = useState(null);
+    [config, setConfig] = useState(null),
+    [unreadCount, setUnreadCount] = useState(0);
   const location = useLocation();
   const accept = useCallback(value => {
     setIdentity(value);
@@ -106,6 +107,23 @@ function App() {
     localStorage.removeItem('pruvs-push-device');
   }
   const user = session?.user;
+  useEffect(() => {
+    if (!user) { setUnreadCount(0); return; }
+    let active = true;
+    const checkInbox = () => request('/inbox/unread-count').then(data => {
+      if (active) setUnreadCount(data.unread_count || 0);
+    }).catch(() => {});
+    checkInbox();
+    const interval = window.setInterval(checkInbox, 15000);
+    window.addEventListener('focus', checkInbox);
+    window.addEventListener('pruvs:inbox-updated', checkInbox);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', checkInbox);
+      window.removeEventListener('pruvs:inbox-updated', checkInbox);
+    };
+  }, [user?.id, location.pathname]);
   setLanguage(user?.preferred_language || "en");
   const nav = [['/', t("Home"), Home], ['/upload', t("Scan"), ScanLine], ['/history', t("History"), ReceiptText], ['/expenses', t("Expenses"), BriefcaseBusiness], ['/inbox', t("Inbox"), Bell], ['/account', t("Account"), UserRound], ...(user?.is_admin ? [['/admin', t("Admin"), ShieldCheck]] : [])];
   return <Context.Provider value={{
@@ -116,11 +134,11 @@ function App() {
     refresh,
     logout
   }}><div className={user ? 'app with-sidebar' : 'app'}><header className="topbar"><Link to="/" className="brand"><img src="/static/pruvs-logo.png" alt="Pruvs" /></Link><div className="row"><Link to="/support" className="help-link"><HelpCircle size={19} /><span>{t("Help")}</span></Link>{user ? <Link to="/account" className="avatar" title={user.name}>{(user.name || user.username || 'P').slice(0, 1).toUpperCase()}</Link> : <Link className="secondary small" to="/login">{t("Sign in")}</Link>}</div></header>
- {user && <aside className="sidebar"><div className="eyebrow">{t("YOUR SPACE")}</div>{nav.map(([url, label, Icon]) => <NavLink key={url} to={url} end={url === '/' || url === '/admin' || url === '/expenses'}><Icon size={20} /><span>{label}</span></NavLink>)}<div className="sidebar-bottom"><p>{t("Shared fairly.")} <br /> {t("Remembered simply.")}</p><small>Pruvs · v7.1.2</small></div></aside>}
+ {user && <aside className="sidebar"><div className="eyebrow">{t("YOUR SPACE")}</div>{nav.map(([url, label, Icon]) => <NavLink key={url} to={url} end={url === '/' || url === '/admin' || url === '/expenses'}><Icon size={20} /><span>{label}</span>{url === '/inbox' && unreadCount > 0 && <span className="inbox-unread-count" aria-label={`${unreadCount} ${t('unread')}`}>{unreadCount > 99 ? '99+' : unreadCount}</span>}</NavLink>)}<div className="sidebar-bottom"><p>{t("Shared fairly.")} <br /> {t("Remembered simply.")}</p><small>Pruvs · v7.1.3</small></div></aside>}
  <main className="content"><ErrorBoundary key={(user?.id || "guest") + ":" + location.pathname}><Routes>
  <Route path="/login" element={user ? <Navigate to="/" /> : <Auth key="login" />} /><Route path="/register" element={user ? <Navigate to="/" /> : <Auth key="register" mode="register" />} /><Route path="/reset" element={<Auth key="reset" mode="reset" />} /><Route path="/reset-password" element={<Navigate to="/reset" />} /><Route path="/password-reset" element={<Navigate to="/reset" />} />
  <Route path="/" element={<Guard><History home /></Guard>} /><Route path="/history" element={<Guard><History /></Guard>} /><Route path="/expenses" element={<Guard><Expenses /></Guard>} /><Route path="/expenses/new" element={<Guard><ExpenseNew /></Guard>} /><Route path="/expenses/:id" element={<Guard><ExpenseView /></Guard>} /><Route path="/upload" element={<Guard><Upload /></Guard>} /><Route path="/receipt/:id" element={<Guard><Receipt /></Guard>} /><Route path="/bill/:token" element={<Guard><Bill /></Guard>} /><Route path="/join/:token" element={<Guard><Join /></Guard>} /><Route path="/account" element={<Guard><Account /></Guard>} /><Route path="/inbox" element={<Guard><Inbox /></Guard>} /><Route path="/account/notifications" element={<Guard><Navigate to="/account#preferences" replace /></Guard>} /><Route path="/notifications" element={<Guard>{location.search.includes('enrol=1') || location.hash.startsWith('#confirm=') ? <Notifications /> : <Navigate to="/account#preferences" replace />}</Guard>} /><Route path="/notifications/open/:id" element={<Guard><NotificationOpen /></Guard>} /><Route path="/admin/*" element={<Guard admin><Admin /></Guard>} /><Route path="/terms" element={<Legal kind="terms" />} /><Route path="/privacy" element={<Legal kind="privacy" />} /><Route path="/support" element={<Support />} /><Route path="*" element={<Panel><h1>{t("Page not found")}</h1><Link to="/">{t("Back to Pruvs")}</Link></Panel>} />
  </Routes></ErrorBoundary><footer><span>© Pruvs</span><Link to="/terms">{t("Terms")}</Link><Link to="/privacy">{t("Privacy")}</Link><Link to="/support">{t("Support")}</Link></footer></main>
- {user && <nav className="mobile-nav">{nav.filter(([url]) => url !== '/admin').map(([url, label, Icon]) => <NavLink to={url} key={url} end={url === '/'}><Icon size={20} /><span>{label}</span></NavLink>)}{user.is_admin && <NavLink to="/admin"><ShieldCheck size={20} /><span>{t("Admin")}</span></NavLink>}</nav>}</div></Context.Provider>;
+ {user && <nav className="mobile-nav">{nav.filter(([url]) => url !== '/admin').map(([url, label, Icon]) => <NavLink to={url} key={url} end={url === '/'}><Icon size={20} /><span>{label}</span>{url === '/inbox' && unreadCount > 0 && <span className="inbox-unread-count" aria-label={`${unreadCount} ${t('unread')}`}>{unreadCount > 99 ? '99+' : unreadCount}</span>}</NavLink>)}{user.is_admin && <NavLink to="/admin"><ShieldCheck size={20} /><span>{t("Admin")}</span></NavLink>}</nav>}</div></Context.Provider>;
 }
 createRoot(document.getElementById('root')).render(<BrowserRouter><App /></BrowserRouter>);

@@ -966,19 +966,19 @@ def send_participant_reminder(
     participant = get_split_bill_participant_by_id(db, participant_id)
     if not participant or participant.session_id != session.id:
         raise ValueError("Participant not found.")
+    if not participant.user_id or participant.status != "joined":
+        raise ValueError("The participant must join Pruvs before an in-app or email reminder can be sent.")
     if participant.reminder_at and datetime.utcnow() - participant.reminder_at < timedelta(seconds=60):
         raise ValueError("Wait one minute before sending another reminder to this participant.")
+    reconfirm = participant.payment_status == "paid"
+    if reconfirm:
+        participant.payment_status = "unpaid"
+        participant.payment_method = None
+        participant.paid_at = None
     participant.reminder_message = (message or "").strip()[:500] or "Please complete your Pruvs split bill."
     participant.reminder_at = datetime.utcnow()
-    if participant.user_id:
-        from app.services.push_service import enqueue
-        from app.react_app.receipt_labels import receipt_label
-        name = receipt_label(db, session.case_id)
-        summary = get_split_bill_session_summary(db, session, ensure_translations=False)
-        own = next((row for row in summary['participants'] if row['participant_id'] == participant.id), None)
-        share = f"{own['total']:.2f} {session.currency}" if own else 'your assigned share'
-        enqueue(db, participant.user_id, "reminder", f"Payment reminder · {name}",
-                f"Your share for {name}: {share}. {participant.reminder_message}", f"/bill/{session.token}")
+    from app.react_app.events import enqueue_reminder
+    enqueue_reminder(db, session, participant, reconfirm=reconfirm)
     db.commit()
     db.refresh(participant)
     return {"participant_id": participant.id, "reminder_at": participant.reminder_at.isoformat()}
@@ -995,9 +995,16 @@ def record_participant_payment_status(
     method = (method or "").lower()
     if method not in {"revolut", "bank_transfer"}:
         raise ValueError("Payment method must pay the bill owner directly.")
+    if not paid and participant.payment_status == "paid":
+        # Opening the payment link again must not undo a saved declaration.
+        return get_split_bill_session_summary(db, session)
+    newly_paid = paid and participant.payment_status != "paid"
     participant.payment_method = method
     participant.payment_status = "paid" if paid else "initiated"
     participant.paid_at = datetime.utcnow() if paid else None
+    if newly_paid:
+        from app.react_app.events import enqueue_payment_marked
+        enqueue_payment_marked(db, session, participant)
     db.commit()
     db.refresh(participant)
     return get_split_bill_session_summary(db, session)

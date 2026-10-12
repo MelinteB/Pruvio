@@ -48,14 +48,14 @@ async def lifespan(app):
         db.query(ReactSession).filter(ReactSession.expires_at<=datetime.utcnow()).delete()
         db.commit()
     stop=asyncio.Event();worker=None
-    if os.getenv('PRUVS_PUSH_WORKER_ENABLED','false').lower()=='true':worker=asyncio.create_task(push_loop(stop))
+    if os.getenv('PRUVS_PUSH_WORKER_ENABLED','true').lower()=='true':worker=asyncio.create_task(push_loop(stop))
     yield
     stop.set()
     if worker:
         try:await asyncio.wait_for(worker,timeout=25)
         except asyncio.TimeoutError:worker.cancel()
 
-app=FastAPI(title='Pruvs Core',version='7.1.2',lifespan=lifespan)
+app=FastAPI(title='Pruvs Core',version='7.1.3',lifespan=lifespan)
 app.include_router(inbox_router);app.include_router(router);app.include_router(expense_router);app.include_router(history_manage_router);app.include_router(admin_router);app.include_router(legacy_router)
 app.include_router(push_router);app.dependency_overrides[push_authenticate]=push_identity
 app.include_router(users_router,prefix='/users',tags=['Admin - Users'])
