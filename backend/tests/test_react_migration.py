@@ -128,6 +128,26 @@ def test_admin_delete_retains_shared_history():
     assert owner.get(url).status_code==401
     assert a.post('/api/v1/admin/users/3/delete',json={'confirm':'3'}).status_code==400
 
+def test_admin_user_edit_and_remove_from_active_listing():
+    a=client('admin')
+    record=a.get('/api/v1/admin/records/users/1').json()
+    assert a.patch('/api/v1/admin/records/users/1',json={
+        'revision':record['revision'],'changes':{'name':'New owner name','email':'new-owner@example.com'}
+    }).status_code==200
+    assert a.get('/api/v1/admin/records/users/1').json()['record']['name']=='New owner name'
+    assert a.post('/api/v1/admin/users/1/delete',json={'confirm':'1'}).status_code==200
+    active=a.get('/api/v1/admin/records/users').json()['rows']
+    assert 1 not in [row['id'] for row in active]
+    all_rows=a.get('/api/v1/admin/records/users?include_deleted=true').json()['rows']
+    assert next(row for row in all_rows if row['id']==1)['status']=='deleted'
+
+def test_admin_document_requires_matching_user_and_case():
+    a=client('admin')
+    url='/api/v1/admin/users/1/bills/1/documents/1/file'
+    assert a.get(url).status_code==404  # Database file is absent on disk.
+    assert a.get('/api/v1/admin/users/2/bills/1/documents/1/file').status_code==404
+    assert client('guest').get(url).status_code==403
+
 def test_admin_control_api_preserved(monkeypatch):
     monkeypatch.setenv('PRUVS_ADMIN_CONTROL_KEY','local-test-key')
     c=client();url='/admin/user-controls'

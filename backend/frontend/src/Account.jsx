@@ -4,6 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Fingerprint, Trash2 } from 'lucide-react';
 import { request, send, credential } from './api';
 import { useApp, useLoad, Title, Panel, Field, Check, Message } from './common';
+import Notifications from './Notifications';
 export default function Account() {
   const {
       user,
@@ -88,7 +89,7 @@ export default function Account() {
               if (r.delivery?.sent === false) throw new Error('Email delivery failed. Try requesting a new code.');
             }
           }, contactChallenge ? t("Contact updated.") : t("Verification code requested."))}>{contactChallenge ? t("Confirm change") : t("Send verification code")}</button>{contactChallenge && <button disabled={busy} onClick={() => run(async () => setContactChallenge(await send('/account/contact', contact)), t("New verification code requested."))}>{t("Resend code")}</button>}</Panel>
- <Panel title={t("Preferences")}><Field label={t("Language")}><select value={form.preferred_language || 'en'} onChange={e => setForm({
+ <div id="preferences"><Panel title={t("Preferences")}><Field label={t("Language")}><select value={form.preferred_language || 'en'} onChange={e => setForm({
               ...form,
               preferred_language: e.target.value
             })}><option value="en">English</option><option value="ro">Română</option></select></Field><Check label={t("Product notifications")} checked={!!form.notifications_opt_in} onChange={e => setForm({
@@ -104,7 +105,7 @@ export default function Account() {
               marketing_opt_in: form.marketing_opt_in
             }, 'PATCH');
             await refresh();
-          })}>{t("Save preferences")}</button><Link to="/account/notifications">{t("Manage device notifications →")}</Link></Panel>
+          })}>{t("Save preferences")}</button></Panel><Notifications embedded /></div>
  </div><div><Panel title={t("Receive payments")}><p className="muted">{t("These details are shared with your participants after you settle a bill. Pruvs does not collect the payment.")}</p><form onSubmit={e => {
             e.preventDefault();
             run(async () => {

@@ -37,9 +37,14 @@ export default function Auth({
       setBusy(false);
     }
   }
-  function signed(result) {
+  function signed(result, justRegistered = false) {
     sessionStorage.removeItem(storageKey);
     accept(result);
+    if (justRegistered) {
+      sessionStorage.setItem('pruvs-next', safeNext(params.get('next')));
+      navigate('/notifications?enrol=1', { replace: true });
+      return;
+    }
     navigate(safeNext(params.get('next')), {
       replace: true
     });
@@ -59,7 +64,7 @@ export default function Auth({
           email: challenge.email || form.email,
           code: form.code,
           challenge_id: challenge.challenge_id
-        }));else {
+        }), true);else {
           const result = await send('/auth/register', form);
           setChallenge(result);
           if (result.delivery?.sent === false) setError('Email delivery failed. Check the address and use Resend code.');

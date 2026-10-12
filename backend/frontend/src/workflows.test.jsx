@@ -16,6 +16,7 @@ vi.mock('./api', () => ({
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+  sessionStorage.clear();
 });
 function Location() {
   const l = useLocation();
@@ -60,6 +61,17 @@ describe('production user flows', () => {
   it('registration offers optional unchecked notification consent', () => {
     shell(<Auth mode="register" />, '/register');
     expect(screen.getByLabelText('Send me updates about my receipts and shared bills (optional)').checked).toBe(false);
+  });
+  it('offers notification enrolment once after completing registration', async () => {
+    sessionStorage.setItem('pruvs-pending-register', JSON.stringify({
+      email: 'new@example.com', challenge: { email: 'new@example.com', challenge_id: 'challenge' }, expires: Date.now() + 60000
+    }));
+    send.mockResolvedValue({ user: { id: 4 }, csrf: 'token' });
+    shell(<Auth mode="register" />, '/register');
+    fireEvent.change(screen.getByLabelText('Email verification code'), { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/notifications'));
+    expect(sessionStorage.getItem('pruvs-next')).toBe('/');
   });
   it('opens the recipient bill from Inbox and supports mark read', async () => {
     request.mockImplementation(path => Promise.resolve(path.startsWith('/inbox') ? {

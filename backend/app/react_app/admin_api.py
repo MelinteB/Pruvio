@@ -5,9 +5,13 @@ import secrets
 import os
 from datetime import datetime
 from fastapi import APIRouter,Depends,HTTPException,Query,Response,Header
-from sqlalchemy import cast,String,or_,inspect,Column,Integer,DateTime,Text
+from fastapi.responses import FileResponse
+from pathlib import Path
+from pydantic import ValidationError
+from sqlalchemy import cast,String,or_,inspect,Column,Integer,DateTime,Text,Float,Boolean
 from app.db.database import get_db,Base
 from app.models.user import User
+from app.models.document import Document
 from app.services import admin_dashboard_service as d
 from app.react_app.auth import admin,revoke_user
 
@@ -61,7 +65,8 @@ def filtered(db,entity,q,field,value):
     model,pk,cols=model_info(entity);query=db.query(model)
     if q:
         escaped=q.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')
-        query=query.filter(or_(*[cast(c,String).ilike('%'+escaped+'%',escape='\\') for c in cols]))
+        searchable=[c for c in cols if isinstance(c.type,(String,Text,Integer,Float,Boolean,DateTime))]
+        if searchable:query=query.filter(or_(*[cast(c,String).ilike('%'+escaped+'%',escape='\\') for c in searchable]))
     if field:
         column=next((c for c in cols if c.name==field),None)
         if column is None:raise ValueError('Invalid filter field.')
@@ -69,8 +74,9 @@ def filtered(db,entity,q,field,value):
     return query,pk,cols
 
 @router.get('/records/{entity}')
-def records(entity:str,q:str='',offset:int=Query(0,ge=0),field:str='',value:str='',identity=Depends(admin),db=Depends(get_db)):
+def records(entity:str,q:str='',offset:int=Query(0,ge=0),field:str='',value:str='',include_deleted:bool=False,identity=Depends(admin),db=Depends(get_db)):
     query,pk,cols=filtered(db,entity,q,field,value)
+    if entity=='users' and not include_deleted:query=query.filter(User.status!='deleted')
     return {'total':query.count(),'rows':[d.serialize(r) for r in query.order_by(pk.desc()).offset(offset).limit(25)]}
 
 @router.get('/records/{entity}/export')
@@ -93,7 +99,8 @@ def record(entity:str,record_id:str,identity=Depends(admin),db=Depends(get_db)):
 
 @router.patch('/records/{entity}/{record_id}')
 def update(entity:str,record_id:int,body:dict,identity=Depends(admin),db=Depends(get_db)):
-    d.update_record(db,identity[0].id,entity,record_id,body.get('changes',{}),body.get('revision',''))
+    try:d.update_record(db,identity[0].id,entity,record_id,body.get('changes',{}),body.get('revision',''))
+    except ValidationError as exc:raise HTTPException(400,'Please check the account fields and try again.') from exc
     if entity=='users':
         u=db.get(User,record_id)
         if u and u.status!='active':revoke_user(db,u.id);db.commit()
@@ -162,3 +169,13 @@ def bill_export(uid:int,cid:int,identity=Depends(admin),db=Depends(get_db)):
     result=d.user_bill_details(db,identity[0].id,uid,cid)
     d.add_audit(db,identity[0].id,'react','export','cases',cid,['bill_details']);db.commit()
     return Response(json.dumps(result,default=str,indent=2),media_type='application/json',headers={'Content-Disposition':f'attachment; filename="pruvs-user-{uid}-bill-{cid}.json"'})
+
+@router.get('/users/{uid}/bills/{cid}/documents/{did}/file')
+def bill_document(uid:int,cid:int,did:int,identity=Depends(admin),db=Depends(get_db)):
+    # Check both the user's bill relationship and the document's case before opening a file.
+    if not d.user_bill_query(db,uid).filter_by(id=cid).first():raise HTTPException(404,'Bill not found.')
+    doc=db.query(Document).filter_by(id=did,case_id=cid).first()
+    if not doc or not doc.path or not Path(doc.path).is_file():raise HTTPException(404,'The original file is unavailable on this server.')
+    return FileResponse(doc.path,media_type=doc.mime_type or 'application/octet-stream',
+                        filename=doc.original_filename or doc.stored_filename,
+                        content_disposition_type='inline',headers={'Cache-Control':'no-store'})

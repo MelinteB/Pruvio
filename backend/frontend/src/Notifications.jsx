@@ -20,7 +20,7 @@ export function NotificationOpen() {
   }, [id]);
   return error ? <Message error={error} /> : <Spinner />;
 }
-export default function Notifications() {
+export default function Notifications({ embedded = false }) {
   const {
       user,
       refresh
@@ -89,6 +89,11 @@ export default function Notifications() {
       active = false;
     };
   }, []);
+  useEffect(() => {
+    const checkPermission = () => setPermission(window.Notification?.permission);
+    window.addEventListener('focus', checkPermission);
+    return () => window.removeEventListener('focus', checkPermission);
+  }, []);
   const current = state?.devices.find(d => d.id === device && d.active && d.current_login);
   function enable() {
     // Native permission request remains in this synchronous user click handler.
@@ -124,7 +129,7 @@ export default function Notifications() {
     bills: t("Bills settled or reopened"),
     reminders: t("Payment reminders")
   };
-  return <><Title eyebrow="STAY IN THE LOOP" title={t("Device notifications")} action={<button onClick={() => run(load)}>{t("Refresh status")}</button>}>{t("Important updates, even when Pruvs is closed.")}</Title>{error && <Message error={error} />} {notice && <Message>{notice}</Message>}<div className="two-column"><div><Panel><span className="large-icon"><Bell size={28} /></span><h2>{t("This device")}</h2><p>{current?.confirmed_at ? t("Test confirmed. This device is ready.") : current ? t("Permission granted. Confirm receipt by tapping the test notification.") : t("Set up notifications on this device.")}</p>{!state ? <Spinner /> : !state.enabled ? <Message error={t("Push is not configured on the server yet. Email fallback remains available.")} /> : !supported ? <p>{t("Your browser does not support push notifications. Use a supported browser over HTTPS.")}</p> : ios && !standalone ? <Message>{t("Add Pruvs to your iPhone/iPad Home Screen: Safari → Share → Add to Home Screen. Open that icon and sign in. Requires iOS/iPadOS 16.4+.")}</Message> : <div className="row wrap"><button className="primary" disabled={!ready || busy} onClick={enable}>{t("Enable on this device")}</button><button disabled={!current || busy} onClick={() => run(async () => {
+  return <>{!embedded && <Title eyebrow="STAY IN THE LOOP" title={t("Device notifications")} action={<button onClick={() => run(load)}>{t("Refresh status")}</button>}>{t("Important updates, even when Pruvs is closed.")}</Title>}{error && <Message error={error} />} {notice && <Message>{notice}</Message>}<div className={embedded ? '' : 'two-column'}><div><Panel><span className="large-icon"><Bell size={28} /></span><h2>{t("This device")}</h2><p>{permission === 'denied' ? t("Notifications are blocked in device or browser settings. Follow the steps below, then return here.") : !user.notifications_opt_in || prefs.push_enabled === false ? t("Notifications are turned off for this account. You can reactivate them here in Account preferences.") : current?.confirmed_at ? t("Test confirmed. This device is ready.") : current ? t("Permission granted. Confirm receipt by tapping the test notification.") : t("This device is not receiving notifications. Enable it here and confirm the test notification.")}</p>{!state ? <Spinner /> : !state.enabled ? <Message error={t("Push is not configured on the server yet. Email fallback remains available.")} /> : !supported ? <p>{t("Your browser does not support push notifications. Use a supported browser over HTTPS.")}</p> : ios && !standalone ? <Message>{t("Add Pruvs to your iPhone/iPad Home Screen: Safari → Share → Add to Home Screen. Open that icon and sign in. Requires iOS/iPadOS 16.4+.")}</Message> : <div className="row wrap">{(embedded || params.has('enrol')) && <button className="primary" disabled={!ready || busy || permission === 'denied'} onClick={enable}>{t("Enable on this device")}</button>}<button disabled={!current || busy} onClick={() => run(async () => {
               await send('/notifications-api/test', {
                 device_id: device
               });
@@ -153,6 +158,8 @@ export default function Notifications() {
                 const sub = await registration.current?.pushManager.getSubscription();
                 if (sub) await sub.unsubscribe();
                 for (const n of (await registration.current?.getNotifications()) || []) n.close();
+                localStorage.removeItem('pruvs-push-device');
+                setDevice('');
               }
               await load();
             })}>{t("Disable")}</button>}</div>)}{state && !state.devices.length && <p className="muted">{t("No devices registered yet.")}</p>}</Panel><details className="panel"><summary>{t("Delivery activity")}</summary>{state?.events.map(e => <Link className="notification-row" key={e.id} to={'/notifications/open/' + e.id}><strong>{e.title}</strong><p>{e.body}</p><small>{date(e.created_at)} · {e.status.replaceAll('_', ' ')}</small></Link>)}{state && !state.events.length && <p className="muted">{t("You're all caught up.")}</p>}</details></div></div></>;
