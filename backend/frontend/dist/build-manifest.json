@@ -1,5 +1,5 @@
 {
-  "version": "7.1.1",
+  "version": "7.1.2",
   "source": {
     "src/Account.jsx": "08730020bd3ef4d7b3d444f6eb77ad51b54b93caa481e150ac3a4720ddffe757",
     "src/Admin.jsx": "be8f00258fd7c6b950d80a8c3f5f9699129e6e2790568ceb25e5595cc0bd8bb5",
@@ -7,24 +7,24 @@
     "src/Bill.jsx": "e1a80c1b8b8cc7efa56264ea615063a827a012ae98ca93bdaaa53a30b1b26e0b",
     "src/CompanyProfiles.jsx": "0974f0f18aa55eff75ad449a4d698400ad8bf0e99a0a597063a48f8cc4f3892b",
     "src/CropEditor.jsx": "a4cd7a7c2265d6758ad523362f896f28fffdb0b4f487252de8058057979b677c",
-    "src/Expenses.jsx": "0f1d40898da1a046fc282e4832b990eae811a6037b0fb9e786286a2c96e7a994",
+    "src/Expenses.jsx": "af6f80f41de6b8b57132940c81580b3babdf16e16a791b929613daae03e98ebd",
     "src/Inbox.jsx": "2447e6d569d1aa26a790345da729a92f964e6d87a5abc00ce633c63e5ac8bf08",
     "src/Notifications.jsx": "274cdd2c090bab70dcc1de46a13c4a9db01590a3cf9a2bea57b2645165e63427",
-    "src/Receipts.jsx": "da5357e4bb179451ac583a82058c480138c2f4ec63c4c974a5601f3e20f8ec75",
+    "src/Receipts.jsx": "b9e80ad8457a48c8cba97e20f50353c071c66d0b6b92974c0f660809010f3212",
     "src/api.js": "421db792022fa569cfb10dec4eba138313d13ea74a15f931f696b751744ebb17",
     "src/common.jsx": "e49b74484960a597acf88929f9f76ac8a889d9e630d320254090e2b08fbbdad2",
-    "src/i18n.js": "1baf8aad6df63feec1889b7b84e3d74a74e4252092708bee75bb3a34abb499ef",
-    "src/main.jsx": "6abc9b9e410af3cabd6f2bdc3e0cee1fddce7926b52be9829947d7cf632b7595",
-    "src/style.css": "922517d7b244518d7f3a6e7842e3d0079cf27cc3fa757b31a7a045b634ff4e47",
+    "src/i18n.js": "b8bc95d599662327f41ea5876bf860502abb9c831c01b283900b3bf601858d3a",
+    "src/main.jsx": "a47c430ac576f21ac363b6f89abd27822a3c0d032d2401b75736a56e09cf694a",
+    "src/style.css": "68dc67378673ab1a5e1944f5d8124ba0c723c4d1adc60d752a40e93499f25f1d",
     "index.html": "3ae6bf190a5228d5c764112d079fc92aafcc423cc9d9ea89d0e351e137f58bbb",
     "vite.config.js": "23391e83cf79211d11ce62897d5548e6ea6fb7bce8f50d0ea327daa9ae3b9ab3",
     "package.json": "b3dcac3685a9eea1af1d0a3c92f8baa2baec4070436d6915933ce134ce8e478e",
     "package-lock.json": "e18feb31007772208370d8207170d9eebc5ea7851a54196fd0a33ab8a4c15813",
-    "scripts/stamp-build.mjs": "bbc93648d3ce0cc3191b40ee5683c7f6bba60df09c1efcf6d2a4611dd7150e1e"
+    "scripts/stamp-build.mjs": "38572da343861f8cb50a1ec99f3be5fd5c121e07934c43391582c3222c56db41"
   },
   "assets": {
-    "dist/assets/index-B4IQSUR-.js": "c07ccb23358c3121bcc21064faaf161ca95393ee61ec4b8dda2b1c062988c0a8",
-    "dist/assets/index-DIzPUAUJ.css": "27691196ce85d84571f5b420a24c8461b2e803553b33c707543f5f2baa833344",
-    "dist/index.html": "14db68087254dcac4c300ba1984981e1a41465fcf7a15b7a95232c81994fda4a"
+    "dist/assets/index-BmpV8Dng.js": "9226bd09341cb2f3c4b0f5ab315ac81c26479749fa12aba1fe04cdb62148b6fa",
+    "dist/assets/index-hl2ESKey.css": "ff6f0ea7801045a4422eaceb0053afc047b253bb56fc2d6108b50ef18dca8f1f",
+    "dist/index.html": "9c65923690b035689807a64115528543f5531bd4e31e575c6951dbf7d913b040"
   }
 }

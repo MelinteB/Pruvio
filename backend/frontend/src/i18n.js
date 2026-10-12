@@ -319,3 +319,13 @@ Object.assign(ro, {
 let language='en';
 export function setLanguage(value){language=value==='ro'?'ro':'en';document.documentElement.lang=language;}
 export function t(value){return language==='ro'?(ro[value]||value):value;}
+Object.assign(ro, {
+ 'Choose receipts and split shares':'Alege bonuri și părți din note împărțite',
+ 'Choose the entire receipt or one of your personal split shares beneath it. Only your assigned split value is added when you choose a split. Switching the choice clears the previous choice for that receipt.':'Alege bonul integral sau partea ta din nota împărțită de sub el. Pentru o parte se adaugă doar suma alocată contului tău. Schimbarea opțiunii o deselectează pe cea anterioară pentru același bon.',
+ 'Select all owned receipts':'Selectează toate bonurile proprii',
+ 'Select all my settled split shares':'Selectează toate părțile mele din note închise',
+ 'Entire receipt':'Bon integral','Shared receipt':'Bon partajat','Split bills':'Note împărțite','My split share':'Partea mea','Personal split share':'Partea mea din notă','Receipt':'Bon','Source type':'Tipul sursei','Load more receipts':'Încarcă alte bonuri',
+ 'Settle this split before claiming your share.':'Închide nota împărțită înainte de a solicita partea ta.',
+ 'No share was assigned to your account.':'Nu este alocată nicio sumă contului tău.',
+ 'This receipt is already saved. We opened the existing receipt and did not send it to OCR again.':'Acest bon este deja salvat. Am deschis bonul existent și nu l-am retrimis la OCR.'
+});

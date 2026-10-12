@@ -1,7 +1,9 @@
 import json
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.case import Case
@@ -58,6 +60,7 @@ def create_standalone_receipt_case(
     original_filename: str,
     mime_type: str | None,
     user_id: int | None = None,
+    deduplicate: bool = False,
 ) -> dict[str, Any]:
     """Create a case, save the upload and immediately process it with Azure OCR."""
     if user_id is not None:
@@ -67,6 +70,14 @@ def create_standalone_receipt_case(
     else:
         # Compatibility fallback for the development API.
         owner = get_or_create_standalone_owner(db)
+
+    if deduplicate:
+        from app.models.receipt_fingerprint import ReceiptFingerprint
+        from app.services.receipt_duplicates import find_duplicate, fingerprint
+        sha, image_signature = fingerprint(file_bytes)
+        existing_id = find_duplicate(db, owner.id, sha, image_signature)
+        if existing_id:
+            return {'case': db.get(Case, existing_id), 'duplicate': True}
 
     case = Case(
         user_id=owner.id,
@@ -87,6 +98,22 @@ def create_standalone_receipt_case(
             document_type="receipt",
         )
 
+        if deduplicate:
+            db.add(ReceiptFingerprint(user_id=owner.id, case_id=case.id, sha256=sha,
+                                      image_signature=image_signature))
+            try:
+                db.commit()  # Unique user/hash constraint also stops concurrent identical uploads.
+            except IntegrityError:
+                db.rollback()
+                existing_id = find_duplicate(db, owner.id, sha, image_signature)
+                if not existing_id:
+                    raise
+                db.delete(document)
+                db.delete(case)
+                db.commit()
+                Path(document.path).unlink(missing_ok=True)
+                return {'case': db.get(Case, existing_id), 'duplicate': True}
+
         ocr_result = process_document_with_azure_receipt_direct(
             db=db,
             document_id=document.id,
@@ -94,7 +121,12 @@ def create_standalone_receipt_case(
 
         case.status = "needs_confirmation" if ocr_result.get("is_valid") else "needs_review"
         from app.services.push_service import enqueue
-        enqueue(db, owner.id, "receipt_ready", "Receipt processed", "Your receipt is ready to review in Pruvs.", f"/receipt/{case.id}")
+        merchant = str(ocr_result.get('merchant_name') or original_filename)[:100]
+        total = ocr_result.get('receipt_total')
+        currency = str(ocr_result.get('currency') or '').upper()
+        amount_text = f'Total: {float(total):.2f} {currency}. ' if isinstance(total, (int, float)) and currency else ''
+        enqueue(db, owner.id, "receipt_ready", f"Receipt ready · {merchant}",
+                f"{amount_text}Review the extracted items and confirm the receipt before splitting.", f"/receipt/{case.id}")
         db.commit()
         db.refresh(case)
 
@@ -107,8 +139,11 @@ def create_standalone_receipt_case(
     except Exception:
         db.rollback()
         case.status = "processing_failed"
+        if deduplicate:
+            db.query(ReceiptFingerprint).filter_by(case_id=case.id).delete()
         from app.services.push_service import enqueue
-        enqueue(db, owner.id, "receipt_failed", "Receipt processing failed", "Open Pruvs to review the receipt or upload it again.", f"/receipt/{case.id}")
+        enqueue(db, owner.id, "receipt_failed", f"Receipt processing failed · {original_filename[:90]}",
+                "Open this receipt to review the error or try a clearer scan.", f"/receipt/{case.id}")
         db.commit()
         raise
 

@@ -1,6 +1,6 @@
 import { t } from "./i18n";
 import React, { useState, useRef, useEffect } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowUpRight, ScanLine, ReceiptText, Users, UploadCloud, RotateCw } from 'lucide-react';
 import { request, send, uploadFile, money } from './api';
 import { useApp, useLoad, Title, Panel, Spinner, Message, Field, Badge, Empty } from './common';
@@ -119,7 +119,7 @@ export function Upload() {
     abort.current = new AbortController();
     try {
       const r = await uploadFile(file, setProgress, abort.current.signal);
-      nav('/receipt/' + r.case_id);
+      nav('/receipt/' + r.case_id, {state:r.duplicate?{duplicate:true}:undefined});
     } catch (e) {
       setError(e.message);
     } finally {
@@ -133,6 +133,7 @@ export function Upload() {
  <Panel title={file ? file.name : t("For a clear result")}>{!file ? <ul className="tips"><li>{t("Include the complete receipt and total.")}</li><li>{t("Use good lighting and avoid reflections.")}</li><li>{t("Keep item names and prices in focus.")}</li><li>{t("Review quantities, discounts and currency after OCR.")}</li></ul> : file.type === 'application/pdf' ? <><iframe title={t("Receipt PDF preview")} src={preview} className="pdf-preview" /><p className="muted">{t('PDF pages are uploaded unchanged. For touch cropping, capture the page as a photo or upload an image.')}</p></> : <><CropEditor preview={preview} crop={crop} onChange={setCrop}/><div className="row wrap"><button disabled={busy} onClick={() => transform(false)}>{t("Apply crop")}</button><button disabled={busy} onClick={() => transform(true)}><RotateCw size={16} /> {t("Rotate")}</button><button disabled={busy||file===original} onClick={()=>{setFile(original);setCrop({x:0,y:0,w:100,h:100})}}>{t('Restore original')}</button><button disabled={busy} onClick={()=>setCrop({x:0,y:0,w:100,h:100})}>{t('Reset selection')}</button></div></>}</Panel></div></>;
 }
 export function Receipt() {
+  const location = useLocation();
   const {
       id
     } = useParams(),
@@ -164,7 +165,7 @@ export function Receipt() {
   if (loading) return <Spinner />;
   if (error) return <Message error={error} />;
   if (!r) return null;
-  return <><Title eyebrow="RECEIPT REVIEW" title={r.merchant_name} action={<a className="secondary" href={'/api/v1/receipts/' + id + '/original'} target="_blank" rel="noreferrer">{t("Download original")}</a>}>{r.original_filename} · {r.status.replaceAll('_', ' ')}</Title>{actionError && <Message error={actionError} />}
+  return <><Title eyebrow="RECEIPT REVIEW" title={r.merchant_name} action={<a className="secondary" href={'/api/v1/receipts/' + id + '/original'} target="_blank" rel="noreferrer">{t("Download original")}</a>}>{r.original_filename} · {r.status.replaceAll('_', ' ')}</Title>{location.state?.duplicate&&<Message error={t('This receipt is already saved. We opened the existing receipt and did not send it to OCR again.')} />}{actionError && <Message error={actionError} />}
  <div className="stats"><Panel><span>{t("Receipt total")}</span><strong>{money(r.receipt_total, r.currency)}</strong></Panel><Panel><span>{t("Extracted items total")}</span><strong>{money(r.calculated_total, r.currency)}</strong></Panel><Panel><span>{t("Items")}</span><strong>{r.items.length}</strong></Panel></div>
  {Math.abs(r.receipt_total - r.calculated_total) > .02 && <Message error={t("The extracted items do not match the receipt total. Review the original receipt before splitting.")} />}
  <Panel title={t("Receipt items")}>{r.items.map(i => <div className="list-row" key={i.id}><div className="grow"><strong>{i.name}</strong>{i.translated_name && i.translated_name !== i.name && <small>{i.translated_name}</small>}<small>{i.quantity} × {money(i.unit_price, r.currency)}</small></div><strong>{money(i.total_price, r.currency)}</strong></div>)}{!r.items.length && <Empty>{t("No items were extracted. Try uploading a clearer image.")}</Empty>}</Panel>

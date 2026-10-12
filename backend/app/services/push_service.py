@@ -173,7 +173,21 @@ def confirm_test(db, grant, code):
 
 def bill_event(db, session, kind, title, body):
     from app.models.split_bill_participant import SplitBillParticipant
+    from app.models.user import User
+    from app.react_app.receipt_labels import receipt_label
+    from app.services.split_bill_session_service import get_split_bill_session_summary
+    name = receipt_label(db, session.case_id)
+    owner = db.get(User, session.owner_user_id)
+    actor = (owner.name or 'The owner') if owner else 'The owner'
+    summary = get_split_bill_session_summary(db, session, ensure_translations=False)
+    shares = {row['user_id']: row for row in summary['participants'] if row['user_id']}
     recipients = {session.owner_user_id}
     recipients.update(p.user_id for p in db.query(SplitBillParticipant).filter_by(session_id=session.id, status='joined') if p.user_id)
     for user_id in recipients:
-        enqueue(db, user_id, kind, title, body, f'/split-bill/sessions/{session.token}/join')
+        own = shares.get(user_id)
+        amount = f"{own['total']:.2f} {session.currency}" if own else 'your current allocation'
+        detail = (f'{actor} settled {name}. Your share: {amount}. Review payment details.'
+                  if kind == 'bill_settled' else
+                  f'{actor} reopened {name}. Your current allocation: {amount}. Payment statuses were reset.')
+        enqueue(db, user_id, kind, f"{'Split settled' if kind == 'bill_settled' else 'Split reopened'} · {name}",
+                detail, f'/split-bill/sessions/{session.token}/join')

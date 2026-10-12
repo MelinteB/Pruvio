@@ -98,7 +98,7 @@ def remove_company(company_id: int, identity=Depends(current), db=Depends(get_db
     return {'ok': True}
 
 
-def source(db, uid, kind, source_id):
+def source(db, uid, kind, source_id, *, include_unavailable=False):
     if kind == 'receipt':
         case = db.query(Case).filter_by(id=source_id, user_id=uid).first()
         if not case or case.status in ('processing', 'processing_failed'):
@@ -112,45 +112,102 @@ def source(db, uid, kind, source_id):
                 'source_url': f'/receipt/{case.id}', 'document_id': doc.id if doc else None,
                 'filename': doc.original_filename if doc else '', 'date': case.created_at.date().isoformat(),
                 'merchant': receipt['merchant_name'], 'currency': currency,
-                'available_amount': str(amount(receipt['receipt_total']))}
+                'available_amount': str(amount(receipt['receipt_total'])), 'eligible': True, 'reason': ''}
     if kind == 'bill':
         from app.react_app.receipt_labels import receipt_label
         session = db.get(SplitBillSession, source_id)
         participant = db.query(SplitBillParticipant).filter_by(session_id=source_id, user_id=uid, status='joined').first()
-        if not session or not participant or session.status not in ('settled', 'closed'):
-            raise ValueError('Select only settled bills in which you participated.')
+        if not session or not participant:
+            raise ValueError('Select only split bills in which you participated.')
+        settled = session.status in ('settled', 'closed')
+        if not settled and not include_unavailable:
+            raise ValueError('Settle the split bill before claiming your share.')
         summary = get_split_bill_session_summary(db, session, ensure_translations=False)
         own = next((p for p in summary['participants'] if p['participant_id'] == participant.id), None)
         currency = summary['currency']
         if not own or not re.fullmatch('[A-Z]{3}', currency or ''):
             raise ValueError('This split bill has no confirmed currency or participant share.')
         name = receipt_label(db, session.case_id)
+        personal_share = amount(own.get('total') or 0, positive=False)
+        if personal_share == 0 and not include_unavailable:
+            raise ValueError('No share was assigned to your account in this split.')
         return {'kind': kind, 'source_id': session.id, 'case_id': session.case_id,
                 'source_url': f'/bill/{session.token}', 'document_id': None,
                 'filename': f'Split · {name}', 'date': (session.settled_at or session.created_at).date().isoformat(),
                 'merchant': f'Split · {name}', 'currency': currency,
-                'available_amount': str(amount(own.get('total') or 0))}
+                'available_amount': str(personal_share), 'eligible': settled and personal_share > 0,
+                'reason': ('Settle this split before claiming your share.' if not settled else
+                           'No share was assigned to your account.' if personal_share == 0 else ''),
+                'split_status': session.status}
     raise ValueError('Unknown expense source.')
+
+
+@router.get('/sources/tree')
+def source_tree(offset: int = Query(0, ge=0), limit: int = Query(30, ge=1, le=100),
+                identity=Depends(current), db=Depends(get_db)):
+    """Group owned receipts and joined splits by the underlying receipt."""
+    from app.react_app.receipt_labels import receipt_label
+
+    uid = identity[0].id
+    cases = db.query(Case).filter(Case.user_id == uid,
+                                  Case.status.notin_(('processing', 'processing_failed'))).all()
+    sessions = (db.query(SplitBillSession)
+                .join(SplitBillParticipant, SplitBillParticipant.session_id == SplitBillSession.id)
+                .filter(SplitBillParticipant.user_id == uid, SplitBillParticipant.status == 'joined')
+                .distinct().all())
+    removed = {(row.kind, row.source_id) for row in db.query(HistoryVisibility)
+               .filter_by(user_id=uid, state='removed').all()}
+    grouped = {}
+    for case in cases:
+        if ('receipt', case.id) not in removed:
+            grouped[case.id] = {'date': case.created_at, 'receipt_id': case.id, 'session_ids': []}
+    for session in sessions:
+        if ('bill', session.id) in removed:
+            continue
+        group = grouped.setdefault(session.case_id, {'date': session.created_at,
+                                                      'receipt_id': None, 'session_ids': []})
+        group['date'] = max(group['date'], session.settled_at or session.created_at)
+        group['session_ids'].append(session.id)
+    ordered = sorted(grouped.items(), key=lambda item: (item[1]['date'], item[0]), reverse=True)
+    rows = []
+    for case_id, group in ordered[offset:offset + limit]:
+        receipt = None
+        if group['receipt_id'] is not None:
+            try:
+                receipt = source(db, uid, 'receipt', group['receipt_id'])
+            except ValueError:
+                pass
+        bills = []
+        for session_id in sorted(group['session_ids'], reverse=True):
+            try:
+                bills.append(source(db, uid, 'bill', session_id, include_unavailable=True))
+            except ValueError:
+                continue
+        if receipt or bills:
+            rows.append({'case_id': case_id, 'title': (receipt['merchant'] if receipt else None) or receipt_label(db, case_id),
+                         'receipt': receipt, 'bills': bills})
+    return {'rows': rows, 'total': len(ordered), 'has_more': offset + limit < len(ordered)}
 
 
 @router.get('/sources')
 def sources(offset: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=100),
+            kind: str | None = Query(None, pattern='^(receipt|bill)$'),
             identity=Depends(current), db=Depends(get_db)):
     uid = identity[0].id
     receipts = [(c.created_at, 'receipt', c.id) for c in db.query(Case).filter(Case.user_id == uid,
                 Case.status.notin_(('processing', 'processing_failed'))).all()]
     bills = [(s.settled_at or s.created_at, 'bill', s.id) for s in db.query(SplitBillSession)
              .join(SplitBillParticipant, SplitBillParticipant.session_id == SplitBillSession.id)
-             .filter(SplitBillParticipant.user_id == uid, SplitBillParticipant.status == 'joined',
-                     SplitBillSession.status.in_(('settled', 'closed'))).distinct().all()]
-    choices = sorted(receipts + bills, key=lambda entry: (entry[0], entry[2]), reverse=True)
+             .filter(SplitBillParticipant.user_id == uid, SplitBillParticipant.status == 'joined').distinct().all()]
+    choices = sorted(receipts if kind == 'receipt' else bills if kind == 'bill' else receipts + bills,
+                     key=lambda entry: (entry[0], entry[2]), reverse=True)
     removed = {(row.kind, row.source_id) for row in db.query(HistoryVisibility)
                .filter_by(user_id=uid, state='removed').all()}
     choices = [choice for choice in choices if (choice[1], choice[2]) not in removed]
     rows = []
     for _, kind, source_id in choices[offset:offset + limit]:
         try:
-            rows.append(source(db, uid, kind, source_id))
+            rows.append(source(db, uid, kind, source_id, include_unavailable=True))
         except ValueError:
             continue
     return {'rows': rows, 'total': len(choices), 'has_more': offset + limit < len(choices)}
@@ -185,8 +242,8 @@ def create_report(body: dict, identity=Depends(current), db=Depends(get_db)):
     title = clean(body.get('title', ''), 180, required=True)
     details = details_input(body.get('details'))
     raw = body.get('items')
-    if not isinstance(raw, list) or not 1 <= len(raw) <= 200:
-        raise ValueError('Choose between 1 and 200 saved receipts or settled bills.')
+    if not isinstance(raw, list) or not 1 <= len(raw) <= 1000:
+        raise ValueError('Choose between 1 and 1000 saved receipts or settled split shares.')
     rows, unique, cases, totals, reimburse = [], set(), set(), {}, {}
     for item in raw:
         if not isinstance(item, dict) or type(item.get('source_id')) is not int:
@@ -197,7 +254,7 @@ def create_report(body: dict, identity=Depends(current), db=Depends(get_db)):
         unique.add((kind, source_id))
         current = source(db, uid, kind, source_id)
         if current['case_id'] in cases:
-            raise ValueError('Choose either a saved receipt or your share of its split bill, not both.')
+            raise ValueError('Choose the full receipt or one personal split share for each receipt, not both.')
         cases.add(current['case_id'])
         category = item.get('category')
         if category not in CATEGORIES:
