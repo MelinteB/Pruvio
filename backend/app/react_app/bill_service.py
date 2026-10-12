@@ -972,7 +972,13 @@ def send_participant_reminder(
     participant.reminder_at = datetime.utcnow()
     if participant.user_id:
         from app.services.push_service import enqueue
-        enqueue(db, participant.user_id, "reminder", "Payment reminder", participant.reminder_message, f"/split-bill/sessions/{session.token}/join")
+        from app.react_app.receipt_labels import receipt_label
+        name = receipt_label(db, session.case_id)
+        summary = get_split_bill_session_summary(db, session, ensure_translations=False)
+        own = next((row for row in summary['participants'] if row['participant_id'] == participant.id), None)
+        share = f"{own['total']:.2f} {session.currency}" if own else 'your assigned share'
+        enqueue(db, participant.user_id, "reminder", f"Payment reminder · {name}",
+                f"Your share for {name}: {share}. {participant.reminder_message}", f"/bill/{session.token}")
     db.commit()
     db.refresh(participant)
     return {"participant_id": participant.id, "reminder_at": participant.reminder_at.isoformat()}

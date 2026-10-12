@@ -39,7 +39,7 @@
     "frontend/src/Receipts.jsx": "b9e80ad8457a48c8cba97e20f50353c071c66d0b6b92974c0f660809010f3212",
     "frontend/src/style.css": "68dc67378673ab1a5e1944f5d8124ba0c723c4d1adc60d752a40e93499f25f1d",
     "frontend/src/workflows.test.jsx": "75092a5ee75d14c3d51ae27df94f98fa0acb329262824db6bed5e4a68bb9c222",
-    "app/react_app/bill_service.py": "97b9b18a55c083f0d78d5d9429d4a6a22a411158a505dc3188db5dd7d3a8b5c7",
+    "app/react_app/bill_service.py": "3f834313b684e0030c476c502ec790f7a2844eabfccfc286879a3a316bf32bf6",
     "app/models/expense.py": "6ec7875c21c2ce9c308e11a0f2765b48434f140d49901d997e8c80ea8520d7f5",
     "app/models/history_visibility.py": "337922a34d6eec7f30e8c18bbcef00feec43e86986bcf1aaa7f8aa097e56c773",
     "app/react_app/expenses.py": "c0fd69a2dc7c650d7306632d7d8cd1520cb70426aa527af38309b2f96bb1a6fc",
