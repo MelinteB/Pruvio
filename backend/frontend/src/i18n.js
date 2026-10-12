@@ -307,6 +307,15 @@ Object.assign(ro, {
  'Outbound flight':'Zbor dus','Return flight':'Zbor întors','Taxi to destination':'Taxi la destinație','Taxi from destination':'Taxi de la destinație','Ground transport':'Transport terestru','Accommodation':'Cazare','Restaurant / meals':'Restaurant / mese','Parking':'Parcare','Tolls':'Taxe de drum','Fuel':'Carburant','Public transport':'Transport public','Client meeting':'Întâlnire cu clientul','Other':'Altele','Print / save PDF':'Tipărește / salvează PDF','Export CSV':'Exportă CSV','Expense report':'Decont de cheltuieli','Employee and assignment':'Angajat și deplasare','Travel and business details':'Detalii deplasare','Itemized expenses':'Cheltuieli detaliate','Totals by currency':'Totaluri pe monede','Currency':'Monedă','Expense total':'Total cheltuieli','Employee paid':'Plătit de angajat','Reimbursement balance':'Sold de rambursat','Prepared by':'Întocmit de','Approved by':'Aprobat de','Date':'Data','Supplier / source':'Furnizor / sursă','Receipt / invoice':'Bon / factură','Business reason':'Motiv de serviciu','Claim':'Solicitat','VAT entered':'TVA declarat','Employee':'Angajat','View source':'Vezi sursa','Tax ID':'Cod fiscal',
  'Current':'Curente','Archived':'Arhivate','Removed':'Eliminate','Restore':'Restabilește','Archive':'Arhivează','Remove':'Elimină','Edit note':'Editează nota','History note (optional)':'Notă din istoric (opțional)','No shared bills in this view.':'Nu sunt note în această categorie.','No receipts in this view.':'Nu sunt bonuri în această categorie.'
 });
+Object.assign(ro, {
+ 'Split':'Împărțire','Receipts and splits':'Bonuri și împărțiri','Split status':'Starea împărțirii','All splits':'Toate împărțirile',
+ 'You own this split':'Tu ai creat această împărțire','Shared by the bill owner':'Partajat de titularul bonului',
+ 'No receipts or splits in this view.':'Nu sunt bonuri sau împărțiri în această categorie.',
+ 'Drag the crop box to move it. Drag a corner or edge to resize; use two fingers to pinch. The highlighted area will be scanned.':'Trage cadrul pentru a-l muta. Trage un colț sau o margine pentru redimensionare; folosește două degete pentru mărire sau micșorare. Zona evidențiată va fi scanată.',
+ 'Crop selection. Arrow keys move it; Shift plus arrows resize it.':'Selecția de decupare. Săgețile o mută; Shift și săgețile o redimensionează.',
+ 'Restore original':'Revino la original','Reset selection':'Resetează selecția',
+ 'PDF pages are uploaded unchanged. For touch cropping, capture the page as a photo or upload an image.':'Paginile PDF sunt încărcate nemodificate. Pentru decupare tactilă, fotografiază pagina sau încarcă o imagine.'
+});
 let language='en';
 export function setLanguage(value){language=value==='ro'?'ro':'en';document.documentElement.lang=language;}
 export function t(value){return language==='ro'?(ro[value]||value):value;}

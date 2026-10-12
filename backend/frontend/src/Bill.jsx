@@ -17,7 +17,7 @@ export function Join() {
   } = useLoad(() => request('/bills/' + token + '/invite'), [token]);
   const [busy, setBusy] = useState(false),
     [err, setError] = useState('');
-  return <><Title eyebrow="YOU'RE INVITED" title="Share the moment. Split the bill." />{loading ? <Spinner /> : error ? <Message error={error} /> : data && <Panel><Users size={36} /><h2>{data.owner}'s bill</h2><p>{t("Sign in with your own account and select the items you enjoyed.")}</p><Badge>{data.status}</Badge>{err && <Message error={err} />}<div className="row"><button className="primary" disabled={busy} onClick={async () => {
+  return <><Title eyebrow="YOU'RE INVITED" title="Share the moment. Split the bill." />{loading ? <Spinner /> : error ? <Message error={error} /> : data && <Panel><Users size={36} /><h2>{t('Split')} · {data.source_name}</h2><p>{data.owner} · {t("Sign in with your own account and select the items you enjoyed.")}</p><Badge>{data.status}</Badge>{err && <Message error={err} />}<div className="row"><button className="primary" disabled={busy} onClick={async () => {
           setBusy(true);
           try {
             if (!data.joined && !data.is_owner) await send('/bills/' + token + '/join');
@@ -144,7 +144,7 @@ export default function Bill() {
     settled = data.status !== 'open',
     link = location.origin + '/join/' + token,
     payment = data.owner_payment_details;
-  return <><Title eyebrow="A LITTLE LESS MATH" title={'Bill #' + data.session_id} action={<button className="secondary" onClick={() => setShare(!share)}><Share2 size={17} /> {t("Share bill")}</button>}><span className={'live-dot ' + (live === t("Live") ? 'connected' : '')} />{live} · {data.joined_participants_count}/{data.expected_participants_count} {t("people ·")} <Badge>{data.status}</Badge></Title>{error && <Message error={error} />} {notice && <Message>{notice}</Message>}
+  return <><Title eyebrow="A LITTLE LESS MATH" title={t('Split')+' · '+(data.source_name||t('Receipt'))} action={<button className="secondary" onClick={() => setShare(!share)}><Share2 size={17} /> {t("Share bill")}</button>}><span className={'live-dot ' + (live === t("Live") ? 'connected' : '')} />{live} · {data.joined_participants_count}/{data.expected_participants_count} {t("people ·")} <Badge>{data.status}</Badge></Title>{error && <Message error={error} />} {notice && <Message>{notice}</Message>}
  {share && <Panel title={t("Invite your people")}><div className="share-box"><QRCodeSVG value={link} size={150} /><div><p>{t("Participants sign in before joining.")}</p><input readOnly aria-label={t("Bill invitation link")} value={link} /><div className="row wrap"><button onClick={() => copied(link)}><Copy size={16} /> {t("Copy link")}</button>{navigator.share && <button onClick={() => navigator.share({
               title: 'Join my Pruvs bill',
               url: link

@@ -114,6 +114,7 @@ def source(db, uid, kind, source_id):
                 'merchant': receipt['merchant_name'], 'currency': currency,
                 'available_amount': str(amount(receipt['receipt_total']))}
     if kind == 'bill':
+        from app.react_app.receipt_labels import receipt_label
         session = db.get(SplitBillSession, source_id)
         participant = db.query(SplitBillParticipant).filter_by(session_id=source_id, user_id=uid, status='joined').first()
         if not session or not participant or session.status not in ('settled', 'closed'):
@@ -123,10 +124,11 @@ def source(db, uid, kind, source_id):
         currency = summary['currency']
         if not own or not re.fullmatch('[A-Z]{3}', currency or ''):
             raise ValueError('This split bill has no confirmed currency or participant share.')
+        name = receipt_label(db, session.case_id)
         return {'kind': kind, 'source_id': session.id, 'case_id': session.case_id,
                 'source_url': f'/bill/{session.token}', 'document_id': None,
-                'filename': f'Split bill #{session.id}', 'date': (session.settled_at or session.created_at).date().isoformat(),
-                'merchant': f'Shared bill #{session.id}', 'currency': currency,
+                'filename': f'Split · {name}', 'date': (session.settled_at or session.created_at).date().isoformat(),
+                'merchant': f'Split · {name}', 'currency': currency,
                 'available_amount': str(amount(own.get('total') or 0))}
     raise ValueError('Unknown expense source.')
 

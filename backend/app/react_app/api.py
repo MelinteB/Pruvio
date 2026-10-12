@@ -35,7 +35,7 @@ class Payload(BaseModel):
 @router.get('/config')
 def config():
     from app.services.receipt_currency_service import CURRENCY_OPTIONS
-    return {'version':'7.1.0','passkeys':passkeys.passkeys_enabled(),'currencies':CURRENCY_OPTIONS,
+    return {'version':'7.1.1','passkeys':passkeys.passkeys_enabled(),'currencies':CURRENCY_OPTIONS,
             'support_email':os.getenv('PRUVIO_SUPPORT_EMAIL','')}
 
 @router.get('/me')
@@ -189,18 +189,28 @@ def delete_confirm(body:dict,response:Response,identity=Depends(current),db=Depe
 @router.get('/history')
 def history(offset:int=Query(0,ge=0),view:str='active',identity=Depends(current),db=Depends(get_db)):
     from app.models.history_visibility import HistoryVisibility
+    from app.react_app.receipt_labels import receipt_label
     if view not in ('active','archived','removed'):raise ValueError('Unknown history view.')
     uid=identity[0].id
     states={(r.kind,r.source_id):r for r in db.query(HistoryVisibility).filter_by(user_id=uid).all()}
     def include(kind,source_id):return (states.get((kind,source_id)).state if (kind,source_id) in states else 'active')==view
     case_query=db.query(Case).filter_by(user_id=uid).order_by(Case.created_at.desc())
     selected=[c for c in case_query.all() if include('receipt',c.id)]
-    cases=selected[offset:offset+30]
+    visible_bills=[b for b in bills.list_split_bill_sessions_for_user(db,uid,None) if include('bill',b['session_id'])]
+    case_ids={c.id for c in selected}|{b['case_id'] for b in visible_bills}
+    ordered=sorted(case_ids,key=lambda cid:(db.get(Case,cid).created_at,cid),reverse=True)
+    page_ids=set(ordered[offset:offset+30])
+    cases=[c for c in selected if c.id in page_ids]
     receipt_rows=[{**receipts.get_receipt_view(db,c.id,user_id=uid,ensure_translations=False),
                    'history_note':states.get(('receipt',c.id)).note if ('receipt',c.id) in states else ''} for c in cases]
-    bill_rows=[{**b,'history_note':states.get(('bill',b['session_id'])).note if ('bill',b['session_id']) in states else ''}
-               for b in bills.list_split_bill_sessions_for_user(db,uid,None) if include('bill',b['session_id'])]
-    return {'receipts':receipt_rows,'receipt_count':len(selected),'bills':bill_rows}
+    bill_rows=[{**b,'source_name':receipt_label(db,b['case_id']),
+                'source_owned':db.get(Case,b['case_id']).user_id==uid,
+                'history_note':states.get(('bill',b['session_id'])).note if ('bill',b['session_id']) in states else ''}
+               for b in visible_bills if b['case_id'] in page_ids]
+    return {'receipts':receipt_rows,'receipt_count':len(selected),'bills':bill_rows,
+            'group_count':len(ordered),'group_order':ordered[offset:offset+30],
+            'bill_counts':{'open':sum(b['status']=='open' for b in visible_bills),
+                                               'settled':sum(b['status']=='settled' for b in visible_bills)}}
 
 @router.post('/receipts/upload')
 def upload(file:UploadFile=File(...),identity=Depends(current),db=Depends(get_db)):
@@ -249,7 +259,9 @@ def member(db,token,uid,owner=False,lock=False):
     return s,p
 
 def summary(db,s,uid):
+    from app.react_app.receipt_labels import receipt_label
     result=bills.get_split_bill_session_summary(db,s,ensure_translations=False)
+    result['source_name']=receipt_label(db,s.case_id)
     result['my_participant_id']=next(p['participant_id'] for p in result['participants'] if p['user_id']==uid)
     if s.owner_user_id!=uid:
         for p in result['participants']:
@@ -258,11 +270,13 @@ def summary(db,s,uid):
 
 @router.get('/bills/{token}/invite')
 def invitation(token:str,identity=Depends(current),db=Depends(get_db)):
+    from app.react_app.receipt_labels import receipt_label
     s=bills.get_split_bill_session_by_token(db,token)
     if not s:raise HTTPException(404,'Invitation not found.')
     mine=db.query(SplitBillParticipant).filter_by(session_id=s.id,user_id=identity[0].id,status='joined').first()
     owner=db.get(User,s.owner_user_id)
-    return {'token':token,'owner':owner.name if owner else 'Pruvs user','status':s.status,'joined':bool(mine),'is_owner':s.owner_user_id==identity[0].id}
+    return {'token':token,'owner':owner.name if owner else 'Pruvs user','source_name':receipt_label(db,s.case_id),
+            'status':s.status,'joined':bool(mine),'is_owner':s.owner_user_id==identity[0].id}
 
 @router.post('/bills/{token}/join')
 def join(token:str,identity=Depends(current),db=Depends(get_db)):

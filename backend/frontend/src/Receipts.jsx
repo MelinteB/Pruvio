@@ -4,6 +4,13 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowUpRight, ScanLine, ReceiptText, Users, UploadCloud, RotateCw } from 'lucide-react';
 import { request, send, uploadFile, money } from './api';
 import { useApp, useLoad, Title, Panel, Spinner, Message, Field, Badge, Empty } from './common';
+import CropEditor from './CropEditor';
+export function groupHistory(data){
+  const grouped=new Map();
+  for(const r of data?.receipts||[])grouped.set(r.case_id,{receipt:r,bills:[]});
+  for(const b of data?.bills||[]){if(!grouped.has(b.case_id))grouped.set(b.case_id,{receipt:null,bills:[]});grouped.get(b.case_id).bills.push(b)}
+  return (data?.group_order||[...grouped.keys()]).map(id=>({id,...grouped.get(id)})).filter(g=>g.receipt||g.bills?.length);
+}
 export function History({
   home = false
 }) {
@@ -21,17 +28,24 @@ export function History({
   } = useLoad(() => request('/history?offset=' + offset + '&view=' + (home ? 'active' : view)), [offset, view]);
   async function organize(kind,id,state,note){setActionError('');try{await send('/history/'+kind+'/'+id,{state,note},'PATCH');await reload()}catch(e){setActionError(e.message)}}
   function controls(kind,id,note){return !home&&<div className="row wrap no-print"><button onClick={()=>{const answer=prompt(t('History note (optional)'),note||'');if(answer!==null)organize(kind,id,view,answer)}}>{t('Edit note')}</button>{view!=='active'&&<button onClick={()=>organize(kind,id,'active',note||'')}>{t('Restore')}</button>}{view!=='archived'&&<button onClick={()=>organize(kind,id,'archived',note||'')}>{t('Archive')}</button>}{view!=='removed'&&<button className="danger" onClick={()=>{if(confirm(t('Move this item to Removed? It remains available to other participants and in completed expense reports.')))organize(kind,id,'removed',note||'')}}>{t('Remove')}</button>}</div>}
+  const groups=groupHistory(data);
+  const receiptName=g=>g.receipt?.merchant_name&&g.receipt.merchant_name!=='Receipt'?g.receipt.merchant_name:g.receipt?.original_filename||g.bills?.[0]?.source_name||t('Receipt');
   return <><Title eyebrow={home ? 'YOUR EVERYDAY, SIMPLIFIED' : 'ALL IN ONE PLACE'} title={home ? `Hello, ${user.name?.split(' ')[0] || user.username}` : t("Your history")} action={<Link className="primary" to="/upload"><ScanLine size={18} /> {t("Scan a receipt")}</Link>}>{home ? t("Keep track of the moments you share.") : t("Receipts you saved and bills you joined.")}</Title>{error && <Message error={error} />}{actionError&&<Message error={actionError}/>} {!home&&<div className="row wrap">{['active','archived','removed'].map(v=><button className={view===v?'primary':''} key={v} onClick={()=>{setOffset(0);setView(v)}}>{t(v==='active'?'Current':v==='archived'?'Archived':'Removed')}</button>)}</div>}{loading ? <Spinner /> : data && <>
- {home && <div className="stats"><Panel><span>{t("Saved receipts")}</span><strong>{data.receipt_count}</strong><ReceiptText /></Panel><Panel><span>{t("Open bills")}</span><strong>{data.bills.filter(b => b.status === 'open').length}</strong><Users /></Panel><Panel><span>{t("Settled bills")}</span><strong>{data.bills.filter(b => b.status === 'settled').length}</strong><ScanLine /></Panel></div>}
- <div className="section-heading"><h2>{t("Shared bills")}</h2><select aria-label="Bill status" value={filter} onChange={e => setFilter(e.target.value)}><option value="all">{t("All statuses")}</option><option value="open">{t("Open")}</option><option value="settled">{t("Settled")}</option></select></div>
- <div className="card-grid">{data.bills.filter(b => filter === 'all' || b.status === filter).map(b => <div key={b.session_id} className="panel bill-card"><Link to={'/bill/' + b.token}><div className="row between"><span className="icon-tile"><Users size={20} /></span><Badge>{b.status}</Badge></div><h3>Bill #{b.session_id}</h3><span className="muted">{b.role === 'owner' ? t("You own this bill") : t("You are a participant")}</span><div className="row between"><div><small>{t("Your share")}</small><strong>{money(b.my_total, b.currency)}</strong></div><ArrowUpRight size={20} /></div></Link>{b.history_note&&<small>{b.history_note}</small>}{controls('bill',b.session_id,b.history_note)}</div>)}</div>{!data.bills.length && <Empty>{t("No shared bills in this view.")}</Empty>}
- <div className="section-heading"><h2>{t("Saved receipts")}</h2><span className="muted">{data.receipt_count} {t("receipts")}</span></div><Panel>{data.receipts.map(r => <div key={r.case_id} className="history-item"><Link to={'/receipt/' + r.case_id} className="list-row"><span className="icon-tile"><ReceiptText size={20} /></span><div className="grow"><strong>{r.merchant_name}</strong><small>{r.original_filename || t("Receipt")} · {r.status.replaceAll('_', ' ')}</small></div><strong>{money(r.receipt_total, r.currency)}</strong><ArrowUpRight size={18} /></Link>{r.history_note&&<small>{r.history_note}</small>}{controls('receipt',r.case_id,r.history_note)}</div>)}{!data.receipts.length && <Empty>{t("No receipts in this view.")}</Empty>}</Panel>
- {!home && <div className="row pager"><button disabled={!offset} onClick={() => setOffset(Math.max(0, offset - 30))}>{t("Previous")}</button><span>{offset + 1}–{Math.min(offset + 30, data.receipt_count)} {t("of")} {data.receipt_count}</span><button disabled={offset + 30 >= data.receipt_count} onClick={() => setOffset(offset + 30)}>{t("Next")}</button></div>}
+ {home && <div className="stats"><Panel><span>{t("Saved receipts")}</span><strong>{data.receipt_count}</strong><ReceiptText /></Panel><Panel><span>{t("Open bills")}</span><strong>{data.bill_counts?.open||0}</strong><Users /></Panel><Panel><span>{t("Settled bills")}</span><strong>{data.bill_counts?.settled||0}</strong><ScanLine /></Panel></div>}
+ <div className="section-heading"><h2>{t('Receipts and splits')}</h2><select aria-label={t('Split status')} value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">{t('All splits')}</option><option value="open">{t('Open')}</option><option value="settled">{t('Settled')}</option></select></div>
+ <div className="receipt-tree">{groups.map(g=>{const name=receiptName(g),related=g.bills.filter(b=>filter==='all'||b.status===filter),owned=!!g.receipt||!!g.bills[0]?.source_owned;
+   if(!g.receipt&&!related.length)return null;
+   return <section className="panel receipt-branch" key={g.id}><div className="list-row"><span className="icon-tile"><ReceiptText size={20}/></span><div className="grow"><strong>{owned?<Link to={'/receipt/'+g.id}>{name}</Link>:name}</strong><small>{g.receipt?(g.receipt.original_filename||t('Receipt'))+' · '+g.receipt.status.replaceAll('_',' '):t('Shared by the bill owner')}</small></div>{g.receipt&&<strong>{money(g.receipt.receipt_total,g.receipt.currency)}</strong>}</div>
+     {g.receipt?.history_note&&<small>{g.receipt.history_note}</small>}{g.receipt&&controls('receipt',g.id,g.receipt.history_note)}
+     {!!related.length&&<div className="receipt-children">{related.map(b=><div key={b.session_id} className="panel bill-card"><Link to={'/bill/'+b.token}><div className="row between"><span className="icon-tile"><Users size={18}/></span><Badge>{b.status}</Badge></div><h3>{t('Split')} · {name}</h3><span className="muted-context">{b.role==='owner'?t('You own this split'):t('You are a participant')}</span><div className="row between"><div><small>{t('Your share')}</small><strong>{money(b.my_total,b.currency)}</strong></div><ArrowUpRight size={18}/></div></Link>{b.history_note&&<small>{b.history_note}</small>}{controls('bill',b.session_id,b.history_note)}</div>)}</div>}
+   </section>})}</div>{!groups.length&&<Empty>{t('No receipts or splits in this view.')}</Empty>}
+ {!home && <div className="row pager"><button disabled={!offset} onClick={() => setOffset(Math.max(0, offset - 30))}>{t("Previous")}</button><span>{data.group_count?offset+1:0}–{Math.min(offset + 30, data.group_count)} {t("of")} {data.group_count}</span><button disabled={offset + 30 >= data.group_count} onClick={() => setOffset(offset + 30)}>{t("Next")}</button></div>}
  </>}</>;
 }
 export function Upload() {
   const nav = useNavigate();
   const [file, setFile] = useState(null),
+    [original, setOriginal] = useState(null),
     [preview, setPreview] = useState(''),
     [busy, setBusy] = useState(false),
     [progress, setProgress] = useState(0),
@@ -61,6 +75,7 @@ export function Upload() {
       return;
     }
     setFile(f);
+    setOriginal(f);
     setCrop({
       x: 0,
       y: 0,
@@ -70,6 +85,7 @@ export function Upload() {
   }
   async function transform(rotate = false) {
     try {
+      if (!file?.type.startsWith('image/')) throw new Error('Select an image to crop. PDF pages can be reviewed and uploaded as they are.');
       const img = await createImageBitmap(file);
       const c = document.createElement('canvas');
       if (rotate) {
@@ -84,16 +100,16 @@ export function Upload() {
           sy = img.height * crop.y / 100,
           sw = Math.max(1, img.width * Math.min(crop.w, 100 - crop.x) / 100),
           sh = Math.max(1, img.height * Math.min(crop.h, 100 - crop.y) / 100);
-        c.width = sw;
-        c.height = sh;
+        c.width = Math.round(sw);
+        c.height = Math.round(sh);
         c.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
       }
       img.close();
-      c.toBlob(b => choose(new File([b], 'receipt.jpg', {
-        type: 'image/jpeg'
-      })), 'image/jpeg', .92);
+      const blob=await new Promise((resolve,reject)=>c.toBlob(b=>b?resolve(b):reject(new Error('Could not prepare the image.')),'image/jpeg',.92));
+      setFile(new File([blob],(original?.name||'receipt').replace(/\.[^.]+$/,'')+(rotate?'-rotated':'-cropped')+'.jpg',{type:'image/jpeg'}));
+      setCrop({x:0,y:0,w:100,h:100});
     } catch (e) {
-      setError('Could not edit this image. Try the original file.');
+      setError(e.message||'Could not edit this image. Try the original file.');
     }
   }
   async function upload() {
@@ -114,15 +130,7 @@ export function Upload() {
           e.preventDefault();
           if (!busy) choose(e.dataTransfer.files[0]);
         }}><UploadCloud size={42} /><h2>{t("Drop your receipt here")}</h2><p>{t("JPG, PNG, WebP or PDF · up to 10 MB")}</p><input aria-label={t("Choose receipt")} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={busy} onChange={e => choose(e.target.files[0])} /></label><label className="secondary camera">{t("Take a photo")} <input aria-label={t("Take receipt photo")} type="file" accept="image/*" capture="environment" disabled={busy} onChange={e => choose(e.target.files[0])} /></label>{error && <Message error={error} />}<button className="primary full" disabled={!file || busy} onClick={upload}>{busy ? progress < 100 ? `Uploading ${progress}%` : t("Reading your receipt…") : t("Process receipt")}</button>{busy && <><progress max="100" value={progress} /><button onClick={() => abort.current.abort()}>{t("Cancel upload")}</button><p className="muted">{t("After upload finishes, processing can continue on the server. You can check History.")}</p></>}</Panel>
- <Panel title={file ? file.name : t("For a clear result")}>{!file ? <ul className="tips"><li>{t("Include the complete receipt and total.")}</li><li>{t("Use good lighting and avoid reflections.")}</li><li>{t("Keep item names and prices in focus.")}</li><li>{t("Review quantities, discounts and currency after OCR.")}</li></ul> : file.type === 'application/pdf' ? <iframe title={t("Receipt PDF preview")} src={preview} className="pdf-preview" /> : <><div className="crop-preview"><img src={preview} alt={t("Receipt preview")} /><div className="crop-overlay" style={{
-              left: crop.x + '%',
-              top: crop.y + '%',
-              width: Math.min(crop.w, 100 - crop.x) + '%',
-              height: Math.min(crop.h, 100 - crop.y) + '%'
-            }} /></div><div className="form-grid">{[['x', t("Left")], ['y', t("Top")], ['w', t("Width")], ['h', t("Height")]].map(([key, label]) => <Field key={key} label={label + ' %'} type="number" min={key === 'x' || key === 'y' ? 0 : 1} max={key === 'x' || key === 'y' ? 99 : 100} value={crop[key]} disabled={busy} onChange={e => setCrop({
-              ...crop,
-              [key]: Math.min(100, Math.max(0, Number(e.target.value)))
-            })} />)}</div><div className="row"><button disabled={busy} onClick={() => transform(false)}>{t("Apply crop")}</button><button disabled={busy} onClick={() => transform(true)}><RotateCw size={16} /> {t("Rotate")}</button></div></>}</Panel></div></>;
+ <Panel title={file ? file.name : t("For a clear result")}>{!file ? <ul className="tips"><li>{t("Include the complete receipt and total.")}</li><li>{t("Use good lighting and avoid reflections.")}</li><li>{t("Keep item names and prices in focus.")}</li><li>{t("Review quantities, discounts and currency after OCR.")}</li></ul> : file.type === 'application/pdf' ? <><iframe title={t("Receipt PDF preview")} src={preview} className="pdf-preview" /><p className="muted">{t('PDF pages are uploaded unchanged. For touch cropping, capture the page as a photo or upload an image.')}</p></> : <><CropEditor preview={preview} crop={crop} onChange={setCrop}/><div className="row wrap"><button disabled={busy} onClick={() => transform(false)}>{t("Apply crop")}</button><button disabled={busy} onClick={() => transform(true)}><RotateCw size={16} /> {t("Rotate")}</button><button disabled={busy||file===original} onClick={()=>{setFile(original);setCrop({x:0,y:0,w:100,h:100})}}>{t('Restore original')}</button><button disabled={busy} onClick={()=>setCrop({x:0,y:0,w:100,h:100})}>{t('Reset selection')}</button></div></>}</Panel></div></>;
 }
 export function Receipt() {
   const {

@@ -20,3 +20,15 @@
  .expense-print .table-scroll{overflow:visible;margin:0}.expense-print table{font-size:9px;table-layout:fixed}.expense-print th,.expense-print td{white-space:normal;word-break:break-word;padding:5px;border:1px solid #ddd}
  .expense-print .two-column{grid-template-columns:1fr 1fr;gap:10px}.expense-print .muted{color:#444}
 }
+
+/* Touch and mouse crop editor */
+.crop-stage{touch-action:none;user-select:none;overflow:hidden;border-radius:12px;border:1px solid #dbe5f3;cursor:crosshair}
+.crop-stage img{display:block;width:100%;height:auto;pointer-events:none;user-select:none}
+.crop-stage .crop-overlay{pointer-events:auto;touch-action:none;background:#0756df18;border:2px solid #fff;box-shadow:0 0 0 1px #0756df,0 0 0 200vmax #0f1c3459;cursor:grab}
+.crop-stage .crop-overlay:active{cursor:grabbing}.crop-stage .crop-overlay:focus-visible{outline:3px solid #ffc752;outline-offset:2px}
+.crop-handle{position:absolute;width:25px;height:25px;border:2px solid #0756df;border-radius:50%;background:#fff;box-shadow:0 2px 8px #112d5d55;touch-action:none}
+.crop-nw{left:0;top:0;transform:translate(-50%,-50%);cursor:nwse-resize}.crop-ne{right:0;top:0;transform:translate(50%,-50%);cursor:nesw-resize}.crop-sw{left:0;bottom:0;transform:translate(-50%,50%);cursor:nesw-resize}.crop-se{right:0;bottom:0;transform:translate(50%,50%);cursor:nwse-resize}
+.crop-n{left:50%;top:0;transform:translate(-50%,-50%);cursor:ns-resize}.crop-s{left:50%;bottom:0;transform:translate(-50%,50%);cursor:ns-resize}.crop-w{left:0;top:50%;transform:translate(-50%,-50%);cursor:ew-resize}.crop-e{right:0;top:50%;transform:translate(50%,-50%);cursor:ew-resize}
+/* The receipt is the parent; split sessions are its children. */
+.receipt-tree{display:grid;gap:16px}.receipt-branch{padding:18px 20px;margin:0}.receipt-branch>.list-row{border:0;padding:3px 0 12px}.receipt-children{margin-left:21px;border-left:2px solid #dce8fb;padding-left:18px;display:grid;gap:10px}.receipt-children .bill-card{padding:14px 17px;margin:0;background:#f8faff;box-shadow:none}.receipt-children .bill-card h3{margin:9px 0 4px}.receipt-children .bill-card>.row{margin:7px 0 0}.receipt-children .bill-card .icon-tile{width:32px;height:32px}.receipt-branch .muted-context{font-size:12px;color:#6d7790}
+@media(max-width:760px){.receipt-branch{padding:15px}.receipt-children{margin-left:9px;padding-left:11px}.crop-handle{width:30px;height:30px}}
