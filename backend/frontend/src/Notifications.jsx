@@ -144,13 +144,13 @@ export default function Notifications({ embedded = false }) {
             await send('/notifications-api/preferences', prefs, 'PUT');
             setNotice(t("Preferences saved."));
           })}>{t("Save preferences")}</button><p className="muted">{t("Split bill activity is emailed when enabled, even when a device push is accepted. A verified email address and an active notification worker are required.")}</p>{state && !state.worker_enabled && <Message error={t("Notification delivery worker is disabled on the server. Ask the administrator to enable it in Render.")} />}</Panel>
- {params.has('enrol') && <button className="primary full" onClick={() => {
+ {params.has('enrol') && <button className="primary full" disabled={!current} onClick={() => {
           const next = safeNext(sessionStorage.getItem('pruvs-next'));
           sessionStorage.removeItem('pruvs-next');
           nav(next === '/notifications' ? '/' : next, {
             replace: true
           });
-        }}>{t(current?t("Continue to Pruvs"):t("Maybe later — continue"))}</button>}</div><div><Panel title={t("Your devices")}>{state?.devices.map(d => <div className="list-row" key={d.id}><Smartphone size={20} /><div className="grow"><strong>{d.label}{d.id === device ? ' · This device' : ''}</strong><small>{!d.active ? t("Disabled") : d.confirmed_at ? t("Test confirmed") : t("Awaiting confirmation")}</small></div>{d.active && <button disabled={busy} onClick={() => run(async () => {
+        }}>{t("Continue to Pruvs")}</button>}</div><div><Panel title={t("Your devices")}>{state?.devices.map(d => <div className="list-row" key={d.id}><Smartphone size={20} /><div className="grow"><strong>{d.label}{d.id === device ? ' · This device' : ''}</strong><small>{!d.active ? t("Disabled") : d.confirmed_at ? t("Test confirmed") : t("Awaiting confirmation")}</small></div>{d.active && <button disabled={busy} onClick={() => run(async () => {
               await send('/notifications-api/disable', {
                 device_id: d.id
               });

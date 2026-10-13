@@ -58,9 +58,13 @@ describe('production user flows', () => {
     }));
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/bill/example'));
   });
-  it('registration offers optional unchecked notification consent', () => {
+  it('prefills username from the full name and requires notification consent', () => {
     shell(<Auth mode="register" />, '/register');
-    expect(screen.getByLabelText('Send me updates about my receipts and shared bills (optional)').checked).toBe(false);
+    fireEvent.change(screen.getByLabelText('Full name'), {target:{value:'Ana Popescu'}});
+    expect(screen.getByLabelText('Username').value).toBe('ana.popescu');
+    const consent=screen.getByLabelText('Allow device notifications before email verification (required)');
+    expect(consent.checked).toBe(false);
+    expect(consent.required).toBe(true);
   });
   it('offers notification enrolment once after completing registration', async () => {
     sessionStorage.setItem('pruvs-pending-register', JSON.stringify({

@@ -46,8 +46,17 @@ export default function Bill() {
       mode: 'none',
       value: 0
     }),
-    [people, setPeople] = useState(2);
+    [people, setPeople] = useState(2),
+    [targetCurrency,setTargetCurrency]=useState('RON'),
+    [fx,setFx]=useState(null),[fxError,setFxError]=useState('');
   const saving = useRef(false);
+  const myAmount=data?.participants?.find(p=>p.participant_id===data.my_participant_id)?.total;
+  useEffect(()=>{let active=true;setFx(null);setFxError('');
+    if(!data?.currency||myAmount==null)return;
+    const timer=setTimeout(()=>request('/fx/quote?'+new URLSearchParams({base:data.currency,target:targetCurrency,amount:String(myAmount)}))
+      .then(result=>active&&setFx(result)).catch(error=>active&&setFxError(error.message)),300);
+    return()=>{active=false;clearTimeout(timer)};
+  },[data?.currency,myAmount,targetCurrency]);
   useEffect(() => {
     let active = true,
       ws,
@@ -150,6 +159,7 @@ export default function Bill() {
               url: link
             }).catch(() => {})}>{t("Share…")}</button>}<a className="button" target="_blank" rel="noreferrer" href={'https://wa.me/?text=' + encodeURIComponent(link)}>WhatsApp</a><a className="button" href={'sms:?body=' + encodeURIComponent(link)}>SMS</a><a className="button" href={'mailto:?subject=Join%20my%20Pruvs%20bill&body=' + encodeURIComponent(link)}>{t("Email")}</a></div></div></div></Panel>}
  <div className="stats"><Panel><span>{t("Your share")}</span><strong>{money(mine?.total, data.currency)}</strong><small>{t("Items")} {money(mine?.item_total, data.currency)} + tip {money(mine?.tip_share, data.currency)}</small></Panel><Panel><span>{t("Still to split")}</span><strong>{money(data.remaining_total, data.currency)}</strong><small>{t("Items remaining, excluding tip")}</small></Panel><Panel><span>{t("Bill total with tip")}</span><strong>{money(data.grand_total, data.currency)}</strong><small>{data.tip_mode === 'percent' ? data.tip_value + '% tip on each person’s items' : data.tip_mode === 'fixed' ? t("Fixed tip shared across participants") : t("No tip")}</small></Panel></div>
+ <Panel title={t('Currency reference')}><div className="row wrap"><Field label={t('Show my share in')}><select value={targetCurrency} onChange={e=>setTargetCurrency(e.target.value)}>{[...new Set([data.currency,'RON','EUR','USD','GBP','CHF'])].map(code=><option key={code} value={code}>{code}</option>)}</select></Field>{fx&&<strong>{money(fx.converted,targetCurrency)}</strong>}</div>{fxError&&<Message error={fxError}/>}<small>{fx?.date?`${t('ECB reference')} · ${fx.date} · 1 ${data.currency} = ${fx.rate} ${targetCurrency}`:t('Original bill amounts remain unchanged.')}</small>{fx?.source_url&&<p><a href={fx.source_url} target="_blank" rel="noreferrer">{t('European Central Bank source')}</a></p>}</Panel>
  <div className="two-column bill-layout"><Panel title={t("Pick what you enjoyed")}><p className="muted">{t("Your choices save automatically and update for everyone.")}</p>{data.items.map(item => {
           const own = item.assignments.filter(a => a.participant_id === data.my_participant_id).reduce((n, a) => n + a.quantity, 0),
             max = own + item.remaining_quantity,

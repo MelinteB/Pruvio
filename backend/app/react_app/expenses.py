@@ -237,9 +237,10 @@ def source_tree(offset: int = Query(0, ge=0), limit: int = Query(30, ge=1, le=10
             continue
         group = grouped.setdefault(session.case_id, {'date': session.created_at,
                                                       'receipt_id': None, 'session_ids': []})
-        group['date'] = max(group['date'], session.settled_at or session.created_at)
+        if group['receipt_id'] is None:
+            group['date'] = min(group['date'], session.settled_at or session.created_at)
         group['session_ids'].append(session.id)
-    ordered = sorted(grouped.items(), key=lambda item: (item[1]['date'], item[0]), reverse=True)
+    ordered = sorted(grouped.items(), key=lambda item: (item[1]['date'], item[0]))
     rows = []
     for case_id, group in ordered[offset:offset + limit]:
         receipt = None
@@ -249,7 +250,7 @@ def source_tree(offset: int = Query(0, ge=0), limit: int = Query(30, ge=1, le=10
             except ValueError:
                 pass
         bills = []
-        for session_id in sorted(group['session_ids'], reverse=True):
+        for session_id in sorted(group['session_ids']):
             try:
                 bills.append(source(db, uid, 'bill', session_id, include_unavailable=True))
             except ValueError:
@@ -271,7 +272,7 @@ def sources(offset: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=100),
              .join(SplitBillParticipant, SplitBillParticipant.session_id == SplitBillSession.id)
              .filter(SplitBillParticipant.user_id == uid, SplitBillParticipant.status == 'joined').distinct().all()]
     choices = sorted(receipts if kind == 'receipt' else bills if kind == 'bill' else receipts + bills,
-                     key=lambda entry: (entry[0], entry[2]), reverse=True)
+                     key=lambda entry: (entry[0], entry[2]))
     removed = {(row.kind, row.source_id) for row in db.query(HistoryVisibility)
                .filter_by(user_id=uid, state='removed').all()}
     choices = [choice for choice in choices if (choice[1], choice[2]) not in removed]
@@ -312,6 +313,9 @@ def create_report(body: dict, identity=Depends(current), db=Depends(get_db)):
         raise ValueError('Choose a company profile from your account.')
     title = clean(body.get('title', ''), 180, required=True)
     details = details_input(body.get('details'))
+    report_currency = str(body.get('report_currency') or 'RON').upper()
+    if not re.fullmatch('[A-Z]{3}', report_currency):
+        raise ValueError('Choose a valid report reference currency.')
     trip=None
     if body.get('trip_profile_id') is not None:
         trip=db.query(ExpenseTripProfile).filter_by(id=body['trip_profile_id'],user_id=uid,company_id=profile.id).first()
@@ -365,9 +369,23 @@ def create_report(body: dict, identity=Depends(current), db=Depends(get_db)):
         currency = details['advance_currency']
         if currency not in reimburse:
             raise ValueError('Advance currency must match an employee-paid expense currency.')
+    rows.sort(key=lambda item: (item['expense_date'], item['case_id'], item['source_id']))
+    from app.services.ecb_fx import quote, rates
+    table = rates() if any(row['currency'] != report_currency for row in rows) else None
+    converted = Decimal('0')
+    for row in rows:
+        conversion = quote(row['claimed_amount'], row['currency'], report_currency, table=table)
+        row['converted_amount'] = conversion['converted']
+        row['fx_rate'] = conversion['rate']
+        row['fx_date'] = conversion['date']
+        converted += Decimal(conversion['converted'])
     snapshot = {'title': title, 'employee': identity[0].name, 'company': format_company(profile),
                 'trip_profile':trip.name if trip else None,
                 'details': details, 'items': rows, 'totals': {k: str(v) for k, v in totals.items()},
+                'reference_conversion': {'currency': report_currency, 'total': str(converted),
+                                         'date': table[0] if table else None,
+                                         'source': 'European Central Bank' if table else 'Same currency',
+                                         'source_url': 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml' if table else None},
                 'employee_paid': {k: str(v) for k, v in reimburse.items()},
                 'reimbursement': {k: str(v - (Decimal(details['advance_amount']) if k == details['advance_currency'] else 0))
                                   for k, v in reimburse.items()}}
@@ -389,7 +407,9 @@ def report(report_id: int, identity=Depends(current), db=Depends(get_db)):
     row = db.query(ExpenseReport).filter_by(id=report_id, user_id=identity[0].id).first()
     if not row:
         raise HTTPException(404, 'Expense report not found.')
-    return {'id': row.id, 'created_at': row.created_at.isoformat(), **json.loads(row.snapshot_json)}
+    snapshot = json.loads(row.snapshot_json)
+    snapshot['items'].sort(key=lambda item: (item.get('expense_date',''), item.get('case_id',0), item.get('source_id',0)))
+    return {'id': row.id, 'created_at': row.created_at.isoformat(), **snapshot}
 
 
 @router.get('/reports/{report_id}/pdf')
@@ -399,7 +419,9 @@ def report_pdf(report_id: int, identity=Depends(current), db=Depends(get_db)):
         raise HTTPException(404, 'Expense report not found.')
     from app.react_app.expense_pdf import render_expense_pdf
     try:
-        output = render_expense_pdf(db, identity[0].id, row.id, json.loads(row.snapshot_json), row.created_at)
+        snapshot = json.loads(row.snapshot_json)
+        snapshot['items'].sort(key=lambda item: (item.get('expense_date',''), item.get('case_id',0), item.get('source_id',0)))
+        output = render_expense_pdf(db, identity[0].id, row.id, snapshot, row.created_at)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     return StreamingResponse(output, media_type='application/pdf', headers={

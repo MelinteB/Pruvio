@@ -375,3 +375,19 @@ Object.assign(ro, {
  'Print summary':'Tipărește sumarul',
  'Could not generate expense PDF.':'PDF-ul decontului nu a putut fi generat.'
 });
+Object.assign(ro, {
+ 'Allow device notifications before email verification (required)':'Permite notificările pe dispozitiv înainte de verificarea e-mailului (obligatoriu)',
+ 'Your browser will ask permission before the email code is sent. After verification, finish linking this device to your account.':'Browserul îți va cere permisiunea înainte de trimiterea codului pe e-mail. După verificare, conectează acest dispozitiv la cont.',
+ 'Allow device notifications before requesting the email code.':'Permite notificările înainte de a solicita codul pe e-mail.',
+ 'Device notifications require a supported browser. On iPhone, add Pruvs to the Home Screen and open it there.':'Notificările necesită un browser compatibil. Pe iPhone, adaugă Pruvs pe ecranul principal și deschide aplicația de acolo.',
+ 'Allow notifications in your browser settings, then try again.':'Permite notificările din setările browserului și încearcă din nou.',
+ 'Currency reference':'Conversie orientativă',
+ 'Show my share in':'Arată partea mea în',
+ 'ECB reference':'Curs de referință BCE',
+ 'European Central Bank source':'Sursa Băncii Centrale Europene',
+ 'Original bill amounts remain unchanged.':'Sumele originale ale notei rămân neschimbate.',
+ 'Reference total currency':'Moneda totalului orientativ',
+ 'The reference total uses the latest ECB rate available when you create the report. The date and rate are saved in the report. Original currencies and claims remain unchanged; check company policy before reimbursement.':'Totalul orientativ folosește ultimul curs BCE disponibil la crearea decontului. Data și cursul sunt salvate. Sumele revendicate rămân în monedele originale; verifică politica firmei înainte de rambursare.',
+ 'Reference currency conversion':'Conversie în moneda de referință',
+ 'Indicative ECB reference at report creation; the original claim amounts remain authoritative.':'Curs BCE orientativ la crearea decontului; sumele originale revendicate rămân principale.'
+});

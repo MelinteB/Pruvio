@@ -81,7 +81,8 @@ def summary_pdf(report_id, snapshot, created_at, annexes):
         grid.append([p(index,'PruvsSmall'), p(item.get('expense_date',''),'PruvsSmall'),
                      p(desc + (' | '+source_details if source_details else ''),'PruvsSmall'),
                      p(item.get('category','').replace('_',' ') + ' | ' + item.get('paid_by',''),'PruvsSmall'),
-                     p(f"{item.get('claimed_amount','')} {item.get('currency','')}",'PruvsSmall'),
+                     p(f"{item.get('claimed_amount','')} {item.get('currency','')}" +
+                       (f" | {item['converted_amount']} {snapshot['reference_conversion']['currency']}" if item.get('fx_date') and snapshot.get('reference_conversion') else ''),'PruvsSmall'),
                      p(f"{item.get('vat_amount','')} {item.get('currency','')}",'PruvsSmall')])
     table = Table(grid, colWidths=widths, repeatRows=1, hAlign='LEFT')
     table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),NAVY),
@@ -94,6 +95,15 @@ def summary_pdf(report_id, snapshot, created_at, annexes):
         story.append(p(f"{currency}: expense {total}  |  employee paid "
                        f"{snapshot['employee_paid'].get(currency,'0.00')}  |  reimbursement "
                        f"{snapshot['reimbursement'].get(currency,'0.00')}"))
+    reference = snapshot.get('reference_conversion')
+    if reference:
+        story += [p('Indicative reference conversion', 'PruvsSection'),
+                  p(f"Total: {reference['total']} {reference['currency']}  |  ECB published {reference.get('date') or 'same currency'}"),
+                  p('Original claim amounts remain authoritative. Rates are indicative, saved when the report was created; check company reimbursement policy.'),
+                  p(reference.get('source_url') or 'Same currency')]
+        for item in snapshot['items']:
+            if item.get('fx_date'):
+                story.append(p(f"{item['expense_date']}: 1 {item['currency']} = {item['fx_rate']} {reference['currency']}  |  {item['fx_date']}"))
     if details.get('advance_amount') not in (None,'','0','0.00'):
         story.append(p(f"Company advance: {details['advance_amount']} {details.get('advance_currency','')}"))
     story += [Spacer(1,8*mm), p('Prepared by ____________________    Approved by ____________________    Date __________'),

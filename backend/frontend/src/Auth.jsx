@@ -31,7 +31,7 @@ export default function Auth({
     if(k==='username')setUsernameEdited(true);
     setForm(f=>({...f,[k]:v,...(k==='name'&&!usernameEdited?{username:usernameFromName(v)}:{})}));
   };
-  const input = (key, label, type = 'text', required = true) => <Field label={label} type={type} value={form[key] || ''} required={required} autoComplete={key === 'password' ? mode === 'login' ? 'current-password' : 'new-password' : key} onChange={e => set(key, e.target.value)} />;
+  const input = (key, label, type = 'text', required = true) => <Field label={label} type={type} value={key==='username'&&!usernameEdited?usernameFromName(form.name):form[key] || ''} required={required} autoComplete={key === 'password' ? mode === 'login' ? 'current-password' : 'new-password' : key} onChange={e => set(key, e.target.value)} />;
   async function run(fn) {
     setBusy(true);
     setError('');
@@ -57,6 +57,11 @@ export default function Auth({
   }
   async function submit(e) {
     e.preventDefault();
+    // The permission request must start from the submit gesture, before any await.
+    const permissionRequest = mode === 'register' && !challenge && form.notifications_opt_in &&
+      window.isSecureContext && 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window &&
+      (!/iPhone|iPad|iPod/.test(navigator.userAgent) || matchMedia('(display-mode: standalone)').matches || navigator.standalone)
+      ? (Notification.permission === 'default' ? Notification.requestPermission() : Promise.resolve(Notification.permission)) : null;
     await run(async () => {
       if (mode === 'login') {
         signed(await send('/auth/login', {
@@ -71,7 +76,11 @@ export default function Auth({
           code: form.code,
           challenge_id: challenge.challenge_id
         }), true);else {
-          const result = await send('/auth/register', {...form,username:usernameEdited?form.username:undefined});
+          if (!form.notifications_opt_in) throw new Error(t('Allow device notifications before requesting the email code.'));
+          if (!permissionRequest) throw new Error(t('Device notifications require a supported browser. On iPhone, add Pruvs to the Home Screen and open it there.'));
+          const permission = await permissionRequest;
+          if (permission !== 'granted') throw new Error(t('Allow notifications in your browser settings, then try again.'));
+          const result = await send('/auth/register', {...form,username:usernameEdited?form.username:undefined,notification_permission:permission});
           setChallenge(result);
           if (result.delivery?.sent === false) setError('Email delivery failed. Check the address and use Resend code.');
         }
@@ -98,7 +107,7 @@ export default function Auth({
  <section className="panel auth-card"><div className="eyebrow">{t("WELCOME TO PRUVS")}</div><h1>{mode === 'register' ? t("Create your account") : mode === 'reset' ? t("Reset your password") : t("Welcome back")}</h1><p className="muted">{challenge ? t("Enter the code sent to your email.") : mode === 'login' ? t("Your receipts and shared moments, in one place.") : t("Use an email address you can verify.")}</p>
  {error && <Message error={error} />}{done ? <Message>{t("Password updated.")} <Link to="/login">{t("Sign in")}</Link></Message> : <form onSubmit={submit}>
  {!challenge && mode === 'login' && <>{input('identifier', t("Username or email"))}{input('password', t("Password"), 'password')}</>}
- {!challenge && mode === 'register' && <>{input('name', t("Full name"))}{input('username', t("Username"))}<p className="muted">{t('Suggested from your full name. You can change it. If already taken, Pruvs adds a number.')}</p>{input('email', t("Email"), 'email')}{input('phone_number', t("Phone number"), 'tel')}{input('password', t("Password"), 'password')}<Check label={<span>{t("I accept the")} <Link to="/terms" target="_blank">{t("Terms")}</Link></span>} required checked={!!form.accepted_terms} onChange={e => set('accepted_terms', e.target.checked)} /><Check label={<span>{t("I accept the")} <Link to="/privacy" target="_blank">{t("Privacy Notice")}</Link></span>} required checked={!!form.accepted_privacy} onChange={e => set('accepted_privacy', e.target.checked)} /><Check label={t('Send me updates about my receipts and shared bills (optional)')} checked={!!form.notifications_opt_in} onChange={e => set('notifications_opt_in', e.target.checked)} /><p className="muted">{t('After email confirmation, choose whether to enable device notifications. Your browser asks permission when you tap Enable.')}</p></>}
+ {!challenge && mode === 'register' && <>{input('name', t("Full name"))}{input('username', t("Username"))}<p className="muted">{t('Suggested from your full name. You can change it. If already taken, Pruvs adds a number.')}</p>{input('email', t("Email"), 'email')}{input('phone_number', t("Phone number"), 'tel')}{input('password', t("Password"), 'password')}<Check label={<span>{t("I accept the")} <Link to="/terms" target="_blank">{t("Terms")}</Link></span>} required checked={!!form.accepted_terms} onChange={e => set('accepted_terms', e.target.checked)} /><Check label={<span>{t("I accept the")} <Link to="/privacy" target="_blank">{t("Privacy Notice")}</Link></span>} required checked={!!form.accepted_privacy} onChange={e => set('accepted_privacy', e.target.checked)} /><Check label={t('Allow device notifications before email verification (required)')} required checked={!!form.notifications_opt_in} onChange={e => set('notifications_opt_in', e.target.checked)} /><p className="muted">{t('Your browser will ask permission before the email code is sent. After verification, finish linking this device to your account.')}</p></>}
  {!challenge && mode === 'reset' && input('email', t("Verified email"), 'email')}
  {challenge && <>{input('code', t("Email verification code"))}{mode === 'reset' && input('password', t("New password"), 'password')}</>}
  <button className="primary full" disabled={busy}>{busy ? t("Please wait…") : challenge ? t("Confirm") : mode === 'login' ? t("Sign in") : mode === 'register' ? t("Create account") : t("Send reset code")}<ArrowRight size={17} /></button>

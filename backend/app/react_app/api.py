@@ -38,12 +38,17 @@ class Payload(BaseModel):
 @router.get('/config')
 def config():
     from app.services.receipt_currency_service import CURRENCY_OPTIONS
-    return {'version':'7.1.6','passkeys':passkeys.passkeys_enabled(),'currencies':CURRENCY_OPTIONS,
+    return {'version':'7.1.7','passkeys':passkeys.passkeys_enabled(),'currencies':CURRENCY_OPTIONS,
             'support_email':os.getenv('PRUVIO_SUPPORT_EMAIL','')}
 
 @router.get('/me')
 def me(request:Request,identity=Depends(current)):
     return {'user':profile(identity[0]),'csrf':request.cookies.get(CSRF_COOKIE,'')}
+
+@router.get('/fx/quote')
+def fx_quote(base:str,target:str,amount:str,identity=Depends(current)):
+    from app.services.ecb_fx import quote
+    return quote(amount,base,target)
 
 @router.post('/auth/login')
 def login(body:dict,request:Request,response:Response,db=Depends(get_db)):
@@ -61,11 +66,13 @@ def logout(response:Response,identity=Depends(current),db=Depends(get_db)):
 def register(body:dict,request:Request,db=Depends(get_db)):
     limit(db,request,'registration',10)
     if not body.get('password'):raise ValueError('Password is required.')
+    if body.get('notifications_opt_in') is not True or body.get('notification_permission') != 'granted':
+        raise ValueError('Allow device notifications before requesting the email code.')
     result=onboarding.start_registration(db,phone_number=body.get('phone_number',''),display_name=body.get('name',''),
         email=body.get('email',''),username=body.get('username',''),password=body.get('password'),
         accepted_terms=body.get('accepted_terms') is True,accepted_privacy=body.get('accepted_privacy') is True,
         marketing_opt_in=body.get('marketing_opt_in') is True)
-    result['user'].notifications_opt_in=body.get('notifications_opt_in') is True
+    result['user'].notifications_opt_in=True
     db.commit()
     return {'challenge_id':result['challenge_id'],'delivery':result['email_delivery'],'email':result['user'].email}
 
