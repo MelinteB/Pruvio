@@ -104,6 +104,16 @@ input, select, textarea {
 input:hover, select:hover, textarea:hover { border-color: #aabbd4; }
 textarea { min-height: 44px; }
 .form-grid { gap: 0 18px; }
+.people-action {
+  display: grid;
+  grid-template-columns: minmax(84px, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  margin: 12px 0 18px;
+  max-width: 640px;
+}
+.people-action .field { margin: 0; max-width: none; }
+.people-action > button { min-height: 44px; align-self: end; }
 .check { font-size: 14px; align-items: flex-start; }
 .check input { width: 20px; height: 20px; min-height: 20px; margin-top: 1px; }
 .message { line-height: 1.5; }
@@ -256,6 +266,10 @@ footer a { min-height: 28px; display: inline-flex; align-items: center; }
   .participant .row.between > strong { text-align: left; }
   .receipt-branch > .list-row > strong { flex-basis: 100%; text-align: left; }
   .mobile-nav a { font-size: 9px; }
+}
+@media (max-width: 360px) {
+  .people-action { grid-template-columns: 1fr; }
+  .people-action > button { justify-self: stretch; }
 }
 @media print {
   .skip-link, .mobile-nav, .account-admin-link, .currency-dialog-backdrop { display: none !important; }

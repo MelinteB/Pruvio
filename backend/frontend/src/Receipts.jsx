@@ -188,7 +188,7 @@ export function Receipt() {
         }, 'PUT');
         await reload();
       })}>{t("Save currency")}</button></Panel>}
- <Panel title="Share this bill"><p>{t("Include yourself in the total number of people.")}</p><div className="row"><Field label={t("People")} type="number" min="1" max="20" value={people} onChange={e => setPeople(Number(e.target.value))} /><button className="primary" disabled={busy || !r.items.length || !/^[A-Z]{3}$/.test(r.currency)} onClick={() => run(async () => {
+ <Panel title="Share this bill"><p>{t("Include yourself in the total number of people.")}</p><div className="people-action"><Field label={t("People")} type="number" min="1" max="20" value={people} onChange={e => setPeople(Number(e.target.value))} /><button className="primary" disabled={busy || !r.items.length || !/^[A-Z]{3}$/.test(r.currency)} onClick={() => run(async () => {
           const s = await send('/receipts/' + id + '/split', {
             people
           });
