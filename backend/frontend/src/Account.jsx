@@ -6,6 +6,11 @@ import { request, send, credential } from './api';
 import { useApp, useLoad, Title, Panel, Field, Check, Message } from './common';
 import Notifications from './Notifications';
 import CompanyProfiles from './CompanyProfiles';
+import TripProfiles from './TripProfiles';
+export function CompanySettings(){
+  const companies=useLoad(()=>request('/expenses/companies'),[]);
+  return <><Title eyebrow="ACCOUNT" title={t('Manage company profiles')} action={<Link className="secondary" to="/account">{t('Back to Account')}</Link>}>{t('Company details and reusable trip profiles for expense reports.')}</Title><CompanyProfiles onUpdated={companies.reload}/><TripProfiles key={(companies.data||[]).map(c=>c.id).join(',')} companies={companies.data||[]}/></>;
+}
 export default function Account() {
   const {
       user,
@@ -107,7 +112,7 @@ export default function Account() {
             }, 'PATCH');
             await refresh();
           })}>{t("Save preferences")}</button></Panel><Notifications embedded /></div>
- </div><div><CompanyProfiles /><Panel title={t("Receive payments")}><p className="muted">{t("These details are shared with your participants after you settle a bill. Pruvs does not collect the payment.")}</p><form onSubmit={e => {
+ </div><div><Panel title={t('Company profiles for expenses')}><p className="muted">{t('Manage employer details and trip profiles in a dedicated view.')}</p><Link className="primary" to="/account/companies">{t('Manage company profiles')}</Link></Panel><Panel title={t("Receive payments")}><p className="muted">{t("These details are shared with your participants after you settle a bill. Pruvs does not collect the payment.")}</p><form onSubmit={e => {
             e.preventDefault();
             run(async () => {
               await send('/account/payment', payment, 'PUT');

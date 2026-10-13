@@ -38,7 +38,7 @@ class Payload(BaseModel):
 @router.get('/config')
 def config():
     from app.services.receipt_currency_service import CURRENCY_OPTIONS
-    return {'version':'7.1.4','passkeys':passkeys.passkeys_enabled(),'currencies':CURRENCY_OPTIONS,
+    return {'version':'7.1.5','passkeys':passkeys.passkeys_enabled(),'currencies':CURRENCY_OPTIONS,
             'support_email':os.getenv('PRUVIO_SUPPORT_EMAIL','')}
 
 @router.get('/me')
@@ -181,9 +181,10 @@ def delete_confirm(body:dict,response:Response,identity=Depends(current),db=Depe
     db.query(PushDevice).filter_by(user_id=u.id).delete();db.query(PushGrant).filter_by(user_id=u.id).delete()
     from app.react_app.inbox import PruvsInboxRead
     db.query(PruvsInboxRead).filter_by(user_id=u.id).delete()
-    from app.models.expense import ExpenseCompany,ExpenseReport
+    from app.models.expense import ExpenseCompany,ExpenseReport,ExpenseTripProfile
     from app.models.history_visibility import HistoryVisibility
     db.query(ExpenseReport).filter_by(user_id=u.id).delete()
+    db.query(ExpenseTripProfile).filter_by(user_id=u.id).delete()
     db.query(ExpenseCompany).filter_by(user_id=u.id).delete()
     db.query(HistoryVisibility).filter_by(user_id=u.id).delete()
     accounts.delete_user_completely(db,u)

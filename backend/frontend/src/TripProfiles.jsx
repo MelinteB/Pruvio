@@ -1,0 +1,23 @@
+import React,{useState} from 'react';
+import {t} from './i18n';
+import {request,send} from './api';
+import {useLoad,Panel,Field,Check,Message} from './common';
+import {initialDetails,detailLabels} from './expenseFields';
+
+const blank={company_id:'',name:'',defaults:{...initialDetails},enabled_fields:Object.keys(detailLabels),required_fields:['purpose']};
+export default function TripProfiles({companies=[],onUpdated,defaultCompanyId=''}){
+  const profiles=useLoad(()=>request('/expenses/trip-profiles'),[]);
+  const [form,setForm]=useState({...blank,company_id:defaultCompanyId}),[id,setId]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
+  async function run(fn){setBusy(true);setError('');setNotice('');try{await fn();await profiles.reload();if(onUpdated)await onUpdated();setNotice(t('Trip profiles updated.'))}catch(e){setError(e.message)}finally{setBusy(false)}}
+  function reset(){setId(null);setForm({...blank,company_id:defaultCompanyId||companies[0]?.id||''})}
+  function pickField(key,enabled){setForm(old=>({...old,enabled_fields:enabled?[...old.enabled_fields,key]:old.enabled_fields.filter(x=>x!==key),required_fields:enabled?old.required_fields:old.required_fields.filter(x=>x!==key)}))}
+  return <Panel title={t('Company trip profiles')}><p className="muted">{t('Save reusable report fields for each company. Select a profile while preparing a report and edit its values for that trip.')}</p>
+    {profiles.error&&<Message error={profiles.error}/>} {error&&<Message error={error}/>} {notice&&<Message>{notice}</Message>}
+    {profiles.data?.map(p=><div className="list-row" key={p.id}><div className="grow"><strong>{p.name}</strong><small>{companies.find(c=>c.id===p.company_id)?.name||t('Company')}</small></div><button disabled={busy} onClick={()=>{setId(p.id);setForm({...p,defaults:{...initialDetails,...p.defaults}})}}>{t('Edit')}</button><button disabled={busy} onClick={()=>{if(confirm(t('Remove this trip profile? Existing reports remain available.')))run(async()=>{await request('/expenses/trip-profiles/'+p.id,{method:'DELETE'});if(id===p.id)reset()})}}>{t('Remove')}</button></div>)}
+    <h3>{t(id?'Edit trip profile':'New trip profile')}</h3><form onSubmit={e=>{e.preventDefault();run(async()=>{const body={...form,company_id:Number(form.company_id)};if(id)await send('/expenses/trip-profiles/'+id,body,'PUT');else await send('/expenses/trip-profiles',body);reset()})}}>
+      <div className="form-grid"><Field label={t('Company profile')}><select required value={form.company_id} onChange={e=>setForm({...form,company_id:e.target.value})}><option value="">{t('Select a company')}</option>{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></Field><Field label={t('Trip profile name')} required maxLength={180} value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></div>
+      <p className="muted">{t('Choose which fields appear, which are required, and their default values. Business purpose is always required.')}</p>
+      {Object.entries(detailLabels).map(([key,label])=>{const enabled=form.enabled_fields.includes(key);return <div className="panel" key={key}><div className="row wrap"><Check label={t(label)} checked={enabled} disabled={key==='purpose'} onChange={e=>pickField(key,e.target.checked)}/><Check label={t('Required')} checked={form.required_fields.includes(key)} disabled={!enabled||key==='purpose'} onChange={e=>setForm(old=>({...old,required_fields:e.target.checked?[...old.required_fields,key]:old.required_fields.filter(x=>x!==key)}))}/></div>{enabled&&<Field label={t('Default value')} type={key.endsWith('_date')?'date':key==='advance_amount'?'number':'text'} min={key==='advance_amount'?'0':undefined} step={key==='advance_amount'?'0.01':undefined} value={form.defaults[key]||''} onChange={e=>setForm(old=>({...old,defaults:{...old.defaults,[key]:e.target.value}}))}/>}</div>})}
+      <div className="row wrap"><button className="primary" disabled={busy||!companies.length}>{t(id?'Save trip profile':'Add trip profile')}</button>{id&&<button type="button" onClick={reset}>{t('Cancel')}</button>}</div>
+    </form></Panel>
+}

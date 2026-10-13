@@ -4,6 +4,11 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Fingerprint, ArrowRight, ScanLine, Users, ShieldCheck } from 'lucide-react';
 import { send, credential, safeNext } from './api';
 import { Field, Check, Message, useApp } from './common';
+function usernameFromName(value){
+  const parts=(value||'').trim().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().split(/\s+/).map(p=>p.replace(/[^a-z0-9-]/g,'')).filter(Boolean);
+  const base=parts.length>1?parts[0]+'.'+parts[parts.length-1]:parts[0]||'';
+  return base&&base.length<3?'user.'+base:base.slice(0,80);
+}
 export default function Auth({
   mode = 'login'
 }) {
@@ -16,15 +21,16 @@ export default function Auth({
   const storageKey='pruvs-pending-'+mode;
   const [pending]=useState(()=>{try{const d=JSON.parse(sessionStorage.getItem(storageKey)||'null');return d&&d.expires>Date.now()?d:null}catch{return null}});
   const [form, setForm] = useState(pending?{email:pending.email}:{}),
+    [usernameEdited,setUsernameEdited]=useState(false),
     [challenge, setChallenge] = useState(pending?.challenge||null),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [done, setDone] = useState(false);
   useEffect(()=>{if(mode==='login')return;if(challenge&&!done)sessionStorage.setItem(storageKey,JSON.stringify({email:challenge.email||form.email,challenge,expires:Date.now()+15*60*1000}));else sessionStorage.removeItem(storageKey)},[challenge,done]);
-  const set = (k, v) => setForm(f => ({
-    ...f,
-    [k]: v
-  }));
+  const set = (k, v) => {
+    if(k==='username')setUsernameEdited(true);
+    setForm(f=>({...f,[k]:v,...(k==='name'&&!usernameEdited?{username:usernameFromName(v)}:{})}));
+  };
   const input = (key, label, type = 'text', required = true) => <Field label={label} type={type} value={form[key] || ''} required={required} autoComplete={key === 'password' ? mode === 'login' ? 'current-password' : 'new-password' : key} onChange={e => set(key, e.target.value)} />;
   async function run(fn) {
     setBusy(true);
@@ -65,7 +71,7 @@ export default function Auth({
           code: form.code,
           challenge_id: challenge.challenge_id
         }), true);else {
-          const result = await send('/auth/register', form);
+          const result = await send('/auth/register', {...form,username:usernameEdited?form.username:undefined});
           setChallenge(result);
           if (result.delivery?.sent === false) setError('Email delivery failed. Check the address and use Resend code.');
         }
@@ -92,7 +98,7 @@ export default function Auth({
  <section className="panel auth-card"><div className="eyebrow">{t("WELCOME TO PRUVS")}</div><h1>{mode === 'register' ? t("Create your account") : mode === 'reset' ? t("Reset your password") : t("Welcome back")}</h1><p className="muted">{challenge ? t("Enter the code sent to your email.") : mode === 'login' ? t("Your receipts and shared moments, in one place.") : t("Use an email address you can verify.")}</p>
  {error && <Message error={error} />}{done ? <Message>{t("Password updated.")} <Link to="/login">{t("Sign in")}</Link></Message> : <form onSubmit={submit}>
  {!challenge && mode === 'login' && <>{input('identifier', t("Username or email"))}{input('password', t("Password"), 'password')}</>}
- {!challenge && mode === 'register' && <>{input('name', t("Full name"))}{input('username', t("Username"))}{input('email', t("Email"), 'email')}{input('phone_number', t("Phone number"), 'tel')}{input('password', t("Password"), 'password')}<Check label={<span>{t("I accept the")} <Link to="/terms" target="_blank">{t("Terms")}</Link></span>} required checked={!!form.accepted_terms} onChange={e => set('accepted_terms', e.target.checked)} /><Check label={<span>{t("I accept the")} <Link to="/privacy" target="_blank">{t("Privacy Notice")}</Link></span>} required checked={!!form.accepted_privacy} onChange={e => set('accepted_privacy', e.target.checked)} /><Check label={t('Send me updates about my receipts and shared bills (optional)')} checked={!!form.notifications_opt_in} onChange={e => set('notifications_opt_in', e.target.checked)} /></>}
+ {!challenge && mode === 'register' && <>{input('name', t("Full name"))}{input('username', t("Username"))}<p className="muted">{t('Suggested from your full name. You can change it. If already taken, Pruvs adds a number.')}</p>{input('email', t("Email"), 'email')}{input('phone_number', t("Phone number"), 'tel')}{input('password', t("Password"), 'password')}<Check label={<span>{t("I accept the")} <Link to="/terms" target="_blank">{t("Terms")}</Link></span>} required checked={!!form.accepted_terms} onChange={e => set('accepted_terms', e.target.checked)} /><Check label={<span>{t("I accept the")} <Link to="/privacy" target="_blank">{t("Privacy Notice")}</Link></span>} required checked={!!form.accepted_privacy} onChange={e => set('accepted_privacy', e.target.checked)} /><Check label={t('Send me updates about my receipts and shared bills (optional)')} checked={!!form.notifications_opt_in} onChange={e => set('notifications_opt_in', e.target.checked)} /><p className="muted">{t('After email confirmation, choose whether to enable device notifications. Your browser asks permission when you tap Enable.')}</p></>}
  {!challenge && mode === 'reset' && input('email', t("Verified email"), 'email')}
  {challenge && <>{input('code', t("Email verification code"))}{mode === 'reset' && input('password', t("New password"), 'password')}</>}
  <button className="primary full" disabled={busy}>{busy ? t("Please wait…") : challenge ? t("Confirm") : mode === 'login' ? t("Sign in") : mode === 'register' ? t("Create account") : t("Send reset code")}<ArrowRight size={17} /></button>

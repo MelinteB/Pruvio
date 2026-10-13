@@ -27,3 +27,15 @@ class ExpenseReport(Base):
     title = Column(String(180), nullable=False)
     snapshot_json = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ExpenseTripProfile(Base):
+    __tablename__ = 'pruvs_expense_trip_profiles'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    company_id = Column(Integer, ForeignKey('pruvs_expense_companies.id'), nullable=False, index=True)
+    name = Column(String(180), nullable=False)
+    defaults_json = Column(Text, nullable=False, default='{}')
+    enabled_json = Column(Text, nullable=False, default='[]')
+    required_json = Column(Text, nullable=False, default='[]')
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
