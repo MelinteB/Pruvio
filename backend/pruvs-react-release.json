@@ -3,7 +3,7 @@
   "baseline": "v6.12.3 incoming split Inbox",
   "files": {
     "requirements-react.txt": "a0cb3cfdc92b2546690e8bda8ace29cd2a7c43fca8099bd38bae0e21476430a9",
-    "app/react_main.py": "86717e4932d62657ec4d5c9334131fc8ec9183bdbc4945436122b5a3af5a947b",
+    "app/react_main.py": "6db0ade5a07826297d98a334d1e4d4c83cc431ee4cefe12955f649ac879ab458",
     "frontend/.gitignore": "a0ee15d8a42bdd1b80f14ec2fb8ada905ccc6edca0fa3b5cb86cc126cff452a6",
     "frontend/index.html": "3ae6bf190a5228d5c764112d079fc92aafcc423cc9d9ea89d0e351e137f58bbb",
     "frontend/package-lock.json": "e18feb31007772208370d8207170d9eebc5ea7851a54196fd0a33ab8a4c15813",
@@ -14,7 +14,7 @@
     "tests/test_react_migration.py": "93e07d7080b4484bcc26451b9ed62ef04e46018c22f8fe2c2cd97431889504b2",
     "app/models/react_session.py": "e302f5439d435d4376ba8cbaae04f3e5d0303f19cfa8d9eab29edde80fd68b76",
     "app/react_app/admin_api.py": "279edf1d222a363283e3cd1eb1494e844384f7979d51ae1dce568d3e488235af",
-    "app/react_app/api.py": "5a7c121d14b34509a8c55f61f764aecce8e03e629cee8e5479aca9941c4e58e1",
+    "app/react_app/api.py": "5bcc83aebe601aa5df0178982e8ccb1fe3748417e19036ba7cb161ba9b64f206",
     "app/react_app/auth.py": "f31b475e20045edbdc0ae39c7f45ec28a2152be82fc73225fb6bc6f7c350e01c",
     "app/react_app/events.py": "de0c30a8fd12eb74415c8df29d17736464d6051da153ac9c723b189c62d63d34",
     "app/react_app/inbox.py": "25703245bf2c58cbfcb47ab385bbfd01db38178485c6ae04fc767fdff2bcd7fe",
@@ -30,9 +30,9 @@
     "frontend/src/Auth.jsx": "1e4109e84dc543d7d9f1aa541de5946b949d1dd8ba6669f5a10b47bfc930e64d",
     "frontend/src/Bill.jsx": "af9bd6c562c171ba25ffea5c33addc8669a4d90eb1a09258243378689d0ef7d8",
     "frontend/src/common.jsx": "e49b74484960a597acf88929f9f76ac8a889d9e630d320254090e2b08fbbdad2",
-    "frontend/src/i18n.js": "56f8b7b3aafc46ce1db67e2063322a1709e5c7d5b4cfb2364759f51740712128",
+    "frontend/src/i18n.js": "2b2a32d62db45cbe3b044a14df7fa5d4a0b6d63f78972f1ffcf402f08555279a",
     "frontend/src/Inbox.jsx": "2a869dcfbbbfc1acf0a514f5e9b991bd37b0b577b65e328d74be12100cf3fe61",
-    "frontend/src/main.jsx": "9dd137e12c904fff58f62ab89366af08a77a87423e244cd3ee933556c9a199da",
+    "frontend/src/main.jsx": "8a5656d685457304cb5604781643c20c78088c602a2f09ba897cad1d9eab053b",
     "frontend/src/Notifications.jsx": "390bd680d0d60a96aab6928d92f2622b74b8acb29566175693b0e08ae8f338f2",
     "frontend/src/Receipts.jsx": "e84bc9fe6336663e3b3b79cd36df9afe830184453372ef4f6ebf0c4145711ed0",
     "frontend/src/style.css": "059a6cc89a7cf2ec8fca7c7c4e3d4b3842c2b65b3519fe04a153d67cea70716b",
@@ -43,7 +43,7 @@
     "app/react_app/expenses.py": "7bc41722018f6653078a8f331ae35f681bc86607c2f7ea6456e118fef0006e3d",
     "app/react_app/history_manage.py": "29aa8c35f9cd2381183dd6c2e9f5968a6796d6641ee119f6ab9f1dfb77bc9d0e",
     "frontend/src/CompanyProfiles.jsx": "7483611d81ce2b5f8bb5fb4d37ebe3624a5960403121583e57cf7f24eb6f9458",
-    "frontend/src/Expenses.jsx": "f3a673e72a67831df49c54479574d85c63ed81e5d8e114c9b6412105f31afd99",
+    "frontend/src/Expenses.jsx": "26d50577b23dd9f3695a6ba2abe60026e44d193a14120b350c61d6368c368579",
     "app/react_app/receipt_labels.py": "55bc1c4b2dafa98a180f641ccae5e4afad29b93005ac1a8ae90fab5d81ddf5f5",
     "frontend/src/CropEditor.jsx": "a4cd7a7c2265d6758ad523362f896f28fffdb0b4f487252de8058057979b677c",
     "app/models/receipt_fingerprint.py": "54eb6b102bdfd2b1d3abf876226cf0b355635a6ae953fad6cae9da5ac796f069",
@@ -59,10 +59,10 @@
     "app/react_app/fonts/DejaVuSans-Bold.ttf": "5c1247acef7f2b8522a31742c76d6adcb5569bacc0be7ceaa4dc39dd252ce895",
     "app/react_app/fonts/DejaVuSans.ttf": "ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280",
     "app/react_app/fonts/LICENSE.txt": "63d3ba759d12804c5b31a9d5940d855c1820d1f5999e6b0872eb1c7ff045fbc9",
-    "frontend/dist/build-manifest.json": "95d326f1258a9a8d9ef587a408a5056bcae14f40a28c241000c5a325ccd93934",
-    "frontend/dist/index.html": "f871f05e4e11d9e6bdb2c828601a1fe158557ed9c653e5eaaf6d4268906e2378",
+    "frontend/dist/build-manifest.json": "1333a174d38a8c628f83c828f6cb7951bdaee62bc3a5cda1cdeca8a2102221b1",
+    "frontend/dist/index.html": "ffddd1a9956ef73ca03181aa49fcd8c3022bab22d832791da4752745d34a2b70",
     "frontend/dist/assets/index-DL50Y4YM.css": "3b95fee0f15e782351ddcfb12de7f608169116e3cc0e43af8d4a18edad208b01",
-    "frontend/dist/assets/index-qoxkQm1B.js": "8daebd73ba9c944904da074b5bce17cd93f8247adb261aae491db8eafac35a94"
+    "frontend/dist/assets/index-T5OZMQTO.js": "653db3638b23866c8a4408fd2b0e11adacb983c92137fc46cc01a72ec8ce606c"
   },
-  "patch": "Expense PDF with saved scan annexes and React build synchronization"
+  "patch": "Expense PDF and Git-normalized React build with v7.1.6 labels"
 }
