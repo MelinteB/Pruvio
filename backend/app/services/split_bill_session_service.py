@@ -697,7 +697,8 @@ def get_split_bill_session_summary(db: Session, session: SplitBillSession, *, en
     session_language = owner.preferred_language if owner and owner.preferred_language else "en"
     owner_payment_details = None
     if owner and session.status in {"settled", "closed"}:
-        owner_payment_details = {
+        import json
+        owner_payment_details = json.loads(session.payment_details_json) if session.payment_details_json else {
             "recipient_name": owner.payment_recipient_name,
             "iban": owner.payment_iban,
             "bank_name": owner.payment_bank_name,
@@ -995,7 +996,7 @@ def record_participant_payment_status(
     if not participant or participant.session_id != session.id:
         raise ValueError("Participant not found.")
     method = (method or "").lower()
-    if method not in {"revolut", "bank_transfer"}:
+    if method not in {"revolut", "bank_transfer", "payment_link"}:
         raise ValueError("Payment method must pay the bill owner directly.")
     if not paid and participant.payment_status == "paid":
         # Opening the payment link again must not undo a saved declaration.

@@ -87,6 +87,8 @@ def ensure_compatibility_schema() -> None:
             "tip_mode": "VARCHAR(20) DEFAULT 'none'",
             "tip_value": "DOUBLE PRECISION DEFAULT 0",
             "settled_at": "TIMESTAMP NULL",
+            "fx_settings_json": "TEXT NULL",
+            "payment_details_json": "TEXT NULL",
         }
         for name, sql_type in wanted.items():
             if name not in cols:

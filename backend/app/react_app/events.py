@@ -103,11 +103,11 @@ def enqueue_payment_marked(db, session, participant):
     name = receipt_label(db, session.case_id)
     actor = (participant.display_name or 'A participant').strip()[:120]
     if owner.preferred_language == 'ro':
-        method = 'transfer bancar' if participant.payment_method == 'bank_transfer' else 'Revolut'
+        method = {'bank_transfer':'transfer bancar','payment_link':'link de plată'}.get(participant.payment_method,'Revolut')
         title = f'Plată declarată · {name}'
         body = f'{actor} a marcat cota sa de {amount} ca plătită prin {method}. Verifică încasarea.'
     else:
-        method = 'bank transfer' if participant.payment_method == 'bank_transfer' else 'Revolut'
+        method = {'bank_transfer':'bank transfer','payment_link':'payment link'}.get(participant.payment_method,'Revolut')
         title = f'Payment reported · {name}'
         body = f'{actor} marked their share of {amount} as paid via {method}. Please verify receipt of the payment.'
     enqueue(db, owner.id, 'payment_marked', title, body, f'/bill/{session.token}')

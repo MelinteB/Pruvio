@@ -38,7 +38,7 @@ class Payload(BaseModel):
 @router.get('/config')
 def config():
     from app.services.receipt_currency_service import CURRENCY_OPTIONS
-    return {'version':'7.1.7','passkeys':passkeys.passkeys_enabled(),'currencies':CURRENCY_OPTIONS,
+    return {'version':'7.1.8','passkeys':passkeys.passkeys_enabled(),'currencies':CURRENCY_OPTIONS,
             'support_email':os.getenv('PRUVIO_SUPPORT_EMAIL','')}
 
 @router.get('/me')
@@ -46,9 +46,9 @@ def me(request:Request,identity=Depends(current)):
     return {'user':profile(identity[0]),'csrf':request.cookies.get(CSRF_COOKIE,'')}
 
 @router.get('/fx/quote')
-def fx_quote(base:str,target:str,amount:str,identity=Depends(current)):
-    from app.services.ecb_fx import quote
-    return quote(amount,base,target)
+def fx_quote(base:str,target:str,amount:str,provider:str='bnr',manual_rate:str|None=None,identity=Depends(current)):
+    from app.services.reference_fx import reference_quote
+    return reference_quote(amount,base,target,provider,manual_rate)
 
 @router.post('/auth/login')
 def login(body:dict,request:Request,response:Response,db=Depends(get_db)):
@@ -156,6 +156,43 @@ def update_account(body:dict,identity=Depends(current),db=Depends(get_db)):
 def payment_details(body:dict,identity=Depends(current),db=Depends(get_db)):
     fields=['recipient_name','iban','bank_name','bic','revolut_link','payment_note']
     return profile(accounts.update_payment_details(db,identity[0],**{k:str(body.get(k) or '')[:500] for k in fields}))
+
+def payment_profile_data(row):
+    return {key:getattr(row,key) for key in ('id','label','recipient_name','iban','bank_name','bic','revolut_link','payment_note')}
+
+@router.get('/account/payment-profiles')
+def payment_profiles(identity=Depends(current),db=Depends(get_db)):
+    from app.models.payment_profile import PaymentProfile
+    return [payment_profile_data(row) for row in db.query(PaymentProfile).filter_by(user_id=identity[0].id).order_by(PaymentProfile.id).all()]
+
+@router.post('/account/payment-profiles')
+@router.put('/account/payment-profiles/{profile_id}')
+def save_payment_profile(body:dict,profile_id:int|None=None,identity=Depends(current),db=Depends(get_db)):
+    from app.models.payment_profile import PaymentProfile
+    uid=identity[0].id
+    row=db.query(PaymentProfile).filter_by(id=profile_id,user_id=uid).first() if profile_id else PaymentProfile(user_id=uid)
+    if profile_id and not row:raise HTTPException(404,'Payment profile not found.')
+    if not profile_id and db.query(PaymentProfile).filter_by(user_id=uid).count()>=20:raise ValueError('Maximum 20 payment profiles.')
+    limits={'label':100,'recipient_name':255,'iban':64,'bank_name':255,'bic':32,'revolut_link':500,'payment_note':255}
+    for key,limit in limits.items():
+        value=body.get(key,'')
+        if not isinstance(value,str) or len(value)>limit:raise ValueError('Invalid payment profile field: '+key)
+        setattr(row,key,value.strip())
+    if not row.label or not row.recipient_name or not (row.iban or row.revolut_link):
+        raise ValueError('Enter a label, recipient and bank account or payment link.')
+    if row.iban and (not row.bank_name or not __import__('re').fullmatch(r'[A-Za-z0-9 ]{15,64}',row.iban)):
+        raise ValueError('Enter a bank name and valid IBAN characters.')
+    if row.revolut_link and not row.revolut_link.startswith('https://'):
+        raise ValueError('Payment links must use HTTPS.')
+    db.add(row);db.commit();db.refresh(row)
+    return payment_profile_data(row)
+
+@router.delete('/account/payment-profiles/{profile_id}')
+def delete_payment_profile(profile_id:int,identity=Depends(current),db=Depends(get_db)):
+    from app.models.payment_profile import PaymentProfile
+    row=db.query(PaymentProfile).filter_by(id=profile_id,user_id=identity[0].id).first()
+    if not row:raise HTTPException(404,'Payment profile not found.')
+    db.delete(row);db.commit();return {'deleted':True}
 
 @router.post('/account/password')
 def password(body:dict,request:Request,response:Response,identity=Depends(current),db=Depends(get_db)):
@@ -294,10 +331,28 @@ def summary(db,s,uid):
     result=bills.get_split_bill_session_summary(db,s,ensure_translations=False)
     result['source_name']=receipt_label(db,s.case_id)
     result['my_participant_id']=next(p['participant_id'] for p in result['participants'] if p['user_id']==uid)
+    settings=json.loads(s.fx_settings_json) if s.fx_settings_json else None
+    result['currency_reference']=settings
+    if settings:
+        from decimal import Decimal,ROUND_HALF_UP
+        for participant in result['participants']:
+            participant['reference_total']=str((Decimal(str(participant['total']))*Decimal(settings['rate'])).quantize(Decimal('0.01'),rounding=ROUND_HALF_UP))
     if s.owner_user_id!=uid:
         for p in result['participants']:
             if p['user_id']!=uid:p.pop('phone_number',None)
     return result
+
+@router.put('/bills/{token}/currency-reference')
+def set_bill_currency_reference(token:str,body:dict,identity=Depends(current),db=Depends(get_db)):
+    s,_=member(db,token,identity[0].id,owner=True,lock=True)
+    from app.services.reference_fx import reference_quote
+    target=str(body.get('target') or '').upper()
+    from app.services.receipt_currency_service import CURRENCY_OPTIONS
+    if target not in CURRENCY_OPTIONS:raise ValueError('Choose a currency from the list.')
+    selected=reference_quote('1',s.currency,target,str(body.get('provider') or 'bnr'),body.get('manual_rate'))
+    s.fx_settings_json=json.dumps({key:selected[key] for key in ('base','target','rate','date','provider','manual','source','source_url')})
+    db.commit()
+    return summary(db,s,identity[0].id)
 
 @router.get('/bills/{token}/invite')
 def invitation(token:str,identity=Depends(current),db=Depends(get_db)):
@@ -330,7 +385,22 @@ def selection(token:str,body:dict,identity=Depends(current),db=Depends(get_db)):
 @router.post('/bills/{token}/action/{action}')
 def bill_action(token:str,action:str,body:dict,identity=Depends(current),db=Depends(get_db)):
     uid=identity[0].id;s,p=member(db,token,uid,owner=action!='payment',lock=True)
-    if action=='settle':bills.close_split_bill_session(db,s,uid)
+    if action=='settle':
+        from app.models.payment_profile import PaymentProfile
+        selected=body.get('payment_profile_id')
+        if selected is not None:
+            if type(selected) is not int:raise ValueError('Choose a payment profile.')
+            row=db.query(PaymentProfile).filter_by(id=selected,user_id=uid).first()
+            if not row:raise ValueError('Choose one of your saved payment profiles.')
+            details=payment_profile_data(row)
+            details['payment_link']=details.pop('revolut_link')
+        else:
+            owner=identity[0]
+            details={'recipient_name':owner.payment_recipient_name,'iban':owner.payment_iban,
+                     'bank_name':owner.payment_bank_name,'bic':owner.payment_bic,
+                     'revolut_payment_link':owner.revolut_payment_link,'payment_note':owner.payment_note}
+        s.payment_details_json=json.dumps(details)
+        bills.close_split_bill_session(db,s,uid)
     elif action=='reopen':bills.reopen_split_bill_session(db,s,uid)
     elif action=='tip':
         value=float(body.get('value',0))

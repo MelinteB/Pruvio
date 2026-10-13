@@ -391,3 +391,35 @@ Object.assign(ro, {
  'Reference currency conversion':'Conversie în moneda de referință',
  'Indicative ECB reference at report creation; the original claim amounts remain authoritative.':'Curs BCE orientativ la crearea decontului; sumele originale revendicate rămân principale.'
 });
+Object.assign(ro,{
+ 'Currency setup':'Setări valutare',
+ 'No currency reference set yet.':'Nu a fost stabilit încă un curs de referință.',
+ 'Including tip, reference value':'Valoare orientativă, inclusiv bacșiș',
+ 'Reference source':'Sursa cursului',
+ 'Reference currency':'Moneda de referință',
+ 'Use a manual rate instead of the published rate':'Folosește un curs introdus manual în locul celui publicat',
+ 'Preview rate':'Previzualizează cursul',
+ 'Save currency setup':'Salvează setările valutare',
+ 'Manual rate':'Curs introdus manual',
+ 'The reference is calculated from each participant’s share including tip. The original payment amount stays in the bill currency.':'Conversia folosește partea fiecărui participant, inclusiv bacșișul. Plata rămâne în moneda notei.',
+ 'Manual rate (optional)':'Curs manual (opțional)',
+ 'manual rates':'cursuri manuale',
+ 'Preview rates':'Previzualizează cursurile',
+ 'Done':'Gata',
+ 'A manual rate is identified as manual in the report and is never presented as a published BNR or ECB rate.':'Un curs introdus manual este marcat în decont și nu apare ca un curs publicat de BNR sau BCE.',
+ 'Original claim amounts remain unchanged. The report saves each reference rate and its date or manual status.':'Sumele originale rămân neschimbate. Decontul păstrează cursul, data sau mențiunea de curs manual.',
+ 'Indicative reference at report creation; the original claim amounts remain authoritative.':'Curs orientativ la crearea decontului; sumele originale rămân principale.',
+ 'Includes manual rates.':'Include cursuri manuale.',
+ 'Receive payment profiles':'Profiluri pentru încasarea plăților',
+ 'Save a profile for each bank or payment link. Choose one when settling a bill. The chosen details are saved with that bill.':'Salvează un profil pentru fiecare bancă sau link de plată. Alege profilul la închiderea notei; datele selectate se păstrează cu nota.',
+ 'Add payment profile':'Adaugă profil de plată',
+ 'Save profile':'Salvează profilul',
+ 'Profile name':'Numele profilului',
+ 'Payment link':'Link de plată',
+ 'Delete this payment profile?':'Ștergi acest profil de plată?',
+ 'Receive payment with':'Încasează folosind',
+ 'Default payment details':'Datele de plată implicite',
+ 'Default payment details (legacy bills)':'Date de plată implicite (note existente)',
+});
+
+Object.assign(ro,{'Open payment link':'Deschide linkul de plată','I paid via payment link':'Am plătit prin linkul de plată'});

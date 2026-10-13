@@ -82,7 +82,7 @@ def summary_pdf(report_id, snapshot, created_at, annexes):
                      p(desc + (' | '+source_details if source_details else ''),'PruvsSmall'),
                      p(item.get('category','').replace('_',' ') + ' | ' + item.get('paid_by',''),'PruvsSmall'),
                      p(f"{item.get('claimed_amount','')} {item.get('currency','')}" +
-                       (f" | {item['converted_amount']} {snapshot['reference_conversion']['currency']}" if item.get('fx_date') and snapshot.get('reference_conversion') else ''),'PruvsSmall'),
+                       (f" | {item['converted_amount']} {snapshot['reference_conversion']['currency']}" if item.get('fx_rate') and snapshot.get('reference_conversion') else ''),'PruvsSmall'),
                      p(f"{item.get('vat_amount','')} {item.get('currency','')}",'PruvsSmall')])
     table = Table(grid, colWidths=widths, repeatRows=1, hAlign='LEFT')
     table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),NAVY),
@@ -98,12 +98,12 @@ def summary_pdf(report_id, snapshot, created_at, annexes):
     reference = snapshot.get('reference_conversion')
     if reference:
         story += [p('Indicative reference conversion', 'PruvsSection'),
-                  p(f"Total: {reference['total']} {reference['currency']}  |  ECB published {reference.get('date') or 'same currency'}"),
+                  p(f"Total: {reference['total']} {reference['currency']}  |  {(reference.get('provider') or 'ECB').upper()} published {reference.get('date') or 'manual / same currency'}"),
                   p('Original claim amounts remain authoritative. Rates are indicative, saved when the report was created; check company reimbursement policy.'),
-                  p(reference.get('source_url') or 'Same currency')]
+                  p(reference.get('source_url') or ('Manual rate entered by report creator' if reference.get('manual') else 'Same currency'))]
         for item in snapshot['items']:
-            if item.get('fx_date'):
-                story.append(p(f"{item['expense_date']}: 1 {item['currency']} = {item['fx_rate']} {reference['currency']}  |  {item['fx_date']}"))
+            if item.get('fx_rate'):
+                story.append(p(f"{item['expense_date']}: 1 {item['currency']} = {item['fx_rate']} {reference['currency']}  |  " + ('Manual rate' if item.get('fx_manual') else f"{(item.get('fx_provider') or 'ECB').upper()} {item.get('fx_date') or 'same currency'}")))
     if details.get('advance_amount') not in (None,'','0','0.00'):
         story.append(p(f"Company advance: {details['advance_amount']} {details.get('advance_currency','')}"))
     story += [Spacer(1,8*mm), p('Prepared by ____________________    Approved by ____________________    Date __________'),

@@ -370,22 +370,39 @@ def create_report(body: dict, identity=Depends(current), db=Depends(get_db)):
         if currency not in reimburse:
             raise ValueError('Advance currency must match an employee-paid expense currency.')
     rows.sort(key=lambda item: (item['expense_date'], item['case_id'], item['source_id']))
-    from app.services.ecb_fx import quote, rates
-    table = rates() if any(row['currency'] != report_currency for row in rows) else None
+    from app.services.reference_fx import reference_quote, bnr_rates
+    from app.services.ecb_fx import rates as ecb_rates
+    fx_settings = body.get('fx_settings') or {}
+    if not isinstance(fx_settings, dict):
+        raise ValueError('Invalid currency setup.')
+    provider = fx_settings.get('provider') or 'bnr'
+    if provider not in ('bnr', 'ecb'):
+        raise ValueError('Choose BNR or ECB as the reference source.')
+    overrides = fx_settings.get('overrides') or {}
+    if not isinstance(overrides, dict) or any(not isinstance(k,str) or not isinstance(v,str) for k,v in overrides.items()):
+        raise ValueError('Invalid manual rates.')
+    used = {row['currency'] for row in rows if row['currency'] != report_currency}
+    if set(overrides) - used:
+        raise ValueError('A manual rate does not match a selected expense currency.')
+    table = (bnr_rates() if provider == 'bnr' else ecb_rates()) if used-set(overrides) else None
     converted = Decimal('0')
     for row in rows:
-        conversion = quote(row['claimed_amount'], row['currency'], report_currency, table=table)
+        conversion = reference_quote(row['claimed_amount'], row['currency'], report_currency,
+                                     provider, overrides.get(row['currency']), table=table)
         row['converted_amount'] = conversion['converted']
         row['fx_rate'] = conversion['rate']
         row['fx_date'] = conversion['date']
+        row['fx_manual'] = conversion['manual']
+        row['fx_provider'] = conversion['provider']
         converted += Decimal(conversion['converted'])
     snapshot = {'title': title, 'employee': identity[0].name, 'company': format_company(profile),
                 'trip_profile':trip.name if trip else None,
                 'details': details, 'items': rows, 'totals': {k: str(v) for k, v in totals.items()},
-                'reference_conversion': {'currency': report_currency, 'total': str(converted),
+                'reference_conversion': {'currency': report_currency, 'total': str(converted), 'provider':provider,
+                                         'manual':bool(overrides), 'overrides':overrides,
                                          'date': table[0] if table else None,
-                                         'source': 'European Central Bank' if table else 'Same currency',
-                                         'source_url': 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml' if table else None},
+                                         'source': ('BNR' if provider=='bnr' else 'ECB') if table else ('Manual rates' if overrides else 'Same currency'),
+                                         'source_url': ('https://curs.bnr.ro/nbrfxrates.xml' if provider=='bnr' else 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml') if table else None},
                 'employee_paid': {k: str(v) for k, v in reimburse.items()},
                 'reimbursement': {k: str(v - (Decimal(details['advance_amount']) if k == details['advance_currency'] else 0))
                                   for k, v in reimburse.items()}}

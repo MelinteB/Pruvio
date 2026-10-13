@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float, Text
 
 from app.db.database import Base
 
@@ -14,6 +14,8 @@ class SplitBillSession(Base):
     token = Column(String, unique=True, nullable=False, index=True)
     status = Column(String, default="open", index=True)
     currency = Column(String, default="RON")
+    fx_settings_json = Column(Text, nullable=True)
+    payment_details_json = Column(Text, nullable=True)
     expected_participants_count = Column(Integer, nullable=False, default=2)
 
     # Tip is set by the owner. Percentage tips are calculated from each
