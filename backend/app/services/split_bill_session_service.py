@@ -465,6 +465,9 @@ def join_split_bill_session_as_user(db: Session, session: SplitBillSession, user
         status="joined",
     )
     db.add(participant)
+    db.flush()
+    from app.react_app.events import enqueue_participant_joined
+    enqueue_participant_joined(db, session, participant)
     db.commit()
     db.refresh(participant)
     return {

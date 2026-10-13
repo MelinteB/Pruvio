@@ -119,7 +119,7 @@ export function Upload() {
     abort.current = new AbortController();
     try {
       const r = await uploadFile(file, setProgress, abort.current.signal);
-      nav('/receipt/' + r.case_id, {state:r.duplicate?{duplicate:true}:undefined});
+      nav('/receipt/' + r.case_id, {state:r.duplicate?{duplicate:true,restored_original:r.restored_original}:undefined});
     } catch (e) {
       setError(e.message);
     } finally {
@@ -151,6 +151,19 @@ export function Receipt() {
     [currency, setCurrency] = useState('RON'),
     [actionError, setError] = useState(''),
     [busy, setBusy] = useState(false);
+  async function restore(file) {
+    if (!file) return;
+    if (!['image/jpeg','image/png','image/webp','application/pdf'].includes(file.type) || file.size > 10 * 1024 * 1024) {
+      setError(t('Choose a JPG, PNG, WebP image or PDF up to 10 MB.'));
+      return;
+    }
+    await run(async () => {
+      const form = new FormData();
+      form.append('file', file);
+      await request('/receipts/' + id + '/original/restore', {method:'POST',body:form});
+      await reload();
+    });
+  }
   async function run(fn) {
     setBusy(true);
     setError('');
@@ -165,7 +178,7 @@ export function Receipt() {
   if (loading) return <Spinner />;
   if (error) return <Message error={error} />;
   if (!r) return null;
-  return <><Title eyebrow="RECEIPT REVIEW" title={r.merchant_name} action={<a className="secondary" href={'/api/v1/receipts/' + id + '/original'} target="_blank" rel="noreferrer">{t("Download original")}</a>}>{r.original_filename} · {r.status.replaceAll('_', ' ')}</Title>{location.state?.duplicate&&<Message error={t('This receipt is already saved. We opened the existing receipt and did not send it to OCR again.')} />}{actionError && <Message error={actionError} />}
+  return <><Title eyebrow="RECEIPT REVIEW" title={r.merchant_name} action={r.original_available&&<a className="secondary" href={'/api/v1/receipts/' + id + '/original'} target="_blank" rel="noreferrer">{t("Download saved copy")}</a>}>{r.original_filename} · {r.status.replaceAll('_', ' ')}</Title>{location.state?.restored_original?<Message>{t('This receipt was already saved. Your uploaded copy restored the missing document without OCR.')}</Message>:location.state?.duplicate&&<Message error={t('This receipt is already saved. We opened the existing receipt and did not send it to OCR again.')} />}{!r.original_available&&<Panel title={t('Document copy missing')}><p>{t('The saved receipt details remain, but its image or PDF is missing from storage. Choose your copy of this receipt to restore the download without OCR.')}</p><label className="secondary">{busy?t('Restoring…'):t('Restore saved document')} <input aria-label={t('Restore saved document')} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={busy} onChange={e=>{restore(e.target.files[0]);e.target.value=''}} /></label></Panel>}{actionError && <Message error={actionError} />}
  <div className="stats"><Panel><span>{t("Receipt total")}</span><strong>{money(r.receipt_total, r.currency)}</strong></Panel><Panel><span>{t("Extracted items total")}</span><strong>{money(r.calculated_total, r.currency)}</strong></Panel><Panel><span>{t("Items")}</span><strong>{r.items.length}</strong></Panel></div>
  {Math.abs(r.receipt_total - r.calculated_total) > .02 && <Message error={t("The extracted items do not match the receipt total. Review the original receipt before splitting.")} />}
  <Panel title={t("Receipt items")}>{r.items.map(i => <div className="list-row" key={i.id}><div className="grow"><strong>{i.name}</strong>{i.translated_name && i.translated_name !== i.name && <small>{i.translated_name}</small>}<small>{i.quantity} × {money(i.unit_price, r.currency)}</small></div><strong>{money(i.total_price, r.currency)}</strong></div>)}{!r.items.length && <Empty>{t("No items were extracted. Try uploading a clearer image.")}</Empty>}</Panel>

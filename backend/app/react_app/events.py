@@ -1,7 +1,36 @@
 """Incoming split events; enqueue in the same transaction as the bill transition."""
 from app.services.push_service import enqueue
 from app.models.user import User
+from app.models.split_bill_participant import SplitBillParticipant
 from app.react_app.receipt_labels import receipt_label
+
+
+def enqueue_participant_joined(db, session, participant):
+    """Create one localized Inbox/push/email event per joined account."""
+    joined = (db.query(SplitBillParticipant)
+              .filter_by(session_id=session.id, status='joined')
+              .order_by(SplitBillParticipant.id).all())
+    name = receipt_label(db, session.case_id)
+    actor = (participant.display_name or 'Participant').strip()[:70]
+    count = f'{len(joined)}/{session.expected_participants_count}'
+    names = ', '.join((person.display_name or 'Participant').strip()[:35] for person in joined)
+    if len(names) > 110:
+        names = names[:107].rsplit(', ', 1)[0] + '…'
+    for person in joined:
+        if not person.user_id:
+            continue  # Guests without an account cannot receive account notifications.
+        user = db.get(User, person.user_id)
+        if not user or user.status != 'active':
+            continue
+        ro = user.preferred_language == 'ro'
+        title = f"{'Participant nou' if ro else 'Participant joined'} · {name}"
+        if person.id == participant.id:
+            body = (f'{actor}, te-ai alăturat notei {name}. Participanți ({count}): {names}.' if ro else
+                    f'{actor}, you joined {name}. Participants ({count}): {names}.')
+        else:
+            body = (f'{actor} s-a alăturat notei {name}. Participanți ({count}): {names}.' if ro else
+                    f'{actor} joined {name}. Participants ({count}): {names}.')
+        enqueue(db, user.id, 'participant_joined', title, body, f'/bill/{session.token}')
 
 def enqueue_transition(db,session,actor_user_id,kind):
     if kind not in ('split_settled','split_reopened') or session.owner_user_id!=actor_user_id:

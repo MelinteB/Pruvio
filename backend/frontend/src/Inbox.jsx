@@ -45,7 +45,7 @@ export default function Inbox() {
                 message: r.message
               }
             });
-          })}>{t('Open bill')}</button> : <span className="muted">{t('This bill is no longer available.')}</span>}</div></Panel>)}</div> : <Panel><Empty><MailOpen size={32} /><h2>{t(unread ? 'No unread messages.' : 'Your inbox is empty.')}</h2><p>{t('Split updates, reminders and reported payments appear here.')}</p></Empty></Panel>}
+          })}>{t('Open bill')}</button> : <span className="muted">{t('This bill is no longer available.')}</span>}</div></Panel>)}</div> : <Panel><Empty><MailOpen size={32} /><h2>{t(unread ? 'No unread messages.' : 'Your inbox is empty.')}</h2><p>{t('Split joins, updates, reminders and reported payments appear here.')}</p></Empty></Panel>}
  {!!data?.total && <div className="row pager"><button disabled={busy || !offset} onClick={() => setOffset(Math.max(0, offset - 30))}>{t('Previous')}</button><span>{offset + 1}–{Math.min(offset + 30, data.total)} / {data.total}</span><button disabled={busy || offset + 30 >= data.total} onClick={() => setOffset(offset + 30)}>{t('Next')}</button></div>}
  </>;
 }

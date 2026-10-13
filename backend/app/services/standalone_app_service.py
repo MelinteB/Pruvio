@@ -14,7 +14,7 @@ from app.models.user import User
 from app.services.azure_receipt_direct_service import (
     process_document_with_azure_receipt_direct,
 )
-from app.services.document_service import save_document_bytes
+from app.services.document_service import save_document_bytes, resolve_document_path, restore_missing_original
 from app.services.receipt_translation_service import translate_receipt_item_names
 
 
@@ -77,7 +77,12 @@ def create_standalone_receipt_case(
         sha, image_signature = fingerprint(file_bytes)
         existing_id = find_duplicate(db, owner.id, sha, image_signature)
         if existing_id:
-            return {'case': db.get(Case, existing_id), 'duplicate': True}
+            existing_case = db.get(Case, existing_id)
+            existing_document = db.query(Document).filter_by(case_id=existing_id).order_by(Document.id.desc()).first()
+            if not resolve_document_path(existing_document):
+                restore_missing_original(db, existing_case, existing_document, file_bytes, original_filename, mime_type)
+                return {'case': existing_case, 'duplicate': True, 'restored_original': True}
+            return {'case': existing_case, 'duplicate': True}
 
     case = Case(
         user_id=owner.id,
@@ -112,7 +117,12 @@ def create_standalone_receipt_case(
                 db.delete(case)
                 db.commit()
                 Path(document.path).unlink(missing_ok=True)
-                return {'case': db.get(Case, existing_id), 'duplicate': True}
+                existing_case = db.get(Case, existing_id)
+                existing_document = db.query(Document).filter_by(case_id=existing_id).order_by(Document.id.desc()).first()
+                if not resolve_document_path(existing_document):
+                    restore_missing_original(db, existing_case, existing_document, file_bytes, original_filename, mime_type)
+                    return {'case': existing_case, 'duplicate': True, 'restored_original': True}
+                return {'case': existing_case, 'duplicate': True}
 
         ocr_result = process_document_with_azure_receipt_direct(
             db=db,

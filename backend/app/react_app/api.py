@@ -15,6 +15,9 @@ from app.db.database import get_db
 from app.models.user import User
 from app.models.case import Case
 from app.models.document import Document
+from app.models.receipt_fingerprint import ReceiptFingerprint
+from app.services.document_service import MAX_FILE_SIZE_BYTES, resolve_document_path, restore_missing_original
+from app.services.receipt_duplicates import fingerprint, same_image
 from app.models.receipt_item import ReceiptItem
 from app.models.split_bill_session import SplitBillSession
 from app.models.split_bill_participant import SplitBillParticipant
@@ -35,7 +38,7 @@ class Payload(BaseModel):
 @router.get('/config')
 def config():
     from app.services.receipt_currency_service import CURRENCY_OPTIONS
-    return {'version':'7.1.3','passkeys':passkeys.passkeys_enabled(),'currencies':CURRENCY_OPTIONS,
+    return {'version':'7.1.4','passkeys':passkeys.passkeys_enabled(),'currencies':CURRENCY_OPTIONS,
             'support_email':os.getenv('PRUVIO_SUPPORT_EMAIL','')}
 
 @router.get('/me')
@@ -214,11 +217,10 @@ def history(offset:int=Query(0,ge=0),view:str='active',identity=Depends(current)
 
 @router.post('/receipts/upload')
 def upload(file:UploadFile=File(...),identity=Depends(current),db=Depends(get_db)):
-    from app.services.document_service import MAX_FILE_SIZE_BYTES
     data=file.file.read(MAX_FILE_SIZE_BYTES+1)
     if len(data)>MAX_FILE_SIZE_BYTES:raise HTTPException(413,'Maximum upload size is 10 MB.')
     result=receipts.create_standalone_receipt_case(db,file_bytes=data,original_filename=file.filename or 'receipt.jpg',mime_type=file.content_type,user_id=identity[0].id,deduplicate=True)
-    return {'case_id':result['case'].id,'duplicate':result.get('duplicate',False)}
+    return {'case_id':result['case'].id,'duplicate':result.get('duplicate',False),'restored_original':result.get('restored_original',False)}
 
 def owned_case(db,case_id,uid):
     c=db.get(Case,case_id)
@@ -230,14 +232,35 @@ def receipt(case_id:int,identity=Depends(current),db=Depends(get_db)):
     owned_case(db,case_id,identity[0].id)
     result=receipts.get_receipt_view(db,case_id,user_id=identity[0].id)
     result['has_split']=db.query(SplitBillSession).filter_by(case_id=case_id).first() is not None
+    doc=db.query(Document).filter_by(case_id=case_id).order_by(Document.id.desc()).first()
+    result['original_available']=resolve_document_path(doc) is not None
     return result
 
 @router.get('/receipts/{case_id}/original')
 def original(case_id:int,identity=Depends(current),db=Depends(get_db)):
     owned_case(db,case_id,identity[0].id)
     doc=db.query(Document).filter_by(case_id=case_id).order_by(Document.id.desc()).first()
-    if not doc or not Path(doc.path).is_file():raise HTTPException(404,'Original file is unavailable.')
-    return FileResponse(doc.path,filename=doc.original_filename or 'receipt',media_type=doc.mime_type or 'application/octet-stream',headers={'Cache-Control':'no-store'})
+    path=resolve_document_path(doc)
+    if path is None:raise HTTPException(404,'Original file is unavailable. Upload your saved copy from this receipt page to restore it.')
+    return FileResponse(path,filename=doc.original_filename or 'receipt',media_type=doc.mime_type or 'application/octet-stream',headers={'Cache-Control':'no-store'})
+
+@router.post('/receipts/{case_id}/original/restore')
+def restore_original(case_id:int,file:UploadFile=File(...),identity=Depends(current),db=Depends(get_db)):
+    case=owned_case(db,case_id,identity[0].id)
+    doc=db.query(Document).filter_by(case_id=case_id).order_by(Document.id.desc()).first()
+    if resolve_document_path(doc):raise HTTPException(409,'This receipt already has a downloadable original.')
+    data=file.file.read(MAX_FILE_SIZE_BYTES+1)
+    if len(data)>MAX_FILE_SIZE_BYTES:raise HTTPException(413,'Maximum upload size is 10 MB.')
+    saved=db.query(ReceiptFingerprint).filter_by(case_id=case_id,user_id=identity[0].id).first()
+    if saved:
+        sha,image_signature=fingerprint(data)
+        if saved.sha256!=sha and not same_image(saved.image_signature,image_signature):
+            raise HTTPException(422,'This file does not match the saved receipt. Choose the original receipt or a photo of it.')
+    try:
+        restore_missing_original(db,case,doc,data,file.filename or 'receipt.jpg',file.content_type)
+    except ValueError as exc:
+        raise HTTPException(400,str(exc)) from exc
+    return {'case_id':case_id,'restored':True}
 
 @router.put('/receipts/{case_id}/currency')
 def currency(case_id:int,body:dict,identity=Depends(current),db=Depends(get_db)):

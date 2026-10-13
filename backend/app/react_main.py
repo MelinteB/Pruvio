@@ -55,7 +55,7 @@ async def lifespan(app):
         try:await asyncio.wait_for(worker,timeout=25)
         except asyncio.TimeoutError:worker.cancel()
 
-app=FastAPI(title='Pruvs Core',version='7.1.3',lifespan=lifespan)
+app=FastAPI(title='Pruvs Core',version='7.1.4',lifespan=lifespan)
 app.include_router(inbox_router);app.include_router(router);app.include_router(expense_router);app.include_router(history_manage_router);app.include_router(admin_router);app.include_router(legacy_router)
 app.include_router(push_router);app.dependency_overrides[push_authenticate]=push_identity
 app.include_router(users_router,prefix='/users',tags=['Admin - Users'])

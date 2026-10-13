@@ -1,5 +1,8 @@
+import os
+import io
 from pathlib import Path
 from uuid import uuid4
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from sqlalchemy.orm import Session
 
@@ -8,7 +11,35 @@ from app.models.case import Case
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-UPLOAD_ROOT = PROJECT_ROOT / "storage" / "uploads"
+LEGACY_UPLOAD_ROOT = PROJECT_ROOT / "storage" / "uploads"
+
+
+def upload_root() -> Path:
+    configured = os.getenv("PRUVS_UPLOAD_ROOT", "").strip()
+    if configured:
+        path = Path(configured).expanduser()
+        if not path.is_absolute():
+            raise ValueError("PRUVS_UPLOAD_ROOT must be an absolute directory on persistent storage.")
+        return path.resolve()
+    return LEGACY_UPLOAD_ROOT
+
+
+def resolve_document_path(document: Document | None) -> Path | None:
+    """Find a stored original after an upload-directory migration."""
+    if document is None:
+        return None
+    if document.path:
+        recorded = Path(document.path)
+        if recorded.is_file():
+            return recorded
+    filename = document.stored_filename or ""
+    if not filename or Path(filename).name != filename or not document.case_id:
+        return None
+    for root in (upload_root(), LEGACY_UPLOAD_ROOT):
+        candidate = root / f"case_{document.case_id}" / filename
+        if candidate.resolve().is_relative_to(root.resolve()) and candidate.is_file():
+            return candidate
+    return None
 
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
 
@@ -19,6 +50,41 @@ ALLOWED_EXTENSIONS = {
     ".pdf",
     ".webp"
 }
+
+
+def prepare_storage_upload(file_bytes: bytes, filename: str, mime_type: str | None) -> tuple[bytes, str, str | None]:
+    """Keep a single OCR-ready copy; avoid storing the camera's oversized photo."""
+    extension = Path(filename).suffix.lower()
+    if extension not in {'.jpg', '.jpeg', '.png', '.webp'}:
+        return file_bytes, filename, mime_type  # PDFs retain every page and embedded detail.
+    try:
+        with Image.open(io.BytesIO(file_bytes)) as opened:
+            if opened.width * opened.height > 40_000_000:
+                raise ValueError('Image is too large to process safely.')
+            oriented = ImageOps.exif_transpose(opened)
+            image = oriented.copy()
+            # Very narrow long receipts need their native width to keep print legible.
+            if min(image.size) > 1600 and max(image.size) > 3200:
+                ratio = 3200 / max(image.size)
+                image.thumbnail((max(1, round(image.width * ratio)), max(1, round(image.height * ratio))), Image.Resampling.LANCZOS)
+            output = io.BytesIO()
+            if extension in {'.jpg', '.jpeg'}:
+                image.convert('RGB').save(output, 'JPEG', quality=88, optimize=True, subsampling=0)
+                new_extension, new_mime = '.jpg', 'image/jpeg'
+            elif extension == '.webp':
+                image.save(output, 'WEBP', quality=88, method=4)
+                new_extension, new_mime = '.webp', 'image/webp'
+            elif image.mode in ('RGB', 'L') and len(file_bytes) > 1_000_000:
+                image.convert('RGB').save(output, 'JPEG', quality=90, optimize=True, subsampling=0)
+                new_extension, new_mime = '.jpg', 'image/jpeg'
+            else:
+                image.save(output, 'PNG', optimize=True)
+                new_extension, new_mime = '.png', 'image/png'
+            if output.tell() < len(file_bytes) * .85:
+                return output.getvalue(), str(Path(filename).with_suffix(new_extension)), new_mime
+    except (UnidentifiedImageError, OSError, Image.DecompressionBombError):
+        pass  # Leave unusual but otherwise valid images untouched for the existing OCR flow.
+    return file_bytes, filename, mime_type
 
 
 def get_documents(db: Session):
@@ -67,7 +133,10 @@ def save_document_bytes(
             "Unsupported file type. Allowed: jpg, jpeg, png, webp, pdf."
         )
 
-    case_folder = UPLOAD_ROOT / f"case_{case.id}"
+    file_bytes, original_filename, mime_type = prepare_storage_upload(file_bytes, original_filename, mime_type)
+    extension = Path(original_filename).suffix.lower()
+
+    case_folder = upload_root() / f"case_{case.id}"
     case_folder.mkdir(parents=True, exist_ok=True)
 
     stored_filename = f"{uuid4().hex}{extension}"
@@ -90,4 +159,38 @@ def save_document_bytes(
     db.commit()
     db.refresh(document)
 
+    return document
+
+
+def restore_missing_original(db: Session, case: Case, document: Document | None,
+                             file_bytes: bytes, original_filename: str, mime_type: str | None) -> Document:
+    """Attach an owner's replacement copy without rerunning OCR or changing extracted items."""
+    if document is not None and resolve_document_path(document):
+        raise ValueError("This receipt already has a downloadable original.")
+    if not file_bytes or len(file_bytes) > MAX_FILE_SIZE_BYTES:
+        raise ValueError("Choose a nonempty file of at most 10 MB.")
+    extension = Path(original_filename).suffix.lower()
+    if extension not in ALLOWED_EXTENSIONS:
+        raise ValueError("Unsupported file type. Allowed: jpg, jpeg, png, webp, pdf.")
+    file_bytes, original_filename, mime_type = prepare_storage_upload(file_bytes, original_filename, mime_type)
+    extension = Path(original_filename).suffix.lower()
+    if document is None:
+        return save_document_bytes(db, case, file_bytes, original_filename, mime_type, "receipt")
+    folder = upload_root() / f"case_{case.id}"
+    folder.mkdir(parents=True, exist_ok=True)
+    filename = f"{uuid4().hex}{extension}"
+    path = folder / filename
+    path.write_bytes(file_bytes)
+    try:
+        document.path = str(path)
+        document.stored_filename = filename
+        document.original_filename = original_filename
+        document.mime_type = mime_type
+        document.size_bytes = len(file_bytes)
+        db.commit()
+        db.refresh(document)
+    except Exception:
+        db.rollback()
+        path.unlink(missing_ok=True)
+        raise
     return document

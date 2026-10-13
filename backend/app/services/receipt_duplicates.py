@@ -2,13 +2,13 @@
 import base64
 import hashlib
 import io
-from pathlib import Path
 
 from PIL import Image, ImageOps, ImageStat
 
 from app.models.case import Case
 from app.models.document import Document
 from app.models.receipt_fingerprint import ReceiptFingerprint
+from app.services.document_service import resolve_document_path
 
 
 def fingerprint(data):
@@ -57,8 +57,8 @@ def find_duplicate(db, user_id, sha, image_signature):
     for document, case in legacy:
         if case.id in known:
             continue
-        path = Path(document.path)
-        if not path.is_file():
+        path = resolve_document_path(document)
+        if path is None:
             continue
         try:
             old_sha, old_image = fingerprint(path.read_bytes())

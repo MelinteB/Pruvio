@@ -175,7 +175,9 @@ def bill_document(uid:int,cid:int,did:int,identity=Depends(admin),db=Depends(get
     # Check both the user's bill relationship and the document's case before opening a file.
     if not d.user_bill_query(db,uid).filter_by(id=cid).first():raise HTTPException(404,'Bill not found.')
     doc=db.query(Document).filter_by(id=did,case_id=cid).first()
-    if not doc or not doc.path or not Path(doc.path).is_file():raise HTTPException(404,'The original file is unavailable on this server.')
-    return FileResponse(doc.path,media_type=doc.mime_type or 'application/octet-stream',
+    from app.services.document_service import resolve_document_path
+    path=resolve_document_path(doc)
+    if path is None:raise HTTPException(404,'The original file is unavailable on this server.')
+    return FileResponse(path,media_type=doc.mime_type or 'application/octet-stream',
                         filename=doc.original_filename or doc.stored_filename,
                         content_disposition_type='inline',headers={'Cache-Control':'no-store'})
