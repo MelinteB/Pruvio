@@ -353,6 +353,8 @@ Object.assign(ro, {
  'Company details and reusable trip profiles for expense reports.':'Datele companiei și modelele de deplasare reutilizabile pentru deconturi.',
  'Manage employer details and trip profiles in a dedicated view.':'Administrează datele angajatorului și modelele de deplasare într-o pagină dedicată.',
  'Company trip profiles':'Modele de deplasare pentru companie',
+ 'Open trip profiles':'Deschide modelele de deplasare',
+ 'Close trip profiles':'Închide modelele de deplasare',
  'Save reusable report fields for each company. Select a profile while preparing a report and edit its values for that trip.':'Salvează câmpuri reutilizabile pentru fiecare companie. Alege un model când pregătești decontul și modifică valorile pentru acea deplasare.',
  'Trip profiles updated.':'Modelele de deplasare au fost actualizate.',
  'Trip profile name':'Numele modelului de deplasare',

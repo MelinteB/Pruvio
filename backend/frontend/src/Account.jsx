@@ -1,16 +1,18 @@
 import { t } from "./i18n";
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Fingerprint, Trash2 } from 'lucide-react';
 import { request, send, credential } from './api';
 import { useApp, useLoad, Title, Panel, Field, Check, Message } from './common';
 import Notifications from './Notifications';
 import CompanyProfiles from './CompanyProfiles';
-import TripProfiles from './TripProfiles';
+import {TripProfilesDialog} from './TripProfiles';
 import PaymentProfiles from './PaymentProfiles';
 export function CompanySettings(){
   const companies=useLoad(()=>request('/expenses/companies'),[]);
-  return <><Title eyebrow="ACCOUNT" title={t('Manage company profiles')} action={<Link className="secondary" to="/account">{t('Back to Account')}</Link>}>{t('Company details and reusable trip profiles for expense reports.')}</Title><CompanyProfiles onUpdated={companies.reload}/><TripProfiles key={(companies.data||[]).map(c=>c.id).join(',')} companies={companies.data||[]}/></>;
+  const [tripOpen,setTripOpen]=useState(false);
+  const tripButton=useRef(null);
+  return <><Title eyebrow="ACCOUNT" title={t('Manage company profiles')} action={<Link className="secondary" to="/account">{t('Back to Account')}</Link>}>{t('Company details and reusable trip profiles for expense reports.')}</Title><CompanyProfiles onUpdated={companies.reload}/><Panel title={t('Company trip profiles')}><p className="muted">{t('Save reusable report fields for each company. Select a profile while preparing a report and edit its values for that trip.')}</p><button ref={tripButton} type="button" onClick={()=>setTripOpen(true)}>{t('Open trip profiles')}</button></Panel>{tripOpen&&<TripProfilesDialog companies={companies.data||[]} onUpdated={companies.reload} onClose={()=>setTripOpen(false)} returnFocusTo={tripButton}/>}</>;
 }
 export default function Account() {
   const {

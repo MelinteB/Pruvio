@@ -285,11 +285,37 @@ footer a { min-height: 28px; display: inline-flex; align-items: center; }
 .trip-field .check { margin: 4px 0; }
 .trip-field .field { margin: 9px 0 0; }
 .trip-field .field > label { font-size: 12px; }
+.trip-profiles-dialog {
+  width: min(900px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--surface);
+  border-radius: 18px;
+  box-shadow: 0 20px 80px #10213b50;
+  padding: clamp(18px, 3vw, 30px);
+}
+.trip-dialog-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+}
+.trip-dialog-header h2 { margin: 0; }
+.trip-dialog-close { flex-shrink: 0; min-width: 44px; min-height: 44px; padding: 8px; }
+.trip-profiles-panel { border: 0; box-shadow: none; padding: 16px 0 0; margin: 0; }
 .content { min-height: calc(100dvh - 72px); display: flex; flex-direction: column; }
 .content > footer { margin-top: auto; }
 @media (max-width: 760px) {
   .content { min-height: calc(100dvh - 66px); }
   .trip-field-grid { grid-template-columns: 1fr; }
+  .trip-profiles-dialog { max-height: calc(100dvh - 20px); border-radius: 18px 18px 12px 12px; }
   .row .field { max-width: min(100%, 240px); flex: 1 1 145px; }
   .mobile-nav a { font-size: clamp(10px, 2.6vw, 11px); }
 }
