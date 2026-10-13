@@ -5,11 +5,12 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 
 from app.db.database import get_db
 from app.models.case import Case
 from app.models.document import Document
-from app.models.expense import ExpenseCompany, ExpenseReport
+from app.models.expense import ExpenseCompany, ExpenseReport, ExpenseTripProfile
 from app.models.history_visibility import HistoryVisibility
 from app.models.split_bill_participant import SplitBillParticipant
 from app.models.split_bill_session import SplitBillSession
@@ -94,8 +95,72 @@ def remove_company(company_id: int, identity=Depends(current), db=Depends(get_db
     row = db.query(ExpenseCompany).filter_by(id=company_id, user_id=identity[0].id).first()
     if row is None:
         raise HTTPException(404, 'Company profile not found.')
+    db.query(ExpenseTripProfile).filter_by(user_id=identity[0].id,company_id=company_id).delete()
     db.delete(row); db.commit()
     return {'ok': True}
+
+
+def format_trip(row):
+    return {'id':row.id,'company_id':row.company_id,'name':row.name,
+            'defaults':json.loads(row.defaults_json),'enabled_fields':json.loads(row.enabled_json),
+            'required_fields':json.loads(row.required_json)}
+
+
+def trip_input(db,uid,body):
+    if not isinstance(body,dict):raise ValueError('Invalid trip profile.')
+    company_id=body.get('company_id')
+    if type(company_id) is not int or not db.query(ExpenseCompany).filter_by(id=company_id,user_id=uid).first():
+        raise ValueError('Choose one of your company profiles.')
+    name=clean(body.get('name',''),180,required=True)
+    defaults=body.get('defaults',{})
+    enabled=body.get('enabled_fields',list(DETAILS))
+    required=body.get('required_fields',['purpose'])
+    if not isinstance(defaults,dict) or not isinstance(enabled,list) or not isinstance(required,list):
+        raise ValueError('Invalid trip fields.')
+    if any(not isinstance(k,str) or k not in DETAILS for k in defaults) or any(not isinstance(k,str) or k not in DETAILS for k in enabled+required):
+        raise ValueError('Unknown trip field.')
+    if len(set(enabled))!=len(enabled) or len(set(required))!=len(required) or 'purpose' not in enabled or 'purpose' not in required or not set(required)<=set(enabled):
+        raise ValueError('Business purpose must be required, and every required field must be enabled.')
+    return {'company_id':company_id,'name':name,
+            'defaults_json':json.dumps({k:clean(v,DETAILS[k]) for k,v in defaults.items()},ensure_ascii=False),
+            'enabled_json':json.dumps(enabled),'required_json':json.dumps(required)}
+
+
+@router.get('/trip-profiles')
+def trip_profiles(identity=Depends(current),db=Depends(get_db)):
+    return [format_trip(p) for p in db.query(ExpenseTripProfile).filter_by(user_id=identity[0].id).order_by(ExpenseTripProfile.name).all()]
+
+
+@router.post('/trip-profiles')
+def create_trip_profile(body:dict,identity=Depends(current),db=Depends(get_db)):
+    uid=identity[0].id
+    if db.query(ExpenseTripProfile).filter_by(user_id=uid).count()>=100:raise ValueError('Maximum 100 trip profiles.')
+    row=ExpenseTripProfile(user_id=uid,**trip_input(db,uid,body));db.add(row);db.commit();db.refresh(row)
+    return format_trip(row)
+
+
+@router.put('/trip-profiles/{profile_id}')
+def update_trip_profile(profile_id:int,body:dict,identity=Depends(current),db=Depends(get_db)):
+    row=db.query(ExpenseTripProfile).filter_by(id=profile_id,user_id=identity[0].id).first()
+    if not row:raise HTTPException(404,'Trip profile not found.')
+    for key,value in trip_input(db,identity[0].id,body).items():setattr(row,key,value)
+    row.updated_at=datetime.utcnow();db.commit();return format_trip(row)
+
+
+@router.delete('/trip-profiles/{profile_id}')
+def remove_trip_profile(profile_id:int,identity=Depends(current),db=Depends(get_db)):
+    row=db.query(ExpenseTripProfile).filter_by(id=profile_id,user_id=identity[0].id).first()
+    if not row:raise HTTPException(404,'Trip profile not found.')
+    db.delete(row);db.commit();return {'ok':True}
+
+
+def period(value,label):
+    if value is None or value=='':return None
+    try:
+        parsed=date.fromisoformat(value)
+        if parsed.isoformat()!=value:raise ValueError()
+        return parsed
+    except ValueError:raise HTTPException(400,f'Invalid {label}; use YYYY-MM-DD.') from None
 
 
 def source(db, uid, kind, source_id, *, include_unavailable=False):
@@ -144,11 +209,17 @@ def source(db, uid, kind, source_id, *, include_unavailable=False):
 
 @router.get('/sources/tree')
 def source_tree(offset: int = Query(0, ge=0), limit: int = Query(30, ge=1, le=100),
+                from_date: str | None = None, to_date: str | None = None,
                 identity=Depends(current), db=Depends(get_db)):
     """Group owned receipts and joined splits by the underlying receipt."""
     from app.react_app.receipt_labels import receipt_label
 
     uid = identity[0].id
+    start,end=period(from_date,'start date'),period(to_date,'end date')
+    if start and end and end<start:raise HTTPException(400,'End date must be on or after start date.')
+    def in_period(when):
+        day=when.date()
+        return (start is None or day>=start) and (end is None or day<=end)
     cases = db.query(Case).filter(Case.user_id == uid,
                                   Case.status.notin_(('processing', 'processing_failed'))).all()
     sessions = (db.query(SplitBillSession)
@@ -159,10 +230,10 @@ def source_tree(offset: int = Query(0, ge=0), limit: int = Query(30, ge=1, le=10
                .filter_by(user_id=uid, state='removed').all()}
     grouped = {}
     for case in cases:
-        if ('receipt', case.id) not in removed:
+        if ('receipt', case.id) not in removed and in_period(case.created_at):
             grouped[case.id] = {'date': case.created_at, 'receipt_id': case.id, 'session_ids': []}
     for session in sessions:
-        if ('bill', session.id) in removed:
+        if ('bill', session.id) in removed or not in_period(session.settled_at or session.created_at):
             continue
         group = grouped.setdefault(session.case_id, {'date': session.created_at,
                                                       'receipt_id': None, 'session_ids': []})
@@ -241,6 +312,12 @@ def create_report(body: dict, identity=Depends(current), db=Depends(get_db)):
         raise ValueError('Choose a company profile from your account.')
     title = clean(body.get('title', ''), 180, required=True)
     details = details_input(body.get('details'))
+    trip=None
+    if body.get('trip_profile_id') is not None:
+        trip=db.query(ExpenseTripProfile).filter_by(id=body['trip_profile_id'],user_id=uid,company_id=profile.id).first()
+        if not trip:raise ValueError('Choose a trip profile for the selected company.')
+        for field in json.loads(trip.required_json):
+            if not details.get(field):raise ValueError(f'Required trip field is missing: {field}.')
     raw = body.get('items')
     if not isinstance(raw, list) or not 1 <= len(raw) <= 1000:
         raise ValueError('Choose between 1 and 1000 saved receipts or settled split shares.')
@@ -289,6 +366,7 @@ def create_report(body: dict, identity=Depends(current), db=Depends(get_db)):
         if currency not in reimburse:
             raise ValueError('Advance currency must match an employee-paid expense currency.')
     snapshot = {'title': title, 'employee': identity[0].name, 'company': format_company(profile),
+                'trip_profile':trip.name if trip else None,
                 'details': details, 'items': rows, 'totals': {k: str(v) for k, v in totals.items()},
                 'employee_paid': {k: str(v) for k, v in reimburse.items()},
                 'reimbursement': {k: str(v - (Decimal(details['advance_amount']) if k == details['advance_currency'] else 0))
@@ -312,3 +390,19 @@ def report(report_id: int, identity=Depends(current), db=Depends(get_db)):
     if not row:
         raise HTTPException(404, 'Expense report not found.')
     return {'id': row.id, 'created_at': row.created_at.isoformat(), **json.loads(row.snapshot_json)}
+
+
+@router.get('/reports/{report_id}/pdf')
+def report_pdf(report_id: int, identity=Depends(current), db=Depends(get_db)):
+    row = db.query(ExpenseReport).filter_by(id=report_id, user_id=identity[0].id).first()
+    if not row:
+        raise HTTPException(404, 'Expense report not found.')
+    from app.react_app.expense_pdf import render_expense_pdf
+    try:
+        output = render_expense_pdf(db, identity[0].id, row.id, json.loads(row.snapshot_json), row.created_at)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return StreamingResponse(output, media_type='application/pdf', headers={
+        'Content-Disposition': f'attachment; filename="pruvs-expense-{row.id}.pdf"',
+        'Cache-Control': 'private, no-store',
+    })

@@ -7,7 +7,7 @@
     "src/Bill.jsx": "af9bd6c562c171ba25ffea5c33addc8669a4d90eb1a09258243378689d0ef7d8",
     "src/CompanyProfiles.jsx": "7483611d81ce2b5f8bb5fb4d37ebe3624a5960403121583e57cf7f24eb6f9458",
     "src/CropEditor.jsx": "a4cd7a7c2265d6758ad523362f896f28fffdb0b4f487252de8058057979b677c",
-    "src/Expenses.jsx": "a18453a9c0543e021282e10fb3de7c30357e3dd6ea11b35f1328691d44923b85",
+    "src/Expenses.jsx": "f3a673e72a67831df49c54479574d85c63ed81e5d8e114c9b6412105f31afd99",
     "src/Inbox.jsx": "2a869dcfbbbfc1acf0a514f5e9b991bd37b0b577b65e328d74be12100cf3fe61",
     "src/Notifications.jsx": "390bd680d0d60a96aab6928d92f2622b74b8acb29566175693b0e08ae8f338f2",
     "src/Receipts.jsx": "e84bc9fe6336663e3b3b79cd36df9afe830184453372ef4f6ebf0c4145711ed0",
@@ -15,7 +15,7 @@
     "src/api.js": "421db792022fa569cfb10dec4eba138313d13ea74a15f931f696b751744ebb17",
     "src/common.jsx": "e49b74484960a597acf88929f9f76ac8a889d9e630d320254090e2b08fbbdad2",
     "src/expenseFields.js": "6694bc352557dc409792e808c02e1333c90eb8e6177c5fc28a821061ee75c839",
-    "src/i18n.js": "6e8383defd2adcf4b839aee947aca951138c5d917bfdd03493b6ae9bd1ba2c32",
+    "src/i18n.js": "56f8b7b3aafc46ce1db67e2063322a1709e5c7d5b4cfb2364759f51740712128",
     "src/main.jsx": "9dd137e12c904fff58f62ab89366af08a77a87423e244cd3ee933556c9a199da",
     "src/style.css": "059a6cc89a7cf2ec8fca7c7c4e3d4b3842c2b65b3519fe04a153d67cea70716b",
     "index.html": "3ae6bf190a5228d5c764112d079fc92aafcc423cc9d9ea89d0e351e137f58bbb",
@@ -25,8 +25,8 @@
     "scripts/stamp-build.mjs": "38572da343861f8cb50a1ec99f3be5fd5c121e07934c43391582c3222c56db41"
   },
   "assets": {
-    "dist/assets/index-CAdNnMyB.js": "d10d8950cbb32108b13d88af81e44fe01d9a798538a1e3f059f0c47b61578f06",
     "dist/assets/index-DL50Y4YM.css": "3b95fee0f15e782351ddcfb12de7f608169116e3cc0e43af8d4a18edad208b01",
-    "dist/index.html": "caa7a56aa4ba8998d29b7b6c4c25adace4375940c87a403c683abb576fd77096"
+    "dist/assets/index-qoxkQm1B.js": "8daebd73ba9c944904da074b5bce17cd93f8247adb261aae491db8eafac35a94",
+    "dist/index.html": "f871f05e4e11d9e6bdb2c828601a1fe158557ed9c653e5eaaf6d4268906e2378"
   }
 }
