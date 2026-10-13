@@ -61,7 +61,7 @@ export default function Notifications({ embedded = false }) {
     run(async () => {
       await load();
       if (!supported || ios && !standalone) return;
-      registration.current = await navigator.serviceWorker.register('/service-worker.js?v=7.0.0', {
+      registration.current = await navigator.serviceWorker.register('/service-worker.js?v=7.1.9', {
         scope: '/'
       });
       await navigator.serviceWorker.ready;

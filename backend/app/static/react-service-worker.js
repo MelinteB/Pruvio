@@ -1,4 +1,4 @@
-const CACHE = 'pruvs-shell-v7.0.0';
+const CACHE = 'pruvs-shell-v7.1.9';
 
 // v6.12: device notifications also work when no Pruvs page is open.
 self.addEventListener('push', event => {
@@ -12,7 +12,7 @@ self.addEventListener('push', event => {
     } catch (_) {}
     await self.registration.showNotification(data.title || 'Pruvs', {
       body: data.body || 'You have an update in Pruvs.',
-      icon: '/static/pruvs-notification-192.png?v=7.0.0', badge: '/static/pruvs-notification-96.png?v=7.0.0',
+      icon: '/static/pruvs-notification-192.png?v=7.1.9', badge: '/static/pruvs-notification-96.png?v=7.1.9',
       tag: data.tag || 'pruvs-update', data: {url}
     });
   })());
@@ -32,7 +32,7 @@ self.addEventListener('notificationclick', event => {
   })());
 });
 
-const STATIC = ['/static/pruvs-notification-192.png?v=7.0.0', '/static/pruvs-notification-96.png?v=7.0.0'];
+const STATIC = ['/static/pruvs-notification-192.png?v=7.1.9', '/static/pruvs-notification-96.png?v=7.1.9'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(STATIC)).catch(() => undefined));

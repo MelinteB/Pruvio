@@ -423,3 +423,5 @@ Object.assign(ro,{
 });
 
 Object.assign(ro,{'Open payment link':'Deschide linkul de plată','I paid via payment link':'Am plătit prin linkul de plată'});
+
+Object.assign(ro, {'Skip to content':'Sari la conținut','Main navigation':'Navigare principală','Open Admin dashboard':'Deschide panoul de administrare'});
