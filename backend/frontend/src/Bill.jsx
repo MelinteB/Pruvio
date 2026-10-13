@@ -34,7 +34,7 @@ export default function Bill() {
       token
     } = useParams(),
     {
-      user
+      user, config
     } = useApp();
   const [data, setData] = useState(null),
     [error, setError] = useState(''),

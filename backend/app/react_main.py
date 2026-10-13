@@ -55,7 +55,7 @@ async def lifespan(app):
         try:await asyncio.wait_for(worker,timeout=25)
         except asyncio.TimeoutError:worker.cancel()
 
-app=FastAPI(title='Pruvs Core',version='7.1.8',lifespan=lifespan)
+app=FastAPI(title='Pruvs Core',version='7.1.8.1',lifespan=lifespan)
 app.include_router(inbox_router);app.include_router(router);app.include_router(expense_router);app.include_router(history_manage_router);app.include_router(admin_router);app.include_router(legacy_router)
 app.include_router(push_router);app.dependency_overrides[push_authenticate]=push_identity
 app.include_router(users_router,prefix='/users',tags=['Admin - Users'])
@@ -91,7 +91,7 @@ async def forbidden(request,exc):return JSONResponse({'detail':str(exc)},403)
 async def conflict(request,exc):return JSONResponse({'detail':'This change conflicts with an existing record. Refresh and try again.'},409)
 
 @app.get('/health')
-def health():return {'status':'ok','app':'Pruvs Core','version':'7.1.8','frontend':'React','mode':'standalone'}
+def health():return {'status':'ok','app':'Pruvs Core','version':'7.1.8.1','frontend':'React','mode':'standalone'}
 
 @app.get('/service-worker.js',include_in_schema=False)
 def worker():return FileResponse(STATIC/'react-service-worker.js',media_type='application/javascript',headers={'Cache-Control':'no-cache','Service-Worker-Allowed':'/'})

@@ -1,10 +1,10 @@
 {
-  "version": "7.1.8",
+  "version": "7.1.8.1",
   "source": {
     "src/Account.jsx": "7bc9ef9f0b384c5730055929921534bcbe6a073b6296e139a202c708940124ee",
     "src/Admin.jsx": "be8f00258fd7c6b950d80a8c3f5f9699129e6e2790568ceb25e5595cc0bd8bb5",
     "src/Auth.jsx": "4355c33236a0a9c57807c7db90f594988560b60d94680d84420efb84e9e95946",
-    "src/Bill.jsx": "94bb1f84bc6476120aebf71fd525bcf2fcd252e023a3bbf4f01e0acefc1d7821",
+    "src/Bill.jsx": "0dd9ef28f87ad25e637e8e7d061ca94e8134e2b296f71d1c7aeb99cdb97c1090",
     "src/CompanyProfiles.jsx": "7483611d81ce2b5f8bb5fb4d37ebe3624a5960403121583e57cf7f24eb6f9458",
     "src/CropEditor.jsx": "a4cd7a7c2265d6758ad523362f896f28fffdb0b4f487252de8058057979b677c",
     "src/Expenses.jsx": "147a6731467ef6cf13af985801b7d6cbdb1fd2a612380f2c195f0771cc86b6f2",
@@ -17,17 +17,17 @@
     "src/common.jsx": "e49b74484960a597acf88929f9f76ac8a889d9e630d320254090e2b08fbbdad2",
     "src/expenseFields.js": "6694bc352557dc409792e808c02e1333c90eb8e6177c5fc28a821061ee75c839",
     "src/i18n.js": "fe54bcf337621d36f2d6ec36f4fbb1c07d1255d0b5677a5ff4b7945ab21ebde9",
-    "src/main.jsx": "18c5990a0c272af7001145c9f70ca4ab17f076840033547e7c8213c2b3be7a5f",
+    "src/main.jsx": "dddd4915113e72c79260f23f871f994c27063af1fc61b5ff976dd23e00e2d87e",
     "src/style.css": "6d47853c1c0f1c90afc1664847cfd732c991a36e6153d8fa09c1e004b41d4b49",
     "index.html": "3ae6bf190a5228d5c764112d079fc92aafcc423cc9d9ea89d0e351e137f58bbb",
     "vite.config.js": "23391e83cf79211d11ce62897d5548e6ea6fb7bce8f50d0ea327daa9ae3b9ab3",
     "package.json": "b3dcac3685a9eea1af1d0a3c92f8baa2baec4070436d6915933ce134ce8e478e",
     "package-lock.json": "e18feb31007772208370d8207170d9eebc5ea7851a54196fd0a33ab8a4c15813",
-    "scripts/stamp-build.mjs": "8616924a6902b4ddc3ee49033a71d78255b4763fa49280464482555fe5ee0897"
+    "scripts/stamp-build.mjs": "1f2c91f5ceb1722404d785900dfc28c6825b3d4e0d8ea766b053d938dc81fdf4"
   },
   "assets": {
+    "dist/assets/index-BAwUJuHC.js": "dc47778131280d94298e8ef557b6f859471d2a4597df50d562695c1e56784771",
     "dist/assets/index-Bl345qFO.css": "611f05b5a46758c56d281ccc006eae606316774e099aab5081b51c00a429a545",
-    "dist/assets/index-GHHi0Lwb.js": "b54cd437726e6afb5623bf1a4d4cdf84ad5ffdaf49c5df79d69fb3d89a6242e1",
-    "dist/index.html": "e208c89e5eb8db858d7b43f5f290a87334fffec5facf3dd1e1829d8907652707"
+    "dist/index.html": "f4fb928c28171704c62caecae8f7fce801cde21bcf43e98352c13a6762a78209"
   }
 }
