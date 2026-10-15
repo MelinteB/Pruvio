@@ -25,7 +25,7 @@
     "vite.config.js": "23391e83cf79211d11ce62897d5548e6ea6fb7bce8f50d0ea327daa9ae3b9ab3",
     "package.json": "b3dcac3685a9eea1af1d0a3c92f8baa2baec4070436d6915933ce134ce8e478e",
     "package-lock.json": "e18feb31007772208370d8207170d9eebc5ea7851a54196fd0a33ab8a4c15813",
-    "scripts/stamp-build.mjs": "d697f1e6decd819c2072216435d23ae0fcf4744dfc51bd0a6ef5afacf7893b3e"
+    "scripts/stamp-build.mjs": "dc96a04752079bda3fe0f40cbeb811b90b03de28366f3b33b9f728b8c825cabf"
   },
   "assets": {
     "dist/assets/index-CxqM7h4E.css": "bc34cde63f83e873a5d8f02d8219d307df8adf613816a022a8f164cf7da7cb30",
