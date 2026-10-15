@@ -1,5 +1,5 @@
 {
-  "version": "7.1.9.2",
+  "version": "7.1.10",
   "source": {
     "src/Account.jsx": "5db190fb0b84ce67cb9b26ba152b8d179519b731a190cca5fed2ff64da8aa64f",
     "src/Admin.jsx": "be8f00258fd7c6b950d80a8c3f5f9699129e6e2790568ceb25e5595cc0bd8bb5",
@@ -29,6 +29,6 @@
   "assets": {
     "dist/assets/index-CmnF8gYG.css": "67f2b0c7e86c9e5557bfeff2593b2a66689b46dc9a5710d833b2b59cf701c56c",
     "dist/assets/index-DVq-5A92.js": "d2ff4907e07c06ffcbf12bc49285789567a0560b1b002eaeafcb2857b5cbf3af",
-    "dist/index.html": "3f11d55a5ad4ede6d4795b4a8fafe53e46cac771ccb608b86700b12252f2b520"
+    "dist/index.html": "b39eb5b88caeee74ffc6993eb15f0102131e403e535aab6328cca07e096b10f3"
   }
 }

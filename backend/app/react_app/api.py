@@ -38,7 +38,7 @@ class Payload(BaseModel):
 @router.get('/config')
 def config():
     from app.services.receipt_currency_service import CURRENCY_OPTIONS
-    return {'version':'7.1.9.2','passkeys':passkeys.passkeys_enabled(),'currencies':CURRENCY_OPTIONS,
+    return {'version':'7.1.10','passkeys':passkeys.passkeys_enabled(),'currencies':CURRENCY_OPTIONS,
             'support_email':os.getenv('PRUVIO_SUPPORT_EMAIL','')}
 
 @router.get('/me')
@@ -369,7 +369,10 @@ def join(token:str,identity=Depends(current),db=Depends(get_db)):
     s=db.query(SplitBillSession).filter_by(token=token).with_for_update().first()
     if not s:raise HTTPException(404,'Invitation not found.')
     if s.owner_user_id==identity[0].id:raise ValueError('The owner is already part of this bill.')
-    bills.join_split_bill_session_as_user(db,s,identity[0]);return summary(db,s,identity[0].id)
+    bills.join_split_bill_session_as_user(db,s,identity[0])
+    from app.react_app.commerce import new_referral
+    new_referral(db,s,identity[0])
+    return summary(db,s,identity[0].id)
 
 @router.get('/bills/{token}')
 def bill(token:str,identity=Depends(current),db=Depends(get_db)):
@@ -380,7 +383,10 @@ def selection(token:str,body:dict,identity=Depends(current),db=Depends(get_db)):
     s,p=member(db,token,identity[0].id,lock=True)
     quantities={int(k):float(v) for k,v in body.get('quantities',{}).items()}
     if len(quantities)>500 or any(not math.isfinite(v) or v<0 for v in quantities.values()):raise ValueError('Invalid item quantities.')
-    bills.save_participant_selection(db,s,p.id,selected_quantities=quantities);return summary(db,s,identity[0].id)
+    bills.save_participant_selection(db,s,p.id,selected_quantities=quantities)
+    from app.react_app.commerce import qualify_referral
+    qualify_referral(db,s,identity[0],quantities)
+    return summary(db,s,identity[0].id)
 
 @router.post('/bills/{token}/action/{action}')
 def bill_action(token:str,action:str,body:dict,identity=Depends(current),db=Depends(get_db)):

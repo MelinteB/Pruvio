@@ -27,6 +27,7 @@ from app.api.users import router as users_router,require_admin_api_key
 from app.api.openai_api import router as openai_router
 from app.react_app.push_worker import loop as push_loop
 from app.react_app.inbox import router as inbox_router
+from app.react_app.commerce import router as commerce_router
 from app.react_app.expenses import router as expense_router
 from app.react_app.history_manage import router as history_manage_router
 from datetime import datetime
@@ -55,8 +56,9 @@ async def lifespan(app):
         try:await asyncio.wait_for(worker,timeout=25)
         except asyncio.TimeoutError:worker.cancel()
 
-app=FastAPI(title='Pruvs Core',version='7.1.9.2',lifespan=lifespan)
+app=FastAPI(title='Pruvs Core',version='7.1.10',lifespan=lifespan)
 app.include_router(inbox_router);app.include_router(router);app.include_router(expense_router);app.include_router(history_manage_router);app.include_router(admin_router);app.include_router(legacy_router)
+app.include_router(commerce_router)
 app.include_router(push_router);app.dependency_overrides[push_authenticate]=push_identity
 app.include_router(users_router,prefix='/users',tags=['Admin - Users'])
 app.include_router(openai_router,prefix='/openai',tags=['Admin - OpenAI'])
@@ -91,7 +93,7 @@ async def forbidden(request,exc):return JSONResponse({'detail':str(exc)},403)
 async def conflict(request,exc):return JSONResponse({'detail':'This change conflicts with an existing record. Refresh and try again.'},409)
 
 @app.get('/health')
-def health():return {'status':'ok','app':'Pruvs Core','version':'7.1.9.2','frontend':'React','mode':'standalone'}
+def health():return {'status':'ok','app':'Pruvs Core','version':'7.1.10','frontend':'React','mode':'standalone'}
 
 @app.get('/service-worker.js',include_in_schema=False)
 def worker():return FileResponse(STATIC/'react-service-worker.js',media_type='application/javascript',headers={'Cache-Control':'no-cache','Service-Worker-Allowed':'/'})
@@ -140,6 +142,12 @@ async def live(websocket:WebSocket,token:str):
     except (WebSocketDisconnect,RuntimeError):pass
     except (PermissionError,HTTPException):
         with contextlib.suppress(RuntimeError):await websocket.close(code=1008)
+
+@app.get('/rewards',include_in_schema=False)
+@app.get('/rewards/merchant/{code}',include_in_schema=False)
+def rewards_portal():
+    # Public QR landing and account portal use existing Pruvs auth in APIs.
+    return FileResponse(STATIC/'pruvs-commerce.html',media_type='text/html',headers={'Cache-Control':'no-store'})
 
 @app.get('/{path:path}',include_in_schema=False)
 def frontend(path:str):
