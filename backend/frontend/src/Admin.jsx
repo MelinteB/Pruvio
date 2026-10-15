@@ -13,6 +13,41 @@ function Table({
   const keys = Object.keys(rows[0]);
   return <div className="table-scroll"><table><thead><tr>{keys.map(k => <th key={k}>{k.replaceAll('_', ' ')}</th>)}{actions && <th>{t("Actions")}</th>}</tr></thead><tbody>{rows.map((r, i) => <tr key={r[pk] ?? i} onClick={() => onSelect?.(r)} className={onSelect ? 'clickable' : ''} tabIndex={onSelect ? 0 : undefined} onKeyDown={e => e.key === 'Enter' && onSelect?.(r)}>{keys.map(k => <td key={k} title={String(r[k] ?? '')}>{typeof r[k] === 'boolean' ? r[k] ? t("Yes") : t("No") : typeof r[k] === 'object' && r[k] !== null ? JSON.stringify(r[k]) : String(r[k] ?? '—')}</td>)}{actions && <td onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>{actions(r)}</td>}</tr>)}</tbody></table></div>;
 }
+function AdminMembership({userId}) {
+  const {data,reload,error,loading} = useLoad(() => request('/commerce/admin/users/'+userId+'/membership'), [userId]);
+  const [plan,setPlan] = useState('free');
+  const [saving,setSaving] = useState(false);
+  const [notice,setNotice] = useState('');
+  React.useEffect(() => { if(data) setPlan(data.plan); }, [data?.plan]);
+  async function update() {
+    if (!window.confirm(`Assign ${plan.toUpperCase()} to user #${userId}? No payment will be collected.`)) return;
+    setSaving(true); setNotice('');
+    try { await send('/commerce/admin/users/'+userId+'/subscription',{plan},'PUT'); await reload(); setNotice('Membership updated; no charge made.'); }
+    catch (e) {setNotice(e.message)}
+    finally {setSaving(false)}
+  }
+  return <section className="admin-membership"><h3>User membership</h3>
+    {error&&<Message error={error}/>}{loading?<Spinner/>:<><p>Assigned plan: <strong>{(data?.plan||'free').toUpperCase()}</strong> · Promotional credits: <strong>{data?.credits ?? 0} PC</strong></p>
+    <p className="muted">This month's processed receipt cases: {data?.ocr?.completed_receipts_this_month ?? '—'}. Purchases remain disabled.</p>
+    <div className="row wrap"><label>Subscription <select aria-label="Assign user subscription" value={plan} onChange={e=>setPlan(e.target.value)}>{['free','plus','pro'].map(k=><option key={k} value={k}>{k.toUpperCase()}</option>)}</select></label><button className="primary" disabled={saving||plan===data?.plan} onClick={update}>Assign subscription</button></div>
+    {notice&&<Message>{notice}</Message>}
+    </>}
+  </section>;
+}
+
+const GROUPS = [
+  ['Accounts',/^(users|pruvs_demo_subscriptions|pruvs_credit_entries|pruvs_split_referrals|pruvs_admin_user_actions)$/],
+  ['Receipts & OCR',/^(cases|documents|receipt_items|external_ocr_requests|external_ocr_usage|receipt_fingerprints|receipt_corrections)$/],
+  ['Split bills & payments',/(split_bill|payment_profile|payment_receipt|split_)/],
+  ['Messages & notifications',/(push_event|push_notification|inbox|reminder|message)/],
+  ['Expenses & companies',/(expense|company|trip_profile)/]
+];
+const NON_OPERATIONAL=/^(pruvs_reward_|pruvs_react_|passkey_|whatsapp_|ocr_provider_keys)/;
+function entityGroup(key) {
+  if(NON_OPERATIONAL.test(key)) return 'Advanced';
+  for(const [name,pattern] of GROUPS) if(pattern.test(key)) return name;
+  return 'Advanced';
+}
 export default function Admin() {
   const {
     user
@@ -34,7 +69,9 @@ export default function Admin() {
     [bill, setBill] = useState(null),
     [error, setError] = useState(''),
     [notice, setNotice] = useState(''),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [showAdvanced,setShowAdvanced] = useState(false);
+  const operational = useLoad(() => request('/admin/operational-overview'), []);
   const info = catalog.data?.find(c => c.key === entity);
   const query = `?q=${encodeURIComponent(q)}&offset=${offset}&field=${encodeURIComponent(filter.field)}&value=${encodeURIComponent(filter.value)}&include_deleted=${showDeleted}`;
   const records = useLoad(() => request('/admin/records/' + entity + query), [entity, q, offset, filter.field, filter.value, showDeleted]);
@@ -99,8 +136,9 @@ export default function Admin() {
     });
   }
   return <><Title eyebrow="ADMINISTRATION" title={t("Your workspace overview")}>{t("Manage users, inspect saved bills and maintain database records.")}</Title>{error && <Message error={error} />} {notice && <Message>{notice}</Message>} {catalog.error && <Message error={catalog.error} />}
- <div className="stats">{['users', 'cases', 'split_bill_sessions'].map(key => <Panel key={key}><span>{catalog.data?.find(c => c.key === key)?.label || key}</span><strong>{catalog.data?.find(c => c.key === key)?.count ?? '—'}</strong></Panel>)}</div>
- <div className="admin-layout"><aside className="panel admin-menu"><h3>{t("Database")}</h3>{catalog.data?.map(c => <button key={c.key} className={entity === c.key ? 'active' : ''} onClick={() => selectEntity(c.key)}><span>{c.label}</span><small>{c.count}</small></button>)}</aside><div>
+ <div className="stats">{operational.data && <><Panel><span>OCR completions this month</span><strong>{operational.data.ocr_completed}</strong><small>{operational.data.ocr_attempts} external OCR log entries</small></Panel><Panel><span>Messages / notification events</span><strong>{operational.data.notification_events}</strong><small>{operational.data.notification_unread} unread outbox events</small></Panel></>}{['users', 'cases', 'split_bill_sessions'].map(key => <Panel key={key}><span>{catalog.data?.find(c => c.key === key)?.label || key}</span><strong>{catalog.data?.find(c => c.key === key)?.count ?? '—'}</strong></Panel>)}</div>
+ <div className="admin-layout"><aside className="panel admin-menu"><h3>Operations</h3>{GROUPS.map(([group]) => { const list=(catalog.data||[]).filter(c=>entityGroup(c.key)===group); return !!list.length&&<section className="admin-category" key={group}><h4>{group}</h4>{list.map(c=><button key={c.key} className={entity === c.key ? 'active' : ''} onClick={() => selectEntity(c.key)}><span>{c.label}</span><small>{c.count}</small></button>)}</section>; })}
+    <details open={showAdvanced} onToggle={e=>setShowAdvanced(e.currentTarget.open)}><summary>Advanced technical records</summary>{(catalog.data||[]).filter(c=>entityGroup(c.key)==='Advanced').map(c=><button key={c.key} className={entity===c.key?'active':''} onClick={()=>selectEntity(c.key)}><span>{c.label}</span><small>{c.count}</small></button>)}</details></aside><div>
  {record ? <Panel><button className="text-button" onClick={() => {
             setRecord(null);
             setBill(null);
@@ -124,7 +162,7 @@ export default function Admin() {
             await records.reload();
             setNotice(t("Record updated."));
           })}>{t("Save changes")}</button>}
- {entity === 'users' && <><hr /><h3>{t("User account controls")}</h3><p className="muted">{t("Removing an account anonymizes it and disables sign-in. Shared bill history remains.")}</p><div className="row wrap"><button onClick={() => run(async () => {
+ {entity === 'users' && <><AdminMembership userId={record.record.id}/><hr /><h3>{t("User account controls")}</h3><p className="muted">{t("Removing an account anonymizes it and disables sign-in. Shared bill history remains.")}</p><div className="row wrap"><button onClick={() => run(async () => {
                 setBillOffset(0);
                 setBills(await request('/admin/users/' + record.record.id + '/bills'));
               })}>{t("View saved bills")}</button>{['block', 'unblock', 'delete'].map(action => <button key={action} className={action === 'delete' ? 'danger' : ''} disabled={busy || record.record.id === user.id || record.record.status === 'deleted' || action === 'unblock' && record.record.status !== 'blocked' || action === 'block' && record.record.status === 'blocked'} onClick={() => act(record.record, action)}>{action === 'delete' ? t("Remove account") : action === 'block' ? t("Block") : t("Unblock")}</button>)}</div></>}

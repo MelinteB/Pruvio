@@ -1,3 +1,4 @@
+import Membership from './Membership';
 import { t } from "./i18n";
 import React, { useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
@@ -67,7 +68,7 @@ export default function Account() {
   return <><Title eyebrow="MAKE IT YOURS" title={t("Your account")} action={<button onClick={() => run(async () => {
       await logout();
       nav('/login');
-    }, t("Signed out."))}>{t("Sign out")}</button>}>{t("Your profile, security and payment details.")}</Title>{user.is_admin&&<div className="account-admin-link"><Link className="secondary" to="/admin">{t('Open Admin dashboard')}</Link></div>}{error && <Message error={error} />} {notice && <Message>{notice}</Message>}<div className="two-column"><div>
+    }, t("Signed out."))}>{t("Sign out")}</button>}>{t("Your profile, security and payment details.")}</Title>{user.is_admin&&<div className="account-admin-link"><Link className="secondary" to="/admin">{t('Open Admin dashboard')}</Link></div>}{error && <Message error={error} />} {notice && <Message>{notice}</Message>}<Membership/><div className="two-column"><div>
  <Panel title={t("Profile")}><form onSubmit={e => {
             e.preventDefault();
             run(async () => {

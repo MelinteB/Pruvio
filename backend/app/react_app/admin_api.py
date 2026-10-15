@@ -181,3 +181,20 @@ def bill_document(uid:int,cid:int,did:int,identity=Depends(admin),db=Depends(get
     return FileResponse(path,media_type=doc.mime_type or 'application/octet-stream',
                         filename=doc.original_filename or doc.stored_filename,
                         content_disposition_type='inline',headers={'Cache-Control':'no-store'})
+
+@router.get('/operational-overview')
+def operational_overview(identity=Depends(admin),db=Depends(get_db)):
+    from app.models.external_ocr_usage import ExternalOCRUsage
+    from app.models.push_notification import PushEvent
+    from app.models.case import Case
+    now=datetime.utcnow();month=now.replace(day=1,hour=0,minute=0,second=0,microsecond=0)
+    ocr=db.query(ExternalOCRUsage).filter(ExternalOCRUsage.created_at>=month)
+    captured=db.query(Case).filter(Case.module=='split_bill',Case.created_at>=month)
+    notifications=db.query(PushEvent).filter(PushEvent.created_at>=month)
+    return {'month':month.strftime('%Y-%m'),'ocr_attempts':ocr.count(),
+      'ocr_completed':captured.filter(Case.status.notin_(['processing','processing_failed'])).count(),
+      'notification_events':notifications.count(),
+      'notification_unread':notifications.filter(PushEvent.read_at.is_(None)).count(),
+      'registered_users':db.query(User).filter(User.status!='deleted').count(),
+      'receipts':db.query(Case).count(),
+      'note':'OCR completions are processed receipt cases; attempts are external-provider log records. Notification events are not delivery confirmation.'}
