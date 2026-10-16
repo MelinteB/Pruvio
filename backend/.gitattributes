@@ -1,0 +1,13 @@
+# React integrity manifest must hash bytes identical on Windows and Linux.
+frontend/src/*.js text eol=lf
+frontend/src/*.jsx text eol=lf
+frontend/src/*.css text eol=lf
+frontend/scripts/** text eol=lf
+frontend/dist/*.html text eol=lf
+frontend/dist/*.json text eol=lf
+frontend/dist/assets/*.js text eol=lf
+frontend/dist/assets/*.css text eol=lf
+frontend/index.html text eol=lf
+frontend/vite.config.js text eol=lf
+frontend/package.json text eol=lf
+frontend/package-lock.json text eol=lf

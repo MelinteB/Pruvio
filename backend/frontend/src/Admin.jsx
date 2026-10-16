@@ -28,11 +28,28 @@ function AdminMembership({userId}) {
   }
   return <section className="admin-membership"><h3>User membership</h3>
     {error&&<Message error={error}/>}{loading?<Spinner/>:<><p>Assigned plan: <strong>{(data?.plan||'free').toUpperCase()}</strong> · Promotional credits: <strong>{data?.credits ?? 0} PC</strong></p>
-    <p className="muted">This month's processed receipt cases: {data?.ocr?.completed_receipts_this_month ?? '—'}. Purchases remain disabled.</p>
-    <div className="row wrap"><label>Subscription <select aria-label="Assign user subscription" value={plan} onChange={e=>setPlan(e.target.value)}>{['free','plus','pro'].map(k=><option key={k} value={k}>{k.toUpperCase()}</option>)}</select></label><button className="primary" disabled={saving||plan===data?.plan} onClick={update}>Assign subscription</button></div>
+    <p className="muted">Monthly AI OCR: {data?.usage?.ocr?.used ?? '—'} / {data?.usage?.ocr?.allowance ?? '—'} · Reports: {data?.usage?.expense_report?.used ?? '—'} / {data?.usage?.expense_report?.allowance ?? '—'}. Purchases disabled.</p>
+    <div className="row wrap"><label>Subscription <select aria-label="Assign user subscription" value={plan} onChange={e=>setPlan(e.target.value)}>{['free','plus','business'].map(k=><option key={k} value={k}>{k.toUpperCase()}</option>)}</select></label><button className="primary" disabled={saving||plan===data?.plan} onClick={update}>Assign subscription</button></div>
     {notice&&<Message>{notice}</Message>}
     </>}
   </section>;
+}
+
+function PendingUpgrades() {
+  const {data,reload,error}=useLoad(()=>request('/commerce/admin/upgrade-requests'),[]);
+  const [busy,setBusy]=useState(false),[notice,setNotice]=useState('');
+  async function act(row,approve){
+    if(approve&&!window.confirm(`Assign ${row.requested_plan.toUpperCase()} to ${row.name} without charging payment?`))return;
+    setBusy(true);setNotice('');
+    try{
+      if(approve)await send('/commerce/admin/users/'+row.user_id+'/subscription',{plan:row.requested_plan},'PUT');
+      else await send('/commerce/admin/upgrade-requests/'+row.id+'/decline',{});
+      setNotice(approve?'Plan assigned. No payment collected.':'Request declined.');await reload();
+    }catch(e){setNotice(e.message)}finally{setBusy(false)}
+  }
+  return <Panel title="Subscription upgrade requests">{error&&<Message error={error}/>}{notice&&<Message>{notice}</Message>}
+    {!data?.length?<p className="muted">No pending upgrade requests.</p>:data.map(row=><div key={row.id} className="list-row"><div className="grow"><strong>{row.name||row.email||'User'} · #{row.user_id}</strong><small>{row.current_plan.toUpperCase()} → {row.requested_plan.toUpperCase()} · {row.requested_at.slice(0,16)} UTC</small></div><button disabled={busy} onClick={()=>act(row,true)}>Assign plan</button><button disabled={busy} onClick={()=>act(row,false)}>Decline</button></div>)}
+  </Panel>;
 }
 
 const GROUPS = [
@@ -137,6 +154,7 @@ export default function Admin() {
   }
   return <><Title eyebrow="ADMINISTRATION" title={t("Your workspace overview")}>{t("Manage users, inspect saved bills and maintain database records.")}</Title>{error && <Message error={error} />} {notice && <Message>{notice}</Message>} {catalog.error && <Message error={catalog.error} />}
  <div className="stats">{operational.data && <><Panel><span>OCR completions this month</span><strong>{operational.data.ocr_completed}</strong><small>{operational.data.ocr_attempts} external OCR log entries</small></Panel><Panel><span>Messages / notification events</span><strong>{operational.data.notification_events}</strong><small>{operational.data.notification_unread} unread outbox events</small></Panel></>}{['users', 'cases', 'split_bill_sessions'].map(key => <Panel key={key}><span>{catalog.data?.find(c => c.key === key)?.label || key}</span><strong>{catalog.data?.find(c => c.key === key)?.count ?? '—'}</strong></Panel>)}</div>
+ <PendingUpgrades/>
  <div className="admin-layout"><aside className="panel admin-menu"><h3>Operations</h3>{GROUPS.map(([group]) => { const list=(catalog.data||[]).filter(c=>entityGroup(c.key)===group); return !!list.length&&<section className="admin-category" key={group}><h4>{group}</h4>{list.map(c=><button key={c.key} className={entity === c.key ? 'active' : ''} onClick={() => selectEntity(c.key)}><span>{c.label}</span><small>{c.count}</small></button>)}</section>; })}
     <details open={showAdvanced} onToggle={e=>setShowAdvanced(e.currentTarget.open)}><summary>Advanced technical records</summary>{(catalog.data||[]).filter(c=>entityGroup(c.key)==='Advanced').map(c=><button key={c.key} className={entity===c.key?'active':''} onClick={()=>selectEntity(c.key)}><span>{c.label}</span><small>{c.count}</small></button>)}</details></aside><div>
  {record ? <Panel><button className="text-button" onClick={() => {

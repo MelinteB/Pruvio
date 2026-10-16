@@ -44,12 +44,14 @@ export function History({
 }
 export function Upload() {
   const nav = useNavigate();
+  const {membership,refreshMembership}=useApp();
   const [file, setFile] = useState(null),
     [original, setOriginal] = useState(null),
     [preview, setPreview] = useState(''),
     [busy, setBusy] = useState(false),
     [progress, setProgress] = useState(0),
     [error, setError] = useState(''),
+    [useCredits,setUseCredits] = useState(false),
     [crop, setCrop] = useState({
       x: 0,
       y: 0,
@@ -118,9 +120,11 @@ export function Upload() {
     setError('');
     abort.current = new AbortController();
     try {
-      const r = await uploadFile(file, setProgress, abort.current.signal);
+      const r = await uploadFile(file, setProgress, abort.current.signal, {useCredits});
+      await refreshMembership?.();
       nav('/receipt/' + r.case_id, {state:r.duplicate?{duplicate:true,restored_original:r.restored_original}:undefined});
     } catch (e) {
+      if(e.status===402&&e.code==='subscription_limit'){nav(e.detail?.membership_url||'/account?limit=ocr#membership');return;}
       setError(e.message);
     } finally {
       setBusy(false);
@@ -128,6 +132,7 @@ export function Upload() {
   }
   return <><Title eyebrow="START WITH A SCAN" title={t("Capture the receipt")}>{t("Upload a photo or PDF. Review the extracted items before splitting.")}</Title><Panel><label className="dropzone" onDragOver={e => e.preventDefault()} onDrop={e => {e.preventDefault();if(!busy)choose(e.dataTransfer.files[0]);}}><UploadCloud size={42}/><h2>{t("Drop your receipt here")}</h2><p>{t("JPG, PNG, WebP or PDF · up to 10 MB")}</p><input aria-label={t("Choose receipt")} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={busy} onChange={e=>choose(e.target.files[0])}/></label><label className="secondary camera">{t("Take a photo")} <input aria-label={t("Take receipt photo")} type="file" accept="image/*" capture="environment" disabled={busy} onChange={e=>choose(e.target.files[0])}/></label>
   <div className="capture-preview" aria-label="Receipt preview before processing"><h3>{file ? `Preview · ${file.name}` : t("Receipt preview")}</h3>{!file?<p className="muted">Choose or photograph a receipt to see it here before processing.</p>:file.type==='application/pdf'?<iframe title={t("Receipt PDF preview")} src={preview} className="pdf-preview"/>:<><CropEditor preview={preview} crop={crop} onChange={setCrop}/><div className="row wrap"><button disabled={busy} onClick={()=>transform(false)}>{t("Apply crop")}</button><button disabled={busy} onClick={()=>transform(true)}><RotateCw size={16}/> {t("Rotate")}</button><button disabled={busy||file===original} onClick={()=>{setFile(original);setCrop({x:0,y:0,w:100,h:100})}}>{t('Restore original')}</button><button disabled={busy} onClick={()=>setCrop({x:0,y:0,w:100,h:100})}>{t('Reset selection')}</button></div></>}</div>
+  {membership?.usage?.ocr&&<div className="usage-at-capture"><strong>AI OCR: {membership.usage.ocr.used}/{membership.usage.ocr.allowance} this month</strong><p className="muted">{membership.usage.ocr.remaining>0?`${membership.usage.ocr.remaining} included scans remaining`:`Monthly allowance exhausted. Use 2 PC per extra scan or view Membership.`}</p><label><input type="checkbox" checked={useCredits} onChange={e=>setUseCredits(e.target.checked)} /> Allow spending 2 PC for this scan ONLY if my monthly allowance is exhausted ({membership.credits||0} PC available)</label></div>}
   {error&&<Message error={error}/>}<button className="primary full" disabled={!file||busy} onClick={upload}>{busy?progress<100?`Uploading ${progress}%`:t("Reading your receipt…"):t("Process receipt")}</button>{busy&&<><progress max="100" value={progress}/><button onClick={()=>abort.current.abort()}>{t("Cancel upload")}</button><p className="muted">{t("After upload finishes, processing can continue on the server. You can check History.")}</p></>}</Panel></>;
 
 }

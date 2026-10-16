@@ -4,7 +4,7 @@ import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from app.db.database import get_db
@@ -306,7 +306,7 @@ def details_input(body):
 
 
 @router.post('/reports')
-def create_report(body: dict, identity=Depends(current), db=Depends(get_db)):
+def create_report(request: Request, body: dict, identity=Depends(current), db=Depends(get_db)):
     uid = identity[0].id
     profile = db.query(ExpenseCompany).filter_by(id=body.get('company_id'), user_id=uid).first()
     if not profile:
@@ -408,7 +408,17 @@ def create_report(body: dict, identity=Depends(current), db=Depends(get_db)):
                                   for k, v in reimburse.items()}}
     report = ExpenseReport(user_id=uid, company_id=profile.id, title=title,
                            snapshot_json=json.dumps(snapshot, ensure_ascii=False))
-    db.add(report); db.commit(); db.refresh(report)
+    from app.react_app.commerce import PLANS, account_plan
+    from app.react_app.usage import reserve, finish
+    token=reserve(uid,'expense_report',PLANS,account_plan(db,uid),
+                  use_credits=request.headers.get('X-Pruvs-Use-Credits','false').lower()=='true')
+    try:
+        db.add(report); db.commit(); db.refresh(report)
+    except Exception:
+        db.rollback()
+        finish(token,False)
+        raise
+    finish(token,True)
     return {'id': report.id}
 
 

@@ -38,7 +38,7 @@ class Payload(BaseModel):
 @router.get('/config')
 def config():
     from app.services.receipt_currency_service import CURRENCY_OPTIONS
-    return {'version':'7.1.11','passkeys':passkeys.passkeys_enabled(),'currencies':CURRENCY_OPTIONS,
+    return {'version':'7.1.12','passkeys':passkeys.passkeys_enabled(),'currencies':CURRENCY_OPTIONS,
             'support_email':os.getenv('PRUVIO_SUPPORT_EMAIL','')}
 
 @router.get('/me')
@@ -261,10 +261,21 @@ def history(offset:int=Query(0,ge=0),view:str='active',identity=Depends(current)
                                                'settled':sum(b['status']=='settled' for b in visible_bills)}}
 
 @router.post('/receipts/upload')
-def upload(file:UploadFile=File(...),identity=Depends(current),db=Depends(get_db)):
+def upload(request:Request,file:UploadFile=File(...),identity=Depends(current),db=Depends(get_db)):
     data=file.file.read(MAX_FILE_SIZE_BYTES+1)
     if len(data)>MAX_FILE_SIZE_BYTES:raise HTTPException(413,'Maximum upload size is 10 MB.')
-    result=receipts.create_standalone_receipt_case(db,file_bytes=data,original_filename=file.filename or 'receipt.jpg',mime_type=file.content_type,user_id=identity[0].id,deduplicate=True)
+    from app.react_app.commerce import PLANS, account_plan
+    from app.react_app.usage import reserve, finish
+    uid=identity[0].id
+    token=reserve(uid,'ocr',PLANS,account_plan(db,uid),
+                  use_credits=request.headers.get('X-Pruvs-Use-Credits','false').lower()=='true')
+    try:
+        result=receipts.create_standalone_receipt_case(db,file_bytes=data,original_filename=file.filename or 'receipt.jpg',mime_type=file.content_type,user_id=uid,deduplicate=True)
+    except Exception:
+        finish(token,False)
+        raise
+    success=not result.get('duplicate',False) and getattr(result['case'],'status','') not in ('processing_failed','failed')
+    finish(token,success)
     return {'case_id':result['case'].id,'duplicate':result.get('duplicate',False),'restored_original':result.get('restored_original',False)}
 
 def owned_case(db,case_id,uid):

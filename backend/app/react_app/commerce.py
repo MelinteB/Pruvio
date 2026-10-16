@@ -14,11 +14,25 @@ from app.models.split_bill_session import SplitBillSession
 from app.models.split_bill_participant import SplitBillParticipant
 from app.models.split_bill_item_assignment import SplitBillItemAssignment
 from app.models.pruvs_commerce import DemoSubscription,CreditEntry,Referral
+from app.models.pruvs_usage import PruvsMeteredUse,PruvsUpgradeRequest
+from app.react_app.usage import COSTS,used,metered,credit_balance
 from app.react_app.auth import current,admin
 
 router=APIRouter(prefix='/api/v1/commerce',tags=['Pruvs Membership'])
 REWARD_CREDITS=20
-PLANS={'free':{'monthly_demo_price_eur':'0.00','ocr_allowance':5},'plus':{'monthly_demo_price_eur':'2.99','ocr_allowance':100},'pro':{'monthly_demo_price_eur':'5.99','ocr_allowance':300}}
+PLANS={
+    'free':{'price_eur':'0.00','ocr_allowance':3,'expense_reports':1},
+    'plus':{'price_eur':'2.99','ocr_allowance':50,'expense_reports':10},
+    'business':{'price_eur':'5.99','ocr_allowance':75,'expense_reports':25},
+}
+def canonical_plan(value):
+    # Honor old PRO admin assignments as Business without mutating the ledger.
+    return 'business' if value == 'pro' else value if value in PLANS else 'free'
+
+def account_plan(db, user_id):
+    row=db.get(DemoSubscription,user_id)
+    return canonical_plan(row.plan) if row and row.status=='admin_assigned' else 'free'
+
 
 def membership_on():return os.getenv('PRUVS_MEMBERSHIP_ENABLED','true').lower()=='true'
 
@@ -32,7 +46,7 @@ def credit(db,user_id,amount,reason,reference):
 
 def new_referral(db,session,user):
     """Attribution attaches automatically to owner invitation, never to a client-supplied owner ID."""
-    if not membership_on() or user.id==session.owner_user_id or not user.is_email_verified:return
+    if not membership_on() or user.id==session.owner_user_id:return
     created=getattr(user,'created_at',None)
     bill_created=getattr(session,'created_at',None)
     if not created or not bill_created or created < bill_created:return
@@ -63,27 +77,32 @@ def qualify_referral(db,session,user,quantities):
 
 def account_snapshot(db,user_id):
     from app.models.external_ocr_usage import ExternalOCRUsage
-    from app.models.case import Case
-    from sqlalchemy import distinct
     row=db.get(DemoSubscription,user_id)
-    # Older sandbox plan selections do not become live entitlements automatically.
-    plan=row.plan if row and row.status=='admin_assigned' and row.plan in PLANS else 'free'
-    start=datetime.utcnow().replace(day=1,hour=0,minute=0,second=0,microsecond=0)
-    # The React capture path uses direct Azure OCR, which does not necessarily
-    # generate ExternalOCRUsage rows. Count successfully processed user receipts
-    # instead of relying exclusively on the external-provider router log.
-    ocr_count=(db.query(func.count(Case.id))
-       .filter(Case.user_id==user_id,Case.module=='split_bill',Case.created_at>=start,
+    plan=account_plan(db,user_id)
+    begin=datetime.utcnow().replace(day=1,hour=0,minute=0,second=0,microsecond=0)
+    # This is a historical receipt count, not the new metered AI OCR ledger.
+    historic_receipts=(db.query(func.count(Case.id))
+       .filter(Case.user_id==user_id,Case.module=='split_bill',Case.created_at>=begin,
                Case.status.notin_(['processing','processing_failed']))
        .scalar() or 0)
     refs=db.query(Referral).filter_by(owner_id=user_id)
-    entries=db.query(CreditEntry).filter_by(user_id=user_id).order_by(CreditEntry.id.desc()).limit(20).all()
+    entries=db.query(CreditEntry).filter_by(user_id=user_id).order_by(CreditEntry.id.desc()).limit(30).all()
+    balances={}
+    for resource, key in (('ocr','ocr_allowance'),('expense_report','expense_reports')):
+        consumed=used(db,user_id,resource)
+        allowance=PLANS[plan][key]
+        balances[resource]={'used':consumed,'allowance':allowance,'remaining':max(0,allowance-consumed),
+                            'total_completed':metered(db,user_id,resource),
+                            'extra_pc':COSTS[resource]}
+    pending=db.query(PruvsUpgradeRequest).filter_by(user_id=user_id,status='pending').order_by(PruvsUpgradeRequest.id.desc()).first()
     return {'plan':plan,'source':'administrator' if row and row.status=='admin_assigned' else 'default',
        'plans':PLANS,'payment_available':False,'credits':credits(db,user_id),
        'purchased_credits':0,'promotional_credits':credits(db,user_id),
+       'usage':balances,'month':begin.strftime('%Y-%m'),'billing_timezone':'UTC',
+       'upgrade_request':{'id':pending.id,'plan':pending.requested_plan} if pending else None,
        'referrals':{'pending':refs.filter_by(status='pending').count(),'rewarded':refs.filter_by(status='rewarded').count()},
-       'ocr':{'completed_receipts_this_month':int(ocr_count),'plan_allowance':PLANS[plan]['ocr_allowance'],
-              'note':'Processed receipt records this month; not a provider invoice or enforced usage cap.'},
+       'ocr':{'completed_receipts_this_month':int(historic_receipts),'plan_allowance':PLANS[plan]['ocr_allowance'],
+              'note':'Historical receipt activity; metered usage applies to new operations from v7.1.12.'},
        'credit_entries':[{'delta':e.delta,'reason':e.reason,'at':e.created_at.isoformat()} for e in entries]}
 
 @router.get('/status')
@@ -93,13 +112,16 @@ def status(identity=Depends(current),db=Depends(get_db)):
 @router.put('/admin/users/{uid}/subscription')
 def assign_subscription(uid:int,body:dict,identity=Depends(admin),db=Depends(get_db)):
     plan=str(body.get('plan','')).strip().lower()
-    if plan not in PLANS:raise HTTPException(422,'Choose free, plus or pro.')
+    if plan not in PLANS:raise HTTPException(422,'Choose free, plus or business.')
     target=db.query(User).filter_by(id=uid).with_for_update().first()
     if not target or target.status=='deleted':raise HTTPException(404,'Account not found.')
     row=db.get(DemoSubscription,uid)
     if row is None:row=DemoSubscription(user_id=uid);db.add(row)
     row.plan=plan;row.status='admin_assigned';row.activated_at=datetime.utcnow();row.expires_at=None
     # Plan changes are never the source of Pruvs credit grants.
+    for req in db.query(PruvsUpgradeRequest).filter_by(user_id=uid,status='pending').all():
+        req.status='approved' if req.requested_plan==plan else 'superseded'
+        req.reviewed_at=datetime.utcnow();req.reviewed_by=identity[0].id
     db.commit()
     return {'ok':True,'user_id':uid,'plan':plan,'payment_charged':False,'assigned_by':identity[0].id}
 
@@ -112,3 +134,66 @@ def admin_membership(uid:int,identity=Depends(admin),db=Depends(get_db)):
 # No public subscription checkout or spending endpoint until an actual payment
 # provider, entitlement enforcement, and credit accounting policy are approved.
 # Merchant loyalty APIs have been retired; historical database rows are retained.
+
+
+@router.post('/upgrade-request')
+def request_upgrade(body:dict,identity=Depends(current),db=Depends(get_db)):
+    wanted=str(body.get('plan','')).strip().lower()
+    if wanted not in ('plus','business'):
+        raise HTTPException(422,'Select Plus or Business.')
+    uid=identity[0].id
+    if account_plan(db,uid)==wanted:
+        raise HTTPException(409,'Your account is already on that plan.')
+    existing=db.query(PruvsUpgradeRequest).filter_by(user_id=uid,status='pending').first()
+    if existing:
+        existing.requested_plan=wanted
+        existing.requested_at=datetime.utcnow()
+    else:
+        existing=PruvsUpgradeRequest(user_id=uid,requested_plan=wanted,status='pending')
+        db.add(existing)
+    db.commit()
+    return {'ok':True,'status':'pending','plan':wanted,'payment_charged':False,
+            'message':'Your request has been submitted to Pruvs administration. No payment was collected.'}
+
+@router.get('/admin/upgrade-requests')
+def pending_upgrades(identity=Depends(admin),db=Depends(get_db)):
+    pending=db.query(PruvsUpgradeRequest).filter_by(status='pending').order_by(PruvsUpgradeRequest.requested_at.desc()).limit(100).all()
+    rows=[]
+    for r in pending:
+        user=db.get(User,r.user_id)
+        rows.append({'id':r.id,'user_id':r.user_id,'name':user.name if user else 'Unknown',
+                     'email':user.email if user else '', 'requested_plan':r.requested_plan,
+                     'current_plan':account_plan(db,r.user_id),
+                     'requested_at':r.requested_at.isoformat()})
+    return rows
+
+@router.post('/admin/upgrade-requests/{req_id}/decline')
+def decline_upgrade(req_id:int,identity=Depends(admin),db=Depends(get_db)):
+    row=db.query(PruvsUpgradeRequest).filter_by(id=req_id,status='pending').with_for_update().first()
+    if not row:raise HTTPException(404,'Pending request not found.')
+    row.status='declined';row.reviewed_by=identity[0].id;row.reviewed_at=datetime.utcnow()
+    db.commit()
+    return {'ok':True}
+
+@router.post('/referrals/reconcile')
+def reconcile_referrals(identity=Depends(current),db=Depends(get_db)):
+    """Retry eligible historic pending referrals from persisted item assignments."""
+    owner_id=identity[0].id
+    count=0
+    pending=db.query(Referral).filter_by(owner_id=owner_id,status='pending').limit(100).all()
+    for r in pending:
+        u=db.get(User,r.referred_id)
+        s=db.get(SplitBillSession,r.session_id)
+        if not u or not s or s.owner_user_id!=owner_id or not u.is_email_verified:
+            continue
+        p=db.query(SplitBillParticipant).filter_by(session_id=s.id,user_id=u.id,status='joined').first()
+        if not p:
+            continue
+        assignment=db.query(SplitBillItemAssignment.id).filter(
+            SplitBillItemAssignment.participant_id==p.id,SplitBillItemAssignment.amount>0).first()
+        if not assignment:
+            continue
+        qualify_referral(db,s,u,{'persisted_assignment':1})
+        db.refresh(r)
+        if r.status=='rewarded':count+=1
+    return {'ok':True,'newly_rewarded':count,'status':account_snapshot(db,owner_id)}
