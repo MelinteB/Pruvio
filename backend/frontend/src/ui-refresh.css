@@ -339,3 +339,10 @@ footer, footer a { color: #5d6c85; font-size: 11px; }
 .usage-at-capture input{margin-top:4px}
 .membership-plan-badge.plan-business{background:#f8ebce;color:#764e00;border-color:#edcf81}
 .membership-tier button:not(:disabled){opacity:1;cursor:pointer}
+
+/* Membership billing and the admin plan editor — v7.1.13 */
+.billing-plan-config {border:1px solid var(--border,#d5dce8);border-radius:12px;padding:12px;margin:12px 0;}
+.billing-plan-config summary {cursor:pointer;margin-bottom:10px;}
+.billing-plan-config .form-grid input,.billing-plan-config .form-grid select,.billing-plan-config .form-grid textarea {width:100%;min-width:0;}
+.billing-credit-costs {padding:12px 0;border-bottom:1px solid var(--border,#d5dce8);margin-bottom:12px;}
+.membership-billing-controls {padding:12px;border:1px solid var(--border,#d5dce8);border-radius:12px;margin-bottom:14px;}

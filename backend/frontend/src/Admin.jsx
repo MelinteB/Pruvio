@@ -28,11 +28,79 @@ function AdminMembership({userId}) {
   }
   return <section className="admin-membership"><h3>User membership</h3>
     {error&&<Message error={error}/>}{loading?<Spinner/>:<><p>Assigned plan: <strong>{(data?.plan||'free').toUpperCase()}</strong> · Promotional credits: <strong>{data?.credits ?? 0} PC</strong></p>
-    <p className="muted">Monthly AI OCR: {data?.usage?.ocr?.used ?? '—'} / {data?.usage?.ocr?.allowance ?? '—'} · Reports: {data?.usage?.expense_report?.used ?? '—'} / {data?.usage?.expense_report?.allowance ?? '—'}. Purchases disabled.</p>
+    <p className="muted">Monthly AI OCR: {data?.usage?.ocr?.used ?? '—'} / {data?.usage?.ocr?.allowance ?? '—'} · Reports: {data?.usage?.expense_report?.used ?? '—'} / {data?.usage?.expense_report?.allowance ?? '—'}. Online checkout is handled by Stripe if enabled.</p>
     <div className="row wrap"><label>Subscription <select aria-label="Assign user subscription" value={plan} onChange={e=>setPlan(e.target.value)}>{['free','plus','business'].map(k=><option key={k} value={k}>{k.toUpperCase()}</option>)}</select></label><button className="primary" disabled={saving||plan===data?.plan} onClick={update}>Assign subscription</button></div>
     {notice&&<Message>{notice}</Message>}
     </>}
   </section>;
+}
+
+function PlanConfiguration() {
+  const {data,reload,error,loading}=useLoad(()=>request('/commerce/billing/admin/plans'),[]);
+  const costs=useLoad(()=>request('/commerce/billing/admin/pc-costs'),[]);
+  const [pcDraft,setPcDraft]=useState(null);
+  useEffect(()=>{if(costs.data)setPcDraft({ocr_pc:costs.data.ocr,report_pc:costs.data.expense_report,version:costs.data.version});},[costs.data]);
+  const [draft,setDraft]=useState({}),[pending,setPending]=useState(''),[note,setNote]=useState('');
+  useEffect(()=>{if(data){const next={};for(const [key,p] of Object.entries(data))next[key]={
+    version:p.version,price:p.price_minor/100,currency:p.currency,interval:p.interval,
+    interval_count:p.interval_count,ocr_allowance:p.ocr_allowance,expense_reports:p.expense_reports,
+    description:p.description,features_text:(p.features||[]).join('\n'),attach_price_id:''};
+    setDraft(next);}},[data]);
+  async function modify(key,what){setPending(key);setNote('');try{
+    const item=draft[key];
+    if(what==='save')await send('/commerce/billing/admin/plans/'+key,{
+      ...item,features:item.features_text.split(/\n/).map(x=>x.trim()).filter(Boolean)
+    },'PUT');
+    if(what==='publish'){
+      if(!window.confirm('Publish a NEW Stripe Price for '+key.toUpperCase()+'? Existing subscriptions are not repriced.'))return;
+      await send('/commerce/billing/admin/plans/'+key+'/publish',{version:item.version});
+    }
+    if(what==='attach')await send('/commerce/billing/admin/plans/'+key+'/attach-price',{
+      version:item.version,price_id:item.attach_price_id
+    });
+    await reload();setNote(key.toUpperCase()+' updated.');
+    window.dispatchEvent(new Event('pruvs:membership-updated'));
+  }catch(e){setNote(e.message)}finally{setPending('')}}
+  const set=(key,field,value)=>setDraft(d=>({...d,[key]:{...d[key],[field]:value}}));
+  return <Panel title="Subscription plans & pricing">
+    <p className="muted">Edit subscription price, period, quotas and features. Quota changes apply to all accounts immediately; price changes must be published as a new Stripe Price. Existing paying customers retain their existing billed price until migrated separately.</p>
+    {error&&<Message error={error}/>}{note&&<Message>{note}</Message>}{loading&&<Spinner/>}
+    {pcDraft&&<div className="billing-credit-costs"><h3>Promotional PC spending</h3><p className="muted">These credits are separate from Stripe subscription payments and merchant loyalty.</p>
+    <label>Extra OCR scan (PC) <input type="number" min="0" value={pcDraft.ocr_pc} onChange={e=>setPcDraft(p=>({...p,ocr_pc:e.target.value}))}/></label>
+    <label>Extra expense report (PC) <input type="number" min="0" value={pcDraft.report_pc} onChange={e=>setPcDraft(p=>({...p,report_pc:e.target.value}))}/></label>
+    <button disabled={!!pending} onClick={async()=>{setPending('pc');setNote('');try{await send('/commerce/billing/admin/pc-costs',pcDraft,'PUT');await costs.reload();setNote('PC spending costs updated.');window.dispatchEvent(new Event('pruvs:membership-updated'));}catch(e){setNote(e.message)}finally{setPending('')}}}>Save PC costs</button></div>}
+    {['free','plus','business'].map(key=>{const item=draft[key],original=data?.[key];if(!item)return null;return <details key={key} open={key==='plus'} className="billing-plan-config"><summary><strong>{key.toUpperCase()}</strong> — {original?.price_display} per {original?.interval_count>1?original.interval_count+' ':''}{original?.interval}{original?.stripe_ready?' · Stripe published':''}</summary>
+      <div className="form-grid">
+        <Field label="Price (EUR)"><input type="number" step="0.01" min="0" disabled={key==='free'} value={item.price} onChange={e=>set(key,'price',e.target.value)}/></Field>
+        <Field label="Billing interval"><select disabled={key==='free'} value={item.interval} onChange={e=>set(key,'interval',e.target.value)}><option value="month">Month</option><option value="year">Year</option></select></Field>
+        <Field label="Every N intervals"><input disabled={key==='free'} type="number" min="1" max={item.interval==='year'?3:12} value={item.interval_count} onChange={e=>set(key,'interval_count',e.target.value)}/></Field>
+        <Field label="AI scans / calendar month"><input type="number" min="0" value={item.ocr_allowance} onChange={e=>set(key,'ocr_allowance',e.target.value)}/></Field>
+        <Field label="Expense reports / calendar month"><input type="number" min="0" value={item.expense_reports} onChange={e=>set(key,'expense_reports',e.target.value)}/></Field>
+        <Field label="Description"><textarea value={item.description} onChange={e=>set(key,'description',e.target.value)}/></Field>
+        <Field label="Included features (one per line)"><textarea rows="5" value={item.features_text} onChange={e=>set(key,'features_text',e.target.value)}/></Field>
+      </div><button disabled={!!pending} onClick={()=>modify(key,'save')}>Save plan settings</button>
+      {key!=='free'&&<div className="row wrap"><button className="secondary" disabled={!!pending} onClick={()=>modify(key,'publish')}>{original?.stripe_ready?'Sync product description':'Publish new Stripe Price'}</button>
+      <label>Or attach an existing Stripe Price ID <input placeholder="price_..." value={item.attach_price_id} onChange={e=>set(key,'attach_price_id',e.target.value)}/></label>
+      <button className="secondary" disabled={!!pending||!item.attach_price_id} onClick={()=>modify(key,'attach')}>Verify and attach price</button></div>}
+      <small>Stripe Price: {original?.stripe_price_id||'Not published'} · Catalog revision {original?.version}. Only published paid plans can be purchased.</small>
+    </details>})}
+  </Panel>;
+}
+
+function InvoiceEmailQueue(){
+  const {data,reload,error}=useLoad(()=>request('/commerce/billing/admin/invoice-emails'),[]);
+  const [busy,setBusy]=useState(false),[note,setNote]=useState('');
+  async function retry(row){setBusy(true);setNote('');try{
+    const result=await send('/commerce/billing/admin/invoice-emails/'+encodeURIComponent(row.invoice_id)+'/retry',{});
+    setNote(result.ok?'Invoice email sent or already delivered.':'Email not delivered. Verify RESEND_API_KEY and PRUVS_INVOICE_FROM_EMAIL in Render.');await reload();
+  }catch(e){setNote(e.message)}finally{setBusy(false)}}
+  return <details className="panel"><summary><strong>Subscription invoice email delivery</strong></summary>
+    <p className="muted">Invoices are generated by Stripe. Optional Pruvs emails use a verified Resend sender and secure invoice links. Never enter email-service keys here.</p>
+    {error&&<Message error={error}/>}{note&&<Message>{note}</Message>}
+    <button className="secondary" disabled={busy} onClick={reload}>Refresh delivery status</button>
+    {!data?.length?<p>No invoice email records.</p>:<ul>{data.map(r=><li key={r.invoice_id}>{r.invoice_id} · User #{r.user_id} · {r.state} · Attempts {r.attempts}
+      {r.error&&<small>{r.error}</small>}{r.state!=='sent'&&<button disabled={busy||r.attempts>=5} onClick={()=>retry(r)}>Retry email</button>}</li>)}</ul>}
+  </details>;
 }
 
 function PendingUpgrades() {
@@ -154,6 +222,8 @@ export default function Admin() {
   }
   return <><Title eyebrow="ADMINISTRATION" title={t("Your workspace overview")}>{t("Manage users, inspect saved bills and maintain database records.")}</Title>{error && <Message error={error} />} {notice && <Message>{notice}</Message>} {catalog.error && <Message error={catalog.error} />}
  <div className="stats">{operational.data && <><Panel><span>OCR completions this month</span><strong>{operational.data.ocr_completed}</strong><small>{operational.data.ocr_attempts} external OCR log entries</small></Panel><Panel><span>Messages / notification events</span><strong>{operational.data.notification_events}</strong><small>{operational.data.notification_unread} unread outbox events</small></Panel></>}{['users', 'cases', 'split_bill_sessions'].map(key => <Panel key={key}><span>{catalog.data?.find(c => c.key === key)?.label || key}</span><strong>{catalog.data?.find(c => c.key === key)?.count ?? '—'}</strong></Panel>)}</div>
+ <PlanConfiguration/>
+ <InvoiceEmailQueue/>
  <PendingUpgrades/>
  <div className="admin-layout"><aside className="panel admin-menu"><h3>Operations</h3>{GROUPS.map(([group]) => { const list=(catalog.data||[]).filter(c=>entityGroup(c.key)===group); return !!list.length&&<section className="admin-category" key={group}><h4>{group}</h4>{list.map(c=><button key={c.key} className={entity === c.key ? 'active' : ''} onClick={() => selectEntity(c.key)}><span>{c.label}</span><small>{c.count}</small></button>)}</section>; })}
     <details open={showAdvanced} onToggle={e=>setShowAdvanced(e.currentTarget.open)}><summary>Advanced technical records</summary>{(catalog.data||[]).filter(c=>entityGroup(c.key)==='Advanced').map(c=><button key={c.key} className={entity===c.key?'active':''} onClick={()=>selectEntity(c.key)}><span>{c.label}</span><small>{c.count}</small></button>)}</details></aside><div>

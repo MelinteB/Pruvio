@@ -16,6 +16,8 @@ from app.models.split_bill_item_assignment import SplitBillItemAssignment
 from app.models.pruvs_commerce import DemoSubscription,CreditEntry,Referral
 from app.models.pruvs_usage import PruvsMeteredUse,PruvsUpgradeRequest
 from app.react_app.usage import COSTS,used,metered,credit_balance
+from app.react_app.plan_catalog import plan_catalog, credit_costs
+from app.react_app.billing import billing_snapshot
 from app.react_app.auth import current,admin
 
 router=APIRouter(prefix='/api/v1/commerce',tags=['Pruvs Membership'])
@@ -30,8 +32,22 @@ def canonical_plan(value):
     return 'business' if value == 'pro' else value if value in PLANS else 'free'
 
 def account_plan(db, user_id):
+    from app.models.pruvs_billing import PruvsStripeAccount
     row=db.get(DemoSubscription,user_id)
-    return canonical_plan(row.plan) if row and row.status=='admin_assigned' else 'free'
+    if not row:
+        return 'free'
+    if row.status=='admin_assigned':
+        return canonical_plan(row.plan)
+    if row.status=='stripe_paid':
+        stripe_row=db.get(PruvsStripeAccount,user_id)
+        if not stripe_row:
+            return 'free'
+        # Access to a paid period persists after renewal failure, not indefinitely.
+        paid_period_valid = (stripe_row.current_period_end is None or
+                             stripe_row.current_period_end>datetime.utcnow())
+        if paid_period_valid and stripe_row.status in ('active','trialing','past_due'):
+            return canonical_plan(stripe_row.plan)
+    return 'free'
 
 
 def membership_on():return os.getenv('PRUVS_MEMBERSHIP_ENABLED','true').lower()=='true'
@@ -85,23 +101,26 @@ def account_snapshot(db,user_id):
        .filter(Case.user_id==user_id,Case.module=='split_bill',Case.created_at>=begin,
                Case.status.notin_(['processing','processing_failed']))
        .scalar() or 0)
+    plans=plan_catalog(db)
+    billing=billing_snapshot(db,user_id)
+    pc_costs=credit_costs(db)
     refs=db.query(Referral).filter_by(owner_id=user_id)
     entries=db.query(CreditEntry).filter_by(user_id=user_id).order_by(CreditEntry.id.desc()).limit(30).all()
     balances={}
     for resource, key in (('ocr','ocr_allowance'),('expense_report','expense_reports')):
         consumed=used(db,user_id,resource)
-        allowance=PLANS[plan][key]
+        allowance=plans[plan][key]
         balances[resource]={'used':consumed,'allowance':allowance,'remaining':max(0,allowance-consumed),
                             'total_completed':metered(db,user_id,resource),
-                            'extra_pc':COSTS[resource]}
+                            'extra_pc':pc_costs[resource]}
     pending=db.query(PruvsUpgradeRequest).filter_by(user_id=user_id,status='pending').order_by(PruvsUpgradeRequest.id.desc()).first()
-    return {'plan':plan,'source':'administrator' if row and row.status=='admin_assigned' else 'default',
-       'plans':PLANS,'payment_available':False,'credits':credits(db,user_id),
+    return {'plan':plan,'source':'administrator' if row and row.status=='admin_assigned' else 'stripe' if row and row.status=='stripe_paid' and plan!='free' else 'default',
+       'plans':plans,'pc_costs':pc_costs,'payment_available':billing['payment_available'],'billing':billing,'credits':credits(db,user_id),
        'purchased_credits':0,'promotional_credits':credits(db,user_id),
        'usage':balances,'month':begin.strftime('%Y-%m'),'billing_timezone':'UTC',
        'upgrade_request':{'id':pending.id,'plan':pending.requested_plan} if pending else None,
        'referrals':{'pending':refs.filter_by(status='pending').count(),'rewarded':refs.filter_by(status='rewarded').count()},
-       'ocr':{'completed_receipts_this_month':int(historic_receipts),'plan_allowance':PLANS[plan]['ocr_allowance'],
+       'ocr':{'completed_receipts_this_month':int(historic_receipts),'plan_allowance':plans[plan]['ocr_allowance'],
               'note':'Historical receipt activity; metered usage applies to new operations from v7.1.12.'},
        'credit_entries':[{'delta':e.delta,'reason':e.reason,'at':e.created_at.isoformat()} for e in entries]}
 
@@ -113,6 +132,10 @@ def status(identity=Depends(current),db=Depends(get_db)):
 def assign_subscription(uid:int,body:dict,identity=Depends(admin),db=Depends(get_db)):
     plan=str(body.get('plan','')).strip().lower()
     if plan not in PLANS:raise HTTPException(422,'Choose free, plus or business.')
+    from app.models.pruvs_billing import PruvsStripeAccount
+    subscribed=db.get(PruvsStripeAccount,uid)
+    if subscribed and subscribed.subscription_id and subscribed.status not in ('canceled','none','incomplete_expired'):
+        raise HTTPException(409,'Cancel the Stripe subscription before assigning a complimentary plan.')
     target=db.query(User).filter_by(id=uid).with_for_update().first()
     if not target or target.status=='deleted':raise HTTPException(404,'Account not found.')
     row=db.get(DemoSubscription,uid)

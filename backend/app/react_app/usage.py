@@ -12,6 +12,7 @@ from sqlalchemy import func, text
 from app.db.database import SessionLocal
 from app.models.pruvs_usage import PruvsMeteredUse
 from app.models.pruvs_commerce import CreditEntry
+from app.react_app.plan_catalog import credit_costs
 
 COSTS = {'ocr': 2, 'expense_report': 5}
 LIMIT_KEYS = {'ocr': 'ocr_allowance', 'expense_report': 'expense_reports'}
@@ -82,7 +83,7 @@ def reserve(uid, resource, plans, plan, use_credits=False):
         stale_reservations(db, uid)
         consumed = used(db, uid, resource)
         charge_credits = consumed >= limit
-        cost = COSTS[resource]
+        cost = credit_costs(db)[resource]
         balance = credit_balance(db, uid)
         if charge_credits and (not use_credits or balance < cost):
             # Deliberately no quota insert / credit deduction for a denied request.

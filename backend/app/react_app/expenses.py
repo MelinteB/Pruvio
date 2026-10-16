@@ -408,9 +408,10 @@ def create_report(request: Request, body: dict, identity=Depends(current), db=De
                                   for k, v in reimburse.items()}}
     report = ExpenseReport(user_id=uid, company_id=profile.id, title=title,
                            snapshot_json=json.dumps(snapshot, ensure_ascii=False))
-    from app.react_app.commerce import PLANS, account_plan
+    from app.react_app.commerce import account_plan
+    from app.react_app.plan_catalog import plan_catalog
     from app.react_app.usage import reserve, finish
-    token=reserve(uid,'expense_report',PLANS,account_plan(db,uid),
+    token=reserve(uid,'expense_report',plan_catalog(db),account_plan(db,uid),
                   use_credits=request.headers.get('X-Pruvs-Use-Credits','false').lower()=='true')
     try:
         db.add(report); db.commit(); db.refresh(report)

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { send } from './api';
+import { send, request } from './api';
 import { useApp, Panel, Message } from './common';
 
 const ORDER=['free','plus','business'];
@@ -22,6 +22,36 @@ export default function Membership(){
   const location=useLocation();
   const exhausted=new URLSearchParams(location.search).get('limit');
   const [requested,setRequested]=useState(false),[saving,setSaving]=useState(false),[notice,setNotice]=useState('');
+  const [invoices,setInvoices]=useState(null);
+  const billing=membership?.billing||{};
+  const params=new URLSearchParams(location.search);
+  const stripeResult=params.get('stripe');
+  const isPaying=membership?.source==='stripe'&&billing.has_subscription;
+  async function billingAction(path,confirmMessage){
+    if(confirmMessage&&!window.confirm(confirmMessage))return;
+    setSaving(true);setNotice('');
+    try{
+      const r=await send('/commerce/billing/'+path,{});
+      if(r.url){const url=new URL(r.url);if(url.protocol!=='https:'||(!url.hostname.endsWith('.stripe.com')&&url.hostname!=='stripe.com'))throw new Error('Unexpected Stripe destination.');window.location.assign(r.url);return;}
+      setNotice(path==='cancel'?'Cancellation scheduled for the end of your paid period.':'Subscription renewal resumed.');
+      await refreshMembership?.();
+    }catch(e){setNotice(e.message)}finally{setSaving(false)}
+  }
+  async function startCheckout(key){
+    setSaving(true);setNotice('');
+    try{
+      const r=await send('/commerce/billing/checkout',{plan:key});
+      const url=new URL(r.checkout_url);
+      if(url.protocol!=='https:'||(!url.hostname.endsWith('.stripe.com')&&url.hostname!=='stripe.com'))throw new Error('Unexpected Stripe checkout destination.');
+      window.location.assign(r.checkout_url);
+    }catch(e){setNotice(e.message);setSaving(false)}
+  }
+  async function loadInvoices(){
+    setSaving(true);setNotice('');
+    try{setInvoices(await request('/commerce/billing/invoices'))}
+    catch(e){setNotice(e.message)}finally{setSaving(false)}
+  }
+
   const plan=membership?.plan||'free';
   React.useEffect(()=>{refreshMembership?.();},[user?.id]);
   async function requestPlan(key){
@@ -43,8 +73,11 @@ export default function Membership(){
     <Panel title="Membership & Pruvs Credits">
       {exhausted && <Message error={`Your monthly ${label(exhausted)} allowance has been reached. Review your plan, spend Pruvs Credits on an extra operation, or request an admin-approved upgrade below.`}/>}
       {notice&&<Message>{notice}</Message>}
+      {stripeResult==='success'&&<Message>Your checkout has returned to Pruvs. Your plan activates only after Stripe confirms payment; refresh your membership if confirmation is still pending.</Message>}
+      {stripeResult==='cancelled'&&<Message>Checkout was cancelled. No plan change was made.</Message>}
+
       <div className="membership-grid">
-        <div><p className="muted">Current subscription</p><div className="membership-current">{plan.toUpperCase()}</div><small>{membership?.source==='administrator'?'Assigned by administration':'Free by default'} · Month {membership?.month||'—'} (UTC)</small></div>
+        <div><p className="muted">Current subscription</p><div className="membership-current">{plan.toUpperCase()}</div><small>{membership?.source==='administrator'?'Assigned by administration':membership?.source==='stripe'?'Paid through Stripe':'Free by default'} · Month {membership?.month||'—'} (UTC)</small></div>
         <div><p className="muted">Pruvs Credits</p><div className="membership-current">{membership?.credits??'—'} PC</div><small>Earn 20 PC when a genuinely new, verified participant joins your split bill and saves an item selection.</small></div>
       </div>
       <h3>Monthly usage</h3>
@@ -55,25 +88,38 @@ export default function Membership(){
       <div className="membership-plans">{ORDER.map(key=>{
         const item=membership?.plans?.[key];
         return <div className={'membership-tier'+(plan===key?' is-current':'')} key={key}>
-          <strong>{key.toUpperCase()}</strong><div>€{item?.price_eur??({free:'0.00',plus:'2.99',business:'5.99'}[key])} / month</div>
+          <strong>{key.toUpperCase()}</strong><div>{item?.price_display||'—'} / {item?.interval_count>1?item.interval_count+' ':''}{item?.interval||'month'}</div>
           <p><strong>{item?.ocr_allowance??'—'} AI OCR</strong> scans / month</p>
           <p><strong>{item?.expense_reports??'—'}</strong> expense reports / month</p>
-          <small>Split bill, receipt history, exports, profile and notification tools remain available.</small>
-          <button type="button" disabled title="Payment integration is not yet available">{plan===key?'Current plan':'Purchase — coming soon'}</button>
+          <small>{item?.description}</small>
+          <ul>{(item?.features||[]).map(feature=><li key={feature}>{feature}</li>)}</ul>
+          <button type="button" disabled={saving||plan===key||key==='free'||isPaying||!membership?.payment_available||!item?.stripe_ready} title={!membership?.payment_available?'Stripe checkout not enabled':!item?.stripe_ready?'Stripe price not published':isPaying?'Manage your current subscription first':''} onClick={()=>startCheckout(key)}>{plan===key?'Current plan':key==='free'?'Included':!membership?.payment_available?'Purchase — unavailable':!item?.stripe_ready?'Awaiting Stripe price':'Subscribe via Stripe'}</button>
           {key!=='free'&&key!==plan&&<button type="button" className="secondary" disabled={saving||membership?.upgrade_request?.plan===key} onClick={()=>requestPlan(key)}>{membership?.upgrade_request?.plan===key?'Upgrade request pending':'Request admin upgrade'}</button>}
         </div>
       })}</div>
-      <h3>Included features</h3>
-      <ul>{FEATURES.map(f=><li key={f}>{f}</li>)}</ul>
+      <h3>Stripe billing and cancellation</h3>
+      <p className="muted">Payment mode: {billing.mode==='live'?'Live':'Stripe sandbox'}. Only paid invoices activate a subscription. Invoice emails require configured Stripe notifications or Pruvs email service.</p>
+      {billing.has_customer&&<div className="membership-billing-controls"><p><strong>Stripe status:</strong> {billing.status} {billing.cancel_at_period_end?'· cancellation scheduled':''}</p>
+        {billing.period_end&&<p>Paid period ends: {new Date(billing.period_end).toLocaleDateString()}</p>}
+        <div className="row wrap">
+          {billing.has_subscription&&billing.status!=='canceled'&&billing.cancel_at_period_end?<button type="button" disabled={saving} onClick={()=>billingAction('resume','Resume automatic renewal?')}>Resume subscription</button>
+          :billing.has_subscription&&billing.status!=='canceled'?<button type="button" className="secondary" disabled={saving} onClick={()=>billingAction('cancel','Cancel renewal at the end of the current paid period? You will keep paid benefits until then.')}>Cancel subscription</button>:null}
+          <button type="button" className="secondary" disabled={saving} onClick={()=>billingAction('portal')}>Manage payment details</button>
+          <button type="button" className="secondary" disabled={saving} onClick={loadInvoices}>My invoices</button>
+        </div>
+      </div>}
+      {invoices!==null&&<div><h4>Stripe invoices</h4>{!invoices.length?<p>No invoices found.</p>:<ul>{invoices.map(inv=><li key={inv.id}>{inv.created?.slice(0,10)} · {inv.status} · {(inv.total_minor/100).toFixed(2)} {inv.currency?.toUpperCase()} {inv.invoice_url&&<a href={inv.invoice_url} target="_blank" rel="noopener noreferrer">View invoice</a>} {inv.pdf_url&&<a href={inv.pdf_url} target="_blank" rel="noopener noreferrer">Download PDF</a>}</li>)}</ul>}</div>}
+      <h3>Features included in your plan</h3>
+      <ul>{(membership?.plans?.[plan]?.features||FEATURES).map(f=><li key={f}>{f}</li>)}</ul>
       <h3>Spend Pruvs Credits</h3>
-      <p><strong>2 PC</strong> = one additional AI OCR scan; <strong>5 PC</strong> = one additional expense report after your monthly allowance runs out.</p>
+      <p><strong>{membership?.pc_costs?.ocr ?? 2} PC</strong> = one additional AI OCR scan; <strong>{membership?.pc_costs?.expense_report ?? 5} PC</strong> = one additional expense report after your monthly allowance runs out.</p>
       <p className="muted">Credits are spent only with your explicit consent on Scan or Create expense report. They are not cash or merchant loyalty points, and cannot be transferred or exchanged for vouchers.</p>
       <div className="row wrap"><a className="secondary" href="/upload">Scan a receipt</a><a className="secondary" href="/expenses/new">Create expense report</a></div>
       <h3>Referrals and credit history</h3>
       <p>{membership?.referrals?.rewarded??0} qualified · {membership?.referrals?.pending??0} pending</p>
       <button type="button" disabled={saving} onClick={reconcile}>Recheck pending referrals</button>
       {!!membership?.credit_entries?.length&&<details><summary>Credit history</summary><ul>{membership.credit_entries.map((e,i)=><li key={i}>{e.delta>0?'+':''}{e.delta} PC · {e.reason.replaceAll('_',' ')} · {e.at?.slice(0,10)}</li>)}</ul></details>}
-      <p className="muted">Payments are unavailable. An upgrade request is reviewed and assigned manually by a Pruvs administrator. No charge is made.</p>
+      <p className="muted">Admin-assigned subscriptions do not charge your card. A Stripe subscription requires a verified card payment. Referral PC and merchant loyalty are separate.</p>
     </Panel>
   </section>;
 }
