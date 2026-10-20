@@ -52,6 +52,16 @@ def credit_balance(db, uid):
                .filter(CreditEntry.user_id == uid).scalar() or 0)
 
 
+def bonus_remaining(db, uid):
+    from app.models.pruvs_rewards_policy import PruvsOCRBonusGrant
+    granted=int(db.query(func.coalesce(func.sum(PruvsOCRBonusGrant.amount),0)).filter_by(user_id=uid).scalar() or 0)
+    spent=int(db.query(func.count(PruvsMeteredUse.id)).filter(
+        PruvsMeteredUse.user_id==uid,PruvsMeteredUse.resource=='ocr',
+        PruvsMeteredUse.paid_with=='bonus',
+        PruvsMeteredUse.state.in_(('reserved','completed'))).scalar() or 0)
+    return max(0,granted-spent)
+
+
 def stale_reservations(db, uid):
     """Recover operations abandoned for over 24 hours, preserving refunds."""
     rows = db.query(PruvsMeteredUse).filter(
@@ -82,7 +92,8 @@ def reserve(uid, resource, plans, plan, use_credits=False):
         lock_user(db, uid)
         stale_reservations(db, uid)
         consumed = used(db, uid, resource)
-        charge_credits = consumed >= limit
+        has_bonus = resource=='ocr' and consumed >= limit and bonus_remaining(db,uid)>0
+        charge_credits = consumed >= limit and not has_bonus
         cost = credit_costs(db)[resource]
         balance = credit_balance(db, uid)
         if charge_credits and (not use_credits or balance < cost):
@@ -99,7 +110,7 @@ def reserve(uid, resource, plans, plan, use_credits=False):
         token = secrets.token_urlsafe(24)
         db.add(PruvsMeteredUse(user_id=uid, resource=resource, month=month_key(),
                                state='reserved', token=token,
-                               paid_with='credits' if charge_credits else 'allowance',
+                               paid_with='credits' if charge_credits else 'bonus' if has_bonus else 'allowance',
                                credit_cost=cost if charge_credits else 0))
         if charge_credits:
             db.add(CreditEntry(user_id=uid, delta=-cost,

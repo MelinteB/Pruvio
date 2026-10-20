@@ -44,14 +44,14 @@ def same_image(first, second):
 def find_duplicate(db, user_id, sha, image_signature):
     stored = (db.query(ReceiptFingerprint, Case)
               .join(Case, Case.id == ReceiptFingerprint.case_id)
-              .filter(ReceiptFingerprint.user_id == user_id, Case.status != 'processing_failed').all())
+              .filter(ReceiptFingerprint.user_id == user_id, Case.status.in_(('needs_confirmation','needs_review'))).all())
     for record, case in stored:
         if record.sha256 == sha or same_image(record.image_signature, image_signature):
             return case.id
     # Older receipts predate persistent fingerprints. Check their surviving files.
     legacy = (db.query(Document, Case)
               .join(Case, Case.id == Document.case_id)
-              .filter(Case.user_id == user_id, Case.status != 'processing_failed',
+              .filter(Case.user_id == user_id, Case.status.in_(('needs_confirmation','needs_review')),
                       Document.document_type == 'receipt').all())
     known = {case.id for _, case in stored}
     for document, case in legacy:

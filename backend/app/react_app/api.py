@@ -8,7 +8,7 @@ import secrets
 from datetime import datetime,timedelta
 from pathlib import Path
 from fastapi import APIRouter,Depends,HTTPException,Request,Response,UploadFile,File,Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel,Field
 from sqlalchemy import String,cast,or_
 from app.db.database import get_db
@@ -38,7 +38,7 @@ class Payload(BaseModel):
 @router.get('/config')
 def config():
     from app.services.receipt_currency_service import CURRENCY_OPTIONS
-    return {'version':'7.1.13','passkeys':passkeys.passkeys_enabled(),'currencies':CURRENCY_OPTIONS,
+    return {'version':'7.1.14','passkeys':passkeys.passkeys_enabled(),'currencies':CURRENCY_OPTIONS,
             'support_email':os.getenv('PRUVIO_SUPPORT_EMAIL','')}
 
 @router.get('/me')
@@ -268,10 +268,14 @@ def upload(request:Request,file:UploadFile=File(...),identity=Depends(current),d
     from app.react_app.plan_catalog import plan_catalog
     from app.react_app.usage import reserve, finish
     uid=identity[0].id
-    token=reserve(uid,'ocr',plan_catalog(db),account_plan(db,uid),
+    plan=account_plan(db,uid)
+    from app.services.receipt_storage import ready
+    if plan!='free' and not ready():
+        raise HTTPException(503,'Paid receipt cloud storage is not configured. Please contact Pruvs support.')
+    token=reserve(uid,'ocr',plan_catalog(db),plan,
                   use_credits=request.headers.get('X-Pruvs-Use-Credits','false').lower()=='true')
     try:
-        result=receipts.create_standalone_receipt_case(db,file_bytes=data,original_filename=file.filename or 'receipt.jpg',mime_type=file.content_type,user_id=uid,deduplicate=True)
+        result=receipts.create_standalone_receipt_case(db,file_bytes=data,original_filename=file.filename or 'receipt.jpg',mime_type=file.content_type,user_id=uid,deduplicate=True,storage_plan=plan)
     except Exception:
         finish(token,False)
         raise
@@ -290,22 +294,34 @@ def receipt(case_id:int,identity=Depends(current),db=Depends(get_db)):
     result=receipts.get_receipt_view(db,case_id,user_id=identity[0].id)
     result['has_split']=db.query(SplitBillSession).filter_by(case_id=case_id).first() is not None
     doc=db.query(Document).filter_by(case_id=case_id).order_by(Document.id.desc()).first()
-    result['original_available']=resolve_document_path(doc) is not None
+    from app.services.receipt_storage import is_cloud
+    result['original_available']=is_cloud(doc) or resolve_document_path(doc) is not None
+    result['storage_mode']='local' if str(getattr(doc,'path','')).startswith('local://') else 'cloud' if is_cloud(doc) else 'legacy' 
     return result
 
 @router.get('/receipts/{case_id}/original')
 def original(case_id:int,identity=Depends(current),db=Depends(get_db)):
     owned_case(db,case_id,identity[0].id)
     doc=db.query(Document).filter_by(case_id=case_id).order_by(Document.id.desc()).first()
+    from app.services.receipt_storage import is_cloud, read_paid
+    if is_cloud(doc):
+        from urllib.parse import quote
+        return Response(content=read_paid(doc),media_type=doc.mime_type or 'application/octet-stream',
+                        headers={'Cache-Control':'no-store','Content-Disposition':"attachment; filename*=UTF-8''"+quote(doc.original_filename or 'receipt')})
     path=resolve_document_path(doc)
-    if path is None:raise HTTPException(404,'Original file is unavailable. Upload your saved copy from this receipt page to restore it.')
+    if path is None:raise HTTPException(404,'Original is stored on the device where it was scanned. Open Pruvs on that device to view it.')
     return FileResponse(path,filename=doc.original_filename or 'receipt',media_type=doc.mime_type or 'application/octet-stream',headers={'Cache-Control':'no-store'})
 
 @router.post('/receipts/{case_id}/original/restore')
 def restore_original(case_id:int,file:UploadFile=File(...),identity=Depends(current),db=Depends(get_db)):
     case=owned_case(db,case_id,identity[0].id)
     doc=db.query(Document).filter_by(case_id=case_id).order_by(Document.id.desc()).first()
-    if resolve_document_path(doc):raise HTTPException(409,'This receipt already has a downloadable original.')
+    from app.services.receipt_storage import is_cloud,ready,finalize_original
+    if str(getattr(doc,'path','')).startswith('local://'):
+        raise HTTPException(409,'Free plan receipts are kept on the original device, not on Pruvs servers.')
+    if is_cloud(doc) or resolve_document_path(doc):raise HTTPException(409,'This receipt already has a downloadable original.')
+    if account_plan(db,identity[0].id)!='free' and not ready():
+        raise HTTPException(503,'Cloud storage is not configured.')
     data=file.file.read(MAX_FILE_SIZE_BYTES+1)
     if len(data)>MAX_FILE_SIZE_BYTES:raise HTTPException(413,'Maximum upload size is 10 MB.')
     saved=db.query(ReceiptFingerprint).filter_by(case_id=case_id,user_id=identity[0].id).first()
@@ -314,10 +330,18 @@ def restore_original(case_id:int,file:UploadFile=File(...),identity=Depends(curr
         if saved.sha256!=sha and not same_image(saved.image_signature,image_signature):
             raise HTTPException(422,'This file does not match the saved receipt. Choose the original receipt or a photo of it.')
     try:
-        restore_missing_original(db,case,doc,data,file.filename or 'receipt.jpg',file.content_type)
+        restored=restore_missing_original(db,case,doc,data,file.filename or 'receipt.jpg',file.content_type)
+        if account_plan(db,identity[0].id)!='free':finalize_original(db,case,restored,identity[0].id,'plus')
     except ValueError as exc:
         raise HTTPException(400,str(exc)) from exc
     return {'case_id':case_id,'restored':True}
+
+@router.delete('/receipts/{case_id}')
+def delete_receipt(case_id:int,identity=Depends(current),db=Depends(get_db)):
+    from app.services.receipt_cleanup import delete_case
+    owned_case(db,case_id,identity[0].id)
+    delete_case(db,case_id,strict=True)
+    return {'deleted':True,'case_id':case_id}
 
 @router.put('/receipts/{case_id}/currency')
 def currency(case_id:int,body:dict,identity=Depends(current),db=Depends(get_db)):

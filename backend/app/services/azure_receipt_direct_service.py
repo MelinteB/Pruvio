@@ -178,17 +178,24 @@ def classify_receipt_line(
     """
     normalized = normalize_text(name)
 
-    if any(keyword in normalized for keyword in BASKET_DISCOUNT_KEYWORDS):
-        return "basket_discount"
+    # Receipt-level VAT/tax breakdowns are normally *informational*, already
+    # included in product prices. They must never become extra split items.
+    if re.match(r"^(?:tva|vat|tax\s+included|taxe\s+incluse|total\s+tva)(?:\b|\s*[:=])", normalized):
+        return "tax_summary"
 
-    if any(keyword in normalized for keyword in SURCHARGE_KEYWORDS):
+    # Refundable bottle deposits are real payable receipt lines (e.g. Romania's
+    # SGR "GARANTIE PET"), not VAT or proportional adjustments.
+    if re.match(r"^(?:garantie\s+(?:pet|sgr|ambalaj)|sgr\s+(?:garantie|deposit)|pet\s+deposit|bottle\s+deposit|pfand)(?:\b|\s*[:=])", normalized):
+        return "product"
+
+    # Match *entire adjustment labels*, not substrings inside product names.
+    # In particular "tip", "serviciu", and "ambalaj" as bare substrings led
+    # to normal purchased lines being reclassified as service charges.
+    if re.match(r"^(?:service\s+charge|taxa\s+(?:de\s+)?serviciu|bacsis|tip|gratuity|taxa\s+ambalaj|packaging\s+fee|service\s+fee|deposit\s+fee|garantie\s+ambalaj)(?:\b|\s*[:=])", normalized):
         return "surcharge"
-
-    if any(keyword in normalized for keyword in LINE_DISCOUNT_KEYWORDS):
-        return "line_discount"
-
-    # Tolerate common OCR truncation: REDUCERE -> REDUCER / REDUC.
-    if normalized.startswith("reduc"):
+    if re.match(r"^(?:voucher|coupon|cupon|cod\s+promo|promo\s+code|discount\s+total|reducere\s+totala|reducere\s+total|loyalty\s+discount|reducere\s+fidelitate)(?:\b|\s*[:=])", normalized):
+        return "basket_discount"
+    if re.match(r"^(?:reducere|reduceri|reduc\.?|reducer\.?|discount|promo(?:tie|tion)?|rabatt)(?:\b|\s*[:=])", normalized):
         return "line_discount"
 
     numeric_total = safe_float(total_price, 0.0)
@@ -269,36 +276,12 @@ def can_attach_line_adjustment(
 
 
 def _format_item_name(item: dict) -> str:
-    parts = [item["base_name"]]
-    currency = item.get("currency") or "RON"
+    """Product identity is never polluted by prorated taxes/adjustments.
 
-    line_adjustment = round(
-        safe_float(item.get("line_adjustment_total"), 0.0),
-        2
-    )
-
-    basket_adjustment = round(
-        safe_float(item.get("basket_adjustment_total"), 0.0),
-        2
-    )
-
-    if abs(line_adjustment) > MONEY_TOLERANCE:
-        label = "Reducere" if line_adjustment < 0 else "Ajustare"
-        parts.append(
-            f"{label} {line_adjustment:+.2f} {currency}"
-        )
-
-    if abs(basket_adjustment) > MONEY_TOLERANCE:
-        label = (
-            "Ajustare bon"
-            if basket_adjustment < 0
-            else "Taxa/Ajustare bon"
-        )
-        parts.append(
-            f"{label} {basket_adjustment:+.2f} {currency}"
-        )
-
-    return " | ".join(parts)
+    Price effects from verified discount/service-charge lines remain in the
+    monetary fields and audit metadata, not in a fabricated product label.
+    """
+    return str(item["base_name"]).strip()
 
 
 def _apply_adjustment_to_item(
@@ -374,6 +357,9 @@ def build_receipt_structure(
             total_price=total_price,
             unit_price=unit_price,
         )
+
+        if line_type == "tax_summary":
+            continue
 
         if line_type == "product":
             items.append(
@@ -517,7 +503,7 @@ def _raw_adjustment_candidates(raw_text: str) -> list[dict]:
             unit_price=None,
         )
 
-        if line_type == "product":
+        if line_type in {"product", "tax_summary"}:
             continue
 
         amount = adjustment_amount(
@@ -772,6 +758,7 @@ def recover_missing_adjustments_from_raw_text(
 
 def apply_basket_adjustments_proportionally(
     structure: dict,
+    receipt_total: float | None = None,
 ) -> None:
     """
     Apply only *explicitly classified* basket-level adjustments across
@@ -787,91 +774,55 @@ def apply_basket_adjustments_proportionally(
     if not items or not basket_adjustments:
         return
 
-    total_adjustment = round(
-        sum(
-            safe_float(adjustment.get("amount"), 0.0)
-            for adjustment in basket_adjustments
-        ),
-        2,
-    )
+    base_net = round(sum(safe_float(item.get("total_price"), 0.0) for item in items), 2)
+    if receipt_total is not None:
+        needed = round(float(receipt_total) - base_net, 2)
+        if abs(needed) <= MONEY_TOLERANCE:
+            # E.g. VAT breakdown and "service" text can be merely descriptive.
+            # Totals already reconcile; never double-add the basket charges.
+            structure["ignored_basket_adjustments"] = basket_adjustments[:]
+            return
+        # Only distribute an explicitly extracted set that *matches* the
+        # receipt-level delta. Never invent a balancing amount or blindly add
+        # every candidate (including repeated OCR lines).
+        from itertools import combinations
+        selected = None
+        if len(basket_adjustments) <= 14:
+            for n in range(1, len(basket_adjustments) + 1):
+                for group in combinations(basket_adjustments, n):
+                    if abs(sum(safe_float(a.get("amount")) for a in group) - needed) <= MONEY_TOLERANCE:
+                        selected = list(group)
+                        break
+                if selected is not None:
+                    break
+        if selected is None:
+            structure["unresolved_adjustments"].append({
+                "type": "basket_reconciliation", "amount": needed,
+                "reason": "No explicitly verified receipt adjustments reconcile to the payable total.",
+                "source": "validation"})
+            return
+        structure["ignored_basket_adjustments"] = [a for a in basket_adjustments if a not in selected]
+        basket_adjustments = selected
+        structure["applied_basket_adjustments"] = selected
 
-    if abs(total_adjustment) <= MONEY_TOLERANCE:
-        return
-
-    base_total = round(
-        sum(
-            max(safe_float(item.get("total_price"), 0.0), 0.0)
-            for item in items
-        ),
-        2,
-    )
-
-    if base_total <= 0:
-        structure["unresolved_adjustments"].append(
-            {
-                "type": "basket_adjustment",
-                "name": "Basket adjustments",
-                "amount": total_adjustment,
-                "reason": "Cannot distribute adjustment across zero-value items.",
-                "source": "calculated",
-            }
-        )
-        return
-
-    # Do not apply a discount that would make the whole basket negative.
-    if total_adjustment < 0 and abs(total_adjustment) > base_total + MONEY_TOLERANCE:
-        structure["unresolved_adjustments"].append(
-            {
-                "type": "basket_adjustment",
-                "name": "Basket adjustments",
-                "amount": total_adjustment,
-                "reason": "Basket discount exceeds detected product total.",
-                "source": "calculated",
-            }
-        )
-        return
-
-    remaining = total_adjustment
-
-    for index, item in enumerate(items):
-        if index == len(items) - 1:
-            allocated = round(remaining, 2)
-        else:
-            weight = (
-                max(safe_float(item.get("total_price"), 0.0), 0.0)
-                / base_total
-            )
-            allocated = round(total_adjustment * weight, 2)
-            remaining = round(remaining - allocated, 2)
-
-        item["basket_adjustment_total"] = round(
-            safe_float(item.get("basket_adjustment_total"), 0.0)
-            + allocated,
-            2,
-        )
-
-        item["total_price"] = round(
-            safe_float(item.get("total_price"), 0.0)
-            + allocated,
-            2,
-        )
-
-        quantity = safe_float(item.get("quantity"), 1.0)
-
-        if quantity:
-            item["unit_price"] = round(
-                item["total_price"] / quantity,
-                2,
-            )
-
-        item.setdefault("applied_adjustments", []).append(
-            {
-                "type": "basket_allocation",
-                "name": "Basket adjustment allocation",
-                "amount": allocated,
-                "source": "calculated",
-            }
-        )
+    # Receipt-level charges remain their OWN receipt line. Distributing them
+    # into product prices fabricated "Taxa/Ajustare bon" prices and even
+    # concealed missing SGR/PET deposits. Do not alter product identity/prices.
+    # Basket discounts must similarly stay separate unless explicitly attached
+    # to a particular product by the OCR parser above.
+    for adjustment in basket_adjustments:
+        amount = round(safe_float(adjustment.get("amount"), 0.0), 2)
+        if abs(amount) <= MONEY_TOLERANCE:
+            continue
+        name = str(adjustment.get("name") or "Receipt adjustment").strip()
+        items.append({
+            "base_name": name, "name": name, "quantity": 1.0,
+            "unit_price": amount, "original_total_price": amount,
+            "total_price": amount,
+            "currency": str(adjustment.get("currency") or items[0].get("currency") or "RON"),
+            "line_adjustment_total": 0.0, "basket_adjustment_total": 0.0,
+            "applied_adjustments": [],
+        })
 
 
 def finalize_receipt_items(structure: dict) -> list[dict]:
@@ -981,6 +932,8 @@ def process_document_with_azure_receipt_direct(
             "last_raw_content",
             "",
         ) or ""
+        from app.services.receipt_identity import extract_from_text
+        receipt_identity=extract_from_text(raw_ocr_text)
 
         existing_item_ids = [
             item_id
@@ -1015,7 +968,7 @@ def process_document_with_azure_receipt_direct(
         # Explicit basket-level adjustments are allocated proportionally so
         # selectable split-bill items still reconcile to the receipt total.
         apply_basket_adjustments_proportionally(
-            structure=structure,
+            structure=structure, receipt_total=float(result.receipt_total or 0),
         )
 
         net_items = finalize_receipt_items(
@@ -1104,7 +1057,8 @@ def process_document_with_azure_receipt_direct(
             "raw_ocr_text": raw_ocr_text,
             "adjustments": {
                 "applied": structure["applied_adjustments"],
-                "basket": structure["basket_adjustments"],
+                "basket": structure.get("applied_basket_adjustments", []),
+                "ignored_basket": structure.get("ignored_basket_adjustments", []),
                 "unresolved": structure["unresolved_adjustments"],
             },
             "validation": {
@@ -1140,6 +1094,7 @@ def process_document_with_azure_receipt_direct(
             "provider_status": external_request.provider_status,
             "duration_ms": duration_ms,
             "merchant_name": result.merchant_name,
+            "receipt_identity":receipt_identity,
             "items_replaced": True,
             "items_count": len(saved_items),
             "receipt_total": receipt_total,
@@ -1153,7 +1108,8 @@ def process_document_with_azure_receipt_direct(
             "warnings": warnings,
             "adjustments": {
                 "applied": structure["applied_adjustments"],
-                "basket": structure["basket_adjustments"],
+                "basket": structure.get("applied_basket_adjustments", []),
+                "ignored_basket": structure.get("ignored_basket_adjustments", []),
                 "unresolved": structure["unresolved_adjustments"],
             },
             "items": [

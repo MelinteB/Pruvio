@@ -25,6 +25,8 @@ class OpenAIReceiptLine(BaseModel):
 
 
 class OpenAIReceiptExtraction(BaseModel):
+    receipt_date: str | None = None
+    receipt_number: str | None = None
     merchant_name: str | None = None
     receipt_total: float
     currency: str
@@ -98,6 +100,8 @@ Return only data represented by the structured schema.
 Rules:
 1. Extract merchant name when visible.
 2. receipt_total is the final amount actually payable by the customer.
+2a. receipt_date and receipt_number are optional: report them only if clearly
+    printed on the receipt, never infer, never return the bank transaction ID.
 3. Detect the ISO currency code, for example RON, EUR, USD or GBP.
 4. Extract every purchased product/service line in printed order.
 5. quantity is purchased quantity. Never confuse package size, volume, weight,
@@ -105,6 +109,10 @@ Rules:
 6. unit_price is unit price when visible/determinable. If quantity is 1 and only
    the line amount is printed, the line amount may be used as unit_price.
 7. total_price is the amount for that line.
+7a. Include separately priced refundable packaging or bottle deposits (e.g.
+    "GARANTIE PET", "GARANTIE SGR", "PFAND") as their own line item with the
+    exact printed amount. NEVER spread a deposit/tax/fee across other products.
+    Distinguish information-only VAT breakdowns from payable product lines.
 8. Do not create purchased items for subtotal, VAT summaries, payment methods,
    card details, cash, change, loyalty points, fiscal IDs or informational lines.
 9. If a discount clearly belongs to one product, prefer the product's net amount
@@ -158,6 +166,7 @@ Rules:
         if not extraction.items:
             raise ValueError("OpenAI did not detect receipt line items.")
 
+        self.last_receipt_identity={'date':extraction.receipt_date,'number':extraction.receipt_number}
         currency = (extraction.currency or "RON").strip().upper()
         confidence = max(
             0.0, min(1.0, float(extraction.provider_confidence or 0.0))

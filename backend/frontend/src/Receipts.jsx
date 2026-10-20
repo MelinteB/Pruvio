@@ -5,6 +5,7 @@ import { ArrowUpRight, ScanLine, ReceiptText, Users, UploadCloud, RotateCw } fro
 import { request, send, uploadFile, money } from './api';
 import { useApp, useLoad, Title, Panel, Spinner, Message, Field, Badge, Empty } from './common';
 import CropEditor from './CropEditor';
+import {saveLocalReceipt,deleteLocalReceipt,downloadLocalReceipt,getLocalReceipt} from './localReceipts';
 export function groupHistory(data){
   const grouped=new Map();
   for(const r of data?.receipts||[])grouped.set(r.case_id,{receipt:r,bills:[]});
@@ -27,6 +28,12 @@ export function History({
     loading
   } = useLoad(() => request('/history?offset=' + offset + '&view=' + (home ? 'active' : view)), [offset, view]);
   async function organize(kind,id,state,note){setActionError('');try{await send('/history/'+kind+'/'+id,{state,note},'PATCH');await reload()}catch(e){setActionError(e.message)}}
+  async function eraseReceipt(id){
+    if(!window.confirm('Permanently delete this receipt, its OCR data and its cloud copy (if applicable)? This cannot be undone.'))return;
+    setActionError('');
+    try{await request('/receipts/'+id,{method:'DELETE'});await deleteLocalReceipt(user.id,id).catch(()=>{});await reload()}
+    catch(e){setActionError(e.message)}
+  }
   function controls(kind,id,note){return !home&&<div className="row wrap no-print"><button onClick={()=>{const answer=prompt(t('History note (optional)'),note||'');if(answer!==null)organize(kind,id,view,answer)}}>{t('Edit note')}</button>{view!=='active'&&<button onClick={()=>organize(kind,id,'active',note||'')}>{t('Restore')}</button>}{view!=='archived'&&<button onClick={()=>organize(kind,id,'archived',note||'')}>{t('Archive')}</button>}{view!=='removed'&&<button className="danger" onClick={()=>{if(confirm(t('Move this item to Removed? It remains available to other participants and in completed expense reports.')))organize(kind,id,'removed',note||'')}}>{t('Remove')}</button>}</div>}
   const groups=groupHistory(data);
   const receiptName=g=>g.receipt?.merchant_name&&g.receipt.merchant_name!=='Receipt'?g.receipt.merchant_name:g.receipt?.original_filename||g.bills?.[0]?.source_name||t('Receipt');
@@ -36,7 +43,7 @@ export function History({
  <div className="receipt-tree">{groups.map(g=>{const name=receiptName(g),related=g.bills.filter(b=>filter==='all'||b.status===filter),owned=!!g.receipt||!!g.bills[0]?.source_owned;
    if(!g.receipt&&!related.length)return null;
    return <section className="panel receipt-branch" key={g.id}><div className="list-row"><span className="icon-tile"><ReceiptText size={20}/></span><div className="grow"><strong>{owned?<Link to={'/receipt/'+g.id}>{name}</Link>:name}</strong><small>{g.receipt?(g.receipt.original_filename||t('Receipt'))+' · '+g.receipt.status.replaceAll('_',' '):t('Shared by the bill owner')}</small></div>{g.receipt&&<strong>{money(g.receipt.receipt_total,g.receipt.currency)}</strong>}</div>
-     {g.receipt?.history_note&&<small>{g.receipt.history_note}</small>}{g.receipt&&controls('receipt',g.id,g.receipt.history_note)}
+     {g.receipt?.history_note&&<small>{g.receipt.history_note}</small>}{g.receipt&&controls('receipt',g.id,g.receipt.history_note)}{g.receipt&&!home&&<button className="danger" onClick={()=>eraseReceipt(g.id)}>Delete permanently</button>}
      {!!related.length&&<div className="receipt-children">{related.map(b=><div key={b.session_id} className="panel bill-card"><Link to={'/bill/'+b.token}><div className="row between"><span className="icon-tile"><Users size={18}/></span><Badge>{b.status}</Badge></div><h3>{t('Split')} · {name}</h3><span className="muted-context">{b.role==='owner'?t('You own this split'):t('You are a participant')}</span><div className="row between"><div><small>{t('Your share')}</small><strong>{money(b.my_total,b.currency)}</strong></div><ArrowUpRight size={18}/></div></Link>{b.history_note&&<small>{b.history_note}</small>}{controls('bill',b.session_id,b.history_note)}</div>)}</div>}
    </section>})}</div>{!groups.length&&<Empty>{t('No receipts or splits in this view.')}</Empty>}
  {!home && <div className="row pager"><button disabled={!offset} onClick={() => setOffset(Math.max(0, offset - 30))}>{t("Previous")}</button><span>{data.group_count?offset+1:0}–{Math.min(offset + 30, data.group_count)} {t("of")} {data.group_count}</span><button disabled={offset + 30 >= data.group_count} onClick={() => setOffset(offset + 30)}>{t("Next")}</button></div>}
@@ -44,7 +51,7 @@ export function History({
 }
 export function Upload() {
   const nav = useNavigate();
-  const {membership,refreshMembership}=useApp();
+  const {membership,refreshMembership,user}=useApp();
   const [file, setFile] = useState(null),
     [original, setOriginal] = useState(null),
     [preview, setPreview] = useState(''),
@@ -120,9 +127,21 @@ export function Upload() {
     setError('');
     abort.current = new AbortController();
     try {
-      const r = await uploadFile(file, setProgress, abort.current.signal, {useCredits});
+      // A Free scan must be writable to IndexedDB *before* OCR begins.
+      // The pending copy is removed whether OCR succeeds or rejects the scan.
+      if(membership?.plan==='free') await saveLocalReceipt(user.id,0,file);
+      let r, savedLocally=true;
+      try{r=await uploadFile(file, setProgress, abort.current.signal, {useCredits});
+        try{await saveLocalReceipt(user.id,r.case_id,file)}
+        catch(storageError){
+          savedLocally=false;
+          // Paid accounts still have their private cloud copy. A Free scan
+          // must not silently claim its local copy was saved.
+          if(membership?.plan==='free')throw storageError;
+        }
+      }finally{if(membership?.plan==='free')await deleteLocalReceipt(user.id,0).catch(()=>{});}
       await refreshMembership?.();
-      nav('/receipt/' + r.case_id, {state:r.duplicate?{duplicate:true,restored_original:r.restored_original}:undefined});
+      nav('/receipt/' + r.case_id, {state:{...(r.duplicate?{duplicate:true,restored_original:r.restored_original}:{}),savedLocally}});
     } catch (e) {
       if(e.status===402&&e.code==='subscription_limit'){nav(e.detail?.membership_url||'/account?limit=ocr#membership');return;}
       setError(e.message);
@@ -130,7 +149,7 @@ export function Upload() {
       setBusy(false);
     }
   }
-  return <><Title eyebrow="START WITH A SCAN" title={t("Capture the receipt")}>{t("Upload a photo or PDF. Review the extracted items before splitting.")}</Title><Panel><label className="dropzone" onDragOver={e => e.preventDefault()} onDrop={e => {e.preventDefault();if(!busy)choose(e.dataTransfer.files[0]);}}><UploadCloud size={42}/><h2>{t("Drop your receipt here")}</h2><p>{t("JPG, PNG, WebP or PDF · up to 10 MB")}</p><input aria-label={t("Choose receipt")} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={busy} onChange={e=>choose(e.target.files[0])}/></label><label className="secondary camera">{t("Take a photo")} <input aria-label={t("Take receipt photo")} type="file" accept="image/*" capture="environment" disabled={busy} onChange={e=>choose(e.target.files[0])}/></label>
+  return <><Title eyebrow="START WITH A SCAN" title={t("Capture the receipt")}>{t("Upload a photo or PDF. Only validated receipts are saved. Free originals stay on this device; paid originals are backed up privately in the cloud.")}</Title><Panel><label className="dropzone" onDragOver={e => e.preventDefault()} onDrop={e => {e.preventDefault();if(!busy)choose(e.dataTransfer.files[0]);}}><UploadCloud size={42}/><h2>{t("Drop your receipt here")}</h2><p>{t("JPG, PNG, WebP or PDF · up to 10 MB")}</p><input aria-label={t("Choose receipt")} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={busy} onChange={e=>choose(e.target.files[0])}/></label><label className="secondary camera">{t("Take a photo")} <input aria-label={t("Take receipt photo")} type="file" accept="image/*" capture="environment" disabled={busy} onChange={e=>choose(e.target.files[0])}/></label>
   <div className="capture-preview" aria-label="Receipt preview before processing"><h3>{file ? `Preview · ${file.name}` : t("Receipt preview")}</h3>{!file?<p className="muted">Choose or photograph a receipt to see it here before processing.</p>:file.type==='application/pdf'?<iframe title={t("Receipt PDF preview")} src={preview} className="pdf-preview"/>:<><CropEditor preview={preview} crop={crop} onChange={setCrop}/><div className="row wrap"><button disabled={busy} onClick={()=>transform(false)}>{t("Apply crop")}</button><button disabled={busy} onClick={()=>transform(true)}><RotateCw size={16}/> {t("Rotate")}</button><button disabled={busy||file===original} onClick={()=>{setFile(original);setCrop({x:0,y:0,w:100,h:100})}}>{t('Restore original')}</button><button disabled={busy} onClick={()=>setCrop({x:0,y:0,w:100,h:100})}>{t('Reset selection')}</button></div></>}</div>
   {membership?.usage?.ocr&&<div className="usage-at-capture"><strong>AI OCR: {membership.usage.ocr.used}/{membership.usage.ocr.allowance} this month</strong><p className="muted">{membership.usage.ocr.remaining>0?`${membership.usage.ocr.remaining} included scans remaining`:`Monthly allowance exhausted. Use 2 PC per extra scan or view Membership.`}</p><label><input type="checkbox" checked={useCredits} onChange={e=>setUseCredits(e.target.checked)} /> Allow spending 2 PC for this scan ONLY if my monthly allowance is exhausted ({membership.credits||0} PC available)</label></div>}
   {error&&<Message error={error}/>}<button className="primary full" disabled={!file||busy} onClick={upload}>{busy?progress<100?`Uploading ${progress}%`:t("Reading your receipt…"):t("Process receipt")}</button>{busy&&<><progress max="100" value={progress}/><button onClick={()=>abort.current.abort()}>{t("Cancel upload")}</button><p className="muted">{t("After upload finishes, processing can continue on the server. You can check History.")}</p></>}</Panel></>;
@@ -143,7 +162,7 @@ export function Receipt() {
     } = useParams(),
     nav = useNavigate(),
     {
-      config
+      config,user
     } = useApp();
   const {
     data: r,
@@ -151,6 +170,8 @@ export function Receipt() {
     loading,
     reload
   } = useLoad(() => request('/receipts/' + id), [id]);
+  const [localAvailable,setLocalAvailable]=useState(false);
+  React.useEffect(()=>{let alive=true;if(user?.id&&id)getLocalReceipt(user.id,id).then(v=>{if(alive)setLocalAvailable(!!v)}).catch(()=>{});return()=>{alive=false}},[user?.id,id]);
   const [people, setPeople] = useState(2),
     [currency, setCurrency] = useState('RON'),
     [actionError, setError] = useState(''),
@@ -182,7 +203,7 @@ export function Receipt() {
   if (loading) return <Spinner />;
   if (error) return <Message error={error} />;
   if (!r) return null;
-  return <><Title eyebrow="RECEIPT REVIEW" title={r.merchant_name} action={r.original_available&&<a className="secondary" href={'/api/v1/receipts/' + id + '/original'} target="_blank" rel="noreferrer">{t("Download saved copy")}</a>}>{r.original_filename} · {r.status.replaceAll('_', ' ')}</Title>{location.state?.restored_original?<Message>{t('This receipt was already saved. Your uploaded copy restored the missing document without OCR.')}</Message>:location.state?.duplicate&&<Message error={t('This receipt is already saved. We opened the existing receipt and did not send it to OCR again.')} />}{!r.original_available&&<Panel title={t('Document copy missing')}><p>{t('The saved receipt details remain, but its image or PDF is missing from storage. Choose your copy of this receipt to restore the download without OCR.')}</p><label className="secondary">{busy?t('Restoring…'):t('Restore saved document')} <input aria-label={t('Restore saved document')} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={busy} onChange={e=>{restore(e.target.files[0]);e.target.value=''}} /></label></Panel>}{actionError && <Message error={actionError} />}
+  return <><Title eyebrow="RECEIPT REVIEW" title={r.merchant_name} action={r.storage_mode==='local'?<button className="secondary" disabled={!localAvailable} onClick={()=>downloadLocalReceipt(user.id,id).catch(e=>setError(e.message))}>{t('Download saved copy')}</button>:r.original_available&&<a className="secondary" href={'/api/v1/receipts/' + id + '/original'} target="_blank" rel="noreferrer">{t("Download saved copy")}</a>}>{r.original_filename} · {r.status.replaceAll('_', ' ')}</Title>{location.state?.restored_original?<Message>{t('This receipt was already saved. Your uploaded copy restored the missing document without OCR.')}</Message>:location.state?.duplicate&&<Message error={t('This receipt is already saved. We opened the existing receipt and did not send it to OCR again.')} />}{r.storage_mode==='local'&&!localAvailable&&<Message error="The original receipt is available only on the device where it was scanned. Browser data clearing can erase this local copy."/>}{!r.original_available&&r.storage_mode!=='local'&&<Panel title={t('Document copy missing')}><p>{t('The saved receipt details remain, but its image or PDF is missing from storage. Choose your copy of this receipt to restore the download without OCR.')}</p><label className="secondary">{busy?t('Restoring…'):t('Restore saved document')} <input aria-label={t('Restore saved document')} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={busy} onChange={e=>{restore(e.target.files[0]);e.target.value=''}} /></label></Panel>}{actionError && <Message error={actionError} />}
  <div className="stats"><Panel><span>{t("Receipt total")}</span><strong>{money(r.receipt_total, r.currency)}</strong></Panel><Panel><span>{t("Extracted items total")}</span><strong>{money(r.calculated_total, r.currency)}</strong></Panel><Panel><span>{t("Items")}</span><strong>{r.items.length}</strong></Panel></div>
  {Math.abs(r.receipt_total - r.calculated_total) > .02 && <Message error={t("The extracted items do not match the receipt total. Review the original receipt before splitting.")} />}
  <Panel title={t("Receipt items")}>{r.items.map(i => <div className="list-row" key={i.id}><div className="grow"><strong>{i.name}</strong>{i.translated_name && i.translated_name !== i.name && <small>{i.translated_name}</small>}<small>{i.quantity} × {money(i.unit_price, r.currency)}</small></div><strong>{money(i.total_price, r.currency)}</strong></div>)}{!r.items.length && <Empty>{t("No items were extracted. Try uploading a clearer image.")}</Empty>}</Panel>
@@ -192,7 +213,7 @@ export function Receipt() {
         }, 'PUT');
         await reload();
       })}>{t("Save currency")}</button></Panel>}
- <Panel title="Share this bill"><p>{t("Include yourself in the total number of people.")}</p><div className="people-action"><Field label={t("People")} type="number" min="1" max="20" value={people} onChange={e => setPeople(Number(e.target.value))} /><button className="primary" disabled={busy || !r.items.length || !/^[A-Z]{3}$/.test(r.currency)} onClick={() => run(async () => {
+ <Panel title="Share this bill"><p>{t("Include yourself in the total number of people.")}</p><div className="people-action"><Field label={t("People")} type="number" min="1" max="20" value={people} onChange={e => setPeople(Number(e.target.value))} /><button className="primary" disabled={busy || !r.items.length || r.status==='needs_review' || Math.abs(r.receipt_total-r.calculated_total)>.05 || !/^[A-Z]{3}$/.test(r.currency)} onClick={() => run(async () => {
           const s = await send('/receipts/' + id + '/split', {
             people
           });

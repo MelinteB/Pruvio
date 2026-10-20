@@ -28,10 +28,12 @@ def resolve_document_path(document: Document | None) -> Path | None:
     """Find a stored original after an upload-directory migration."""
     if document is None:
         return None
-    if document.path:
+    if document.path and not str(document.path).startswith(("s3://", "local://")):
         recorded = Path(document.path)
         if recorded.is_file():
             return recorded
+    if str(document.path or '').startswith(('s3://','local://')):
+        return None
     filename = document.stored_filename or ""
     if not filename or Path(filename).name != filename or not document.case_id:
         return None

@@ -21,7 +21,7 @@ from app.react_app.billing import billing_snapshot
 from app.react_app.auth import current,admin
 
 router=APIRouter(prefix='/api/v1/commerce',tags=['Pruvs Membership'])
-REWARD_CREDITS=20
+REWARD_CREDITS=5
 PLANS={
     'free':{'price_eur':'0.00','ocr_allowance':3,'expense_reports':1},
     'plus':{'price_eur':'2.99','ocr_allowance':50,'expense_reports':10},
@@ -86,7 +86,13 @@ def qualify_referral(db,session,user,quantities):
     today_count=db.query(Referral).filter(Referral.owner_id==row.owner_id,Referral.status=='rewarded',Referral.rewarded_at>=datetime.combine(today,datetime.min.time())).count()
     if today_count>=10:return
     row.status='rewarded';row.rewarded_at=datetime.utcnow()
-    credit(db,row.owner_id,REWARD_CREDITS,'split_referral',f'split-referral:{row.referred_id}')
+    from app.models.pruvs_rewards_policy import PruvsRewardPolicy,PruvsOCRBonusGrant
+    policy=db.get(PruvsRewardPolicy,1)
+    pc=policy.pc_reward if policy else REWARD_CREDITS
+    scans=policy.ocr_bonus if policy else 2
+    if pc:credit(db,row.owner_id,pc,'split_referral',f'split-referral:{row.referred_id}')
+    if scans and not db.query(PruvsOCRBonusGrant.id).filter_by(reference=f'referral-ocr:{row.referred_id}').first():
+        db.add(PruvsOCRBonusGrant(user_id=row.owner_id,amount=scans,reference=f'referral-ocr:{row.referred_id}'))
     db.commit()
 
 
@@ -122,7 +128,58 @@ def account_snapshot(db,user_id):
        'referrals':{'pending':refs.filter_by(status='pending').count(),'rewarded':refs.filter_by(status='rewarded').count()},
        'ocr':{'completed_receipts_this_month':int(historic_receipts),'plan_allowance':plans[plan]['ocr_allowance'],
               'note':'Historical receipt activity; metered usage applies to new operations from v7.1.12.'},
+       'reward_policy':reward_policy_data(db), 'bonus_ocr_remaining':bonus_ocr_remaining(db,user_id),
+       'storage':{'mode':'local' if plan=='free' else 'cloud','description':'Only on this device. No cloud backup.' if plan=='free' else 'Private cloud backup and local offline copy.'},
        'credit_entries':[{'delta':e.delta,'reason':e.reason,'at':e.created_at.isoformat()} for e in entries]}
+
+def reward_policy_data(db):
+    from app.models.pruvs_rewards_policy import PruvsRewardPolicy
+    row=db.get(PruvsRewardPolicy,1)
+    return {'pc_reward':row.pc_reward if row else 5,'ocr_bonus':row.ocr_bonus if row else 2,
+            'version':row.version if row else 0}
+
+def bonus_ocr_remaining(db,user_id):
+    from app.react_app.usage import bonus_remaining
+    return bonus_remaining(db,user_id)
+
+@router.get('/admin/referral-rewards')
+def admin_referral_rewards(identity=Depends(admin),db=Depends(get_db)):
+    return reward_policy_data(db)
+
+@router.put('/admin/referral-rewards')
+def admin_update_referral_rewards(body:dict,identity=Depends(admin),db=Depends(get_db)):
+    from app.models.pruvs_rewards_policy import PruvsRewardPolicy
+    from app.react_app.plan_catalog import _count
+    row=db.query(PruvsRewardPolicy).filter_by(id=1).with_for_update().first()
+    before=reward_policy_data(db)
+    if int(body.get('version',-1))!=before['version']:
+        raise HTTPException(409,'Referral reward policy changed. Refresh and retry.')
+    pc=_count(body.get('pc_reward'), 'Referral PC', 1000)
+    scans=_count(body.get('ocr_bonus'), 'Referral OCR bonus', 100)
+    if not row:
+        row=PruvsRewardPolicy(id=1)
+        db.add(row)
+    row.pc_reward=pc;row.ocr_bonus=scans;row.version=before['version']+1
+    row.updated_by=identity[0].id;row.updated_at=datetime.utcnow()
+    db.commit()
+    return reward_policy_data(db)
+
+@router.put('/admin/users/{uid}/credits')
+def admin_edit_credits(uid:int,body:dict,identity=Depends(admin),db=Depends(get_db)):
+    from app.react_app.usage import lock_user
+    from app.react_app.plan_catalog import _count
+    target=db.query(User).filter_by(id=uid).with_for_update().first()
+    if not target or target.status=='deleted':raise HTTPException(404,'User not found.')
+    new_balance=_count(body.get('balance'), 'PC balance', 1_000_000)
+    lock_user(db,uid)
+    old=credits(db,uid)
+    expected=_count(body.get('expected_balance'), 'Expected PC balance', 1_000_000)
+    if old!=expected:raise HTTPException(409,'Credit balance changed. Refresh the user before editing.')
+    delta=new_balance-old
+    if delta:
+        credit(db,uid,delta,'admin_balance_adjustment',f'admin-pc:{uid}:{secrets.token_hex(16)}')
+        db.commit()
+    return {'user_id':uid,'credits':credits(db,uid),'delta':delta}
 
 @router.get('/status')
 def status(identity=Depends(current),db=Depends(get_db)):

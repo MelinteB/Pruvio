@@ -8,3 +8,5 @@ qrcode[pil]>=8,<9
 
 # Stripe Billing Checkout / subscription webhooks (keys only in environment)
 stripe>=12,<16
+
+boto3>=1.35,<2

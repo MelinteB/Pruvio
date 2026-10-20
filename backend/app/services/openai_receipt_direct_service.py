@@ -75,6 +75,7 @@ def process_document_with_openai_receipt_direct(
     try:
         result = provider.process_document(document=document, request=external_request)
         result_dict = model_to_dict(result)
+        receipt_identity=getattr(provider,'last_receipt_identity',{}) or {}
         result_dict["_openai_usage"] = provider.last_usage
 
         existing_item_ids = [
@@ -100,7 +101,7 @@ def process_document_with_openai_receipt_direct(
             default_currency=result.currency or "RON",
         )
         _retag_openai_adjustment_sources(structure)
-        apply_basket_adjustments_proportionally(structure=structure)
+        apply_basket_adjustments_proportionally(structure=structure, receipt_total=float(result.receipt_total or 0))
         net_items = finalize_receipt_items(structure=structure)
 
         translation = translate_receipt_item_names(
@@ -163,7 +164,8 @@ def process_document_with_openai_receipt_direct(
             "openai_usage": provider.last_usage,
             "adjustments": {
                 "applied": structure["applied_adjustments"],
-                "basket": structure["basket_adjustments"],
+                "basket": structure.get("applied_basket_adjustments", []),
+                "ignored_basket": structure.get("ignored_basket_adjustments", []),
                 "unresolved": structure["unresolved_adjustments"],
             },
             "validation": {
@@ -196,6 +198,7 @@ def process_document_with_openai_receipt_direct(
             "provider_status": external_request.provider_status,
             "duration_ms": duration_ms,
             "merchant_name": result.merchant_name,
+            "receipt_identity":receipt_identity,
             "items_replaced": True,
             "items_count": len(saved_items),
             "receipt_total": receipt_total,
@@ -211,7 +214,8 @@ def process_document_with_openai_receipt_direct(
             "warnings": warnings,
             "adjustments": {
                 "applied": structure["applied_adjustments"],
-                "basket": structure["basket_adjustments"],
+                "basket": structure.get("applied_basket_adjustments", []),
+                "ignored_basket": structure.get("ignored_basket_adjustments", []),
                 "unresolved": structure["unresolved_adjustments"],
             },
             "items": [

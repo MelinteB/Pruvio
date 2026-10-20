@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -61,6 +62,7 @@ def create_standalone_receipt_case(
     mime_type: str | None,
     user_id: int | None = None,
     deduplicate: bool = False,
+    storage_plan: str | None = None,
 ) -> dict[str, Any]:
     """Create a case, save the upload and immediately process it with Azure OCR."""
     if user_id is not None:
@@ -79,7 +81,8 @@ def create_standalone_receipt_case(
         if existing_id:
             existing_case = db.get(Case, existing_id)
             existing_document = db.query(Document).filter_by(case_id=existing_id).order_by(Document.id.desc()).first()
-            if not resolve_document_path(existing_document):
+            if not resolve_document_path(existing_document) and not str(getattr(existing_document,'path','')).startswith(('local://','s3://')):
+                # Existing legacy record missing its original: restore without extra OCR.
                 restore_missing_original(db, existing_case, existing_document, file_bytes, original_filename, mime_type)
                 return {'case': existing_case, 'duplicate': True, 'restored_original': True}
             return {'case': existing_case, 'duplicate': True}
@@ -119,7 +122,7 @@ def create_standalone_receipt_case(
                 Path(document.path).unlink(missing_ok=True)
                 existing_case = db.get(Case, existing_id)
                 existing_document = db.query(Document).filter_by(case_id=existing_id).order_by(Document.id.desc()).first()
-                if not resolve_document_path(existing_document):
+                if not resolve_document_path(existing_document) and not str(getattr(existing_document,'path','')).startswith(('local://','s3://')):
                     restore_missing_original(db, existing_case, existing_document, file_bytes, original_filename, mime_type)
                     return {'case': existing_case, 'duplicate': True, 'restored_original': True}
                 return {'case': existing_case, 'duplicate': True}
@@ -129,7 +132,37 @@ def create_standalone_receipt_case(
             document_id=document.id,
         )
 
-        case.status = "needs_confirmation" if ocr_result.get("is_valid") else "needs_review"
+        from app.services.receipt_cleanup import delete_case
+        if (not ocr_result.get('is_valid') or int(ocr_result.get('items_count') or 0)<1
+                or float(ocr_result.get('receipt_total') or 0)<=0):
+            delete_case(db,case.id,strict=False)
+            from fastapi import HTTPException
+            raise HTTPException(422,{
+                'code':'receipt_invalid',
+                'message':'We could not verify the receipt total against its items. Take a clearer photo of the full receipt and try again. No receipt was saved.'})
+        # Strong semantic duplicate protection after OCR (same merchant, total,
+        # dated fiscal/document number). Never block on amount alone.
+        if deduplicate:
+            from app.models.receipt_identity import ReceiptIdentity
+            from app.services.receipt_identity import identity_hash
+            proof=ocr_result.get('receipt_identity') or {}
+            semantic=identity_hash(ocr_result.get('merchant_name'),ocr_result.get('receipt_total'),
+                                   ocr_result.get('currency'),proof.get('date'),proof.get('number'))
+            if semantic:
+                existing_identity=db.query(ReceiptIdentity).filter_by(user_id=owner.id,identity_hash=semantic).first()
+                if existing_identity and existing_identity.case_id != case.id:
+                    prior_case=db.get(Case,existing_identity.case_id)
+                    if prior_case and prior_case.status=='needs_confirmation':
+                        delete_case(db,case.id,strict=False)
+                        return {'case':prior_case,'duplicate':True,'semantic_duplicate':True}
+                else:
+                    db.add(ReceiptIdentity(user_id=owner.id,case_id=case.id,identity_hash=semantic))
+                    db.commit()
+        # Store validated originals only. For Free, the frontend retains its own local copy.
+        if storage_plan:
+            from app.services.receipt_storage import finalize_original
+            finalize_original(db,case,document,owner.id,storage_plan)
+        case.status = 'needs_confirmation' 
         from app.services.push_service import enqueue
         merchant = str(ocr_result.get('merchant_name') or original_filename)[:100]
         total = ocr_result.get('receipt_total')
@@ -148,13 +181,10 @@ def create_standalone_receipt_case(
 
     except Exception:
         db.rollback()
-        case.status = "processing_failed"
-        if deduplicate:
-            db.query(ReceiptFingerprint).filter_by(case_id=case.id).delete()
-        from app.services.push_service import enqueue
-        enqueue(db, owner.id, "receipt_failed", f"Receipt processing failed · {original_filename[:90]}",
-                "Open this receipt to review the error or try a clearer scan.", f"/receipt/{case.id}")
-        db.commit()
+        from app.services.receipt_cleanup import delete_case
+        if db.get(Case,case.id) is None:
+            raise
+        delete_case(db,case.id,strict=False)
         raise
 
 
@@ -232,6 +262,12 @@ def _parse_ocr_metadata(request: ExternalOCRRequest | None) -> dict[str, Any]:
     }
 
 
+def _display_item_name(name: str) -> str:
+    # Old persisted receipt items sometimes contain artificial basket allocations.
+    # Keep historic totals untouched, but do not show an invented item-level tax.
+    return re.sub(r'(?:\s*\|\s*(?:Taxa/Ajustare bon|Ajustare bon)\s*[+-]\d+(?:[.,]\d{2})?\s*[A-Z]{3})+$', '', name or '').strip()
+
+
 def get_receipt_view(
     db: Session,
     case_id: int,
@@ -283,7 +319,7 @@ def get_receipt_view(
         "items": [
             {
                 "id": item.id,
-                "name": item.name,
+                "name": _display_item_name(item.name),
                 "translated_name": item.translated_name,
                 "source_language": item.source_language,
                 "quantity": float(item.quantity or 1),

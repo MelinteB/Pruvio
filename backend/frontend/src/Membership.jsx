@@ -76,9 +76,11 @@ export default function Membership(){
       {stripeResult==='success'&&<Message>Your checkout has returned to Pruvs. Your plan activates only after Stripe confirms payment; refresh your membership if confirmation is still pending.</Message>}
       {stripeResult==='cancelled'&&<Message>Checkout was cancelled. No plan change was made.</Message>}
 
+      <h3>Membership</h3>
+      <p className="muted">Manage your subscription and included usage.</p>
       <div className="membership-grid">
         <div><p className="muted">Current subscription</p><div className="membership-current">{plan.toUpperCase()}</div><small>{membership?.source==='administrator'?'Assigned by administration':membership?.source==='stripe'?'Paid through Stripe':'Free by default'} · Month {membership?.month||'—'} (UTC)</small></div>
-        <div><p className="muted">Pruvs Credits</p><div className="membership-current">{membership?.credits??'—'} PC</div><small>Earn 20 PC when a genuinely new, verified participant joins your split bill and saves an item selection.</small></div>
+        <div><p className="muted">Receipt storage</p><div className="membership-current" style={{fontSize:'1.3rem'}}>{plan==='free'?'On this device':'Local + Cloud'}</div><small>{membership?.storage?.description||'Free: device-only storage. Paid: private cloud backup.'}</small></div>
       </div>
       <h3>Monthly usage</h3>
       <Meter title="AI OCR scans" value={membership?.usage?.ocr}/>
@@ -91,13 +93,13 @@ export default function Membership(){
           <strong>{key.toUpperCase()}</strong><div>{item?.price_display||'—'} / {item?.interval_count>1?item.interval_count+' ':''}{item?.interval||'month'}</div>
           <p><strong>{item?.ocr_allowance??'—'} AI OCR</strong> scans / month</p>
           <p><strong>{item?.expense_reports??'—'}</strong> expense reports / month</p>
-          <small>{item?.description}</small>
+          <small>{item?.description}</small><p className="muted">{key==='free'?'Receipts stored on this device only. No cloud backup.':'Local copies with private cloud backup.'}</p>
           <ul>{(item?.features||[]).map(feature=><li key={feature}>{feature}</li>)}</ul>
           <button type="button" disabled={saving||plan===key||key==='free'||isPaying||!membership?.payment_available||!item?.stripe_ready} title={!membership?.payment_available?'Stripe checkout not enabled':!item?.stripe_ready?'Stripe price not published':isPaying?'Manage your current subscription first':''} onClick={()=>startCheckout(key)}>{plan===key?'Current plan':key==='free'?'Included':!membership?.payment_available?'Purchase — unavailable':!item?.stripe_ready?'Awaiting Stripe price':'Subscribe via Stripe'}</button>
           {key!=='free'&&key!==plan&&<button type="button" className="secondary" disabled={saving||membership?.upgrade_request?.plan===key} onClick={()=>requestPlan(key)}>{membership?.upgrade_request?.plan===key?'Upgrade request pending':'Request admin upgrade'}</button>}
         </div>
       })}</div>
-      <h3>Stripe billing and cancellation</h3>
+      <h3>Billing</h3>
       <p className="muted">Payment mode: {billing.mode==='live'?'Live':'Stripe sandbox'}. Only paid invoices activate a subscription. Invoice emails require configured Stripe notifications or Pruvs email service.</p>
       {billing.has_customer&&<div className="membership-billing-controls"><p><strong>Stripe status:</strong> {billing.status} {billing.cancel_at_period_end?'· cancellation scheduled':''}</p>
         {billing.period_end&&<p>Paid period ends: {new Date(billing.period_end).toLocaleDateString()}</p>}
@@ -109,9 +111,11 @@ export default function Membership(){
         </div>
       </div>}
       {invoices!==null&&<div><h4>Stripe invoices</h4>{!invoices.length?<p>No invoices found.</p>:<ul>{invoices.map(inv=><li key={inv.id}>{inv.created?.slice(0,10)} · {inv.status} · {(inv.total_minor/100).toFixed(2)} {inv.currency?.toUpperCase()} {inv.invoice_url&&<a href={inv.invoice_url} target="_blank" rel="noopener noreferrer">View invoice</a>} {inv.pdf_url&&<a href={inv.pdf_url} target="_blank" rel="noopener noreferrer">Download PDF</a>}</li>)}</ul>}</div>}
-      <h3>Features included in your plan</h3>
-      <ul>{(membership?.plans?.[plan]?.features||FEATURES).map(f=><li key={f}>{f}</li>)}</ul>
-      <h3>Spend Pruvs Credits</h3>
+      <div className="membership-credits-section" aria-label="Pruvs Credits">
+      <h3>Pruvs Credits</h3>
+      <div className="membership-grid"><div><small>Available balance</small><div className="membership-current">{membership?.credits??'—'} PC</div></div><div><small>Bonus AI scans available</small><div className="membership-current">{membership?.bonus_ocr_remaining??0}</div></div></div>
+      <p className="muted">Qualifying referrals earn {membership?.reward_policy?.pc_reward??5} PC + {membership?.reward_policy?.ocr_bonus??2} AI OCR scans.</p>
+      <h3>Use your credits</h3>
       <p><strong>{membership?.pc_costs?.ocr ?? 2} PC</strong> = one additional AI OCR scan; <strong>{membership?.pc_costs?.expense_report ?? 5} PC</strong> = one additional expense report after your monthly allowance runs out.</p>
       <p className="muted">Credits are spent only with your explicit consent on Scan or Create expense report. They are not cash or merchant loyalty points, and cannot be transferred or exchanged for vouchers.</p>
       <div className="row wrap"><a className="secondary" href="/upload">Scan a receipt</a><a className="secondary" href="/expenses/new">Create expense report</a></div>
@@ -119,7 +123,7 @@ export default function Membership(){
       <p>{membership?.referrals?.rewarded??0} qualified · {membership?.referrals?.pending??0} pending</p>
       <button type="button" disabled={saving} onClick={reconcile}>Recheck pending referrals</button>
       {!!membership?.credit_entries?.length&&<details><summary>Credit history</summary><ul>{membership.credit_entries.map((e,i)=><li key={i}>{e.delta>0?'+':''}{e.delta} PC · {e.reason.replaceAll('_',' ')} · {e.at?.slice(0,10)}</li>)}</ul></details>}
-      <p className="muted">Admin-assigned subscriptions do not charge your card. A Stripe subscription requires a verified card payment. Referral PC and merchant loyalty are separate.</p>
+      </div>
     </Panel>
   </section>;
 }

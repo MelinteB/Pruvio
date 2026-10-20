@@ -18,7 +18,8 @@ function AdminMembership({userId}) {
   const [plan,setPlan] = useState('free');
   const [saving,setSaving] = useState(false);
   const [notice,setNotice] = useState('');
-  React.useEffect(() => { if(data) setPlan(data.plan); }, [data?.plan]);
+  const [balance,setBalance]=useState('0');
+  React.useEffect(() => { if(data){setPlan(data.plan);setBalance(String(data.credits??0));} }, [data?.plan,data?.credits]);
   async function update() {
     if (!window.confirm(`Assign ${plan.toUpperCase()} to user #${userId}? No payment will be collected.`)) return;
     setSaving(true); setNotice('');
@@ -30,6 +31,10 @@ function AdminMembership({userId}) {
     {error&&<Message error={error}/>}{loading?<Spinner/>:<><p>Assigned plan: <strong>{(data?.plan||'free').toUpperCase()}</strong> · Promotional credits: <strong>{data?.credits ?? 0} PC</strong></p>
     <p className="muted">Monthly AI OCR: {data?.usage?.ocr?.used ?? '—'} / {data?.usage?.ocr?.allowance ?? '—'} · Reports: {data?.usage?.expense_report?.used ?? '—'} / {data?.usage?.expense_report?.allowance ?? '—'}. Online checkout is handled by Stripe if enabled.</p>
     <div className="row wrap"><label>Subscription <select aria-label="Assign user subscription" value={plan} onChange={e=>setPlan(e.target.value)}>{['free','plus','business'].map(k=><option key={k} value={k}>{k.toUpperCase()}</option>)}</select></label><button className="primary" disabled={saving||plan===data?.plan} onClick={update}>Assign subscription</button></div>
+    <div className="row wrap"><label>Set Pruvs Credits balance (PC) <input type="number" min="0" step="1" value={balance} onChange={e=>setBalance(e.target.value)}/></label><button disabled={saving||String(data?.credits??0)===balance} onClick={async()=>{
+      if(!window.confirm(`Set user #${userId} balance to ${balance} PC?`))return;
+      setSaving(true);setNotice('');try{await send('/commerce/admin/users/'+userId+'/credits',{balance:Number(balance),expected_balance:data?.credits??0},'PUT');await reload();setNotice('Balance updated.');}catch(e){setNotice(e.message)}finally{setSaving(false)}
+    }}>Save balance</button></div>
     {notice&&<Message>{notice}</Message>}
     </>}
   </section>;
@@ -38,6 +43,9 @@ function AdminMembership({userId}) {
 function PlanConfiguration() {
   const {data,reload,error,loading}=useLoad(()=>request('/commerce/billing/admin/plans'),[]);
   const costs=useLoad(()=>request('/commerce/billing/admin/pc-costs'),[]);
+  const rewards=useLoad(()=>request('/commerce/admin/referral-rewards'),[]);
+  const [rewardDraft,setRewardDraft]=useState(null);
+  useEffect(()=>{if(rewards.data)setRewardDraft(rewards.data);},[rewards.data]);
   const [pcDraft,setPcDraft]=useState(null);
   useEffect(()=>{if(costs.data)setPcDraft({ocr_pc:costs.data.ocr,report_pc:costs.data.expense_report,version:costs.data.version});},[costs.data]);
   const [draft,setDraft]=useState({}),[pending,setPending]=useState(''),[note,setNote]=useState('');
@@ -65,6 +73,10 @@ function PlanConfiguration() {
   return <Panel title="Subscription plans & pricing">
     <p className="muted">Edit subscription price, period, quotas and features. Quota changes apply to all accounts immediately; price changes must be published as a new Stripe Price. Existing paying customers retain their existing billed price until migrated separately.</p>
     {error&&<Message error={error}/>}{note&&<Message>{note}</Message>}{loading&&<Spinner/>}
+    {rewardDraft&&<div className="billing-credit-costs"><h3>Referral rewards</h3>
+      <label>PC per qualified referral <input type="number" min="0" step="1" value={rewardDraft.pc_reward} onChange={e=>setRewardDraft(p=>({...p,pc_reward:e.target.value}))}/></label>
+      <label>Bonus AI OCR scans per qualified referral <input type="number" min="0" step="1" value={rewardDraft.ocr_bonus} onChange={e=>setRewardDraft(p=>({...p,ocr_bonus:e.target.value}))}/></label>
+      <button disabled={!!pending} onClick={async()=>{setPending('rewards');setNote('');try{await send('/commerce/admin/referral-rewards',rewardDraft,'PUT');await rewards.reload();setNote('Future referral rewards updated.');}catch(e){setNote(e.message)}finally{setPending('')}}}>Save referral rewards</button></div>}
     {pcDraft&&<div className="billing-credit-costs"><h3>Promotional PC spending</h3><p className="muted">These credits are separate from Stripe subscription payments and merchant loyalty.</p>
     <label>Extra OCR scan (PC) <input type="number" min="0" value={pcDraft.ocr_pc} onChange={e=>setPcDraft(p=>({...p,ocr_pc:e.target.value}))}/></label>
     <label>Extra expense report (PC) <input type="number" min="0" value={pcDraft.report_pc} onChange={e=>setPcDraft(p=>({...p,report_pc:e.target.value}))}/></label>
