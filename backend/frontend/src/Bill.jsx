@@ -62,7 +62,8 @@ export default function Bill() {
   useEffect(() => {
     let active = true,
       ws,
-      timer;
+      timer,
+      retryCount = 0;
     async function load() {
       try {
         const r = await request('/bills/' + token);
@@ -83,21 +84,27 @@ export default function Bill() {
       if (!active) return;
       ws = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/api/v1/live/${encodeURIComponent(token)}`);
       ws.onopen = () => {
+        retryCount = 0;
         if (active) setLive(t("Live"));
         if (ws?.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'visibility', hidden: document.hidden }));
         }
       };
       ws.onmessage = e => {
-        const value = JSON.parse(e.data);
-        if (active && !saving.current && value.type !== 'heartbeat') {
+        let value;
+        try { value = JSON.parse(e.data); } catch { return; }
+        if (active && !saving.current && value && typeof value === 'object' && value.type !== 'heartbeat') {
           setData(value);
         }
       };
       ws.onclose = e => {
         if (!active) return;
         setLive(e.code === 1008 ? t("Sign in again") : t("Reconnecting"));
-        if (e.code !== 1008) timer = setTimeout(connect, 2500);
+        if (e.code !== 1008) {
+          // Bounded exponential backoff reduces reconnect storms during outages.
+          const delay = Math.min(30000, 1500 * (2 ** Math.min(retryCount++, 5)));
+          timer = setTimeout(connect, delay + Math.floor(Math.random() * 500));
+        }
       };
       ws.onerror = () => ws.close();
     }

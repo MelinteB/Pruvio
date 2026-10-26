@@ -30,6 +30,7 @@ from app.services import admin_dashboard_service as dashboard
 from app.services.auth_service import authenticate_with_password
 from app.services.username_service import update_username
 from app.react_app.auth import current,admin,profile,issue,revoke,revoke_user,limit,digest,secure,COOKIE,CSRF_COOKIE
+from app.reliability import RELEASE
 router=APIRouter(prefix='/api/v1')
 
 class Payload(BaseModel):
@@ -38,7 +39,7 @@ class Payload(BaseModel):
 @router.get('/config')
 def config():
     from app.services.receipt_currency_service import CURRENCY_OPTIONS
-    return {'version':'7.1.14','passkeys':passkeys.passkeys_enabled(),'currencies':CURRENCY_OPTIONS,
+    return {'version':RELEASE,'passkeys':passkeys.passkeys_enabled(),'currencies':CURRENCY_OPTIONS,
             'support_email':os.getenv('PRUVIO_SUPPORT_EMAIL','')}
 
 @router.get('/me')
@@ -237,7 +238,7 @@ def delete_confirm(body:dict,response:Response,identity=Depends(current),db=Depe
 @router.get('/history')
 def history(offset:int=Query(0,ge=0),view:str='active',identity=Depends(current),db=Depends(get_db)):
     from app.models.history_visibility import HistoryVisibility
-    from app.react_app.receipt_labels import receipt_label
+    from app.react_app.receipt_labels import receipt_labels
     if view not in ('active','archived','removed'):raise ValueError('Unknown history view.')
     uid=identity[0].id
     states={(r.kind,r.source_id):r for r in db.query(HistoryVisibility).filter_by(user_id=uid).all()}
@@ -246,13 +247,20 @@ def history(offset:int=Query(0,ge=0),view:str='active',identity=Depends(current)
     selected=[c for c in case_query.all() if include('receipt',c.id)]
     visible_bills=[b for b in bills.list_split_bill_sessions_for_user(db,uid,None) if include('bill',b['session_id'])]
     case_ids={c.id for c in selected}|{b['case_id'] for b in visible_bills}
-    ordered=sorted(case_ids,key=lambda cid:(db.get(Case,cid).created_at,cid),reverse=True)
+    case_by_id={c.id:c for c in selected}
+    missing=list(case_ids-set(case_by_id))
+    # Read joined/shared bill cases in bounded batches, not db.get() per case.
+    for index in range(0,len(missing),400):
+        case_by_id.update({c.id:c for c in db.query(Case).filter(Case.id.in_(missing[index:index+400])).all()})
+    ordered=sorted((cid for cid in case_ids if cid in case_by_id),
+                   key=lambda cid:(case_by_id[cid].created_at or datetime.min,cid),reverse=True)
     page_ids=set(ordered[offset:offset+30])
     cases=[c for c in selected if c.id in page_ids]
     receipt_rows=[{**receipts.get_receipt_view(db,c.id,user_id=uid,ensure_translations=False),
                    'history_note':states.get(('receipt',c.id)).note if ('receipt',c.id) in states else ''} for c in cases]
-    bill_rows=[{**b,'source_name':receipt_label(db,b['case_id']),
-                'source_owned':db.get(Case,b['case_id']).user_id==uid,
+    names=receipt_labels(db,{b['case_id'] for b in visible_bills if b['case_id'] in page_ids})
+    bill_rows=[{**b,'source_name':names[b['case_id']],
+                'source_owned':case_by_id[b['case_id']].user_id==uid,
                 'history_note':states.get(('bill',b['session_id'])).note if ('bill',b['session_id']) in states else ''}
                for b in visible_bills if b['case_id'] in page_ids]
     return {'receipts':receipt_rows,'receipt_count':len(selected),'bills':bill_rows,
@@ -262,26 +270,33 @@ def history(offset:int=Query(0,ge=0),view:str='active',identity=Depends(current)
 
 @router.post('/receipts/upload')
 def upload(request:Request,file:UploadFile=File(...),identity=Depends(current),db=Depends(get_db)):
-    data=file.file.read(MAX_FILE_SIZE_BYTES+1)
-    if len(data)>MAX_FILE_SIZE_BYTES:raise HTTPException(413,'Maximum upload size is 10 MB.')
     from app.react_app.commerce import account_plan
     from app.react_app.plan_catalog import plan_catalog
     from app.react_app.usage import reserve, finish
+    from app.reliability import ocr_capacity, OCRBusy
     uid=identity[0].id
     plan=account_plan(db,uid)
     from app.services.receipt_storage import ready
     if plan!='free' and not ready():
         raise HTTPException(503,'Paid receipt cloud storage is not configured. Please contact Pruvs support.')
-    token=reserve(uid,'ocr',plan_catalog(db),plan,
-                  use_credits=request.headers.get('X-Pruvs-Use-Credits','false').lower()=='true')
     try:
-        result=receipts.create_standalone_receipt_case(db,file_bytes=data,original_filename=file.filename or 'receipt.jpg',mime_type=file.content_type,user_id=uid,deduplicate=True,storage_plan=plan)
-    except Exception:
-        finish(token,False)
-        raise
-    success=not result.get('duplicate',False) and getattr(result['case'],'status','') not in ('processing_failed','failed')
-    finish(token,success)
-    return {'case_id':result['case'].id,'duplicate':result.get('duplicate',False),'restored_original':result.get('restored_original',False)}
+        # Admission precedes upload buffering and credit reservation. 503 does
+        # not consume credits or allocate a second full in-memory receipt copy.
+        with ocr_capacity.admit():
+            data=file.file.read(MAX_FILE_SIZE_BYTES+1)
+            if len(data)>MAX_FILE_SIZE_BYTES:raise HTTPException(413,'Maximum upload size is 10 MB.')
+            token=reserve(uid,'ocr',plan_catalog(db),plan,
+                          use_credits=request.headers.get('X-Pruvs-Use-Credits','false').lower()=='true')
+            try:
+                result=receipts.create_standalone_receipt_case(db,file_bytes=data,original_filename=file.filename or 'receipt.jpg',mime_type=file.content_type,user_id=uid,deduplicate=True,storage_plan=plan)
+            except Exception:
+                finish(token,False)
+                raise
+            success=not result.get('duplicate',False) and getattr(result['case'],'status','') not in ('processing_failed','failed')
+            finish(token,success)
+            return {'case_id':result['case'].id,'duplicate':result.get('duplicate',False),'restored_original':result.get('restored_original',False)}
+    except OCRBusy as exc:
+        raise HTTPException(503,str(exc),headers={'Retry-After':'10'}) from exc
 
 def owned_case(db,case_id,uid):
     c=db.get(Case,case_id)

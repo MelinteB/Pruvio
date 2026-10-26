@@ -8,7 +8,7 @@ from app.reliability import RELEASE, bounded_seconds, frontend_is_ready, require
 
 class ProductionFoundationTests(unittest.TestCase):
     def test_release(self):
-        self.assertEqual(RELEASE, '7.1.17')
+        self.assertEqual(RELEASE, '7.1.19')
 
     def test_live_interval_bounds(self):
         with patch.dict(os.environ, {'PRUVS_LIVE_ACTIVE_SECONDS': '0.1'}):

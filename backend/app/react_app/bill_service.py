@@ -649,6 +649,13 @@ def get_split_bill_session_summary(db: Session, session: SplitBillSession, *, en
     base_fixed_share = round(fixed_tip_total / people, 2) if fixed_tip_total else 0.0
     fixed_residue = round(fixed_tip_total - base_fixed_share * people, 2)
 
+    # v7.1.19: load linked users and owner in one query, not N per participant.
+    referenced_user_ids = {p.user_id for p in participants if p.user_id is not None}
+    if session.owner_user_id is not None:
+        referenced_user_ids.add(session.owner_user_id)
+    linked_users = ({u.id: u for u in db.query(User).filter(User.id.in_(referenced_user_ids)).all()}
+                    if referenced_user_ids else {})
+
     participant_rows = []
     for participant in participants:
         participant_assignments = assignments_by_participant.get(participant.id, [])
@@ -671,7 +678,7 @@ def get_split_bill_session_summary(db: Session, session: SplitBillSession, *, en
         else:
             tip_share = 0.0
 
-        linked_user = db.query(User).filter(User.id == participant.user_id).first() if participant.user_id else None
+        linked_user = linked_users.get(participant.user_id)
         participant_rows.append({
             "participant_id": participant.id,
             "user_id": participant.user_id,
@@ -694,7 +701,7 @@ def get_split_bill_session_summary(db: Session, session: SplitBillSession, *, en
 
     tip_total = round(sum(float(row["tip_share"] or 0) for row in participant_rows), 2)
     close_state = get_close_state(db, session, remaining_total=remaining_total)
-    owner = db.query(User).filter(User.id == session.owner_user_id).first() if session.owner_user_id else None
+    owner = linked_users.get(session.owner_user_id)
     session_language = owner.preferred_language if owner and owner.preferred_language else "en"
     owner_payment_details = None
     if owner and session.status in {"settled", "closed"}:
