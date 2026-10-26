@@ -82,7 +82,12 @@ export default function Bill() {
     function connect() {
       if (!active) return;
       ws = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/api/v1/live/${encodeURIComponent(token)}`);
-      ws.onopen = () => active && setLive(t("Live"));
+      ws.onopen = () => {
+        if (active) setLive(t("Live"));
+        if (ws?.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'visibility', hidden: document.hidden }));
+        }
+      };
       ws.onmessage = e => {
         const value = JSON.parse(e.data);
         if (active && !saving.current && value.type !== 'heartbeat') {
@@ -96,9 +101,16 @@ export default function Bill() {
       };
       ws.onerror = () => ws.close();
     }
+    const reportVisibility = () => {
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'visibility', hidden: document.hidden }));
+      }
+    };
+    document.addEventListener('visibilitychange', reportVisibility);
     connect();
     return () => {
       active = false;
+      document.removeEventListener('visibilitychange', reportVisibility);
       clearTimeout(timer);
       ws?.close();
     };

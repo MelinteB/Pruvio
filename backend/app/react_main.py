@@ -32,6 +32,8 @@ from app.react_app.billing import router as billing_router, webhook_router as st
 from app.react_app.expenses import router as expense_router
 from app.react_app.history_manage import router as history_manage_router
 from datetime import datetime
+from sqlalchemy import text as sql_text
+from app.reliability import RELEASE, bounded_seconds, require_postgres_if_enabled, frontend_is_ready
 from app.models.push_notification import PushGrant,PushDevice
 from app.web_domain import canonical_browser_redirect,_PAGES,_PAGE_PATTERNS
 _PAGES.update({"/login","/reset","/password-reset","/notifications","/inbox","/account/notifications","/account/companies","/admin","/admin/manage-users"})
@@ -40,6 +42,7 @@ _domain._PAGE_PATTERNS += (r"/bill/[^/]+",r"/join/[^/]+",r"/notifications/open/[
 
 @asynccontextmanager
 async def lifespan(app):
+    require_postgres_if_enabled()
     Base.metadata.create_all(bind=engine);ensure_compatibility_schema()
     if not (FRONTEND/'index.html').is_file():raise RuntimeError('React build missing. Run npm ci and npm run build in backend/frontend.')
     # Retire legacy browser grants and expired sessions before serving React.
@@ -57,7 +60,7 @@ async def lifespan(app):
         try:await asyncio.wait_for(worker,timeout=25)
         except asyncio.TimeoutError:worker.cancel()
 
-app=FastAPI(title='Pruvs Core',version='7.1.14',lifespan=lifespan)
+app=FastAPI(title='Pruvs Core',version=RELEASE,lifespan=lifespan)
 app.include_router(inbox_router);app.include_router(router);app.include_router(expense_router);app.include_router(history_manage_router);app.include_router(admin_router);app.include_router(legacy_router)
 app.include_router(commerce_router);app.include_router(billing_router);app.include_router(stripe_webhook_router)
 app.include_router(push_router);app.dependency_overrides[push_authenticate]=push_identity
@@ -94,7 +97,25 @@ async def forbidden(request,exc):return JSONResponse({'detail':str(exc)},403)
 async def conflict(request,exc):return JSONResponse({'detail':'This change conflicts with an existing record. Refresh and try again.'},409)
 
 @app.get('/health')
-def health():return {'status':'ok','app':'Pruvs Core','version':'7.1.14','frontend':'React','mode':'standalone'}
+def health():
+    """Liveness: doesn't fail because of a transient database outage."""
+    return {'status': 'ok', 'app': 'Pruvs Core', 'version': RELEASE, 'frontend': 'React'}
+
+@app.get('/ready', include_in_schema=False)
+def readiness():
+    """Readiness: cheap database probe plus built frontend, no secrets or bill data."""
+    if not frontend_is_ready(FRONTEND):
+        return JSONResponse({'status': 'unavailable', 'version': RELEASE}, status_code=503,
+                            headers={'Cache-Control': 'no-store'})
+    try:
+        with engine.connect() as connection:
+            connection.execute(sql_text('SELECT 1')).scalar_one()
+    except Exception:
+        logging.getLogger('pruvs.readiness').exception('Database readiness probe failed')
+        return JSONResponse({'status': 'unavailable', 'version': RELEASE}, status_code=503,
+                            headers={'Cache-Control': 'no-store'})
+    return {'status': 'ready', 'version': RELEASE}
+
 
 @app.get('/service-worker.js',include_in_schema=False)
 def worker():return FileResponse(STATIC/'react-service-worker.js',media_type='application/javascript',headers={'Cache-Control':'no-cache','Service-Worker-Allowed':'/'})
@@ -127,22 +148,67 @@ def live_snapshot(raw,token):
         return summary(db,s,user.id)
 
 @app.websocket('/api/v1/live/{token}')
-async def live(websocket:WebSocket,token:str):
-    if not origin_allowed(websocket.headers.get('origin')):await websocket.close(code=1008);return
-    raw=websocket.cookies.get(COOKIE,'')
-    try:result=await asyncio.to_thread(live_snapshot,raw,token)
-    except (PermissionError,HTTPException):await websocket.close(code=1008);return
-    await websocket.accept();previous=None
+async def live(websocket: WebSocket, token: str):
+    """Bounded live updates: full snapshot every 5s active / 20s hidden by default.
+
+    Visibility hints only affect polling frequency, not authorization.
+    The server always rechecks the user/session on each snapshot.
+    """
+    if not origin_allowed(websocket.headers.get('origin')):
+        await websocket.close(code=1008)
+        return
+    raw = websocket.cookies.get(COOKIE, '')
+    try:
+        result = await asyncio.to_thread(live_snapshot, raw, token)
+    except (PermissionError, HTTPException):
+        await websocket.close(code=1008)
+        return
+    await websocket.accept()
+    active_poll = bounded_seconds('PRUVS_LIVE_ACTIVE_SECONDS', 5.0, 2.0, 15.0)
+    hidden_poll = bounded_seconds('PRUVS_LIVE_HIDDEN_SECONDS', 20.0, 10.0, 60.0)
+    heartbeat = bounded_seconds('PRUVS_LIVE_HEARTBEAT_SECONDS', 25.0, 15.0, 60.0)
+    hidden = False
+    previous = None
+    loop = asyncio.get_running_loop()
+    last_sent = loop.time()
+    next_refresh = last_sent + active_poll
     try:
         while True:
-            text=json.dumps(result,sort_keys=True)
-            if text!=previous:await websocket.send_text(text);previous=text
-            else:await websocket.send_json({'type':'heartbeat'})
-            await asyncio.sleep(1)
-            result=await asyncio.to_thread(live_snapshot,raw,token)
-    except (WebSocketDisconnect,RuntimeError):pass
-    except (PermissionError,HTTPException):
-        with contextlib.suppress(RuntimeError):await websocket.close(code=1008)
+            text = json.dumps(result, sort_keys=True)
+            if text != previous:
+                await websocket.send_text(text)
+                previous = text
+                last_sent = loop.time()
+            now = loop.time()
+            wait = min(max(0.0, next_refresh - now), max(0.0, heartbeat - (now - last_sent)))
+            if wait > 0:
+                try:
+                    incoming = await asyncio.wait_for(websocket.receive_text(), timeout=wait)
+                    try:
+                        payload = json.loads(incoming)
+                    except (ValueError, TypeError):
+                        payload = None
+                    if isinstance(payload, dict) and payload.get('type') == 'visibility' and isinstance(payload.get('hidden'), bool):
+                        was_hidden = hidden
+                        hidden = payload['hidden']
+                        # When returning to the tab, refresh immediately.
+                        next_refresh = loop.time() if was_hidden and not hidden else loop.time() + (hidden_poll if hidden else active_poll)
+                    continue
+                except asyncio.TimeoutError:
+                    pass
+            now = loop.time()
+            if now >= next_refresh:
+                result = await asyncio.to_thread(live_snapshot, raw, token)
+                next_refresh = loop.time() + (hidden_poll if hidden else active_poll)
+                continue
+            if now - last_sent >= heartbeat:
+                await websocket.send_json({'type': 'heartbeat'})
+                last_sent = loop.time()
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+    except (PermissionError, HTTPException):
+        with contextlib.suppress(RuntimeError):
+            await websocket.close(code=1008)
 
 @app.get('/rewards',include_in_schema=False)
 @app.get('/rewards/merchant/{code}',include_in_schema=False)
