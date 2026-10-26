@@ -5,6 +5,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Users, Share2, Copy, Minus, Plus, Check, ExternalLink } from 'lucide-react';
 import { request, send, money, copy } from './api';
 import { useApp, useLoad, Title, Panel, Field, Spinner, Message, Badge } from './common';
+import RoundTable, { ClosedBillNotice } from './professional/RoundTable';
 export function Join() {
   const {
       token
@@ -42,6 +43,7 @@ export default function Bill() {
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState(''),
     [share, setShare] = useState(false),
+    [showTable, setShowTable] = useState(false),
     [tip, setTip] = useState({
       mode: 'none',
       value: 0
@@ -157,6 +159,9 @@ export default function Bill() {
               title: 'Join my Pruvs bill',
               url: link
             }).catch(() => {})}>{t("Share…")}</button>}<a className="button" target="_blank" rel="noreferrer" href={'https://wa.me/?text=' + encodeURIComponent(link)}>WhatsApp</a><a className="button" href={'sms:?body=' + encodeURIComponent(link)}>SMS</a><a className="button" href={'mailto:?subject=Join%20my%20Pruvs%20bill&body=' + encodeURIComponent(link)}>{t("Email")}</a></div></div></div></Panel>}
+ <div className="pruvs-social-controls"><p>Your people, at a glance. Continue splitting using the item list below.</p><button className="secondary" aria-pressed={showTable} aria-expanded={showTable} aria-controls="pruvs-round-table" onClick={() => setShowTable(open => !open)}><Users size={17} /> {showTable ? 'Hide Round Table' : 'Show Round Table'}</button></div>
+ <div id="pruvs-round-table" hidden={!showTable}>{showTable && <RoundTable participants={data.participants} myParticipantId={data.my_participant_id} expectedCount={data.expected_participants_count} currency={data.currency} status={data.status} />}</div>
+ {settled && <ClosedBillNotice canPay={!owner} />}
  <div className="stats"><Panel><span>{t("Your share")}</span><strong>{data.currency_reference && Number.isFinite(Number(mine?.reference_total)) ? money(mine.reference_total,data.currency_reference.target) : money(mine?.total, data.currency)}</strong><small>{t("Items")} {money(mine?.item_total, data.currency)} + tip {money(mine?.tip_share, data.currency)}</small></Panel><Panel><span>{t("Still to split")}</span><strong>{money(data.remaining_total, data.currency)}</strong><small>{t("Items remaining, excluding tip")}</small></Panel><Panel><span>{t("Bill total with tip")}</span><strong>{money(data.grand_total, data.currency)}</strong><small>{data.tip_mode === 'percent' ? data.tip_value + '% tip on each person’s items' : data.tip_mode === 'fixed' ? t("Fixed tip shared across participants") : t("No tip")}</small></Panel></div>
  <div className="two-column bill-layout"><Panel title={t("Pick what you enjoyed")}><p className="muted">{t("Your choices save automatically and update for everyone.")}</p>{data.items.map(item => {
           const own = item.assignments.filter(a => a.participant_id === data.my_participant_id).reduce((n, a) => n + a.quantity, 0),
