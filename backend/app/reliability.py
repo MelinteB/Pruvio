@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-RELEASE = "7.1.19"
+RELEASE = "7.1.20"
 
 def bounded_seconds(name: str, default: float, minimum: float, maximum: float) -> float:
     """Use safe runtime polling limits even with an invalid environment value."""
@@ -31,12 +31,8 @@ def require_postgres_if_enabled(url: str | None = None) -> None:
 
 
 def frontend_is_ready(frontend: Path) -> bool:
-    """Check that the served build has HTML and at least one referenced bundle."""
-    html = frontend / "index.html"
-    assets = frontend / "assets"
-    if not html.is_file() or not assets.is_dir():
-        return False
-    return any(assets.glob("*.js")) and any(assets.glob("*.css"))
+    """Validate current HTML references and release manifest, not stale stray bundles."""
+    return frontend_build_report(frontend)['status'] == 'ready'
 
 
 # v7.1.19: bounded synchronous OCR uploads to protect the web worker pool.
@@ -77,3 +73,85 @@ class OCRCapacity:
 
 
 ocr_capacity = OCRCapacity(bounded_integer('PRUVS_OCR_MAX_INFLIGHT', 2, 1, 8))
+
+
+# v7.1.20 - Reliable production build identification and readiness.
+# Use only metadata and file paths; never expose server environment or database URLs.
+import hashlib
+import json
+import re
+
+_ASSET_PATTERN = re.compile(r'["\'](/assets/[A-Za-z0-9_./-]+\.(?:js|css))["\']')
+
+
+def frontend_build_report(frontend: Path, expected: str | None = None, verify_hashes: bool = False) -> dict:
+    """Return a public-safe report of version/assets with concrete failure reasons.
+
+    Normal readiness checks are lightweight (HTML+manifest+file existence only).
+    The CLI can request full checksums; hashing JS/CSS on every /ready is avoided.
+    """
+    expected = expected or RELEASE
+    problems = []
+    html_path = frontend / 'index.html'
+    manifest_path = frontend / 'build-manifest.json'
+    html = ''
+    manifest = {}
+    try:
+        html = html_path.read_text(encoding='utf-8')
+    except (OSError, UnicodeError):
+        problems.append('missing_index')
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+        if not isinstance(manifest, dict):
+            raise ValueError('Invalid manifest')
+    except (OSError, ValueError, UnicodeError):
+        problems.append('missing_or_invalid_manifest')
+        manifest = {}
+    build_version = manifest.get('version')
+    if build_version != expected:
+        problems.append('version_mismatch')
+    refs = sorted(set(_ASSET_PATTERN.findall(html)))
+    if not refs or not any(p.endswith('.js') for p in refs) or not any(p.endswith('.css') for p in refs):
+        problems.append('missing_asset_references')
+    manifest_assets = manifest.get('assets')
+    if not isinstance(manifest_assets, dict):
+        problems.append('invalid_asset_manifest')
+        manifest_assets = {}
+    for ref in refs:
+        # HTML provides public URLs; never resolve arbitrary/supplied path segments.
+        if '..' in Path(ref).parts:
+            problems.append('unsafe_asset_path')
+            continue
+        asset = frontend / ref.lstrip('/')
+        if not asset.is_file():
+            problems.append('missing_asset')
+            continue
+        key = 'dist' + ref
+        advertised = manifest_assets.get(key)
+        if not isinstance(advertised, str) or not re.fullmatch(r'[0-9a-f]{64}', advertised):
+            problems.append('asset_not_stamped')
+            continue
+        if verify_hashes and hashlib.sha256(asset.read_bytes()).hexdigest() != advertised:
+            problems.append('asset_hash_mismatch')
+    # Fingerprint the referenced assets and expected version, not timestamps/paths.
+    fingerprint = hashlib.sha256(json.dumps({
+        'version': build_version,
+        'assets': {ref: manifest_assets.get('dist' + ref) for ref in refs},
+    }, sort_keys=True).encode('utf-8')).hexdigest()[:16] if refs else None
+    return {
+        'status': 'ready' if not problems else 'mismatch',
+        'version': expected,
+        'build_version': build_version,
+        'build_id': fingerprint,
+        'assets': refs,
+        'checks': sorted(set(problems)),
+    }
+
+
+def require_build_match_if_enabled(frontend: Path) -> None:
+    """Optional fail-fast guard. Run only after npm run build on Render."""
+    if os.getenv('PRUVS_REQUIRE_BUILD_MATCH', '').strip().lower() not in ('1', 'true', 'yes'):
+        return
+    report = frontend_build_report(frontend, verify_hashes=True)
+    if report['status'] != 'ready':
+        raise RuntimeError('Pruvs frontend build does not match backend release: ' + ', '.join(report['checks']))

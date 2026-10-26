@@ -1,0 +1,6 @@
+.pruvs-release-banner{display:flex;align-items:center;gap:12px;margin:0 0 14px;padding:11px 14px;border:1px solid #bdd8fa;background:#f1f7ff;color:#0b2454;border-radius:12px;font-size:.9rem;box-shadow:0 2px 8px rgba(16,60,110,.04)}
+.pruvs-release-banner span{flex:1}
+.pruvs-release-banner button{border:0;border-radius:9px;background:#1364e7;color:white;padding:7px 12px;font:inherit;font-weight:600;cursor:pointer}
+.pruvs-release-banner button.release-dismiss{background:transparent;color:#26415e;font-size:1.15rem;padding:2px 6px}
+.pruvs-release-banner button:focus-visible{outline:3px solid #70b1ff;outline-offset:2px}
+@media(max-width:480px){.pruvs-release-banner{gap:8px;flex-wrap:wrap}}

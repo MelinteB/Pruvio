@@ -1,5 +1,7 @@
 """Run with: python -m unittest discover -s tests -p test_production_foundation_v7_1_17.py"""
 import os
+import json
+import hashlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,7 +10,7 @@ from app.reliability import RELEASE, bounded_seconds, frontend_is_ready, require
 
 class ProductionFoundationTests(unittest.TestCase):
     def test_release(self):
-        self.assertEqual(RELEASE, '7.1.19')
+        self.assertEqual(RELEASE, '7.1.20')
 
     def test_live_interval_bounds(self):
         with patch.dict(os.environ, {'PRUVS_LIVE_ACTIVE_SECONDS': '0.1'}):
@@ -36,6 +38,16 @@ class ProductionFoundationTests(unittest.TestCase):
             (assets / 'app.js').write_text('')
             self.assertFalse(frontend_is_ready(directory))
             (assets / 'app.css').write_text('')
+            self.assertFalse(frontend_is_ready(directory))
+            (directory / 'index.html').write_text('<script src="/assets/app.js"></script><link href="/assets/app.css">')
+            manifests = {
+                'version': '7.1.20',
+                'assets': {
+                    'dist/assets/app.js': hashlib.sha256(b'').hexdigest(),
+                    'dist/assets/app.css': hashlib.sha256(b'').hexdigest(),
+                },
+            }
+            (directory / 'build-manifest.json').write_text(json.dumps(manifests))
             self.assertTrue(frontend_is_ready(directory))
 
 if __name__ == '__main__':

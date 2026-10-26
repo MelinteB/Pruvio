@@ -1,5 +1,5 @@
 {
-  "version": "7.1.19",
+  "version": "7.1.20",
   "source": {
     "src/Account.jsx": "c114d8480b5764d6576d317ffd76277790508e16422aab69478d9034fb861ee7",
     "src/Admin.jsx": "27bdf28fab66fc0022df99ba2fbf2fbda88eb6c273108002b92a41ac5617bdcb",
@@ -16,16 +16,18 @@
     "src/Inbox.jsx": "2a869dcfbbbfc1acf0a514f5e9b991bd37b0b577b65e328d74be12100cf3fe61",
     "src/lightweight-ui.css": "9c4a14b60e07807ddd2616bf4629eea2cf6a2fc99342bbd0435adbb09413aa64",
     "src/localReceipts.js": "ec28c8a8171a4876f16565620e5b932479037166b9f4df4419d25f260dc092c4",
-    "src/main.jsx": "e42744e4a71d9dd5d5e7328acaacb6ae9dd80cc0842f3a50944c658f691bf68c",
+    "src/main.jsx": "532917201e38268903642afc11cc1a65d4900ce7d2470f593e06eaaaa94fc9fe",
     "src/Membership.jsx": "55d8eca04e3bf1905756e56da304498e1a9f5bc7e9a2d09440f12e5f7baa7216",
     "src/Notifications.jsx": "5ae7fcd3de2adf5a254992ce6f6e9ab004fbf03a951b1d467281be664187810c",
     "src/PaymentProfiles.jsx": "ddf074a5240f41e1c6f3b74243ee657940a1e9aa31d260e0759576b611f4b2ad",
     "src/professional/BrandExperience.jsx": "8f5841a66891af842692544ea595852953fc529674ea6635121806d5d5675af2",
     "src/professional/CorePages.jsx": "29ff516670ec9d102bcc3fab4a5fee0a3980fcdee74d5fa9d6af71c818791695",
     "src/professional/CorePages.jsx.before_restore.bak": "29ff516670ec9d102bcc3fab4a5fee0a3980fcdee74d5fa9d6af71c818791695",
+    "src/professional/ReleaseUpdateBanner.jsx": "47c7641c6c054598bdc0e500928fd857b5dcfe96e14f2e449cdc7250dda2b8ef",
     "src/professional/RoundTable.jsx": "934e969e760909d9eff3f8d3515d707b8e8240bad958965d6e7753ba5caeb952",
     "src/professional-ui.css": "b60a4e22b359d66821a838663d25db57ca4f3835071119b28730dd881081f697",
     "src/Receipts.jsx": "8e0865e370415a64f58986c8103dcfa16d66117f08ccdea8caccc34eb7844385",
+    "src/release-update.css": "11109e4edd09a550310e97babc6b90867eb4ad357e5ba0a246089f40e6aea35d",
     "src/style.css": "6d47853c1c0f1c90afc1664847cfd732c991a36e6153d8fa09c1e004b41d4b49",
     "src/TripProfiles.jsx": "2ad417b13dac8740134dda9fc36b7d5bf0b24cddd481ea5b0cc437d85a4b8117",
     "src/ui-refresh.css": "1e81fd14eecc9e51513ee5f068b72a6c0903e50744ce41f5c3e1567ea3ccc0bb",
@@ -33,22 +35,22 @@
     "vite.config.js": "23391e83cf79211d11ce62897d5548e6ea6fb7bce8f50d0ea327daa9ae3b9ab3",
     "package.json": "b3dcac3685a9eea1af1d0a3c92f8baa2baec4070436d6915933ce134ce8e478e",
     "package-lock.json": "dea7fec23f7d3d2676f56fa0aaf35f9a512611fc76ba1e6164c9410d338964eb",
-    "scripts/stamp-build.mjs": "20545ca12afcd775386052d7ec7f010762f515108ed9777894e864e376bcce14"
+    "scripts/stamp-build.mjs": "7352833d0e1394e4c207d18a803285e39fe2537418b2d6fa0be43aae6ae0babb"
   },
   "assets": {
-    "dist/assets/Account-Cwi3Ppwk.js": "da792111c74deb62050824203a532e16a770fe70974e0d20c73611ea06211079",
+    "dist/assets/Account-CkKxrzOQ.js": "cf1863ae8f4ec947690cd4812996e8749d806306c915b332c66d6ccaffad8707",
     "dist/assets/Admin-BPMiM-oo.js": "dbe5297f728a42506a8f019389226d0173aa87214346040d407b7ba572a696c5",
     "dist/assets/api-C7S9Kxyl.js": "96072f159ff5de3f4cf3799598897e5a5c3317595559d973e4e1615a97199e42",
-    "dist/assets/Auth-DHOcNkwf.js": "038c72bde2f97de481db0d54ad50bad751bee9e6b6a9397194377bd6c6e0bc8a",
-    "dist/assets/Bill-BTp0d633.js": "756a41704eb112f85bd8f91f0b05401c9266f0aa74d4f886f2f1a56d90b09686",
-    "dist/assets/Expenses-C4BbB6L3.js": "869ae18a704013b09f9b7bbc60a9e294078c0343f37e6cb2d6c7fd99fbdb3838",
+    "dist/assets/Auth-DWKvdtgo.js": "4e3ffbf6a7545598cb46212b71ad0f687c8aa0a79c8f9be0317c5f2863771daf",
+    "dist/assets/Bill-Jzf4HfX9.js": "a0c46b1d01dd24bdadc8ed9cfcdde1ea9df43d185c5d16a23e87af36e0a95d68",
+    "dist/assets/Expenses-CGgd4IcM.js": "5b42f31a5b4baf6f9a05921e1fe2c24867c9d44ee5adad35feb24d58bc85f70c",
     "dist/assets/fingerprint-pattern-BAKi0e2q.js": "14b719b4f8656f11008607742a5768fbfcab1a3c9a6908a3a20095d0fc97f59f",
-    "dist/assets/Inbox-Bwhb5_Dp.js": "8192f54cf9fb161cfe93244ce22a9e980ffcd522a09d982ae3f2c2a3372e40db",
-    "dist/assets/index-D5ZPA-iw.js": "166faa81bb04c959c5c0b53a9ad59f9ad9fb6e0a9faa388677d232ed9c68c5bb",
-    "dist/assets/index-qH-MhM2z.css": "22333cacc48103fbe82271c3128eb7e3282a01f2a51da88b869b9267333dcb03",
-    "dist/assets/Notifications-zkUXkAKi.js": "6cf9c38798751107d0a939088cc8b370d23d9d3b4d4b58dce8d6317cd320758c",
-    "dist/assets/Receipts-DBvjzto5.js": "daeae10fa88fd7f118885fa55b6c7b90bcf4deab49404f27fd8b1eaa297d5be4",
-    "dist/assets/TripProfiles-Dry_5WAS.js": "0c9fea2300dba9d93880a6e86feb4cb3d03245d6529266306999dde86e47eb08",
-    "dist/index.html": "cb7f39f7a721295da80d18bec48435c0406c3edc12038570af68b445c452ed3d"
+    "dist/assets/Inbox-BgcAJvdl.js": "90cc7cd5d739ac3d8f97ad78b3cdd8d916f2d65a5b60fe87a574c50a5415e02c",
+    "dist/assets/index-Brss1i3c.css": "8514c954cdd72660b879af128ecfdc393bc9aa2d428f990db01700c7337edb5f",
+    "dist/assets/index-DqC5rPkh.js": "5e4d5c2254472c1ce8ec91e95a32015c42b2e2bdf80231e5f0b9274fa9f57554",
+    "dist/assets/Notifications-DuE_vx3-.js": "e61eeeb1f265977b23801bcbccfefaf4eb71c4be3e94f36e394434744a2f776f",
+    "dist/assets/Receipts-D3wjdMxV.js": "3e075f9013d9b639febf13a0c27a59e9373e443b08268c506053ed98c2c437a4",
+    "dist/assets/TripProfiles-C89PTPSx.js": "daaa531c4b49951d5dddd738c4fa2842f689fb7b64eaffc35695e1e67140bcac",
+    "dist/index.html": "e68baf928e4168e8c24fbe29896edf2aa48ae40c907650bd4d9689ff0431ab75"
   }
 }

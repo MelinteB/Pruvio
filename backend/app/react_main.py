@@ -33,7 +33,7 @@ from app.react_app.expenses import router as expense_router
 from app.react_app.history_manage import router as history_manage_router
 from datetime import datetime
 from sqlalchemy import text as sql_text
-from app.reliability import RELEASE, bounded_seconds, require_postgres_if_enabled, frontend_is_ready
+from app.reliability import RELEASE, bounded_seconds, require_postgres_if_enabled, frontend_is_ready, frontend_build_report, require_build_match_if_enabled
 from app.models.push_notification import PushGrant,PushDevice
 from app.web_domain import canonical_browser_redirect,_PAGES,_PAGE_PATTERNS
 _PAGES.update({"/login","/reset","/password-reset","/notifications","/inbox","/account/notifications","/account/companies","/admin","/admin/manage-users"})
@@ -45,6 +45,7 @@ async def lifespan(app):
     require_postgres_if_enabled()
     Base.metadata.create_all(bind=engine);ensure_compatibility_schema()
     if not (FRONTEND/'index.html').is_file():raise RuntimeError('React build missing. Run npm ci and npm run build in backend/frontend.')
+    require_build_match_if_enabled(FRONTEND)
     # Retire legacy browser grants and expired sessions before serving React.
     with SessionLocal() as db:
         valid=db.query(ReactSession.token_hash).filter(ReactSession.expires_at>datetime.utcnow())
@@ -82,6 +83,7 @@ async def headers(request,call_next):
         if origin and not origin_allowed(origin):return JSONResponse({'detail':'Origin is not allowed.'},403)
     response=await call_next(request)
     response.headers['X-Content-Type-Options']='nosniff'
+    response.headers['X-Pruvs-Release']=RELEASE
     response.headers['Referrer-Policy']='same-origin'
     response.headers['X-Frame-Options']='DENY'
     if not path.startswith(('/assets/','/static/')):response.headers['Cache-Control']='no-store'
@@ -115,6 +117,14 @@ def readiness():
         return JSONResponse({'status': 'unavailable', 'version': RELEASE}, status_code=503,
                             headers={'Cache-Control': 'no-store'})
     return {'status': 'ready', 'version': RELEASE}
+
+
+@app.get('/api/v1/release', include_in_schema=False)
+def release_info():
+    """Public, read-only deploy fingerprint (no tokens, users or env vars)."""
+    report = frontend_build_report(FRONTEND)
+    return JSONResponse(report, status_code=200 if report['status'] == 'ready' else 503,
+                        headers={'Cache-Control': 'no-store'})
 
 
 @app.get('/service-worker.js',include_in_schema=False)
