@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BriefcaseBusiness, ReceiptText, ScanLine, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowRight, BriefcaseBusiness, ReceiptText, ScanLine, ShieldCheck, Sparkles, Users } from 'lucide-react';
 
 const MESSAGES = Object.freeze([
   'Good moments. Fair shares.',
@@ -25,22 +25,17 @@ export function BrandPhrase({ route = '/' }) {
 }
 
 export function HomeWelcome({ user }) {
-  const firstName = (user?.name || user?.username || '').trim().split(/\s+/)[0] || 'there';
-  return <section className="pruvs-welcome" aria-label="Pruvs quick actions">
-    <div className="pruvs-welcome-text">
-      <span className="pruvs-welcome-label"><Sparkles size={15} aria-hidden="true" /> YOUR PRUVS SPACE</span>
-      <h2>Good to see you, {firstName}.</h2>
-      <p>Scan a receipt, share the bill, and keep your moments organized.</p>
-      <div className="pruvs-welcome-actions">
-        <Link className="primary" to="/upload"><ScanLine size={17} /> Scan a receipt <ArrowRight size={16} /></Link>
-        <Link className="secondary" to="/history"><ReceiptText size={17} /> Open history</Link>
-        <Link className="secondary" to="/expenses"><BriefcaseBusiness size={17} /> Expenses</Link>
-      </div>
-    </div>
-    <div className="pruvs-welcome-aside" aria-hidden="true">
-      <img src="/static/pruvs-mark.png" alt="" />
-      <div><ShieldCheck size={16} /> Clear shares. No awkwardness.</div>
-    </div>
+  const firstName=(user?.name||user?.username||'').trim().split(/\s+/)[0]||'there';
+  const shortcuts=[
+    ['/upload','Scan receipt',ScanLine,'Start with a photo','core-shortcut-primary'],
+    ['/join','Join bill',Users,'Enter an invite link',''],
+    ['/bills','My bills',ReceiptText,'Open shared bills',''],
+    ['/expenses','Expenses',BriefcaseBusiness,'Organize your reports',''],
+  ];
+  return <section className="core-home-dashboard" aria-label="Pruvs Home">
+    <div className="core-home-hero"><div className="core-home-hero-copy"><span className="core-overline"><Sparkles size={15}/> YOUR PRUVS SPACE</span><h2>Good moments.<br/><span>Fair shares.</span></h2><p>Ready for another moment, {firstName}? Keep every receipt, friend and share in one place.</p><Link className="primary core-hero-cta" to="/upload"><ScanLine size={18}/> Scan a receipt <ArrowRight size={17}/></Link></div><div className="core-home-hero-art" aria-hidden="true"><span className="core-art-halo"><img src="/static/pruvs-mark.png" alt=""/></span><div className="core-art-note">Clear shares. Better moments.</div></div></div>
+    <div className="core-shortcut-heading"><h2>What would you like to do?</h2><span>Your everyday shortcuts</span></div>
+    <div className="core-home-shortcuts">{shortcuts.map(([to,label,Icon,detail,cls])=><Link key={to} className={'core-shortcut '+cls} to={to}><span className="core-shortcut-icon"><Icon size={24}/></span><strong>{label}</strong><small>{detail}</small><ArrowRight className="core-shortcut-arrow" size={17}/></Link>)}</div>
   </section>;
 }
 
