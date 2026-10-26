@@ -1,24 +1,38 @@
 import { t, setLanguage } from "./i18n";
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route, NavLink, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Home, ScanLine, ReceiptText, UserRound, Bell, ShieldCheck, HelpCircle, BriefcaseBusiness, Users, Plus, Menu } from 'lucide-react';
 import { Context, Spinner, Message, useLoad, useApp, Title, Panel } from './common';
 import { request, send, setIdentity } from './api';
-import Auth from './Auth';
-import { History, Upload, Receipt } from './Receipts';
-import Bill, { Join } from './Bill';
-import Account,{CompanySettings} from './Account';
-import Notifications, { NotificationOpen } from './Notifications';
-import Admin from './Admin';
-import Inbox from './Inbox';
-import { Expenses, ExpenseNew, ExpenseView } from './Expenses';
+// Large routes load on demand. Each exported view retains its original API behavior.
+const Auth = lazy(() => import('./Auth'));
+const receiptRoute = () => import('./Receipts');
+const History = lazy(() => receiptRoute().then(m => ({ default: m.History })));
+const Upload = lazy(() => receiptRoute().then(m => ({ default: m.Upload })));
+const Receipt = lazy(() => receiptRoute().then(m => ({ default: m.Receipt })));
+const billRoute = () => import('./Bill');
+const Bill = lazy(() => billRoute().then(m => ({ default: m.default })));
+const Join = lazy(() => billRoute().then(m => ({ default: m.Join })));
+const accountRoute = () => import('./Account');
+const Account = lazy(() => accountRoute().then(m => ({ default: m.default })));
+const CompanySettings = lazy(() => accountRoute().then(m => ({ default: m.CompanySettings })));
+const noticeRoute = () => import('./Notifications');
+const Notifications = lazy(() => noticeRoute().then(m => ({ default: m.default })));
+const NotificationOpen = lazy(() => noticeRoute().then(m => ({ default: m.NotificationOpen })));
+const Admin = lazy(() => import('./Admin'));
+const Inbox = lazy(() => import('./Inbox'));
+const expenseRoute = () => import('./Expenses');
+const Expenses = lazy(() => expenseRoute().then(m => ({ default: m.Expenses })));
+const ExpenseNew = lazy(() => expenseRoute().then(m => ({ default: m.ExpenseNew })));
+const ExpenseView = lazy(() => expenseRoute().then(m => ({ default: m.ExpenseView })));
 import './style.css';
 import './ui-refresh.css';
 import './professional-ui.css';
 import { BrandPhrase } from './professional/BrandExperience';
 import { Welcome, JoinByLink } from './professional/CorePages';
 import './core-experience.css';
+import './lightweight-ui.css';
 function Guard({
   children,
   admin = false
@@ -90,7 +104,7 @@ function App() {
   useEffect(() => {
     refresh().catch(() => {});
     request('/config').then(setConfig).catch(() => {});
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js?v=7.1.17', {
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js?v=7.1.18', {
       scope: '/'
     }).catch(() => {});
     const focus = () => refresh().catch(() => {});
@@ -171,12 +185,12 @@ function App() {
     membership,
     refreshMembership,
     logout
-  }}><div className={user ? 'app with-sidebar pruvs-professional core-experience' : 'app pruvs-professional core-experience'}><a className="skip-link" href="#main-content">{t('Skip to content')}</a><header className="topbar"><div className="brand-membership"><Link to="/" className="brand"><img src="/static/pruvs-logo.png" alt="Pruvs" /></Link><BrandPhrase route={location.pathname} />{user && <Link to="/account#membership" className={"membership-plan-badge plan-" + (membership?.plan || "pending")} title="View membership and Pruvs Credits" aria-label={membership?.plan ? "Subscription: " + membership.plan.toUpperCase() : "Subscription loading"}>{membership?.plan ? membership.plan.toUpperCase() : "…"}</Link>}</div><div className="row"><Link to="/support" className="help-link"><HelpCircle size={19} /><span>{t("Help")}</span></Link>{user ? <Link to="/account" className="avatar" title={user.name}>{(user.name || user.username || 'P').slice(0, 1).toUpperCase()}</Link> : <Link className="secondary small" to="/login">{t("Sign in")}</Link>}</div></header>
- {user && <aside className="sidebar"><div className="eyebrow">{t("YOUR SPACE")}</div>{nav.map(([url, label, Icon]) => <NavLink key={url} to={url} end={url === '/' || url === '/admin' || url === '/expenses'}><Icon size={20} /><span>{label}</span>{url === '/inbox' && unreadCount > 0 && <span className="inbox-unread-count" aria-label={`${unreadCount} ${t('unread')}`}>{unreadCount > 99 ? '99+' : unreadCount}</span>}</NavLink>)}<div className="sidebar-bottom"><p>{t("Shared fairly.")} <br /> {t("Remembered simply.")}</p><small>Pruvs · Core Experience 7.1.17</small></div></aside>}
- <main id="main-content" className="content" tabIndex="-1"><ErrorBoundary key={(user?.id || "guest") + ":" + location.pathname}><Routes>
+  }}><div className={user ? 'app with-sidebar pruvs-professional core-experience' : 'app pruvs-professional core-experience'}><a className="skip-link" href="#main-content">{t('Skip to content')}</a><header className="topbar"><div className="brand-membership"><Link to="/" className="brand"><picture><source type="image/webp" srcSet="/static/pruvs-logo-compact.webp"/><img src="/static/pruvs-logo.png" alt="Pruvs" width="146" height="53" decoding="async" /></picture></Link><BrandPhrase route={location.pathname} />{user && <Link to="/account#membership" className={"membership-plan-badge plan-" + (membership?.plan || "pending")} title="View membership and Pruvs Credits" aria-label={membership?.plan ? "Subscription: " + membership.plan.toUpperCase() : "Subscription loading"}>{membership?.plan ? membership.plan.toUpperCase() : "…"}</Link>}</div><div className="row"><Link to="/support" className="help-link"><HelpCircle size={19} /><span>{t("Help")}</span></Link>{user ? <Link to="/account" className="avatar" title={user.name}>{(user.name || user.username || 'P').slice(0, 1).toUpperCase()}</Link> : <Link className="secondary small" to="/login">{t("Sign in")}</Link>}</div></header>
+ {user && <aside className="sidebar"><div className="eyebrow">{t("YOUR SPACE")}</div>{nav.map(([url, label, Icon]) => <NavLink key={url} to={url} end={url === '/' || url === '/admin' || url === '/expenses'}><Icon size={20} /><span>{label}</span>{url === '/inbox' && unreadCount > 0 && <span className="inbox-unread-count" aria-label={`${unreadCount} ${t('unread')}`}>{unreadCount > 99 ? '99+' : unreadCount}</span>}</NavLink>)}<div className="sidebar-bottom"><p>{t("Shared fairly.")} <br /> {t("Remembered simply.")}</p><small>Pruvs · Core Experience 7.1.18</small></div></aside>}
+ <main id="main-content" className="content" tabIndex="-1"><ErrorBoundary key={(user?.id || "guest") + ":" + location.pathname}><Suspense fallback={<div className="core-route-loading" role="status" aria-live="polite"><Spinner /></div>}><Routes>
  <Route path="/login" element={user ? <Navigate to="/" /> : <Auth key="login" />} /><Route path="/register" element={user ? <Navigate to="/" /> : <Auth key="register" mode="register" />} /><Route path="/reset" element={<Auth key="reset" mode="reset" />} /><Route path="/reset-password" element={<Navigate to="/reset" />} /><Route path="/password-reset" element={<Navigate to="/reset" />} />
  <Route path="/" element={user ? <Guard><History home /></Guard> : <Welcome />} /><Route path="/join" element={<Guard><JoinByLink /></Guard>} /><Route path="/bills" element={<Guard><History billsOnly /></Guard>} /><Route path="/history" element={<Guard><History /></Guard>} /><Route path="/expenses" element={<Guard><Expenses /></Guard>} /><Route path="/expenses/new" element={<Guard><ExpenseNew /></Guard>} /><Route path="/expenses/:id" element={<Guard><ExpenseView /></Guard>} /><Route path="/upload" element={<Guard><Upload /></Guard>} /><Route path="/receipt/:id" element={<Guard><Receipt /></Guard>} /><Route path="/bill/:token" element={<Guard><Bill /></Guard>} /><Route path="/join/:token" element={<Guard><Join /></Guard>} /><Route path="/account" element={<Guard><Account /></Guard>} /><Route path="/account/companies" element={<Guard><CompanySettings /></Guard>} /><Route path="/inbox" element={<Guard><Inbox /></Guard>} /><Route path="/account/notifications" element={<Guard><Navigate to="/account#preferences" replace /></Guard>} /><Route path="/notifications" element={<Guard>{location.search.includes('enrol=1') || location.hash.startsWith('#confirm=') ? <Notifications /> : <Navigate to="/account#preferences" replace />}</Guard>} /><Route path="/notifications/open/:id" element={<Guard><NotificationOpen /></Guard>} /><Route path="/admin/*" element={<Guard admin><Admin /></Guard>} /><Route path="/terms" element={<Legal kind="terms" />} /><Route path="/privacy" element={<Legal kind="privacy" />} /><Route path="/support" element={<Support />} /><Route path="*" element={<Panel><h1>{t("Page not found")}</h1><Link to="/">{t("Back to Pruvs")}</Link></Panel>} />
- </Routes></ErrorBoundary><footer><span>© Pruvs</span><Link to="/terms">{t("Terms")}</Link><Link to="/privacy">{t("Privacy")}</Link><Link to="/support">{t("Support")}</Link></footer></main>
+ </Routes></Suspense></ErrorBoundary><footer><span>© Pruvs</span><Link to="/terms">{t("Terms")}</Link><Link to="/privacy">{t("Privacy")}</Link><Link to="/support">{t("Support")}</Link></footer></main>
  {user && <nav className="mobile-nav core-mobile-nav" aria-label={t('Main navigation')}>{[['/', t('Home'), Home], ['/bills', t('Bills'), Users], ['/inbox', t('Inbox'), Bell], ['/history', t('History'), ReceiptText], ['/account', t('Profile'), UserRound]].map(([url, label, Icon]) => <NavLink to={url} key={url} end={url === '/'}><Icon size={21} /><span>{label}</span>{url === '/inbox' && unreadCount > 0 && <span className="inbox-unread-count" aria-label={`${unreadCount} ${t('unread')}`}>{unreadCount > 99 ? '99+' : unreadCount}</span>}</NavLink>)}<Link to="/upload" className="core-fab" aria-label={t('Scan a receipt')}><Plus size={24}/></Link></nav>}</div></Context.Provider>;
 }
 createRoot(document.getElementById('root')).render(<BrowserRouter><App /></BrowserRouter>);

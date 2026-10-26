@@ -27,14 +27,13 @@ export function BrandPhrase({ route = '/' }) {
 export function HomeWelcome({ user }) {
   const firstName=(user?.name||user?.username||'').trim().split(/\s+/)[0]||'there';
   const shortcuts=[
-    ['/upload','Scan receipt',ScanLine,'Start with a photo','core-shortcut-primary'],
-    ['/join','Join bill',Users,'Enter an invite link',''],
-    ['/bills','My bills',ReceiptText,'Open shared bills',''],
-    ['/expenses','Expenses',BriefcaseBusiness,'Organize your reports',''],
+    ['/join','Join a bill',Users,'Enter an invitation',''],
+    ['/bills','Shared bills',ReceiptText,'Open or settled',''],
+    ['/expenses','Expenses',BriefcaseBusiness,'View your reports',''],
   ];
   return <section className="core-home-dashboard" aria-label="Pruvs Home">
-    <div className="core-home-hero"><div className="core-home-hero-copy"><span className="core-overline"><Sparkles size={15}/> YOUR PRUVS SPACE</span><h2>Good moments.<br/><span>Fair shares.</span></h2><p>Ready for another moment, {firstName}? Keep every receipt, friend and share in one place.</p><Link className="primary core-hero-cta" to="/upload"><ScanLine size={18}/> Scan a receipt <ArrowRight size={17}/></Link></div><div className="core-home-hero-art" aria-hidden="true"><span className="core-art-halo"><img src="/static/pruvs-mark.png" alt=""/></span><div className="core-art-note">Clear shares. Better moments.</div></div></div>
-    <div className="core-shortcut-heading"><h2>What would you like to do?</h2><span>Your everyday shortcuts</span></div>
+    <div className="core-home-hero"><div className="core-home-hero-copy"><span className="core-overline">YOUR WORKSPACE</span><h2>Welcome back, <span>{firstName}.</span></h2><p>Scan a receipt or pick up where you left off.</p><Link className="primary core-hero-cta" to="/upload"><ScanLine size={18}/> Scan a receipt <ArrowRight size={17}/></Link></div><div className="core-home-hero-art" aria-hidden="true"><span className="core-art-halo"><picture><source type="image/webp" srcSet="/static/pruvs-mark-compact.webp"/><img src="/static/pruvs-mark.png" width="106" height="106" alt="" decoding="async"/></picture></span></div></div>
+    <div className="core-shortcut-heading"><h2>Quick access</h2></div>
     <div className="core-home-shortcuts">{shortcuts.map(([to,label,Icon,detail,cls])=><Link key={to} className={'core-shortcut '+cls} to={to}><span className="core-shortcut-icon"><Icon size={24}/></span><strong>{label}</strong><small>{detail}</small><ArrowRight className="core-shortcut-arrow" size={17}/></Link>)}</div>
   </section>;
 }

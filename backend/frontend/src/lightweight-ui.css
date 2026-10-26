@@ -1,0 +1,50 @@
+/* v7.1.18: smaller, calmer screens. Inherits Pruvs original branding. */
+.core-experience { --core-shadow: 0 3px 12px rgba(20,53,106,.045); }
+.core-experience .content { max-width: 1280px; }
+.core-experience .page-title { margin-bottom: 18px; }
+.core-experience .page-title h1 { font-size: clamp(23px,2.1vw,31px); }
+.core-experience .page-title .eyebrow { letter-spacing: .08em; font-size: 10px; }
+.core-experience .panel { border-radius: 16px; box-shadow: var(--core-shadow); }
+.core-experience .core-home-hero { min-height: 165px; padding: clamp(22px,2.5vw,32px); border-radius: 18px; box-shadow: none; background: linear-gradient(110deg,#12345e,#1158b2); }
+.core-experience .core-home-hero h2 { font-size: clamp(24px,2.6vw,34px); margin: 9px 0 9px; }
+.core-experience .core-home-hero p { margin-bottom: 14px; }
+.core-experience .core-home-hero-art { width: 125px; min-width: 90px; }
+.core-experience .core-art-halo { width: 116px; height: 116px; }
+.core-experience .core-art-halo img { width: 86px; height: 86px; }
+.core-experience .core-home-shortcuts { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+.core-experience .core-shortcut { min-height: 110px; padding: 16px; border-radius: 14px; transition: border-color .15s ease,background-color .15s ease; box-shadow: none; }
+.core-experience .core-shortcut:hover { transform: none; box-shadow: none; border-color: #b7d3f9; background: #f9fbff; }
+.core-experience .core-shortcut-icon { width: 36px; height: 36px; margin-bottom: 8px; }
+.core-experience .core-shortcut-icon svg { width: 19px; height: 19px; }
+.core-experience .core-shortcut-heading { margin: 21px 0 12px; }
+.core-experience .core-shortcut-heading h2, .core-experience .section-heading h2 { font-size: 17px; }
+.core-experience .core-summary-strip { display: flex; flex-wrap: wrap; margin: 12px 0 23px; gap: 0; border: 1px solid #e3ebf5; background: #fff; border-radius: 14px; overflow: hidden; }
+.core-experience .core-summary-strip > div { flex: 1 1 120px; padding: 12px 19px; display: flex; flex-direction: column; gap: 3px; }
+.core-experience .core-summary-strip > div + div { border-left: 1px solid #edf1f7; }
+.core-experience .core-summary-strip strong { color: #152d51; font-size: 21px; letter-spacing: -.03em; }
+.core-experience .core-summary-strip span { color: #687a93; font-size: 12px; }
+.core-experience .core-view-all { display: inline-flex; align-items: center; gap: 7px; color: #125ec5; font-size: 13px; font-weight: 700; padding: 11px 2px; }
+.core-experience .receipt-tree { gap: 10px; }
+.core-experience .receipt-branch { border-radius: 16px; }
+.core-experience .section-heading { margin-top: 23px; }
+.core-experience .core-route-loading { min-height: 220px; display: grid; place-items: center; }
+.core-experience .sidebar>a { padding: 12px 14px; }
+.core-experience :where(button,a,input,select,textarea):focus-visible { outline: 3px solid #92bdfc; outline-offset: 2px; }
+@media (max-width: 760px) {
+  .core-experience .core-home-hero { min-height: 0; padding: 20px; }
+  .core-experience .core-home-hero-art { display: none; }
+  .core-experience .core-home-shortcuts { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; }
+  .core-experience .core-shortcut { min-height: 100px; padding: 12px 10px; font-size: 12px; }
+  .core-experience .core-shortcut small { font-size: 10px; }
+  .core-experience .core-summary-strip > div { min-width: 0; flex: 1 1 33%; padding: 12px 9px; }
+  .core-experience .core-summary-strip strong { font-size: 19px; }
+  .core-experience .core-summary-strip span { font-size: 10px; }
+}
+@media (max-width: 410px) {
+  .core-experience .core-shortcut { padding: 11px 8px; }
+  .core-experience .core-shortcut strong { font-size: 11px; }
+  .core-experience .core-shortcut-arrow { display: none; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .core-experience .core-shortcut { transition: none; }
+}
