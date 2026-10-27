@@ -67,15 +67,15 @@ export function BillSummaryStrip({data,mine,currency}) {
   const joined=Number(data.joined_participants_count||0);
   const progress=count>0?Math.min(100,100*joined/count):0;
   return <section className="core-bill-hero" aria-label="Bill overview">
-    <div className="core-bill-summary"><span className="core-overline">SHARED BILL OVERVIEW</span><div className="core-bill-amounts"><div><small>Bill total with tip</small><strong>{money(data.grand_total,currency)}</strong></div><div><small>Your share</small><strong>{money(mine?.total,currency)}</strong></div></div><div className="core-bill-progress"><div className="core-progress-label"><span><Users size={15}/> {joined} of {count} participants joined</span><span>{data.status==='open'?'Open':'Closed'}</span></div><div className="core-progress-track"><div style={{width:progress+'%'}}/></div></div></div>
+    <div className="core-bill-summary"><span className="core-overline">SHARED BILL OVERVIEW</span><div className="core-bill-amounts"><div><small>Bill total with tip</small><strong>{money(data.grand_total,currency)}</strong></div><div><small>Your share</small><strong>{money(mine?.total,currency)}</strong></div><div><small>Still to split</small><strong>{money(data.remaining_total,currency)}</strong></div></div><div className="core-bill-progress"><div className="core-progress-label"><span><Users size={15}/> {joined} of {count} participants joined</span><span>{data.status==='open'?'Open':'Closed'}</span></div><div className="core-progress-track"><div style={{width:progress+'%'}}/></div></div></div>
     <div className="core-bill-people" aria-label="People in this bill">{(data.participants||[]).slice(0,6).map(person => <div key={person.participant_id} className="core-bill-member" title={person.display_name}><span>{String(person.display_name||'?').trim().split(/\s+/).slice(0,2).map(part=>part[0]).join('').toUpperCase()}</span><small>{person.participant_id===data.my_participant_id?'You':person.display_name}</small>{person.payment_status==='paid'&&<Check size={12}/>}</div>)}{joined>6&&<span className="core-bill-overflow">+{joined-6}</span>}</div>
   </section>;
 }
 
-/** Hash links are navigation only; server-side split state is unchanged. */
-export function BillFlowNav() {
-  const sections=[['core-bill-items','Select items',ClipboardList],['core-bill-people','People',Users],['core-bill-summary','Summary',FileText]];
-  return <nav className="core-bill-tabs" aria-label="Bill sections">{sections.map(([id,label,Icon])=><a href={'#'+id} key={id} onClick={e=>{const target=document.getElementById(id);if(target){e.preventDefault();target.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});}}}><Icon size={16}/>{label}</a>)}</nav>;
+/** Separate views keep the existing bill actions and data; URL query allows direct links. */
+export function BillFlowNav({active='items',onChange=()=>{}}) {
+  const sections=[['items','Select items',ClipboardList],['people','People',Users],['summary','Summary',FileText]];
+  return <nav className="core-bill-tabs v22-bill-tabs" aria-label="Bill sections" role="tablist">{sections.map(([id,label,Icon])=><button type="button" role="tab" aria-selected={active===id} key={id} className={active===id?'is-active':''} onClick={()=>onChange(id)}><Icon size={16}/>{label}</button>)}</nav>;
 }
 
 export function ProfileHeader({ user }) {

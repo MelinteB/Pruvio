@@ -236,16 +236,17 @@ def delete_confirm(body:dict,response:Response,identity=Depends(current),db=Depe
     response.delete_cookie(COOKIE,path='/');response.delete_cookie(CSRF_COOKIE,path='/');return {'ok':True}
 
 @router.get('/history')
-def history(offset:int=Query(0,ge=0),view:str='active',identity=Depends(current),db=Depends(get_db)):
+def history(offset:int=Query(0,ge=0),view:str='active',split_status:str|None=None,identity=Depends(current),db=Depends(get_db)):
     from app.models.history_visibility import HistoryVisibility
     from app.react_app.receipt_labels import receipt_labels
     if view not in ('active','archived','removed'):raise ValueError('Unknown history view.')
+    if split_status not in (None,'open','settled'):raise ValueError('Unknown split status.')
     uid=identity[0].id
     states={(r.kind,r.source_id):r for r in db.query(HistoryVisibility).filter_by(user_id=uid).all()}
     def include(kind,source_id):return (states.get((kind,source_id)).state if (kind,source_id) in states else 'active')==view
     case_query=db.query(Case).filter_by(user_id=uid).order_by(Case.created_at.desc())
-    selected=[c for c in case_query.all() if include('receipt',c.id)]
-    visible_bills=[b for b in bills.list_split_bill_sessions_for_user(db,uid,None) if include('bill',b['session_id'])]
+    selected=[c for c in case_query.all() if include('receipt',c.id)] if not split_status else []
+    visible_bills=[b for b in bills.list_split_bill_sessions_for_user(db,uid,None) if include('bill',b['session_id']) and (not split_status or b['status']==split_status)]
     case_ids={c.id for c in selected}|{b['case_id'] for b in visible_bills}
     case_by_id={c.id:c for c in selected}
     missing=list(case_ids-set(case_by_id))
@@ -257,10 +258,12 @@ def history(offset:int=Query(0,ge=0),view:str='active',identity=Depends(current)
     page_ids=set(ordered[offset:offset+30])
     cases=[c for c in selected if c.id in page_ids]
     receipt_rows=[{**receipts.get_receipt_view(db,c.id,user_id=uid,ensure_translations=False),
-                   'history_note':states.get(('receipt',c.id)).note if ('receipt',c.id) in states else ''} for c in cases]
+                   'history_note':states.get(('receipt',c.id)).note if ('receipt',c.id) in states else '',
+                   'scan_date':c.created_at.isoformat() if c.created_at else None} for c in cases]
     names=receipt_labels(db,{b['case_id'] for b in visible_bills if b['case_id'] in page_ids})
     bill_rows=[{**b,'source_name':names[b['case_id']],
                 'source_owned':case_by_id[b['case_id']].user_id==uid,
+                'scan_date':case_by_id[b['case_id']].created_at.isoformat() if case_by_id[b['case_id']].created_at else None,
                 'history_note':states.get(('bill',b['session_id'])).note if ('bill',b['session_id']) in states else ''}
                for b in visible_bills if b['case_id'] in page_ids]
     return {'receipts':receipt_rows,'receipt_count':len(selected),'bills':bill_rows,

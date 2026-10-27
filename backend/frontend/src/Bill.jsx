@@ -1,8 +1,8 @@
 import { t } from "./i18n";
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { Users, Share2, Copy, Minus, Plus, Check, ExternalLink } from 'lucide-react';
+import { Users, Share2, Copy, Minus, Plus, Check, ExternalLink, MessageCircle } from 'lucide-react';
 import { request, send, money, copy } from './api';
 import { useApp, useLoad, Title, Panel, Field, Spinner, Message, Badge } from './common';
 import RoundTable, { ClosedBillNotice } from './professional/RoundTable';
@@ -44,7 +44,6 @@ export default function Bill() {
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState(''),
     [share, setShare] = useState(false),
-    [showTable, setShowTable] = useState(false),
     [tip, setTip] = useState({
       mode: 'none',
       value: 0
@@ -54,6 +53,10 @@ export default function Bill() {
     [fxProvider,setFxProvider]=useState('bnr'),[fxOpen,setFxOpen]=useState(false),
     [manualRate,setManualRate]=useState(''),[useManualRate,setUseManualRate]=useState(false),
     [fxPreview,setFxPreview]=useState(null),[fxError,setFxError]=useState(''),[paymentProfiles,setPaymentProfiles]=useState([]),[paymentProfileId,setPaymentProfileId]=useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requested = searchParams.get('view');
+  const section = ['items','people','summary'].includes(requested) ? requested : 'items';
+  const chooseSection = next => setSearchParams(current => {const params=new URLSearchParams(current);params.set('view',next);return params;});
   const saving = useRef(false);
   function openCurrency(){const current=data.currency_reference;setFxProvider(current?.provider||'bnr');setTargetCurrency(current?.target||'RON');setUseManualRate(!!current?.manual);setManualRate(current?.manual?current.rate:'');setFxPreview(null);setFxError('');setFxOpen(true)}
   async function previewCurrency(){setFxError('');try{const query=new URLSearchParams({base:data.currency,target:targetCurrency,amount:'1',provider:fxProvider,...(useManualRate?{manual_rate:manualRate}:{})});setFxPreview(await request('/fx/quote?'+query))}catch(e){setFxError(e.message)}}
@@ -176,16 +179,42 @@ export default function Bill() {
     payment = data.owner_payment_details, paymentLink = payment?.payment_link || payment?.revolut_payment_link, linkMethod = payment?.payment_link ? 'payment_link' : 'revolut';
   return <><Title eyebrow="A LITTLE LESS MATH" title={t('Split')+' · '+(data.source_name||t('Receipt'))} action={<button className="secondary" onClick={() => setShare(!share)}><Share2 size={17} /> {t("Share bill")}</button>}><span className={'live-dot ' + (live === t("Live") ? 'connected' : '')} />{live} · {data.joined_participants_count}/{data.expected_participants_count} {t("people ·")} <Badge>{data.status}</Badge></Title>{error && <Message error={error} />} {notice && <Message>{notice}</Message>}
  <BillSummaryStrip data={data} mine={mine} currency={data.currency} />
- <BillFlowNav />
+ <BillFlowNav active={section} onChange={chooseSection} />
  {share && <div id="core-bill-invite"><Panel title={t("Invite your people")}><div className="share-box"><QRCodeSVG value={link} size={150} /><div><p>{t("Participants sign in before joining.")}</p><input readOnly aria-label={t("Bill invitation link")} value={link} /><div className="row wrap"><button onClick={() => copied(link)}><Copy size={16} /> {t("Copy link")}</button>{navigator.share && <button onClick={() => navigator.share({
               title: 'Join my Pruvs bill',
               url: link
             }).catch(() => {})}>{t("Share…")}</button>}<a className="button" target="_blank" rel="noreferrer" href={'https://wa.me/?text=' + encodeURIComponent(link)}>WhatsApp</a><a className="button" href={'sms:?body=' + encodeURIComponent(link)}>SMS</a><a className="button" href={'mailto:?subject=Join%20my%20Pruvs%20bill&body=' + encodeURIComponent(link)}>{t("Email")}</a></div></div></div></Panel></div>}
- <div id="core-bill-people" className="pruvs-social-controls"><p>Your people, at a glance. Continue splitting using the item list below.</p><button className="secondary" aria-pressed={showTable} aria-expanded={showTable} aria-controls="pruvs-round-table" onClick={() => setShowTable(open => !open)}><Users size={17} /> {showTable ? 'Hide Round Table' : 'Show Round Table'}</button></div>
- <div id="pruvs-round-table" hidden={!showTable}>{showTable && <RoundTable participants={data.participants} myParticipantId={data.my_participant_id} expectedCount={data.expected_participants_count} currency={data.currency} status={data.status} />}</div>
- {settled && <ClosedBillNotice canPay={!owner} />}
- <div className="stats"><Panel><span>{t("Your share")}</span><strong>{data.currency_reference && Number.isFinite(Number(mine?.reference_total)) ? money(mine.reference_total,data.currency_reference.target) : money(mine?.total, data.currency)}</strong><small>{t("Items")} {money(mine?.item_total, data.currency)} + tip {money(mine?.tip_share, data.currency)}</small></Panel><Panel><span>{t("Still to split")}</span><strong>{money(data.remaining_total, data.currency)}</strong><small>{t("Items remaining, excluding tip")}</small></Panel><Panel><span>{t("Bill total with tip")}</span><strong>{money(data.grand_total, data.currency)}</strong><small>{data.tip_mode === 'percent' ? data.tip_value + '% tip on each person’s items' : data.tip_mode === 'fixed' ? t("Fixed tip shared across participants") : t("No tip")}</small></Panel></div>
- <div className="two-column bill-layout"><div id="core-bill-items"><Panel title={t("Pick what you enjoyed")}><p className="muted">{t("Your choices save automatically and update for everyone.")}</p>{data.items.map(item => {
+ {section==='people'&&<section id="core-bill-people" className="bill-workspace-people">
+   <Panel title="People at the table">
+     <p className="muted">Everyone can see their current share. Use WhatsApp or SMS to contact a participant; messages are sent outside Pruvs.</p>
+     <RoundTable participants={data.participants} myParticipantId={data.my_participant_id} expectedCount={data.expected_participants_count} currency={data.currency} status={data.status}/>
+     <div className="bill-message-list" aria-label="Contact participants">
+       {data.participants.filter(p=>p.participant_id!==data.my_participant_id).map(p=>{
+         const phone=String(p.phone_number||'').replace(/\D/g,'');
+         const message=`Hi ${p.display_name||'there'}, here's our Pruvs bill: ${link}`;
+         return <div key={p.participant_id} className="bill-contact-row">
+           <div className="grow"><strong>{p.display_name}</strong><small>{money(p.total,data.currency)} · {p.payment_status==='paid'?'Marked paid':'Payment not confirmed'}</small></div>
+           {phone?<a className="secondary" href={'https://wa.me/'+phone+'?text='+encodeURIComponent(message)} target="_blank" rel="noreferrer"><MessageCircle size={16}/> WhatsApp</a>:<button className="secondary" onClick={()=>copied(message)}><Copy size={16}/> Copy message</button>}
+           {phone&&<a className="secondary" href={'sms:'+phone+'?body='+encodeURIComponent(message)}>SMS</a>}
+           {owner&&p.user_id&&<button disabled={busy} onClick={()=>act('remind',{participant_id:p.participant_id})}>Send reminder</button>}
+         </div>;
+       })}
+     </div>
+     <button className="secondary" onClick={()=>setShare(open=>!open)}><Share2 size={16}/> Invite more people</button>
+   </Panel>
+ </section>}
+ {section==='summary'&&<section className="bill-workspace-summary" aria-label="Summary and payment confirmation">
+   {settled&&<ClosedBillNotice canPay={!owner}/>}
+   <Panel title="Payment confirmation status">
+     <p className="muted">Payment confirmations are reported by participants; Pruvs does not verify bank transfers or card payments.</p>
+     <div className="bill-payment-confirmations">{data.participants.map(p=><div key={p.participant_id} className="bill-confirmation-row">
+       <span className="grow"><strong>{p.display_name}{p.participant_id===data.my_participant_id?' (you)':''}</strong><small>{p.payment_status==='paid'?`Marked paid by ${p.display_name}${p.payment_method?' · '+p.payment_method.replaceAll('_',' '):''}`:'Awaiting participant confirmation'}</small></span>
+       <strong>{money(p.total,data.currency)}</strong><Badge>{p.payment_status==='paid'?'Paid (reported)':'Not confirmed'}</Badge>
+     </div>)}</div>
+   </Panel>
+   <div className="stats"><Panel><span>{t('Your share')}</span><strong>{data.currency_reference&&Number.isFinite(Number(mine?.reference_total))?money(mine.reference_total,data.currency_reference.target):money(mine?.total,data.currency)}</strong></Panel><Panel><span>Still to split</span><strong>{money(data.remaining_total,data.currency)}</strong></Panel><Panel><span>Bill total with tip</span><strong>{money(data.grand_total,data.currency)}</strong></Panel></div>
+ </section>}
+ <div className="two-column bill-layout v22-bill-layout">{section==='items'&&<div id="core-bill-items"><Panel title={t("Pick what you enjoyed")}><p className="muted">{t("Your choices save automatically and update for everyone.")}</p>{data.items.map(item => {
           const own = item.assignments.filter(a => a.participant_id === data.my_participant_id).reduce((n, a) => n + a.quantity, 0),
             max = own + item.remaining_quantity,
             unavailable = max <= .0001,
@@ -194,10 +223,8 @@ export default function Bill() {
                   const n = Number(e.target.value);
                   if (Number.isFinite(n) && n >= 0 && n <= max) select(item, n);
                 }} /><button aria-label={'Add ' + item.name} disabled={settled || busy || own >= max} onClick={() => select(item, Math.min(max, own + step))}><Plus size={15} /></button></div></div></div>;
-        })}</Panel></div>
- <div id="core-bill-summary"><Panel title={t("Everyone's share")}><div className="row between wrap"><small>{data.currency_reference?`${data.currency_reference.manual?t('Manual rate'):data.currency_reference.provider.toUpperCase()} · 1 ${data.currency} = ${data.currency_reference.rate} ${data.currency_reference.target}${data.currency_reference.date?' · '+data.currency_reference.date:''}`:t('No currency reference set yet.')}</small>{owner&&<button onClick={openCurrency}>{t('Currency setup')}</button>}</div>{data.currency_reference?.source_url&&<small><a href={data.currency_reference.source_url} target="_blank" rel="noreferrer">{t('Reference source')}</a></small>}{data.participants.map(p => <div className="participant" key={p.participant_id}><div className="row between"><div><strong>{p.display_name}{p.user_id === user.id ? ' · You' : ''}</strong><small>{p.role} · {p.payment_status} {p.payment_method ? '· ' + p.payment_method.replace('_', ' ') : ''}</small></div><strong>{data.currency_reference && Number.isFinite(Number(p.reference_total)) ? money(p.reference_total,data.currency_reference.target) : money(p.total, data.currency)}</strong></div>{data.currency_reference && <small>Original share (settled in {data.currency}): {money(p.total,data.currency)}</small>}<small>{t("Items")} {money(p.item_total, data.currency)} + tip {money(p.tip_share, data.currency)}</small>{owner && p.user_id !== user.id && <div className="row wrap"><button disabled={busy || !p.user_id} title={!p.user_id ? t("Participant must join to receive reminders.") : undefined} onClick={() => act('remind', {
-                participant_id: p.participant_id
-              })}>{t("Send reminder")}</button>{p.phone_number && <><a href={'https://wa.me/' + p.phone_number.replace(/\D/g, '') + '?text=' + encodeURIComponent('Your Pruvs bill: ' + link)} target="_blank" rel="noreferrer">WhatsApp</a><a href={'sms:' + p.phone_number + '?body=' + encodeURIComponent('Your Pruvs bill: ' + link)}>SMS</a></>}</div>}</div>)}</Panel>
+        })}</Panel></div>}
+ {section==='summary'&&<div id="core-bill-summary"><Panel title={t("Everyone's share")}><div className="row between wrap"><small>{data.currency_reference?`${data.currency_reference.manual?t('Manual rate'):data.currency_reference.provider.toUpperCase()} · 1 ${data.currency} = ${data.currency_reference.rate} ${data.currency_reference.target}${data.currency_reference.date?' · '+data.currency_reference.date:''}`:t('No currency reference set yet.')}</small>{owner&&<button onClick={openCurrency}>{t('Currency setup')}</button>}</div>{data.currency_reference?.source_url&&<small><a href={data.currency_reference.source_url} target="_blank" rel="noreferrer">{t('Reference source')}</a></small>}{data.participants.map(p => <div className="participant" key={p.participant_id}><div className="row between"><div><strong>{p.display_name}{p.user_id === user.id ? ' · You' : ''}</strong><small>{p.role} · {p.payment_status} {p.payment_method ? '· ' + p.payment_method.replace('_', ' ') : ''}</small></div><strong>{data.currency_reference && Number.isFinite(Number(p.reference_total)) ? money(p.reference_total,data.currency_reference.target) : money(p.total, data.currency)}</strong></div>{data.currency_reference && <small>Original share (settled in {data.currency}): {money(p.total,data.currency)}</small>}<small>{t("Items")} {money(p.item_total, data.currency)} + tip {money(p.tip_share, data.currency)}</small></div>)}</Panel>
  {owner && <div id="core-bill-settle"><Panel title={t("Owner controls")}>{!settled ? <><div className="form-grid"><Field label={t("Tip type")}><select value={tip.mode} onChange={e => setTip({
                   ...tip,
                   mode: e.target.value
@@ -219,5 +246,5 @@ export default function Bill() {
             })}>{mine.payment_status === 'paid' && mine.payment_method === 'bank_transfer' && <Check size={16} />}{t("I paid by bank transfer")}</button><button disabled={busy} aria-pressed={mine.payment_status === 'paid' && mine.payment_method === linkMethod} className={mine.payment_status === 'paid' && mine.payment_method === linkMethod ? 'paid-choice' : ''} onClick={() => act('payment', {
               method: linkMethod,
               paid: true
-            })}>{mine.payment_status === 'paid' && mine.payment_method === linkMethod && <Check size={16} />}{t(payment?.payment_link?'I paid via payment link':'I paid by Revolut')}</button></div></Panel>}</div></div></>;
+            })}>{mine.payment_status === 'paid' && mine.payment_method === linkMethod && <Check size={16} />}{t(payment?.payment_link?'I paid via payment link':'I paid by Revolut')}</button></div></Panel>}</div>}</div></>;
 }

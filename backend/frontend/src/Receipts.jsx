@@ -1,7 +1,7 @@
 import { t } from "./i18n";
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowUpRight, ScanLine, ReceiptText, Users, UploadCloud, RotateCw } from 'lucide-react';
+import { ArrowUpRight, ScanLine, ReceiptText, Users, UploadCloud, RotateCw, ChevronDown, CalendarDays } from 'lucide-react';
 import { request, send, uploadFile, money } from './api';
 import { useApp, useLoad, Title, Panel, Spinner, Message, Field, Badge, Empty } from './common';
 import CropEditor from './CropEditor';
@@ -14,42 +14,152 @@ export function groupHistory(data){
   for(const b of data?.bills||[]){if(!grouped.has(b.case_id))grouped.set(b.case_id,{receipt:null,bills:[]});grouped.get(b.case_id).bills.push(b)}
   return (data?.group_order||[...grouped.keys()]).map(id=>({id,...grouped.get(id)})).filter(g=>g.receipt||g.bills?.length);
 }
-export function History({
-  home = false, billsOnly = false
-}) {
-  const {
-    user
-  } = useApp();
-  const [offset, setOffset] = useState(0),
-    [filter, setFilter] = useState('all'),
-    [view, setView] = useState('active'),
-    [actionError, setActionError] = useState('');
-  const {
-    data, reload,
-    error,
-    loading
-  } = useLoad(() => request('/history?offset=' + offset + '&view=' + (home ? 'active' : view)), [offset, view]);
-  async function organize(kind,id,state,note){setActionError('');try{await send('/history/'+kind+'/'+id,{state,note},'PATCH');await reload()}catch(e){setActionError(e.message)}}
+/** Groups visible receipts by normalized merchant; each receipt retains its own split children. */
+export function groupMerchants(data) {
+  const groups=new Map();
+  for (const entry of groupHistory(data)) {
+    const receipt=entry.receipt;
+    const raw=receipt?.merchant_name && receipt.merchant_name!=='Receipt'
+      ? receipt.merchant_name : entry.bills?.[0]?.source_name || receipt?.original_filename || 'Receipt';
+    const name=String(raw||'Receipt').trim();
+    const key=name.replace(/\s+/g,' ').toLocaleLowerCase();
+    const date=receipt?.scan_date || receipt?.created_at || receipt?.date || entry.bills?.[0]?.scan_date || entry.bills?.[0]?.created_at || '';
+    const item={...entry,merchantName:name,date};
+    if (!groups.has(key)) groups.set(key,{key,name,receipts:[],date:''});
+    const group=groups.get(key);
+    group.receipts.push(item);
+    if (String(date)>String(group.date)) group.date=String(date);
+  }
+  return [...groups.values()].map(group=>({
+    ...group,receipts:group.receipts.sort((a,b)=>String(b.date).localeCompare(String(a.date)))
+  })).sort((a,b)=>String(b.date).localeCompare(String(a.date)) || a.name.localeCompare(b.name));
+}
+const historyDate=(date)=>{
+  if(!date)return 'Scan date unavailable';
+  const d=new Date(date);
+  return Number.isNaN(d.getTime())?'Scan date unavailable':new Intl.DateTimeFormat(undefined,{year:'numeric',month:'short',day:'numeric'}).format(d);
+};
+export function History({home=false,billsOnly=false}) {
+  const {user}=useApp();
+  const [offset,setOffset]=useState(0);
+  const [tab,setTab]=useState(billsOnly?'open':'receipts');
+  const [showRemoved,setShowRemoved]=useState(false);
+  const [actionError,setActionError]=useState('');
+  const historyView=tab==='archived'?(showRemoved?'removed':'archived'):'active';
+  const isSplitTab=tab==='open'||tab==='settled';
+  const {data,reload,error,loading}=useLoad(
+    ()=>request('/history?offset='+offset+'&view='+historyView+(isSplitTab?'&split_status='+tab:'')),[offset,historyView,tab]
+  );
+  const tabs=[['receipts','Receipts'],['open','Open'],['settled','Settled'],['archived','Archived']];
+  const onTab=(value)=>{setTab(value);setOffset(0);setShowRemoved(false)};
+  async function organize(kind,id,state,note){
+    setActionError('');
+    try{await send('/history/'+kind+'/'+id,{state,note},'PATCH');await reload()}
+    catch(e){setActionError(e.message)}
+  }
   async function eraseReceipt(id){
     if(!window.confirm('Permanently delete this receipt, its OCR data and its cloud copy (if applicable)? This cannot be undone.'))return;
     setActionError('');
     try{await request('/receipts/'+id,{method:'DELETE'});await deleteLocalReceipt(user.id,id).catch(()=>{});await reload()}
     catch(e){setActionError(e.message)}
   }
-  function controls(kind,id,note){return !home&&<div className="row wrap no-print"><button onClick={()=>{const answer=prompt(t('History note (optional)'),note||'');if(answer!==null)organize(kind,id,view,answer)}}>{t('Edit note')}</button>{view!=='active'&&<button onClick={()=>organize(kind,id,'active',note||'')}>{t('Restore')}</button>}{view!=='archived'&&<button onClick={()=>organize(kind,id,'archived',note||'')}>{t('Archive')}</button>}{view!=='removed'&&<button className="danger" onClick={()=>{if(confirm(t('Move this item to Removed? It remains available to other participants and in completed expense reports.')))organize(kind,id,'removed',note||'')}}>{t('Remove')}</button>}</div>}
-  const groups=groupHistory(data).filter(group => !billsOnly || group.bills?.length);
-  const receiptName=g=>g.receipt?.merchant_name&&g.receipt.merchant_name!=='Receipt'?g.receipt.merchant_name:g.receipt?.original_filename||g.bills?.[0]?.source_name||t('Receipt');
-  return <><Title eyebrow={home ? 'YOUR EVERYDAY, SIMPLIFIED' : 'ALL IN ONE PLACE'} title={home ? t("Overview") : billsOnly ? t('Your shared bills') : t("Your history")} action={home ? null : <Link className="primary" to="/upload"><ScanLine size={18} /> {t("Scan a receipt")}</Link>}>{home ? t("Good moments. Fair shares.") : billsOnly ? t('Open and settled shared bills, in one place.') : t("Receipts you saved and bills you joined.")}</Title>{home && <HomeWelcome user={user} />}{error && <Message error={error} />}{actionError&&<Message error={actionError}/>} {!home&&<div className="row wrap">{['active','archived','removed'].map(v=><button className={view===v?'primary':''} key={v} onClick={()=>{setOffset(0);setView(v)}}>{t(v==='active'?'Current':v==='archived'?'Archived':'Removed')}</button>)}</div>}{loading ? <Spinner /> : data && <>
- {home && <div className="core-summary-strip" aria-label="Your Pruvs activity"><div><strong>{data.receipt_count ?? 0}</strong><span>{t("Saved receipts")}</span></div><div><strong>{data.bill_counts?.open ?? 0}</strong><span>{t("Open bills")}</span></div><div><strong>{data.bill_counts?.settled ?? 0}</strong><span>{t("Settled bills")}</span></div></div>}
- <div className="section-heading"><h2>{billsOnly ? t('Shared bills') : home ? t('Recent activity') : t('Receipts and splits')}</h2><select aria-label={t('Split status')} value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">{t('All splits')}</option><option value="open">{t('Open')}</option><option value="settled">{t('Settled')}</option></select></div>
- <div className="receipt-tree">{(home ? groups.slice(0, 5) : groups).map(g=>{const name=receiptName(g),related=g.bills.filter(b=>filter==='all'||b.status===filter),owned=!!g.receipt||!!g.bills[0]?.source_owned;
-   if((billsOnly && !related.length) || (!g.receipt&&!related.length))return null;
-   return <section className="panel receipt-branch" key={g.id}><div className="list-row"><span className="icon-tile"><ReceiptText size={20}/></span><div className="grow"><strong>{owned?<Link to={'/receipt/'+g.id}>{name}</Link>:name}</strong><small>{g.receipt?(g.receipt.original_filename||t('Receipt'))+' · '+g.receipt.status.replaceAll('_',' '):t('Shared by the bill owner')}</small></div>{g.receipt&&<strong>{money(g.receipt.receipt_total,g.receipt.currency)}</strong>}</div>
-     {g.receipt?.history_note&&<small>{g.receipt.history_note}</small>}{g.receipt&&controls('receipt',g.id,g.receipt.history_note)}{g.receipt&&!home&&<button className="danger" onClick={()=>eraseReceipt(g.id)}>Delete permanently</button>}
-     {!!related.length&&<div className="receipt-children">{related.map(b=><div key={b.session_id} className="panel bill-card"><Link to={'/bill/'+b.token}><div className="row between"><span className="icon-tile"><Users size={18}/></span><Badge>{b.status}</Badge></div><h3>{t('Split')} · {name}</h3><span className="muted-context">{b.role==='owner'?t('You own this split'):t('You are a participant')}</span><div className="row between"><div><small>{t('Your share')}</small><strong>{money(b.my_total,b.currency)}</strong></div><ArrowUpRight size={18}/></div></Link>{b.history_note&&<small>{b.history_note}</small>}{controls('bill',b.session_id,b.history_note)}</div>)}</div>}
-   </section>})}</div>{!groups.length&&<Empty>{t('No receipts or splits in this view.')} {home && <Link to="/upload">{t('Scan your first receipt')}</Link>}</Empty>}{home && groups.length > 5 && <Link className="core-view-all" to="/history">{t('View all activity')} <ArrowUpRight size={16}/></Link>}
- {!home && <div className="row pager"><button disabled={!offset} onClick={() => setOffset(Math.max(0, offset - 30))}>{t("Previous")}</button><span>{data.group_count?offset+1:0}–{Math.min(offset + 30, data.group_count)} {t("of")} {data.group_count}</span><button disabled={offset + 30 >= data.group_count} onClick={() => setOffset(offset + 30)}>{t("Next")}</button></div>}
- </>}</>;
+  function controls(kind,id,note){
+    if(home)return null;
+    return <div className="row wrap no-print history-actions">
+      <button onClick={()=>{const answer=prompt(t('History note (optional)'),note||'');if(answer!==null)organize(kind,id,historyView,answer)}}>{t('Edit note')}</button>
+      {historyView!=='active'&&<button onClick={()=>organize(kind,id,'active',note||'')}>{t('Restore')}</button>}
+      {historyView!=='archived'&&<button onClick={()=>organize(kind,id,'archived',note||'')}>{t('Archive')}</button>}
+      {historyView!=='removed'&&<button className="danger" onClick={()=>{
+        if(confirm(t('Move this item to Removed? It remains available to other participants and in completed expense reports.')))
+          organize(kind,id,'removed',note||'');
+      }}>{t('Remove')}</button>}
+    </div>;
+  }
+  const merchants=groupMerchants(data).map(merchant=>({
+    ...merchant,receipts:merchant.receipts.map(entry=>({
+      ...entry,
+      bills:entry.bills.filter(b=>!isSplitTab||b.status===tab)
+    })).filter(entry=>{
+      if(home)return true;
+      if(isSplitTab)return entry.bills.length>0;
+      if(billsOnly && tab==='receipts')return true;
+      return entry.receipt||entry.bills.length;
+    })
+  })).filter(merchant=>merchant.receipts.length);
+  const visible=home?merchants.slice(0,5):merchants;
+  const label=home?'Recent receipts':isSplitTab?(tab==='open'?'Open shared bills':'Settled shared bills'):
+    tab==='archived'?(showRemoved?'Removed records':'Archived records'):'Receipts';
+  return <>
+    <Title eyebrow={home?'YOUR EVERYDAY, SIMPLIFIED':'YOUR BILL LIBRARY'}
+      title={home?t('Overview'):billsOnly?t('Your shared bills'):t('Your receipts and bills')}
+      action={home?null:<Link className="primary" to="/upload"><ScanLine size={18}/>{t('Scan a receipt')}</Link>}>
+      {home?t('Good moments. Fair shares.'):'Organized by merchant and scan date. Expand a receipt to see its splits.'}
+    </Title>
+    {home&&<HomeWelcome user={user}/>}
+    {error&&<Message error={error}/>}{actionError&&<Message error={actionError}/>}
+    {!home&&<nav className="receipt-status-tabs" aria-label="Receipt and bill views">
+      {tabs.map(([value,title])=><button key={value} type="button" className={tab===value?'is-active':''}
+        aria-current={tab===value?'page':undefined} onClick={()=>onTab(value)}>{title}</button>)}
+    </nav>}
+    {tab==='archived'&&!home&&<div className="row wrap receipt-archive-options">
+      <span className="muted">Archived receipts and bills can be restored at any time.</span>
+      <button type="button" className={showRemoved?'secondary is-active':'secondary'} onClick={()=>{setShowRemoved(v=>!v);setOffset(0)}}>
+        {showRemoved?'Show archived':'Manage removed'}
+      </button>
+    </div>}
+    {home&&data&&<div className="core-summary-strip" aria-label="Your Pruvs activity">
+      <div><strong>{data.receipt_count??0}</strong><span>{t('Saved receipts')}</span></div>
+      <div><strong>{data.bill_counts?.open??0}</strong><span>{t('Open bills')}</span></div>
+      <div><strong>{data.bill_counts?.settled??0}</strong><span>{t('Settled bills')}</span></div>
+    </div>}
+    <div className="section-heading"><h2>{label}</h2><small className="muted">Grouped by merchant · newest scans first</small></div>
+    {loading?<Spinner/>:data&&<>
+      <div className="merchant-tree" aria-label="Merchants and receipts">
+        {visible.map(merchant=><details key={merchant.key} className="merchant-group panel">
+          <summary className="merchant-header">
+            <span className="icon-tile"><ReceiptText size={20}/></span>
+            <span className="merchant-main"><strong>{merchant.name}</strong><small>{merchant.receipts.length} {merchant.receipts.length===1?'receipt':'receipts'} · Latest scan {historyDate(merchant.date)}</small></span>
+            <span className="merchant-right"><span className="merchant-count">{merchant.receipts.reduce((n,e)=>n+e.bills.length,0)} splits</span><ChevronDown size={18}/></span>
+          </summary>
+          <div className="merchant-receipts">
+            {merchant.receipts.map(entry=>{
+              const own=!!entry.receipt;
+              const owned=own||!!entry.bills[0]?.source_owned;
+              const identifier=entry.receipt?.original_filename||'Receipt';
+              return <details key={entry.id} className="merchant-receipt">
+                <summary className="merchant-receipt-header">
+                  <span className="merchant-receipt-icon"><CalendarDays size={17}/></span>
+                  <span className="merchant-main"><strong>{historyDate(entry.date)}</strong><small>{own?identifier:'Shared by the bill owner'} · {entry.bills.length} splits</small></span>
+                  <span className="merchant-right">
+                    {own&&<strong>{money(entry.receipt.receipt_total,entry.receipt.currency)}</strong>}
+                    <ChevronDown size={16}/>
+                  </span>
+                </summary>
+                <div className="merchant-receipt-content">
+                  {owned&&<Link className="secondary" to={'/receipt/'+entry.id}>View receipt</Link>}
+                  {entry.receipt?.history_note&&<p className="muted">{entry.receipt.history_note}</p>}
+                  {entry.receipt&&controls('receipt',entry.id,entry.receipt.history_note)}
+                  {entry.receipt&&!home&&<button className="danger" onClick={()=>eraseReceipt(entry.id)}>Delete permanently</button>}
+                  {entry.bills.length?entry.bills.map(b=><div key={b.session_id} className="merchant-split">
+                    <Link to={'/bill/'+b.token} className="merchant-split-link">
+                      <span className="icon-tile"><Users size={17}/></span>
+                      <span className="merchant-main"><strong>Split #{b.session_id}</strong><small>{b.role==='owner'?'You own this split':'You are a participant'} · Your share {money(b.my_total,b.currency)}</small></span>
+                      <Badge>{b.status}</Badge><ArrowUpRight size={17}/>
+                    </Link>
+                    {b.history_note&&<p className="muted">{b.history_note}</p>}
+                    {controls('bill',b.session_id,b.history_note)}
+                  </div>):<p className="muted">No splits for this receipt in this view.</p>}
+                </div>
+              </details>;
+            })}
+          </div>
+        </details>)}
+      </div>
+      {!visible.length&&<Empty>{tab==='open'?'No open splits.':tab==='settled'?'No settled splits.':'No receipts in this view.'} {home&&<Link to="/upload">Scan your first receipt</Link>}</Empty>}
+      {home&&merchants.length>5&&<Link className="core-view-all" to="/bills">View all merchants <ArrowUpRight size={16}/></Link>}
+      {!home&&<div className="row pager"><button disabled={!offset} onClick={()=>setOffset(Math.max(0,offset-30))}>Previous</button><span>{data.group_count?offset+1:0}–{Math.min(offset+30,data.group_count)} of {data.group_count}</span><button disabled={offset+30>=data.group_count} onClick={()=>setOffset(offset+30)}>Next</button></div>}
+    </>}
+  </>;
 }
 export function Upload() {
   const nav = useNavigate();

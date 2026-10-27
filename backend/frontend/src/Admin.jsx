@@ -167,7 +167,8 @@ export default function Admin() {
     [error, setError] = useState(''),
     [notice, setNotice] = useState(''),
     [busy, setBusy] = useState(false),
-    [showAdvanced,setShowAdvanced] = useState(false);
+    [showAdvanced,setShowAdvanced] = useState(false),
+    [showBilling,setShowBilling] = useState(false);
   const operational = useLoad(() => request('/admin/operational-overview'), []);
   const info = catalog.data?.find(c => c.key === entity);
   const query = `?q=${encodeURIComponent(q)}&offset=${offset}&field=${encodeURIComponent(filter.field)}&value=${encodeURIComponent(filter.value)}&include_deleted=${showDeleted}`;
@@ -232,13 +233,23 @@ export default function Admin() {
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     });
   }
-  return <><Title eyebrow="ADMINISTRATION" title={t("Your workspace overview")}>{t("Manage users, inspect saved bills and maintain database records.")}</Title>{error && <Message error={error} />} {notice && <Message>{notice}</Message>} {catalog.error && <Message error={catalog.error} />}
+  return <><Title eyebrow="ADMINISTRATION" title={t("Admin operations")}>{t("Focus on users, receipts, shared bills and reports. Advanced tools are available only when needed.")}</Title>{error && <Message error={error} />} {notice && <Message>{notice}</Message>} {catalog.error && <Message error={catalog.error} />}
  <div className="stats">{operational.data && <><Panel><span>OCR completions this month</span><strong>{operational.data.ocr_completed}</strong><small>{operational.data.ocr_attempts} external OCR log entries</small></Panel><Panel><span>Messages / notification events</span><strong>{operational.data.notification_events}</strong><small>{operational.data.notification_unread} unread outbox events</small></Panel></>}{['users', 'cases', 'split_bill_sessions'].map(key => <Panel key={key}><span>{catalog.data?.find(c => c.key === key)?.label || key}</span><strong>{catalog.data?.find(c => c.key === key)?.count ?? '—'}</strong></Panel>)}</div>
- <PlanConfiguration/>
- <InvoiceEmailQueue/>
- <PendingUpgrades/>
- <div className="admin-layout"><aside className="panel admin-menu"><h3>Operations</h3>{GROUPS.map(([group]) => { const list=(catalog.data||[]).filter(c=>entityGroup(c.key)===group); return !!list.length&&<section className="admin-category" key={group}><h4>{group}</h4>{list.map(c=><button key={c.key} className={entity === c.key ? 'active' : ''} onClick={() => selectEntity(c.key)}><span>{c.label}</span><small>{c.count}</small></button>)}</section>; })}
-    <details open={showAdvanced} onToggle={e=>setShowAdvanced(e.currentTarget.open)}><summary>Advanced technical records</summary>{(catalog.data||[]).filter(c=>entityGroup(c.key)==='Advanced').map(c=><button key={c.key} className={entity===c.key?'active':''} onClick={()=>selectEntity(c.key)}><span>{c.label}</span><small>{c.count}</small></button>)}</details></aside><div>
+ <section className="v22-admin-advanced">
+   <button type="button" className="secondary v22-admin-billing-toggle" aria-expanded={showBilling} onClick={()=>setShowBilling(v=>!v)}>{showBilling?'Hide':'Show'} subscriptions, billing and advanced finance operations</button>
+   {showBilling&&<div className="v22-admin-billing"><PendingUpgrades/><InvoiceEmailQueue/><PlanConfiguration/></div>}
+ </section>
+ <div className="admin-layout"><aside className="panel admin-menu"><h3>Key operations</h3>
+   {['users','cases','split_bill_sessions','expense_reports','push_events'].map(key=>{
+     const item=catalog.data?.find(c=>c.key===key);
+     if(!item)return null;
+     return <button key={item.key} className={entity===item.key?'active':''} onClick={()=>selectEntity(item.key)}><span>{item.label}</span><small>{item.count}</small></button>;
+   })}
+   <details open={showAdvanced} onToggle={e=>setShowAdvanced(e.currentTarget.open)}>
+     <summary>Advanced records</summary>
+     <p className="muted">Technical and rarely used operations. Changes may affect live data.</p>
+     {(catalog.data||[]).filter(item=>!['users','cases','split_bill_sessions','expense_reports','push_events'].includes(item.key)).map(item=><button key={item.key} className={entity===item.key?'active':''} onClick={()=>selectEntity(item.key)}><span>{item.label}</span><small>{item.count}</small></button>)}
+   </details></aside><div>
  {record ? <Panel><button className="text-button" onClick={() => {
             setRecord(null);
             setBill(null);

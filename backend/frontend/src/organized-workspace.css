@@ -1,0 +1,73 @@
+/* Pruvs 7.1.22 — Organized Workspace. Uses existing Pruvs brand colors. */
+.receipt-status-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 26px;align-items:center}
+.receipt-status-tabs button{padding:11px 18px;min-height:44px;background:#fff;color:#142447;border:1px solid #dce6f5;border-radius:12px;font-weight:700;box-shadow:none}
+.receipt-status-tabs button.is-active{color:#fff;background:#3163f0;border-color:#3163f0;box-shadow:0 7px 14px #3163f01f}
+.receipt-archive-options{justify-content:space-between;margin:6px 0 20px}
+.merchant-tree{display:grid;gap:14px}
+.merchant-group{padding:0!important;overflow:hidden;border-radius:17px!important}
+.merchant-header,.merchant-receipt-header{display:flex;gap:14px;align-items:center;cursor:pointer;list-style:none;padding:20px 22px;min-height:76px}
+.merchant-header::-webkit-details-marker,.merchant-receipt-header::-webkit-details-marker{display:none}
+.merchant-header:focus-visible,.merchant-receipt-header:focus-visible,.v22-account-category-toggle:focus-visible{outline:3px solid #88a8fc;outline-offset:-3px}
+.merchant-header:hover,.merchant-receipt-header:hover{background:#f7faff}
+.merchant-header>.icon-tile{flex:0 0 auto}
+.merchant-main{min-width:0;flex:1;display:flex;flex-direction:column;gap:5px}
+.merchant-main strong{color:#132754;overflow-wrap:anywhere}
+.merchant-main small{color:#697a99;font-size:12px;overflow-wrap:anywhere}
+.merchant-right{margin-left:auto;display:flex;align-items:center;gap:15px;color:#456de8;flex:0 0 auto}
+.merchant-right strong{color:#142447;font-size:13px}
+.merchant-right>svg{transition:transform .18s ease}
+.merchant-group[open]>.merchant-header .merchant-right>svg,.merchant-receipt[open]>.merchant-receipt-header .merchant-right>svg{transform:rotate(180deg)}
+.merchant-count{font-size:12px;color:#47627f;background:#f0f5ff;border-radius:99px;padding:5px 9px}
+.merchant-receipts{padding:0 20px 16px;border-top:1px solid #e8eef8}
+.merchant-receipt{margin-top:12px;border:1px solid #e6edf8;border-radius:12px;overflow:hidden;background:#fcfdff}
+.merchant-receipt-header{padding:14px 18px;min-height:64px}
+.merchant-receipt-icon{color:#376bdb;flex:0 0 auto}
+.merchant-receipt-content{display:grid;gap:12px;padding:14px 18px 18px;border-top:1px solid #edf2fb}
+.merchant-receipt-content>.secondary{width:max-content}
+.merchant-split{border-radius:12px;background:#f3f7fe;border:1px solid #e1eafb;padding:12px 14px;display:grid;gap:10px}
+.merchant-split-link{display:flex;align-items:center;gap:12px;text-decoration:none!important;color:inherit}
+.merchant-split-link>svg{flex:0 0 auto;color:#3566e8}
+.merchant-split-link .icon-tile{flex:0 0 auto}
+.merchant-split-link .badge{margin-left:auto}
+.history-actions{gap:8px}.history-actions button,.merchant-receipt-content>.danger{padding:8px 12px;font-size:12px;min-height:34px}
+.v22-bill-tabs{margin:20px 0 24px;display:flex;flex-wrap:wrap;gap:8px}
+.v22-bill-tabs button{border:1px solid #dce6f5;border-radius:12px;background:#fff;color:#16305a;display:inline-flex;justify-content:center;align-items:center;gap:9px;min-height:46px;padding:12px 18px;font-weight:700}
+.v22-bill-tabs button.is-active{color:white;background:#3163f0;border-color:#3163f0;box-shadow:0 6px 14px #3163f01d}
+.v22-bill-layout{display:block!important;grid-template-columns:unset!important}
+.v22-bill-layout #core-bill-items,.v22-bill-layout #core-bill-summary{width:100%;max-width:1050px;margin-inline:auto}
+.bill-workspace-people,.bill-workspace-summary{max-width:1050px;margin:0 auto 22px}
+.bill-message-list{margin:20px 0;display:grid;gap:10px}
+.bill-contact-row,.bill-confirmation-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px;border:1px solid #e5edfa;border-radius:12px;background:#fbfdff}
+.bill-contact-row .grow,.bill-confirmation-row .grow{min-width:160px;display:grid;gap:4px}
+.bill-contact-row small,.bill-confirmation-row small{color:#687c9b;font-size:12px;display:block;margin-top:5px}
+.bill-contact-row .secondary{display:inline-flex;gap:6px;align-items:center}
+.bill-payment-confirmations{display:grid;gap:10px}
+.v22-account-intro{margin:16px 0 20px}.v22-account-sections{max-width:980px;display:grid;gap:12px}
+.v22-account-category{border:1px solid #dfebfa;background:#fff;box-shadow:0 7px 25px rgba(17,45,100,.035);border-radius:15px;overflow:hidden;scroll-margin-top:16px}
+.v22-account-category-toggle{border:0!important;box-shadow:none!important;background:#fff!important;color:#162650!important;display:flex;justify-content:space-between;align-items:center;gap:16px;width:100%;min-height:74px;text-align:left;padding:19px 24px!important;font-size:16px}
+.v22-account-category-toggle>span:first-child{display:grid;gap:5px}
+.v22-account-category-toggle small{color:#7585a2;font-size:12px;font-weight:400}
+.v22-account-category-toggle>span:last-child{font-size:24px;font-weight:400;color:#3265dc}
+.v22-account-category.is-open .v22-account-category-toggle{background:#f8faff!important}
+.v22-account-category-content{padding:16px 20px 20px;display:grid;gap:15px;border-top:1px solid #edf1f8}
+.v22-account-category-content>.panel{margin:0}
+.v22-account-category-content .membership-section{margin:0}
+.v22-admin-advanced{margin-bottom:16px}.v22-admin-billing-toggle{width:100%;justify-content:flex-start}
+.v22-admin-billing{display:grid;gap:12px;margin-top:15px}
+.admin-menu>button{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:40px;margin:4px 0}
+.admin-menu details{margin-top:16px;border-top:1px solid #e2eafb;padding-top:12px}
+.admin-menu details>summary{cursor:pointer;font-weight:700;margin-bottom:12px}
+.admin-menu details>button{display:flex;width:100%;justify-content:space-between;margin-bottom:6px}
+@media(max-width:680px){
+ .merchant-header,.merchant-receipt-header{padding:13px 12px;gap:10px}
+ .merchant-right{gap:7px}.merchant-count{font-size:11px;padding:4px 6px}
+ .merchant-receipts{padding:0 9px 10px}
+ .merchant-receipt-content{padding:12px}
+ .merchant-split-link{flex-wrap:wrap}
+ .v22-bill-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+ .v22-bill-tabs button{font-size:12px;padding:9px 6px;gap:5px}
+ .v22-account-category-toggle{padding:16px!important}
+ .v22-account-category-content{padding:12px}
+ .bill-contact-row a,.bill-contact-row button{font-size:12px;padding:8px}
+}
+@media(prefers-reduced-motion:reduce){.merchant-right>svg{transition:none}}
