@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Copy, Mail, MessageCircle, Phone, Share2, Smartphone, UserRoundPlus, Users, X } from 'lucide-react';
+import { Copy, Mail, MessageCircle, Phone, Share2, Smartphone, UserRoundPlus, X } from 'lucide-react';
 
 /** The device address book is never uploaded or stored by this component. */
 export function normalizeInvitePhone(value) {
@@ -9,10 +9,6 @@ export function normalizeInvitePhone(value) {
   if (!/^\+[\d\s().-]+$/.test(raw)) return '';
   const digits = raw.replace(/\D/g, '');
   return /^[1-9]\d{7,14}$/.test(digits) ? digits : '';
-}
-export function whatsappGroupName(billName) {
-  const name = String(billName || 'Shared bill').replace(/\s+/g, ' ').trim();
-  return `Pruvs - ${name || 'Shared bill'}`.slice(0, 100);
 }
 export function invitationText(billName, shareUrl) {
   return `Join our Pruvs bill (${String(billName || 'Shared bill').trim()}): ${shareUrl}`;
@@ -27,9 +23,8 @@ export default function InviteDialog({ open = false, onClose = () => {}, shareUr
   const [manualName, setManualName] = useState('');
   const [manualPhone, setManualPhone] = useState('');
   const [error, setError] = useState('');
-  const [groupHelp, setGroupHelp] = useState(false);
   const contactsAvailable = typeof navigator !== 'undefined' && typeof navigator.contacts?.select === 'function';
-  const name = whatsappGroupName(billName);
+  const shareTitle = `Pruvs · ${String(billName || 'Shared bill').trim() || 'Shared bill'}`;
   const message = invitationText(billName, shareUrl);
   const waShareUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
 
@@ -62,7 +57,7 @@ export default function InviteDialog({ open = false, onClose = () => {}, shareUr
   }, [open]);
 
   useEffect(() => {
-    if (!open) { setContacts([]); setManualName(''); setManualPhone(''); setError(''); setGroupHelp(false); }
+    if (!open) { setContacts([]); setManualName(''); setManualPhone(''); setError(''); }
   }, [open]);
 
   async function pickContacts() {
@@ -92,7 +87,7 @@ export default function InviteDialog({ open = false, onClose = () => {}, shareUr
   }
   async function nativeShare() {
     if (typeof navigator.share !== 'function') return;
-    try { await navigator.share({ title: name, text: message, url: shareUrl }); }
+    try { await navigator.share({ title: shareTitle, text: message, url: shareUrl }); }
     catch (e) { if (e?.name !== 'AbortError') setError('Unable to open the share menu. Use Copy link instead.'); }
   }
 
@@ -112,7 +107,7 @@ export default function InviteDialog({ open = false, onClose = () => {}, shareUr
               {typeof navigator.share === 'function' && <button type="button" onClick={nativeShare}><Share2 size={16}/> Share</button>}
               <a href={waShareUrl} target="_blank" rel="noopener noreferrer"><MessageCircle size={16}/> WhatsApp</a>
               <a href={`sms:?body=${encodeURIComponent(message)}`}><Phone size={16}/> SMS</a>
-              <a href={`mailto:?subject=${encodeURIComponent(name)}&body=${encodeURIComponent(message)}`}><Mail size={16}/> Email</a>
+              <a href={`mailto:?subject=${encodeURIComponent(shareTitle)}&body=${encodeURIComponent(message)}`}><Mail size={16}/> Email</a>
             </div>
           </div>
         </div>
@@ -125,9 +120,7 @@ export default function InviteDialog({ open = false, onClose = () => {}, shareUr
             return <div className="pruvs-invite-contact" key={`${contact.tel}-${index}`}><span><strong>{contact.name}</strong><small>{contact.tel}</small></span>{number ? <a target="_blank" rel="noopener noreferrer" href={`https://wa.me/${number}?text=${encodeURIComponent(message)}`}>WhatsApp</a> : <small>Requires +country code</small>}<button type="button" aria-label={`Remove ${contact.name}`} onClick={() => setContacts(list => list.filter((_,i) => i !== index))}><X size={15}/></button></div>;
           })}</div>}
         </div>
-        <div className="pruvs-invite-section pruvs-invite-whatsapp"><button type="button" className="pruvs-invite-group-toggle" aria-expanded={groupHelp} onClick={() => setGroupHelp(!groupHelp)}><Users size={18}/> WhatsApp group for this bill <span>{groupHelp ? '−' : '+'}</span></button>
-          {groupHelp && <div className="pruvs-invite-group-details"><p>Suggested group name</p><div className="pruvs-invite-copyline"><input readOnly aria-label="Suggested WhatsApp group name" value={name}/><button type="button" onClick={() => onCopied(name)}><Copy size={16}/> Copy</button></div><p className="pruvs-invite-hint">In WhatsApp, choose <strong>New group</strong>, select the people who want to join, and paste this name. Pruvs cannot automatically add contacts to a personal WhatsApp group.</p><a target="_blank" rel="noopener noreferrer" href={waShareUrl}><MessageCircle size={17}/> Share the bill invitation in WhatsApp</a></div>}
-        </div>
+
       </div>
       <footer className="pruvs-invite-footer"><small>People must sign in to Pruvs before joining. Sharing a link does not send it automatically.</small><button type="button" onClick={onClose}>Done</button></footer>
     </section>

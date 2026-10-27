@@ -72,7 +72,7 @@ export function BillSummaryStrip({data,mine,currency}) {
   </section>;
 }
 
-/** Numeric assignment state; green means assigned, never payment-confirmed. */
+/** Numeric assignment state; blue means selected/allocated, never payment-confirmed. */
 export function itemAllocationState(item, myParticipantId) {
   const assignments = item?.assignments || [];
   const own = assignments.filter(a => a.participant_id === myParticipantId)

@@ -51,9 +51,9 @@ export default function Auth({
       navigate('/notifications?enrol=1', { replace: true });
       return;
     }
-    navigate(safeNext(params.get('next')), {
-      replace: true
-    });
+    // Keep the original invitation route rather than taking the user Home.
+    // safeNext refuses external and protocol-relative destinations.
+    navigate(safeNext(params.get('next')), { replace: true });
   }
   async function submit(e) {
     e.preventDefault();

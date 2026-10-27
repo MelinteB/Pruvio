@@ -6,7 +6,7 @@ import { BillFlowNav, itemAllocationState } from './professional/CorePages';
 afterEach(() => cleanup());
 
 describe('Pruvs v7.1.24 item completion and sticky overview', () => {
-  it('marks the current participant selection green without requiring full allocation', () => {
+  it('marks the current participant selection blue without requiring full allocation', () => {
     const state = itemAllocationState({quantity:2,remaining_quantity:1,assignments:[{participant_id:7,quantity:1}]},7);
     expect(state.selectedByMe).toBe(true);
     expect(state.fullyAllocated).toBe(false);

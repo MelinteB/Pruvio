@@ -2,7 +2,7 @@ import Membership from './Membership';
 import { t } from "./i18n";
 import { ProfileHeader } from './professional/CorePages';
 import React, { useRef, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { Fingerprint, Trash2 } from 'lucide-react';
 import { request, send, credential } from './api';
 import { useApp, useLoad, Title, Panel, Field, Check, Message } from './common';
@@ -18,7 +18,10 @@ export function CompanySettings(){
   return <><Title eyebrow="ACCOUNT" title={t('Manage company profiles')} action={<Link className="secondary" to="/account">{t('Back to Account')}</Link>}>{t('Company details and reusable trip profiles for expense reports.')}</Title><CompanyProfiles onUpdated={companies.reload}/><Panel title={t('Company trip profiles')}><p className="muted">{t('Save reusable report fields for each company. Select a profile while preparing a report and edit its values for that trip.')}</p><button ref={tripButton} type="button" onClick={()=>setTripOpen(true)}>{t('Open trip profiles')}</button></Panel>{tripOpen&&<TripProfilesDialog companies={companies.data||[]} onUpdated={companies.reload} onClose={()=>setTripOpen(false)} returnFocusTo={tripButton}/>}</>;
 }
 function AccountSection({id,title,description,children,defaultOpen=false}) {
-  const [open,setOpen]=useState(defaultOpen || (typeof window!=='undefined' && window.location.hash==='#'+id));
+  const location=useLocation();
+  const targeted=location.hash==='#'+id || (id==='account-membership'&&location.hash==='#membership');
+  const [open,setOpen]=useState(defaultOpen || targeted);
+  React.useEffect(()=>{if(targeted)setOpen(true)},[targeted]);
   return <section id={id} className={'v22-account-category'+(open?' is-open':'')}>
     <button type="button" className="v22-account-category-toggle" aria-expanded={open} aria-controls={id+'-content'} onClick={()=>setOpen(value=>!value)}>
       <span><strong>{title}</strong><small>{description}</small></span><span aria-hidden="true">{open?'−':'+'}</span>

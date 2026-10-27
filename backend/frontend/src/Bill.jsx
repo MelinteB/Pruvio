@@ -17,19 +17,32 @@ export function Join() {
     error,
     loading
   } = useLoad(() => request('/bills/' + token + '/invite'), [token]);
+  const [params] = useSearchParams();
+  const autoJoin = params.get('autojoin') === '1';
+  const attemptedAutoJoin = useRef(false);
   const [busy, setBusy] = useState(false),
     [err, setError] = useState('');
-  return <><Title eyebrow="YOU'RE INVITED" title="Share the moment. Split the bill." />{loading ? <Spinner /> : error ? <Message error={error} /> : data && <Panel><Users size={36} /><h2>{t('Split')} · {data.source_name}</h2><p>{data.owner} · {t("Sign in with your own account and select the items you enjoyed.")}</p><Badge>{data.status}</Badge>{err && <Message error={err} />}<div className="row"><button className="primary" disabled={busy} onClick={async () => {
-          setBusy(true);
-          try {
-            if (!data.joined && !data.is_owner) await send('/bills/' + token + '/join');
-            nav('/bill/' + token);
-          } catch (e) {
-            setError(e.message);
-          } finally {
-            setBusy(false);
-          }
-        }}>{data.joined || data.is_owner ? t("Open your bill") : t("Join bill")}</button></div></Panel>}</>;
+  async function enterBill() {
+    if (!data || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      if (!data.joined && !data.is_owner) await send('/bills/' + encodeURIComponent(token) + '/join');
+      nav('/bill/' + encodeURIComponent(token), { replace: true });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  // Only after an explicit invitation followed by authentication; a simple visit
+  // to the invitation page by an already signed-in user still offers Join first.
+  useEffect(() => {
+    if (!autoJoin || !data || loading || error || attemptedAutoJoin.current) return;
+    attemptedAutoJoin.current = true;
+    void enterBill();
+  }, [autoJoin, data, loading, error]);
+  return <><Title eyebrow="YOU'RE INVITED" title="Share the moment. Split the bill." />{loading ? <Spinner /> : error ? <Message error={error} /> : data && <Panel><Users size={36} /><h2>{t('Split')} · {data.source_name}</h2><p>{data.owner} · {t("Sign in with your own account and select the items you enjoyed.")}</p><Badge>{data.status}</Badge>{err && <Message error={err} />}<div className="row"><button className="primary" disabled={busy} onClick={enterBill}>{busy ? 'Opening your bill…' : data.joined || data.is_owner ? t("Open your bill") : t("Join bill")}</button></div></Panel>}</>;
 }
 export default function Bill() {
   const {

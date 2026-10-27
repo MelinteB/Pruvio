@@ -1,4 +1,4 @@
-"""v7.1.24 sharing & invitations source contracts (no database/network required)."""
+"""v7.1.25 sharing & invitations source contracts (no database/network required)."""
 import unittest
 from pathlib import Path
 from app.reliability import RELEASE
@@ -8,10 +8,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class SharingInvitesTests(unittest.TestCase):
     def test_release_alignment(self):
-        self.assertEqual(RELEASE, '7.1.24')
-        self.assertIn("version:'7.1.24'", (ROOT/'frontend/scripts/stamp-build.mjs').read_text())
-        self.assertIn('pruvs-shell-v7.1.24', (ROOT/'app/static/react-service-worker.js').read_text())
-        self.assertIn("CLIENT_RELEASE = '7.1.24'", (ROOT/'frontend/src/professional/ReleaseUpdateBanner.jsx').read_text())
+        self.assertEqual(RELEASE, '7.1.25')
+        self.assertIn("version:'7.1.25'", (ROOT/'frontend/scripts/stamp-build.mjs').read_text())
+        self.assertIn('pruvs-shell-v7.1.25', (ROOT/'app/static/react-service-worker.js').read_text())
+        self.assertIn("CLIENT_RELEASE = '7.1.25'", (ROOT/'frontend/src/professional/ReleaseUpdateBanner.jsx').read_text())
 
     def test_modal_replaces_inline_share(self):
         bill=(ROOT/'frontend/src/Bill.jsx').read_text()
@@ -30,7 +30,8 @@ class SharingInvitesTests(unittest.TestCase):
         self.assertIn('navigator.contacts.select', dialog)
         self.assertIn('multiple: true', dialog)
         self.assertIn('normalizeInvitePhone', dialog)
-        self.assertIn('Pruvs cannot automatically add contacts', dialog)
+        self.assertNotIn('WhatsApp group for this bill', dialog)
+        self.assertIn('waShareUrl', dialog)
         self.assertNotIn('/users/', dialog)
         self.assertNotIn('/contacts/upload', dialog)
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import InviteDialog, { normalizeInvitePhone, whatsappGroupName, invitationText } from './professional/InviteDialog';
+import InviteDialog, { normalizeInvitePhone, invitationText } from './professional/InviteDialog';
 import RoundTable from './professional/RoundTable';
 
 afterEach(() => { cleanup(); delete navigator.contacts; });
@@ -12,9 +12,7 @@ describe('Pruvs invitation links and phone privacy', () => {
     expect(normalizeInvitePhone('0722123456')).toBe('');
     expect(normalizeInvitePhone('+000')).toBe('');
   });
-  it('suggests a bill-specific WhatsApp group without creating one', () => {
-    expect(whatsappGroupName('Dinner with friends')).toBe('Pruvs - Dinner with friends');
-    expect(whatsappGroupName('x'.repeat(140)).length).toBeLessThanOrEqual(100);
+  it('keeps the bill invitation link without creating a WhatsApp group', () => {
     expect(invitationText('Dinner', 'https://pruvs.io/join/a')).toContain('https://pruvs.io/join/a');
   });
   it('opens and closes a dialog without navigating away from the bill', () => {
@@ -26,11 +24,11 @@ describe('Pruvs invitation links and phone privacy', () => {
     fireEvent.keyDown(document, { key:'Escape' });
     expect(close).toHaveBeenCalledOnce();
   });
-  it('provides a WhatsApp group-name helper with explicit manual steps', () => {
+  it('removes the group section but keeps direct WhatsApp sharing', () => {
     render(<InviteDialog open shareUrl="https://pruvs.io/join/abc" billName="Dinner" />);
-    fireEvent.click(screen.getByRole('button', { name:/WhatsApp group for this bill/i }));
-    expect(screen.getByRole('textbox', { name:/Suggested WhatsApp group name/i }).value).toBe('Pruvs - Dinner');
-    expect(screen.getByText(/cannot automatically add contacts/i)).toBeTruthy();
+    expect(screen.queryByText(/WhatsApp group for this bill/i)).toBeNull();
+    expect(screen.queryByText(/Suggested group name/i)).toBeNull();
+    expect(screen.getAllByRole('link', { name:'WhatsApp', exact:true }).length).toBeGreaterThan(0);
   });
   it('can use consented contact selection on supported browsers', async () => {
     Object.defineProperty(navigator, 'contacts', { configurable:true, value:{ select:vi.fn().mockResolvedValue([{name:['Alex'],tel:['+40722123456']}]) } });
