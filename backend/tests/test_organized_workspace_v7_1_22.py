@@ -1,4 +1,4 @@
-"""v7.1.25 organized workspaces — static source regressions, no user data or DB access."""
+"""v7.1.26 organized workspaces — static source regressions, no user data or DB access."""
 import pathlib
 import unittest
 from app.reliability import RELEASE
@@ -7,9 +7,9 @@ ROOT=pathlib.Path(__file__).resolve().parents[1]
 
 class OrganizedWorkspaceTests(unittest.TestCase):
     def test_release_alignment(self):
-        self.assertEqual(RELEASE,'7.1.25')
-        self.assertIn("version:'7.1.25'",(ROOT/'frontend/scripts/stamp-build.mjs').read_text())
-        self.assertIn('pruvs-shell-v7.1.25',(ROOT/'app/static/react-service-worker.js').read_text())
+        self.assertEqual(RELEASE,'7.1.26')
+        self.assertIn("version:'7.1.26'",(ROOT/'frontend/scripts/stamp-build.mjs').read_text())
+        self.assertIn('pruvs-shell-v7.1.26',(ROOT/'app/static/react-service-worker.js').read_text())
 
     def test_merchant_tree_and_status_views(self):
         source=(ROOT/'frontend/src/Receipts.jsx').read_text()
@@ -28,7 +28,8 @@ class OrganizedWorkspaceTests(unittest.TestCase):
         source=(ROOT/'frontend/src/Bill.jsx').read_text()
         for item in ('useSearchParams','section===\'items\'','section===\'people\'','id="core-bill-summary"','RoundTable','WhatsApp','act(\'settle\'','act(\'payment\''):
             self.assertIn(item,source)
-        self.assertIn('reported by participants',source.lower())
+        self.assertIn('PaymentConfirmation',source)
+        self.assertIn('not bank verified', (ROOT/'frontend/src/PaymentConfirmation.jsx').read_text().lower())
 
     def test_account_admin_keep_advanced_operations(self):
         account=(ROOT/'frontend/src/Account.jsx').read_text()

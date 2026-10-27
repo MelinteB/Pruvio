@@ -444,7 +444,7 @@ def selection(token:str,body:dict,identity=Depends(current),db=Depends(get_db)):
 
 @router.post('/bills/{token}/action/{action}')
 def bill_action(token:str,action:str,body:dict,identity=Depends(current),db=Depends(get_db)):
-    uid=identity[0].id;s,p=member(db,token,uid,owner=action!='payment',lock=True)
+    uid=identity[0].id;s,p=member(db,token,uid,owner=action not in ('payment', 'withdraw_payment'),lock=True)
     if action=='settle':
         from app.models.payment_profile import PaymentProfile
         selected=body.get('payment_profile_id')
@@ -471,8 +471,22 @@ def bill_action(token:str,action:str,body:dict,identity=Depends(current),db=Depe
         if int(body.get('participant_id',0))==p.id:raise ValueError('Reminders are for other participants.')
         bills.send_participant_reminder(db,s,uid,int(body.get('participant_id',0)),str(body.get('message','Please complete your Pruvs bill payment.'))[:500])
     elif action=='payment':bills.record_participant_payment_status(db,s,p.id,str(body.get('method','bank_transfer')),paid=body.get('paid') is True)
+    elif action=='withdraw_payment':
+        from app.react_app.payment_confirmation import withdraw
+        withdraw(db,s,p.id,uid)
+    elif action in ('confirm_receipt','reverse_receipt'):
+        from app.react_app.payment_confirmation import acknowledge
+        if type(body.get('participant_id')) is not int:
+            raise ValueError('Choose a participant to confirm.')
+        acknowledge(db,s,body['participant_id'],uid,reverse=action=='reverse_receipt')
     else:raise HTTPException(404,'Unknown bill action.')
     return summary(db,s,uid)
+
+@router.get('/bills/{token}/payment-history')
+def bill_payment_history(token:str,identity=Depends(current),db=Depends(get_db)):
+    s,_=member(db,token,identity[0].id)
+    from app.react_app.payment_confirmation import history
+    return {'events':history(db,s)}
 
 @router.post('/device/subscribe')
 def device_subscribe(body:dict,identity=Depends(current),db=Depends(get_db)):

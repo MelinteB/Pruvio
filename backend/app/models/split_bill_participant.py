@@ -23,5 +23,7 @@ class SplitBillParticipant(Base):
     payment_status = Column(String(30), nullable=False, default="unpaid")
     payment_method = Column(String(40), nullable=True)
     paid_at = Column(DateTime, nullable=True)
+    received_at = Column(DateTime, nullable=True)
+    confirmed_by_user_id = Column(Integer, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)

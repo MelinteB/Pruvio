@@ -697,6 +697,8 @@ def get_split_bill_session_summary(db: Session, session: SplitBillSession, *, en
             "payment_status": participant.payment_status or "unpaid",
             "payment_method": participant.payment_method,
             "paid_at": participant.paid_at.isoformat() if participant.paid_at else None,
+            "received_at": participant.received_at.isoformat() + "Z" if participant.received_at else None,
+            "confirmed_by_user_id": participant.confirmed_by_user_id,
         })
 
     tip_total = round(sum(float(row["tip_share"] or 0) for row in participant_rows), 2)
@@ -883,9 +885,14 @@ def reopen_split_bill_session(
     # A reopened split can change amounts, so previous payment state can no
     # longer be treated as current. Reset it for all participants.
     for participant in get_joined_participants(db, session):
+        if participant.payment_status in {"paid", "received"}:
+            from app.react_app.payment_confirmation import record_event
+            record_event(db, session, participant, owner_user_id, "reopened_reset")
         participant.payment_status = "unpaid"
         participant.payment_method = None
         participant.paid_at = None
+        participant.received_at = None
+        participant.confirmed_by_user_id = None
 
     from app.react_app.events import enqueue_transition
     enqueue_transition(db, session, owner_user_id, 'split_reopened')
@@ -981,8 +988,12 @@ def send_participant_reminder(
         raise ValueError("The participant must join Pruvs before an in-app or email reminder can be sent.")
     if participant.reminder_at and datetime.utcnow() - participant.reminder_at < timedelta(seconds=60):
         raise ValueError("Wait one minute before sending another reminder to this participant.")
+    if participant.payment_status == "received":
+        raise ValueError("Reverse the receipt confirmation before requesting payment again.")
     reconfirm = participant.payment_status == "paid"
     if reconfirm:
+        from app.react_app.payment_confirmation import record_event
+        record_event(db, session, participant, owner_user_id, "reminder_reset")
         participant.payment_status = "unpaid"
         participant.payment_method = None
         participant.paid_at = None
@@ -1003,9 +1014,16 @@ def record_participant_payment_status(
     participant = get_split_bill_participant_by_id(db, participant_id)
     if not participant or participant.session_id != session.id:
         raise ValueError("Participant not found.")
+    if participant.role == "owner" or not participant.user_id:
+        raise ValueError("Only joined participants can report a payment to the owner.")
     method = (method or "").lower()
-    if method not in {"revolut", "bank_transfer", "payment_link"}:
+    if method not in {"revolut", "bank_transfer", "payment_link", "cash"}:
         raise ValueError("Payment method must pay the bill owner directly.")
+    if participant.payment_status == "received":
+        return get_split_bill_session_summary(db, session)
+    if paid and participant.payment_status == "paid":
+        # A duplicate click must not silently rewrite the method without an audit event.
+        return get_split_bill_session_summary(db, session)
     if not paid and participant.payment_status == "paid":
         # Opening the payment link again must not undo a saved declaration.
         return get_split_bill_session_summary(db, session)
@@ -1014,6 +1032,8 @@ def record_participant_payment_status(
     participant.payment_status = "paid" if paid else "initiated"
     participant.paid_at = datetime.utcnow() if paid else None
     if newly_paid:
+        from app.react_app.payment_confirmation import record_event
+        record_event(db, session, participant, participant.user_id, "reported")
         from app.react_app.events import enqueue_payment_marked
         enqueue_payment_marked(db, session, participant)
     db.commit()

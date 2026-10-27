@@ -8,11 +8,12 @@ export function initials(name) {
 }
 
 function ParticipantAvatar({ participant, isMe, currency, compact = false }) {
-  const paid = participant.payment_status === 'paid';
+  const paid = ['paid','received'].includes(participant.payment_status);
   const className = ['pruvs-table-person', paid && 'is-paid', isMe && 'is-me', compact && 'is-compact'].filter(Boolean).join(' ');
   return <div className={className}>
     <div className="pruvs-table-face" aria-hidden="true">{initials(participant.display_name)}{paid && <CheckCircle2 size={14} className="pruvs-table-paid-icon" />}</div>
     <strong>{participant.display_name || 'Guest'}{isMe ? ' (you)' : ''}</strong>
+    <small>{participant.payment_status === 'received' ? 'Owner confirmed receipt' : participant.payment_status === 'paid' ? 'Payment reported' : 'Awaiting payment'}</small>
     <small>{money(participant.total, currency)}</small>
   </div>;
 }
@@ -38,7 +39,7 @@ export default function RoundTable({ participants = [], myParticipantId, expecte
       })}
     </div> : <div className="pruvs-table-grid">{people.map(p => <ParticipantAvatar key={p.participant_id} participant={p} isMe={p.participant_id === myParticipantId} currency={currency} compact />)}</div>}
     {extraSeats > 0 && <p className="pruvs-table-awaiting">{extraSeats} {extraSeats === 1 ? 'place' : 'places'} still available for invited participants.</p>}
-    <p className="pruvs-table-disclaimer">Payment status is self-reported, not bank-verified. Amounts update with item selections.</p>
+    <p className="pruvs-table-disclaimer">Payments are reported by participants and may be acknowledged by the owner; neither is bank verification. Amounts update with item selections.</p>
   </section>;
 }
 

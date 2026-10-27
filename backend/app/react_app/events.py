@@ -89,6 +89,39 @@ def enqueue_reminder(db, session, participant, *, reconfirm=False):
     enqueue(db, recipient.id, 'reminder', title, body, f'/bill/{session.token}')
 
 
+def enqueue_payment_confirmation(db, session, participant, kind):
+    """Enqueue an owner or participant status change in the same DB transaction."""
+    from app.services.push_service import enqueue
+    name = receipt_label(db, session.case_id)
+    amount = f"{getattr(participant, 'display_name', 'Participant')}: payment for {name}"
+    owner = db.get(User, session.owner_user_id)
+    if kind == 'withdrawn':
+        if not owner or owner.status != 'active':
+            return
+        ro = owner.preferred_language == 'ro'
+        title = f"{'Plată retrasă' if ro else 'Payment report withdrawn'} · {name}"
+        body = (f"{participant.display_name} și-a retras confirmarea de plată. Verifică situația." if ro else
+                f"{participant.display_name} withdrew their payment report. Please review the bill.")
+        enqueue(db, owner.id, 'payment_withdrawn', title, body, f'/bill/{session.token}')
+        return
+    recipient = db.get(User, participant.user_id) if participant.user_id else None
+    if not recipient or recipient.status != 'active':
+        return
+    ro = recipient.preferred_language == 'ro'
+    if kind == 'received':
+        title = f"{'Încasare confirmată' if ro else 'Payment receipt confirmed'} · {name}"
+        body = ('Organizatorul a confirmat primirea plății tale. Aceasta este confirmarea organizatorului, nu a băncii.' if ro else
+                'The bill owner confirmed receiving your payment. This is an owner acknowledgment, not bank verification.')
+    elif kind == 'receipt_reversed':
+        title = f"{'Confirmare retrasă' if ro else 'Receipt confirmation reversed'} · {name}"
+        body = ('Organizatorul a retras confirmarea încasării. Plata ta rămâne declarată.' if ro else
+                'The owner reversed their receipt acknowledgment. Your payment is still reported, not confirmed.')
+    else:
+        raise ValueError('Unknown notification type')
+    enqueue(db, recipient.id, 'payment_received' if kind == 'received' else 'payment_receipt_reversed',
+            title, body, f'/bill/{session.token}')
+
+
 def enqueue_payment_marked(db, session, participant):
     """Tell the owner about a participant's self-reported payment."""
     if not participant.user_id or participant.user_id == session.owner_user_id:

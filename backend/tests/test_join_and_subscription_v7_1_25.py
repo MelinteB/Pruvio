@@ -1,4 +1,4 @@
-"""Scoped v7.1.25 join and subscription navigation wiring regression tests."""
+"""Scoped v7.1.26 join and subscription navigation wiring regression tests."""
 import unittest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]/'frontend/src'

@@ -6,6 +6,8 @@ import { request, send, money, copy } from './api';
 import { useApp, useLoad, Title, Panel, Field, Spinner, Message, Badge } from './common';
 import RoundTable, { ClosedBillNotice } from './professional/RoundTable';
 import InviteDialog from './professional/InviteDialog';
+import PaymentConfirmation from './PaymentConfirmation';
+import './payment-confirmation.css';
 import { BillSummaryStrip, BillFlowNav, itemAllocationState } from './professional/CorePages';
 export function Join() {
   const {
@@ -65,7 +67,8 @@ export default function Bill() {
     [targetCurrency,setTargetCurrency]=useState('RON'),
     [fxProvider,setFxProvider]=useState('bnr'),[fxOpen,setFxOpen]=useState(false),
     [manualRate,setManualRate]=useState(''),[useManualRate,setUseManualRate]=useState(false),
-    [fxPreview,setFxPreview]=useState(null),[fxError,setFxError]=useState(''),[paymentProfiles,setPaymentProfiles]=useState([]),[paymentProfileId,setPaymentProfileId]=useState('');
+    [fxPreview,setFxPreview]=useState(null),[fxError,setFxError]=useState(''),[paymentProfiles,setPaymentProfiles]=useState([]),[paymentProfileId,setPaymentProfileId]=useState(''),
+    [paymentHistory,setPaymentHistory]=useState([]),[paymentHistoryError,setPaymentHistoryError]=useState(''),[paymentHistoryRevision,setPaymentHistoryRevision]=useState(0);
   const [searchParams, setSearchParams] = useSearchParams();
   const requested = searchParams.get('view');
   const section = requested === 'people' ? 'people' : 'items';
@@ -83,6 +86,15 @@ export default function Bill() {
   async function previewCurrency(){setFxError('');try{const query=new URLSearchParams({base:data.currency,target:targetCurrency,amount:'1',provider:fxProvider,...(useManualRate?{manual_rate:manualRate}:{})});setFxPreview(await request('/fx/quote?'+query))}catch(e){setFxError(e.message)}}
   async function saveCurrency(){setFxError('');setBusy(true);try{setData(await send('/bills/'+token+'/currency-reference',{target:targetCurrency,provider:fxProvider,manual_rate:useManualRate?manualRate:null},'PUT'));setFxOpen(false)}catch(e){setFxError(e.message)}finally{setBusy(false)}}
   useEffect(()=>{request('/account/payment-profiles').then(setPaymentProfiles).catch(()=>{})},[]);
+  const paymentStateSignature = data?.participants?.map(p => `${p.participant_id}:${p.payment_status}:${p.paid_at || ''}:${p.received_at || ''}`).join('|') || '';
+  useEffect(() => {
+    if (!data) return;
+    let active = true;
+    request('/bills/' + encodeURIComponent(token) + '/payment-history')
+      .then(result => { if (active) { setPaymentHistory(result.events || []); setPaymentHistoryError(''); } })
+      .catch(err => { if (active) setPaymentHistoryError(err.message || 'Could not load payment history.'); });
+    return () => { active = false; };
+  }, [token, data?.status, paymentHistoryRevision, paymentStateSignature]);
   useEffect(() => {
     let active = true,
       ws,
@@ -153,6 +165,7 @@ export default function Bill() {
     setError('');
     try {
       setData(await send('/bills/' + token + '/action/' + action, body));
+      setPaymentHistoryRevision(current => current + 1);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -211,10 +224,10 @@ export default function Bill() {
          const phone=String(p.phone_number||'').replace(/\D/g,'');
          const message=`Hi ${p.display_name||'there'}, here's our Pruvs bill: ${link}`;
          return <div key={p.participant_id} className="bill-contact-row">
-           <div className="grow"><strong>{p.display_name}</strong><small>{money(p.total,data.currency)} · {p.payment_status==='paid'?'Marked paid':'Payment not confirmed'}</small></div>
+           <div className="grow"><strong>{p.display_name}</strong><small>{money(p.total,data.currency)} · {p.payment_status==='received'?'Owner confirmed receipt':p.payment_status==='paid'?'Payment reported':'Awaiting payment'}</small></div>
            {phone?<a className="secondary" href={'https://wa.me/'+phone+'?text='+encodeURIComponent(message)} target="_blank" rel="noreferrer"><MessageCircle size={16}/> WhatsApp</a>:<button className="secondary" onClick={()=>copied(message)}><Copy size={16}/> Copy message</button>}
            {phone&&<a className="secondary" href={'sms:'+phone+'?body='+encodeURIComponent(message)}>SMS</a>}
-           {owner&&p.user_id&&<button disabled={busy} onClick={()=>act('remind',{participant_id:p.participant_id})}>Send reminder</button>}
+           {owner&&p.user_id&&<button disabled={busy || p.payment_status==='received'} onClick={()=>act('remind',{participant_id:p.participant_id})}>Send reminder</button>}
          </div>;
        })}
      </div>
@@ -230,14 +243,8 @@ export default function Bill() {
         })}</Panel>
  <section id="core-bill-summary" className="bill-workspace-summary" aria-label="Summary and payment confirmation"><h2 className="bill-inline-summary-heading">Summary &amp; payment</h2>
    {settled&&<ClosedBillNotice canPay={!owner}/>}
-   <Panel title="Payment confirmation status">
-     <p className="muted">Payment confirmations are reported by participants; Pruvs does not verify bank transfers or card payments.</p>
-     <div className="bill-payment-confirmations">{data.participants.map(p=><div key={p.participant_id} className="bill-confirmation-row">
-       <span className="grow"><strong>{p.display_name}{p.participant_id===data.my_participant_id?' (you)':''}</strong><small>{p.payment_status==='paid'?`Marked paid by ${p.display_name}${p.payment_method?' · '+p.payment_method.replaceAll('_',' '):''}`:'Awaiting participant confirmation'}</small></span>
-       <strong>{money(p.total,data.currency)}</strong><Badge>{p.payment_status==='paid'?'Paid (reported)':'Not confirmed'}</Badge>
-     </div>)}</div>
-   </Panel>
- <div className="bill-summary-details"><Panel title={t("Everyone's share")}><div className="row between wrap"><small>{data.currency_reference?`${data.currency_reference.manual?t('Manual rate'):data.currency_reference.provider.toUpperCase()} · 1 ${data.currency} = ${data.currency_reference.rate} ${data.currency_reference.target}${data.currency_reference.date?' · '+data.currency_reference.date:''}`:t('No currency reference set yet.')}</small>{owner&&<button onClick={openCurrency}>{t('Currency setup')}</button>}</div>{data.currency_reference?.source_url&&<small><a href={data.currency_reference.source_url} target="_blank" rel="noreferrer">{t('Reference source')}</a></small>}{data.participants.map(p => <div className="participant" key={p.participant_id}><div className="row between"><div><strong>{p.display_name}{p.user_id === user.id ? ' · You' : ''}</strong><small>{p.role} · {p.payment_status} {p.payment_method ? '· ' + p.payment_method.replace('_', ' ') : ''}</small></div><strong>{data.currency_reference && Number.isFinite(Number(p.reference_total)) ? money(p.reference_total,data.currency_reference.target) : money(p.total, data.currency)}</strong></div>{data.currency_reference && <small>Original share (settled in {data.currency}): {money(p.total,data.currency)}</small>}<small>{t("Items")} {money(p.item_total, data.currency)} + tip {money(p.tip_share, data.currency)}</small></div>)}</Panel>
+   <PaymentConfirmation data={data} isOwner={owner} isBusy={busy} onAction={act} history={paymentHistory} historyError={paymentHistoryError} onRefresh={() => setPaymentHistoryRevision(current => current + 1)} />
+ <div className="bill-summary-details"><Panel title={t("Everyone's share")}><div className="row between wrap"><small>{data.currency_reference?`${data.currency_reference.manual?t('Manual rate'):data.currency_reference.provider.toUpperCase()} · 1 ${data.currency} = ${data.currency_reference.rate} ${data.currency_reference.target}${data.currency_reference.date?' · '+data.currency_reference.date:''}`:t('No currency reference set yet.')}</small>{owner&&<button onClick={openCurrency}>{t('Currency setup')}</button>}</div>{data.currency_reference?.source_url&&<small><a href={data.currency_reference.source_url} target="_blank" rel="noreferrer">{t('Reference source')}</a></small>}{data.participants.map(p => <div className="participant" key={p.participant_id}><div className="row between"><div><strong>{p.display_name}{p.user_id === user.id ? ' · You' : ''}</strong><small>{p.role} · {p.payment_status==='received'?'Owner confirmed':p.payment_status==='paid'?'Payment reported':'Awaiting payment'} {p.payment_method ? '· ' + p.payment_method.replace('_', ' ') : ''}</small></div><strong>{data.currency_reference && Number.isFinite(Number(p.reference_total)) ? money(p.reference_total,data.currency_reference.target) : money(p.total, data.currency)}</strong></div>{data.currency_reference && <small>Original share (settled in {data.currency}): {money(p.total,data.currency)}</small>}<small>{t("Items")} {money(p.item_total, data.currency)} + tip {money(p.tip_share, data.currency)}</small></div>)}</Panel>
  {owner && <div id="core-bill-settle"><Panel title={t("Owner controls")}>{!settled ? <><div className="form-grid"><Field label={t("Tip type")}><select value={tip.mode} onChange={e => setTip({
                   ...tip,
                   mode: e.target.value
@@ -247,17 +254,17 @@ export default function Bill() {
               })} /></div><button disabled={busy} onClick={() => act('tip', tip)}>{t("Save tip")}</button><div className="people-action"><Field label={t("People")} type="number" min={data.joined_participants_count} max="20" value={people} onChange={e => setPeople(Number(e.target.value))} /><button disabled={busy} onClick={() => act('people', {
                 people
               })}>{t("Update")}</button></div><Field label={t('Receive payment with')}><select value={paymentProfileId} onChange={e=>setPaymentProfileId(e.target.value)}><option value="">{t('Default payment details')}</option>{paymentProfiles.map(profile=><option key={profile.id} value={profile.id}>{profile.label} · {profile.bank_name||'Link'}</option>)}</select></Field><button className="primary full" disabled={busy || !data.can_close} onClick={() => act('settle',{payment_profile_id:paymentProfileId?Number(paymentProfileId):null})}>{t("Settle bill")} <Check size={17} /></button>{!data.can_close && <p className="muted">{data.close_block_reason}</p>}</> : <><p>{t("Reopening allows selections to change and resets payment status.")}</p><button disabled={busy} onClick={() => {
-              if (confirm(t("Reopen this bill and reset payment statuses?"))) act('reopen');
+              if (confirm(t("Reopen and reset all current payment confirmations? This does not undo any bank transfers."))) act('reopen');
             }}>{t("Reopen bill")}</button></>}</Panel></div>}
  {fxOpen&&<div className="currency-dialog-backdrop" onClick={()=>setFxOpen(false)}><section className="currency-dialog" role="dialog" aria-modal="true" aria-label={t('Currency setup')} onClick={e=>e.stopPropagation()}><h2>{t('Currency setup')}</h2><p className="muted">{t('The reference is calculated from each participant’s share including tip. The original payment amount stays in the bill currency.')}</p><div className="form-grid"><Field label={t('Reference source')}><select value={fxProvider} onChange={e=>{setFxProvider(e.target.value);setFxPreview(null)}}><option value="bnr">BNR</option><option value="ecb">ECB</option></select></Field><Field label={t('Reference currency')}><select value={targetCurrency} onChange={e=>{setTargetCurrency(e.target.value);setFxPreview(null)}}>{[...new Set([data.currency,...Object.keys(config?.currencies||{}),'RON','EUR','USD','GBP','CHF'])].map(code=><option key={code} value={code}>{code}</option>)}</select></Field></div><label className="check"><input type="checkbox" checked={useManualRate} onChange={e=>{setUseManualRate(e.target.checked);setFxPreview(null)}}/><span>{t('Use a manual rate instead of the published rate')}</span></label>{useManualRate&&<Field label={`1 ${data.currency} = ${targetCurrency}`} type="number" min="0.00000001" step="any" value={manualRate} onChange={e=>{setManualRate(e.target.value);setFxPreview(null)}}/>}<div className="row wrap"><button onClick={previewCurrency} disabled={busy}>{t('Preview rate')}</button>{fxPreview&&<strong>1 {data.currency} = {fxPreview.rate} {targetCurrency} · {fxPreview.manual?t('Manual rate'):`${fxPreview.provider.toUpperCase()} ${fxPreview.date||''}`}</strong>}</div>{fxError&&<Message error={fxError}/>}<div className="row wrap"><button className="primary" disabled={busy} onClick={saveCurrency}>{t('Save currency setup')}</button><button onClick={()=>setFxOpen(false)}>{t('Cancel')}</button></div></section></div>}
  {settled && !owner && <Panel title={t("Pay the bill owner")}><p>{t("Your amount:")} <strong>{money(mine.total, data.currency)}</strong></p><p className="muted">{t("Payment happens outside Pruvs. Marking paid is your confirmation, not bank verification.")}</p>{paymentLink && <a className="primary full" href={paymentLink} target="_blank" rel="noreferrer" onClick={() => act('payment', {
             method: linkMethod,
             paid: false
-          })}>{t(payment?.payment_link?'Open payment link':'Open Revolut')} <ExternalLink size={17} /></a>}{payment?.iban && <details open><summary>{t("Use bank transfer")}</summary>{[[t("Recipient"), payment.recipient_name], ['IBAN', payment.iban], [t("Bank"), payment.bank_name], ['BIC', payment.bic], [t("Reference"), payment.payment_note]].filter(([, v]) => v).map(([k, v]) => <div key={k} className="bank-field"><small>{k}</small><span>{v}</span><button aria-label={'Copy ' + k} onClick={() => copied(v)}><Copy size={15} /></button></div>)}</details>}{!payment?.iban && !paymentLink && <p>{t("The owner has not added payment details yet.")}</p>}<div className="row wrap"><button disabled={busy} aria-pressed={mine.payment_status === 'paid' && mine.payment_method === 'bank_transfer'} className={mine.payment_status === 'paid' && mine.payment_method === 'bank_transfer' ? 'paid-choice' : ''} onClick={() => act('payment', {
+          })}>{t(payment?.payment_link?'Open payment link':'Open Revolut')} <ExternalLink size={17} /></a>}{payment?.iban && <details open><summary>{t("Use bank transfer")}</summary>{[[t("Recipient"), payment.recipient_name], ['IBAN', payment.iban], [t("Bank"), payment.bank_name], ['BIC', payment.bic], [t("Reference"), payment.payment_note]].filter(([, v]) => v).map(([k, v]) => <div key={k} className="bank-field"><small>{k}</small><span>{v}</span><button aria-label={'Copy ' + k} onClick={() => copied(v)}><Copy size={15} /></button></div>)}</details>}{!payment?.iban && !paymentLink && <p>{t("The owner has not added payment details yet.")}</p>}<div className="row wrap"><button disabled={busy || ['paid','received'].includes(mine.payment_status)} aria-pressed={mine.payment_status === 'paid' && mine.payment_method === 'bank_transfer'} className={mine.payment_status === 'paid' && mine.payment_method === 'bank_transfer' ? 'paid-choice' : ''} onClick={() => act('payment', {
               method: 'bank_transfer',
               paid: true
-            })}>{mine.payment_status === 'paid' && mine.payment_method === 'bank_transfer' && <Check size={16} />}{t("I paid by bank transfer")}</button><button disabled={busy} aria-pressed={mine.payment_status === 'paid' && mine.payment_method === linkMethod} className={mine.payment_status === 'paid' && mine.payment_method === linkMethod ? 'paid-choice' : ''} onClick={() => act('payment', {
+            })}>{mine.payment_status === 'paid' && mine.payment_method === 'bank_transfer' && <Check size={16} />}{t("I paid by bank transfer")}</button><button disabled={busy || ['paid','received'].includes(mine.payment_status)} aria-pressed={mine.payment_status === 'paid' && mine.payment_method === linkMethod} className={mine.payment_status === 'paid' && mine.payment_method === linkMethod ? 'paid-choice' : ''} onClick={() => act('payment', {
               method: linkMethod,
               paid: true
-            })}>{mine.payment_status === 'paid' && mine.payment_method === linkMethod && <Check size={16} />}{t(payment?.payment_link?'I paid via payment link':'I paid by Revolut')}</button></div></Panel>}</div></section></div>}</div></>;
+            })}>{mine.payment_status === 'paid' && mine.payment_method === linkMethod && <Check size={16} />}{t(payment?.payment_link?'I paid via payment link':'I paid by Revolut')}</button><button disabled={busy || ['paid','received'].includes(mine.payment_status)} aria-pressed={mine.payment_status === 'paid' && mine.payment_method === 'cash'} onClick={() => act('payment', {method:'cash',paid:true})}>I paid in cash</button></div>{mine.payment_status === 'paid' && <p className="muted">To change the payment method, withdraw the current report first.</p>}</Panel>}</div></section></div>}</div></>;
 }

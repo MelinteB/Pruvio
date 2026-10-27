@@ -189,6 +189,8 @@ def request_account_deletion_otp(db: Session, user: User, channel: str = "email"
 
 
 def _delete_session(db: Session, session_id: int) -> None:
+    from app.models.payment_confirmation_event import PaymentConfirmationEvent
+    db.query(PaymentConfirmationEvent).filter_by(session_id=session_id).delete(synchronize_session=False)
     db.query(SplitBillItemAssignment).filter(SplitBillItemAssignment.session_id == session_id).delete(synchronize_session=False)
     db.query(SplitBillParticipant).filter(SplitBillParticipant.session_id == session_id).delete(synchronize_session=False)
     db.query(SplitBillSession).filter(SplitBillSession.id == session_id).delete(synchronize_session=False)
@@ -200,9 +202,14 @@ def delete_user_completely(db: Session, user: User) -> None:
     # Remove participation from sessions owned by somebody else.
     participant_ids = [row.id for row in db.query(SplitBillParticipant).filter(SplitBillParticipant.user_id == user_id).all()]
     if participant_ids:
+        from app.models.payment_confirmation_event import PaymentConfirmationEvent
+        db.query(PaymentConfirmationEvent).filter(PaymentConfirmationEvent.participant_id.in_(participant_ids)).delete(synchronize_session=False)
         db.query(SplitBillItemAssignment).filter(SplitBillItemAssignment.participant_id.in_(participant_ids)).delete(synchronize_session=False)
         db.query(SplitBillParticipant).filter(SplitBillParticipant.id.in_(participant_ids)).delete(synchronize_session=False)
 
+    # Erase this user's actor identifiers from surviving shared bills as well.
+    from app.models.payment_confirmation_event import PaymentConfirmationEvent
+    db.query(PaymentConfirmationEvent).filter_by(actor_user_id=user_id).delete(synchronize_session=False)
     # Remove sessions owned by the user.
     owned_session_ids = [row.id for row in db.query(SplitBillSession).filter(SplitBillSession.owner_user_id == user_id).all()]
     for session_id in owned_session_ids:

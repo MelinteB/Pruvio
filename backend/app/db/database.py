@@ -102,6 +102,8 @@ def ensure_compatibility_schema() -> None:
             "payment_status": "VARCHAR(30) DEFAULT 'unpaid'",
             "payment_method": "VARCHAR(40)",
             "paid_at": "TIMESTAMP NULL",
+            "received_at": "TIMESTAMP NULL",
+            "confirmed_by_user_id": "INTEGER",
         }
         for name, sql_type in wanted.items():
             if name not in cols:
