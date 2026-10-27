@@ -34,6 +34,8 @@ from app.react_app.history_manage import router as history_manage_router
 from datetime import datetime
 from sqlalchemy import text as sql_text
 from app.reliability import RELEASE, bounded_seconds, require_postgres_if_enabled, frontend_is_ready, frontend_build_report, require_build_match_if_enabled
+from app.operations import new_request_id, safe_route_template, slow_threshold_ms, should_log, safe_method
+import time
 from app.models.push_notification import PushGrant,PushDevice
 from app.web_domain import canonical_browser_redirect,_PAGES,_PAGE_PATTERNS
 _PAGES.update({"/login","/reset","/password-reset","/notifications","/inbox","/account/notifications","/account/companies","/admin","/admin/manage-users"})
@@ -90,6 +92,29 @@ async def headers(request,call_next):
     if response.headers.get('content-type','').startswith('text/html') and not path.startswith(('/docs','/redoc')):
         response.headers['Content-Security-Policy']="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
     return response
+
+# v7.1.21: safe support diagnostics. Middleware is outermost and does not
+# change authorization, status, response bodies, caching or payment behavior.
+@app.middleware('http')
+async def request_diagnostics(request: Request, call_next):
+    correlation = new_request_id()
+    started = time.perf_counter()
+    threshold = slow_threshold_ms()
+    status = 500
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        response.headers['X-Pruvs-Request-ID'] = correlation
+        return response
+    finally:
+        elapsed = (time.perf_counter() - started) * 1000
+        if should_log(status, elapsed, threshold):
+            # Route *templates*, not actual bill tokens or account identifiers.
+            logging.getLogger('pruvs.operations').warning(
+                'request_id=%s method=%s route=%s status=%d duration_ms=%d',
+                correlation, safe_method(request.method), safe_route_template(request.scope),
+                status, round(elapsed)
+            )
 
 @app.exception_handler(ValueError)
 async def invalid(request,exc):return JSONResponse({'detail':str(exc)},400)

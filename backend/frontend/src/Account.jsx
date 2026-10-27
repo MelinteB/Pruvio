@@ -10,6 +10,7 @@ import Notifications from './Notifications';
 import CompanyProfiles from './CompanyProfiles';
 import {TripProfilesDialog} from './TripProfiles';
 import PaymentProfiles from './PaymentProfiles';
+import SupportDiagnostics from './professional/SupportDiagnostics';
 export function CompanySettings(){
   const companies=useLoad(()=>request('/expenses/companies'),[]);
   const [tripOpen,setTripOpen]=useState(false);
@@ -161,5 +162,5 @@ export default function Account() {
             const r = await send('/account/delete/request');
             setDeletion(r);
             if (r.delivery?.sent === false) throw new Error('Verification email could not be sent.');
-          }, t("Check your email for the confirmation code."))}>{t("Request deletion code")}</button>}</Panel></div></div></>;
+          }, t("Check your email for the confirmation code."))}>{t("Request deletion code")}</button>}</Panel><SupportDiagnostics/></div></div></>;
 }

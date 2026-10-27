@@ -1,0 +1,3 @@
+.pruvs-support-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0}
+.pruvs-support-details{overflow-wrap:anywhere;white-space:pre-wrap;word-break:break-word;border:1px solid var(--border,#dde5f0);border-radius:12px;background:var(--surface-soft,#f5f8fc);color:var(--ink,#15233d);padding:12px;font:12px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace}
+@media (prefers-reduced-motion:reduce){.pruvs-support-actions button{transition:none}}
