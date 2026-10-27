@@ -1,0 +1,81 @@
+/* Pruvs v7.1.24: persistent compact bill overview and item-allocation status. */
+.pruvs-floating-bill-overview {
+  position: sticky;
+  top: 80px; /* below the desktop fixed navigation */
+  z-index: 24; /* underneath the topbar (30), dialog overlays and mobile nav */
+  margin: 0 0 14px;
+  isolation: isolate;
+}
+.pruvs-floating-bill-overview .core-bill-hero {
+  margin: 0;
+  padding: 12px 18px;
+  border-radius: 16px;
+  border: 1px solid #b8d1fb;
+  background: rgba(247, 251, 255, .97);
+  box-shadow: 0 8px 24px rgba(22, 65, 126, .14);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  gap: 14px;
+}
+.pruvs-floating-bill-overview .core-overline {font-size: 10px;letter-spacing: .13em;}
+.pruvs-floating-bill-overview .core-bill-amounts {margin: 7px 0 8px;gap: clamp(14px, 3vw, 36px);}
+.pruvs-floating-bill-overview .core-bill-amounts>div {min-width: 0;}
+.pruvs-floating-bill-overview .core-bill-amounts strong {font-size: clamp(17px, 1.8vw, 23px);line-height: 1.2;white-space: nowrap;}
+.pruvs-floating-bill-overview .core-bill-progress {max-width: 450px;}
+.pruvs-floating-bill-overview .core-progress-track {margin-top: 5px;height: 4px;}
+.pruvs-floating-bill-overview .core-bill-people {max-width: 240px;gap: 4px;}
+.pruvs-floating-bill-overview .core-bill-member {width: 45px;gap: 2px;}
+.pruvs-floating-bill-overview .core-bill-member>span {width: 32px;height: 32px;border-width: 2px;font-size: 10px;}
+.pruvs-floating-bill-overview .core-bill-member small {max-width: 48px;font-size: 9px;}
+.pruvs-floating-bill-overview .core-bill-member>svg {top: 22px;right: 4px;}
+.pruvs-floating-bill-overview .core-bill-overflow {width: 32px;height: 32px;}
+/* The summary now follows item allocation; it is not a separate tab or route. */
+.bill-inline-summary-heading {color: #15366d;letter-spacing: -.02em;margin: 2px 0 14px;}
+.bill-summary-details {width: 100%;max-width: 1050px;margin: 0 auto;}
+.bill-summary-details>.panel {margin-bottom: 18px;}
+.bill-workspace-summary {margin-top: 23px;scroll-margin-top: 210px;}
+.v22-bill-tabs {position: relative;z-index: 1;}
+/* A green item is either selected locally or fully allocated. Neither means bank payment was verified. */
+.core-experience .item.is-selected-by-me {
+  background: #f0faf4;
+  border: 1px solid #bfe9d2;
+  border-left: 4px solid #2a9b6c;
+  padding-inline: 15px;
+  margin-block: 6px;
+}
+.core-experience .item.is-fully-allocated {
+  background: #e9f8f0;
+  border: 1px solid #91dab5;
+  border-left: 4px solid #148557;
+  padding-inline: 15px;
+  margin-block: 6px;
+}
+.core-experience .item.is-fully-allocated.unavailable {opacity: 1;}
+.core-experience .item.is-fully-allocated.unavailable>.row:first-child strong {text-decoration: none;}
+.core-experience .item.is-fully-allocated:hover,
+.core-experience .item.is-selected-by-me:hover {background: #e4f5ec;}
+.bill-item-status {display:inline-flex;align-items:center;gap:4px;width:fit-content;margin-top:6px;padding:4px 8px;background:#d9f2e5;color:#137148;border-radius:99px;font-size:11px;font-weight:700;}
+.core-experience .item.is-fully-allocated .assignment-tags .badge.blue,
+.core-experience .item.is-selected-by-me .assignment-tags .badge.blue {background:#c3e9d3;color:#166a49;}
+@media (max-width: 760px) {
+  .pruvs-floating-bill-overview {top: 65px;margin-bottom: 10px;}
+  .pruvs-floating-bill-overview .core-bill-hero {padding: 9px 11px;gap: 0;border-radius: 12px;}
+  .pruvs-floating-bill-overview .core-bill-amounts {display:grid;grid-template-columns: repeat(3,minmax(0,1fr));gap: 5px;margin: 7px 0 0;}
+  .pruvs-floating-bill-overview .core-bill-amounts strong {font-size: clamp(13px, 3.7vw, 18px);white-space: normal;overflow-wrap: anywhere;}
+  .pruvs-floating-bill-overview .core-bill-amounts small {font-size: 9px;line-height: 1.3;}
+  .pruvs-floating-bill-overview .core-bill-progress,
+  .pruvs-floating-bill-overview .core-bill-people {display: none;}
+  .v22-bill-tabs {grid-template-columns: repeat(2,minmax(0,1fr));}
+  .v22-bill-tabs button {min-height: 42px;}
+  .bill-workspace-summary {scroll-margin-top: 165px;}
+}
+@media (max-width: 380px) {
+  .pruvs-floating-bill-overview .core-overline {font-size: 9px;}
+  .pruvs-floating-bill-overview .core-bill-amounts strong {font-size: 12px;}
+}
+@media print {
+  .pruvs-floating-bill-overview {position: static;box-shadow: none;}
+}
+@media (prefers-reduced-motion: reduce) {
+  .pruvs-floating-bill-overview *, .core-experience .item {transition:none!important;}
+}

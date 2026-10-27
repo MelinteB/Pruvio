@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, CircleUserRound, Users } from 'lucide-react';
+import { CheckCircle2, CircleUserRound, Users, UserRoundPlus } from 'lucide-react';
 import { money } from '../api';
 
 export function initials(name) {
@@ -17,14 +17,14 @@ function ParticipantAvatar({ participant, isMe, currency, compact = false }) {
   </div>;
 }
 
-export default function RoundTable({ participants = [], myParticipantId, expectedCount = 0, currency = 'RON', status = 'open' }) {
+export default function RoundTable({ participants = [], myParticipantId, expectedCount = 0, currency = 'RON', status = 'open', onInvite }) {
   const people = participants.filter(Boolean);
   const extraSeats = Math.max(0, Number(expectedCount || 0) - people.length);
   const useRing = people.length <= 6;
   return <section className="pruvs-table-panel" aria-label="Participant table view">
     <div className="pruvs-table-heading">
       <div><h3>At the table</h3><p>See who's sharing the bill. Updated from the live session.</p></div>
-      <span className="pruvs-table-count"><Users size={15} /> {people.length} joined</span>
+      <div className="row wrap"><span className="pruvs-table-count"><Users size={15} /> {people.length} joined</span>{typeof onInvite === 'function' && status === 'open' && <button type="button" className="pruvs-invite-table-btn" onClick={onInvite}><UserRoundPlus size={16}/> Invite more</button>}</div>
     </div>
     {useRing ? <div className="pruvs-table-scene">
       <div className="pruvs-table-center" aria-hidden="true">

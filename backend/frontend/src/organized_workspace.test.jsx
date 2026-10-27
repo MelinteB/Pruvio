@@ -34,9 +34,10 @@ describe('separate shared bill views',()=>{
     fireEvent.click(screen.getByRole('tab',{name:/people/i}));
     expect(onChange).toHaveBeenCalledWith('people');
   });
-  it('allows Summary to be selected independently',()=>{
-    const onChange=vi.fn();
-    render(<BillFlowNav active="summary" onChange={onChange}/>);
-    expect(screen.getByRole('tab',{name:/summary/i}).getAttribute('aria-selected')).toBe('true');
+  it('keeps just Select Items and People as views; Summary follows items',()=>{
+    render(<BillFlowNav active="items" onChange={vi.fn()}/>);
+    expect(screen.getAllByRole('tab')).toHaveLength(2);
+    expect(screen.getByRole('tab',{name:/select items/i}).getAttribute('aria-selected')).toBe('true');
+    expect(screen.queryByRole('tab',{name:/summary/i})).toBeNull();
   });
 });

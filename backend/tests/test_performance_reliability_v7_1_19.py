@@ -13,10 +13,10 @@ BACKEND = Path(__file__).resolve().parents[1]
 
 class PerformanceReliabilityTests(unittest.TestCase):
     def test_release_version(self):
-        self.assertEqual(RELEASE, '7.1.22')
+        self.assertEqual(RELEASE, '7.1.24')
         api = (BACKEND/'app/react_app/api.py').read_text(encoding='utf8')
         self.assertIn("'version':RELEASE", api)
-        self.assertIn("version:'7.1.22'", (BACKEND/'frontend/scripts/stamp-build.mjs').read_text(encoding='utf8'))
+        self.assertIn("version:'7.1.24'", (BACKEND/'frontend/scripts/stamp-build.mjs').read_text(encoding='utf8'))
 
     def test_bounded_ocr_capacity(self):
         gate = OCRCapacity(1)

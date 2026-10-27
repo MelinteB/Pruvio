@@ -14,8 +14,8 @@ describe('bill currency setup',()=>{
   vi.stubGlobal('WebSocket',FakeSocket);
   request.mockImplementation(path=>Promise.resolve(path==='/account/payment-profiles'?[]:path.startsWith('/fx/quote')?{rate:'4.9',provider:'bnr',date:'2026-10-13',manual:false}:bill));
   render(<MemoryRouter initialEntries={['/bill/test']}><Context.Provider value={{user:{id:1},config:{currencies:{EUR:'Euro',RON:'Leu',USD:'Dollar'}}}}><Routes><Route path="/bill/:token" element={<Bill/>}/></Routes></Context.Provider></MemoryRouter>);
-  // Owner's currency controls moved to Summary in v7.1.22.
-  fireEvent.click(await screen.findByRole('tab', {name: /^summary$/i}));
+  // Summary and currency setup now appear below Select Items in v7.1.24.
+  expect(await screen.findByRole('heading', {name:/everyone's share/i})).toBeTruthy();
   fireEvent.click(await screen.findByRole('button',{name:'Currency setup'}));
   expect(screen.getByRole('dialog',{name:'Currency setup'})).toBeTruthy();
   fireEvent.change(screen.getByLabelText('Reference currency'),{target:{value:'RON'}});

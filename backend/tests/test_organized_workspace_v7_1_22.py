@@ -1,4 +1,4 @@
-"""v7.1.22 organized workspaces — static source regressions, no user data or DB access."""
+"""v7.1.24 organized workspaces — static source regressions, no user data or DB access."""
 import pathlib
 import unittest
 from app.reliability import RELEASE
@@ -7,9 +7,9 @@ ROOT=pathlib.Path(__file__).resolve().parents[1]
 
 class OrganizedWorkspaceTests(unittest.TestCase):
     def test_release_alignment(self):
-        self.assertEqual(RELEASE,'7.1.22')
-        self.assertIn("version:'7.1.22'",(ROOT/'frontend/scripts/stamp-build.mjs').read_text())
-        self.assertIn('pruvs-shell-v7.1.22',(ROOT/'app/static/react-service-worker.js').read_text())
+        self.assertEqual(RELEASE,'7.1.24')
+        self.assertIn("version:'7.1.24'",(ROOT/'frontend/scripts/stamp-build.mjs').read_text())
+        self.assertIn('pruvs-shell-v7.1.24',(ROOT/'app/static/react-service-worker.js').read_text())
 
     def test_merchant_tree_and_status_views(self):
         source=(ROOT/'frontend/src/Receipts.jsx').read_text()
@@ -26,7 +26,7 @@ class OrganizedWorkspaceTests(unittest.TestCase):
 
     def test_bill_sections_preserve_actions(self):
         source=(ROOT/'frontend/src/Bill.jsx').read_text()
-        for item in ('useSearchParams','section===\'items\'','section===\'people\'','section===\'summary\'','RoundTable','WhatsApp','act(\'settle\'','act(\'payment\''):
+        for item in ('useSearchParams','section===\'items\'','section===\'people\'','id="core-bill-summary"','RoundTable','WhatsApp','act(\'settle\'','act(\'payment\''):
             self.assertIn(item,source)
         self.assertIn('reported by participants',source.lower())
 

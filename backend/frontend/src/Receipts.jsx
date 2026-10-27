@@ -1,12 +1,13 @@
 import { t } from "./i18n";
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowUpRight, ScanLine, ReceiptText, Users, UploadCloud, RotateCw, ChevronDown, CalendarDays } from 'lucide-react';
+import { ArrowUpRight, ScanLine, ReceiptText, Users, UploadCloud, RotateCw, ChevronDown, CalendarDays, UserRoundPlus } from 'lucide-react';
 import { request, send, uploadFile, money } from './api';
 import { useApp, useLoad, Title, Panel, Spinner, Message, Field, Badge, Empty } from './common';
 import CropEditor from './CropEditor';
 import { HomeWelcome, ProcessingStatus } from './professional/BrandExperience';
 import { CaptureGuide, ReceiptReviewGuide } from './professional/CorePages';
+import InviteDialog from './professional/InviteDialog';
 import {saveLocalReceipt,deleteLocalReceipt,downloadLocalReceipt,getLocalReceipt} from './localReceipts';
 export function groupHistory(data){
   const grouped=new Map();
@@ -45,6 +46,7 @@ export function History({home=false,billsOnly=false}) {
   const [tab,setTab]=useState(billsOnly?'open':'receipts');
   const [showRemoved,setShowRemoved]=useState(false);
   const [actionError,setActionError]=useState('');
+  const [inviteSplit,setInviteSplit]=useState(null);
   const historyView=tab==='archived'?(showRemoved?'removed':'archived'):'active';
   const isSplitTab=tab==='open'||tab==='settled';
   const {data,reload,error,loading}=useLoad(
@@ -146,6 +148,7 @@ export function History({home=false,billsOnly=false}) {
                       <span className="merchant-main"><strong>Split #{b.session_id}</strong><small>{b.role==='owner'?'You own this split':'You are a participant'} · Your share {money(b.my_total,b.currency)}</small></span>
                       <Badge>{b.status}</Badge><ArrowUpRight size={17}/>
                     </Link>
+                    {b.status==='open'&&b.token&&<button type="button" className="secondary pruvs-invite-merchant-action" onClick={() => setInviteSplit({ token:b.token, name:merchant.name })}><UserRoundPlus size={16}/> Invite people</button>}
                     {b.history_note&&<p className="muted">{b.history_note}</p>}
                     {controls('bill',b.session_id,b.history_note)}
                   </div>):<p className="muted">No splits for this receipt in this view.</p>}
@@ -155,6 +158,7 @@ export function History({home=false,billsOnly=false}) {
           </div>
         </details>)}
       </div>
+      <InviteDialog open={!!inviteSplit} onClose={() => setInviteSplit(null)} shareUrl={inviteSplit ? `${window.location.origin}/join/${encodeURIComponent(inviteSplit.token)}` : ''} billName={inviteSplit?.name || 'Shared bill'} onCopied={async value => { try { await navigator.clipboard.writeText(value); } catch { setActionError('Copy is unavailable. Select the link and copy it manually.'); } }}/>
       {!visible.length&&<Empty>{tab==='open'?'No open splits.':tab==='settled'?'No settled splits.':'No receipts in this view.'} {home&&<Link to="/upload">Scan your first receipt</Link>}</Empty>}
       {home&&merchants.length>5&&<Link className="core-view-all" to="/bills">View all merchants <ArrowUpRight size={16}/></Link>}
       {!home&&<div className="row pager"><button disabled={!offset} onClick={()=>setOffset(Math.max(0,offset-30))}>Previous</button><span>{data.group_count?offset+1:0}–{Math.min(offset+30,data.group_count)} of {data.group_count}</span><button disabled={offset+30>=data.group_count} onClick={()=>setOffset(offset+30)}>Next</button></div>}

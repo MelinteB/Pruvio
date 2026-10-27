@@ -72,9 +72,26 @@ export function BillSummaryStrip({data,mine,currency}) {
   </section>;
 }
 
+/** Numeric assignment state; green means assigned, never payment-confirmed. */
+export function itemAllocationState(item, myParticipantId) {
+  const assignments = item?.assignments || [];
+  const own = assignments.filter(a => a.participant_id === myParticipantId)
+    .reduce((total, a) => total + (Number(a.quantity) || 0), 0);
+  const remaining = Math.max(0, Number(item?.remaining_quantity) || 0);
+  const quantity = Math.max(0, Number(item?.quantity) || 0);
+  return {
+    own,
+    max: own + remaining,
+    unavailable: own + remaining <= .0001,
+    selectedByMe: own > .0001,
+    fullyAllocated: quantity > .0001 && remaining <= .0001,
+    step: Number.isInteger(quantity) ? 1 : .001,
+  };
+}
+
 /** Separate views keep the existing bill actions and data; URL query allows direct links. */
 export function BillFlowNav({active='items',onChange=()=>{}}) {
-  const sections=[['items','Select items',ClipboardList],['people','People',Users],['summary','Summary',FileText]];
+  const sections=[['items','Select items',ClipboardList],['people','People',Users]];
   return <nav className="core-bill-tabs v22-bill-tabs" aria-label="Bill sections" role="tablist">{sections.map(([id,label,Icon])=><button type="button" role="tab" aria-selected={active===id} key={id} className={active===id?'is-active':''} onClick={()=>onChange(id)}><Icon size={16}/>{label}</button>)}</nav>;
 }
 

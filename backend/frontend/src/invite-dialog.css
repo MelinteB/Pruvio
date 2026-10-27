@@ -1,0 +1,42 @@
+/* Pruvs 7.1.23 — Sharing and invitation dialog. Uses the existing Pruvs brand. */
+.pruvs-invite-overlay{position:fixed;inset:0;z-index:1100;background:rgba(13,28,61,.56);display:grid;place-items:center;padding:20px;overscroll-behavior:contain;backdrop-filter:blur(4px)}
+.pruvs-invite-dialog{width:min(760px,100%);max-height:min(92dvh,950px);overflow:auto;background:#fff;border:1px solid #e2e9f7;border-radius:20px;box-shadow:0 30px 90px rgba(10,24,60,.23);color:#152b55}
+.pruvs-invite-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:25px 28px 19px;border-bottom:1px solid #e9eff8}
+.pruvs-invite-eyebrow{display:block;letter-spacing:.13em;font-size:10px;color:#3268e9;font-weight:800;margin-bottom:8px}
+.pruvs-invite-header h2{font-size:23px;line-height:1.25;margin:0 0 5px;color:#13254e}
+.pruvs-invite-header p{font-size:13px;color:#687c9f;margin:0}
+.pruvs-invite-close{display:grid;place-items:center;flex:none;min-width:38px;height:38px;background:#f2f6fd;border:0;color:#16305e;border-radius:11px;box-shadow:none;padding:0}
+.pruvs-invite-body{padding:24px 28px;display:grid;gap:20px}
+.pruvs-invite-share-layout{display:grid;grid-template-columns:155px minmax(0,1fr);gap:24px;align-items:center}
+.pruvs-invite-qr{display:grid;justify-items:center;gap:9px;padding:15px 12px 10px;background:#f5f8ff;border-radius:15px;border:1px solid #e3eafa}
+.pruvs-invite-qr small{font-size:11px;color:#5c6e91}
+.pruvs-invite-share-options{min-width:0}.pruvs-invite-share-options>label{display:block;font-size:12px;font-weight:700;margin-bottom:9px;color:#314968}
+.pruvs-invite-copyline{display:flex;align-items:stretch;gap:8px;min-width:0}
+.pruvs-invite-copyline input{min-width:0;flex:1;width:100%;padding:11px;background:#fafcff;border:1px solid #dce5f4;border-radius:10px;color:#364c6f;text-overflow:ellipsis;font-size:12px}
+.pruvs-invite-copyline button,.pruvs-invite-buttons a,.pruvs-invite-buttons button,.pruvs-invite-group-details>a{display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;border-radius:10px;min-height:42px;padding:10px 13px;font-size:12px;font-weight:700;box-shadow:none;text-decoration:none}
+.pruvs-invite-copyline button,.pruvs-invite-footer button{background:#3263ed;color:#fff;border:1px solid #3263ed}
+.pruvs-invite-buttons{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
+.pruvs-invite-buttons a,.pruvs-invite-buttons button,.pruvs-invite-group-details>a{border:1px solid #dce5f5;background:#fff;color:#193c78}
+.pruvs-invite-section{border-top:1px solid #e8eef9;padding-top:17px}
+.pruvs-invite-section-title h3{margin:0;font-size:15px;color:#142952}.pruvs-invite-section-title small{display:block;color:#6a7c9d;margin:5px 0 13px;font-size:12px}
+.pruvs-invite-picker{display:inline-flex;align-items:center;gap:8px;background:#f1f6ff;color:#1e53bd;border:1px solid #d9e5fb;min-height:40px;border-radius:10px;padding:9px 12px;box-shadow:none;font-size:12px}
+.pruvs-invite-picker:disabled{opacity:.6;cursor:not-allowed}
+.pruvs-invite-manual{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:8px;margin-top:12px}
+.pruvs-invite-manual input{min-width:0;width:100%;border-radius:10px;padding:10px 11px;font-size:12px;border:1px solid #dbe5f5}
+.pruvs-invite-manual button{display:inline-flex;align-items:center;gap:6px;border-radius:10px;padding:10px 12px;font-size:12px;box-shadow:none}
+.pruvs-invite-contacts{display:grid;gap:6px;margin-top:12px;max-height:170px;overflow:auto}
+.pruvs-invite-contact{display:flex;gap:8px;align-items:center;border:1px solid #e6edf9;background:#fafdff;border-radius:10px;padding:8px 10px}
+.pruvs-invite-contact>span{flex:1;min-width:0;display:grid;gap:2px}.pruvs-invite-contact strong{font-size:12px}.pruvs-invite-contact small{font-size:11px;color:#72829c}
+.pruvs-invite-contact a{font-size:12px;color:#215de0}.pruvs-invite-contact button{display:grid;place-items:center;border:0;background:transparent;color:#7c8ca3;padding:5px;box-shadow:none}
+.pruvs-invite-error{font-size:12px;color:#bb2439;margin:9px 0 0}
+.pruvs-invite-hint{font-size:12px;line-height:1.6;color:#5e718f;background:#f5f8ff;border:1px solid #e0eafb;border-radius:10px;padding:10px 12px;margin:0}
+.pruvs-invite-group-toggle{display:flex;width:100%;align-items:center;gap:10px;border:0;background:transparent;color:#183563;font-weight:700;padding:0;box-shadow:none;text-align:left}
+.pruvs-invite-group-toggle span{margin-left:auto;font-size:19px;color:#3266e9}
+.pruvs-invite-group-details{display:grid;gap:12px;margin-top:16px}.pruvs-invite-group-details p{font-size:12px;color:#607492;margin:0}.pruvs-invite-group-details>a{width:max-content;max-width:100%;white-space:normal}
+.pruvs-invite-footer{display:flex;align-items:center;justify-content:space-between;gap:18px;border-top:1px solid #e9eff8;padding:15px 28px}.pruvs-invite-footer small{font-size:11px;color:#7382a0;line-height:1.5;max-width:470px}
+.pruvs-invite-footer button{border-radius:10px;min-width:85px;min-height:40px}
+.pruvs-invite-table-btn{display:inline-flex;align-items:center;gap:7px;border-radius:10px;min-height:38px;font-size:12px;white-space:nowrap;color:#275cce;background:#edf4ff;border:1px solid #d8e7ff;padding:8px 12px;box-shadow:none}
+.pruvs-invite-merchant-action{justify-self:start;min-height:36px;font-size:12px}
+.pruvs-invite-overlay button:focus-visible,.pruvs-invite-overlay a:focus-visible,.pruvs-invite-overlay input:focus-visible{outline:3px solid #8caeff;outline-offset:3px}
+@media(max-width:580px){.pruvs-invite-overlay{padding:8px}.pruvs-invite-dialog{max-height:96dvh;border-radius:16px}.pruvs-invite-header{padding:20px 17px 15px}.pruvs-invite-header h2{font-size:19px}.pruvs-invite-body{padding:17px;gap:16px}.pruvs-invite-share-layout{grid-template-columns:1fr;gap:14px}.pruvs-invite-qr{width:max-content;justify-self:center}.pruvs-invite-manual{grid-template-columns:1fr 1fr}.pruvs-invite-manual button{grid-column:1/-1;justify-content:center}.pruvs-invite-footer{padding:14px 17px}}
+@media(prefers-reduced-motion:reduce){.pruvs-invite-overlay{backdrop-filter:none}}
