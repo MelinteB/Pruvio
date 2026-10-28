@@ -667,7 +667,7 @@ Object.assign(ro, {
   "PC per": "PC per",
   "PC ·": "PC ·",
   "PRUVS · SHARED BILL": "PRUVS · NOTĂ COMUNĂ",
-  "Pruvs · Core Experience 7.1.28": "Pruvs · Experiența principală 7.1.28",
+  "Pruvs · Core Experience 7.1.29": "Pruvs · Experiența principală 7.1.29",
   "Resume subscription": "Reia abonamentul",
   "Retry email": "Retrimite e-mailul",
   "SHARED BILL OVERVIEW": "REZUMATUL NOTEI COMUNE",

@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Fingerprint, ArrowRight, ScanLine, Users, ShieldCheck } from 'lucide-react';
 import { send, credential, safeNext } from './api';
+import { invitedBillDestination } from './join-return';
 import { Field, Check, Message, useApp } from './common';
 function usernameFromName(value){
   const parts=(value||'').trim().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().split(/\s+/).map(p=>p.replace(/[^a-z0-9-]/g,'')).filter(Boolean);
@@ -20,13 +21,16 @@ export default function Auth({
   const [params] = useSearchParams();
   const storageKey='pruvs-pending-'+mode;
   const [pending]=useState(()=>{try{const d=JSON.parse(sessionStorage.getItem(storageKey)||'null');return d&&d.expires>Date.now()?d:null}catch{return null}});
+  // The email verification screen may reload before registration is complete.
+  // A pending invitation must survive that reload without leaving this browser tab.
+  const returnTo = params.get('next') || pending?.next || '';
   const [form, setForm] = useState(pending?{email:pending.email}:{}),
     [usernameEdited,setUsernameEdited]=useState(false),
     [challenge, setChallenge] = useState(pending?.challenge||null),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [done, setDone] = useState(false);
-  useEffect(()=>{if(mode==='login')return;if(challenge&&!done)sessionStorage.setItem(storageKey,JSON.stringify({email:challenge.email||form.email,challenge,expires:Date.now()+15*60*1000}));else sessionStorage.removeItem(storageKey)},[challenge,done]);
+  useEffect(()=>{if(mode==='login')return;if(challenge&&!done)sessionStorage.setItem(storageKey,JSON.stringify({email:challenge.email||form.email,challenge,next:safeNext(returnTo),expires:Date.now()+15*60*1000}));else sessionStorage.removeItem(storageKey)},[challenge,done,returnTo]);
   const set = (k, v) => {
     if(k==='username')setUsernameEdited(true);
     setForm(f=>({...f,[k]:v,...(k==='name'&&!usernameEdited?{username:usernameFromName(v)}:{})}));
@@ -47,13 +51,21 @@ export default function Auth({
     sessionStorage.removeItem(storageKey);
     accept(result);
     if (justRegistered) {
-      sessionStorage.setItem('pruvs-next', safeNext(params.get('next')));
+      // Invitation completion takes priority over device notification enrollment.
+      // Push setup remains available in Account after the guest joins the bill.
+      const invited = invitedBillDestination(returnTo);
+      if (invited) {
+        sessionStorage.removeItem('pruvs-next');
+        navigate(invited, { replace: true });
+        return;
+      }
+      sessionStorage.setItem('pruvs-next', safeNext(returnTo));
       navigate('/notifications?enrol=1', { replace: true });
       return;
     }
     // Keep the original invitation route rather than taking the user Home.
     // safeNext refuses external and protocol-relative destinations.
-    navigate(safeNext(params.get('next')), { replace: true });
+    navigate(invitedBillDestination(returnTo) || safeNext(returnTo), { replace: true });
   }
   async function submit(e) {
     e.preventDefault();
