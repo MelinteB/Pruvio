@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import React, { useState } from 'react';
 import { Panel } from '../common';
 import { getLastFailureRequestId } from '../api';
@@ -30,11 +31,11 @@ export default function SupportDiagnostics() {
       setNotice('Technical details copied.');
     } catch (_) { setNotice('Could not copy automatically. You can select the details below.'); }
   };
-  return <Panel title="Technical support">
-    <p className="muted">If something is not working, you can check the running application version. No personal, payment or receipt details are included.</p>
+  return <Panel title={t("Technical support" )}>
+    <p className="muted">{t("If something is not working, you can check the running application version. No personal, payment or receipt details are included.")}</p>
     <div className="pruvs-support-actions">
       <button type="button" className="secondary" disabled={busy} onClick={check}>{busy ? 'Checking…' : 'Check app version'}</button>
-      {details && <button type="button" onClick={copy}>Copy diagnostics</button>}
+      {details && <button type="button" onClick={copy}>{t("Copy diagnostics")}</button>}
     </div>
     {details && <pre className="pruvs-support-details">{info}</pre>}
     {notice && <p role="status" className="muted">{notice}</p>}

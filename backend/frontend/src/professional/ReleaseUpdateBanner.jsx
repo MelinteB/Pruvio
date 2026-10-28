@@ -1,9 +1,10 @@
+import { t } from '../i18n';
 import React, { useEffect, useState } from 'react';
 
 // This constant identifies the code running in the user's browser. The server
 // exposes /api/v1/release; a newer release can be offered without clearing
 // IndexedDB or other local Pruvs receipts.
-export const CLIENT_RELEASE = '7.1.26';
+export const CLIENT_RELEASE = '7.1.27';
 
 export function isNewerRelease(server, client = CLIENT_RELEASE) {
   const parse = value => {
@@ -42,8 +43,8 @@ export function ReleaseUpdateBanner() {
   }, []);
   if (!available) return null;
   return <div className="pruvs-release-banner" role="status">
-    <span>A newer Pruvs version is ready.</span>
-    <button type="button" onClick={() => window.location.reload()}>Reload</button>
-    <button type="button" className="release-dismiss" aria-label="Dismiss update notice" onClick={() => setAvailable(false)}>×</button>
+    <span>{t("A newer Pruvs version is ready.")}</span>
+    <button type="button" onClick={() => window.location.reload()}>{t("Reload")}</button>
+    <button type="button" className="release-dismiss" aria-label={t("Dismiss update notice")} onClick={() => setAvailable(false)}>×</button>
   </div>;
 }

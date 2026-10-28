@@ -19,6 +19,29 @@ from app.services.push_service import active_user, preferences, enabled, validat
 
 log = logging.getLogger(__name__)
 
+# Retry only transient delivery failures. Provider acceptance is not proof
+# the operating system displayed a push; Inbox remains the durable record.
+MAX_PUSH_ATTEMPTS = 5
+
+def push_failure(code, attempts):
+    """Return (permanent, next_delay_seconds) for a provider result."""
+    try:
+        code = int(code)
+    except (ValueError, TypeError):
+        code = 0
+    permanent = code in (400, 401, 403, 404, 410, 413) or 300 <= code < 400
+    if permanent or attempts >= MAX_PUSH_ATTEMPTS:
+        return True, None
+    # 408 / 429 / 5xx and transport failures get capped exponential delay.
+    return False, min(900, 30 * 2 ** max(0, attempts - 1))
+
+
+def event_retry_delay(event, now=None):
+    """Keep queued notifications within their TTL, even during outages."""
+    now = now or datetime.utcnow()
+    remaining = (event.expires_at - now).total_seconds()
+    return max(0, min(900, int(remaining)))
+
 
 def send_push(device, payload):
     from pywebpush import webpush
@@ -75,7 +98,7 @@ def claim(db):
     for (eid,) in db.query(PushEvent.id).filter(due).order_by(PushEvent.available_at).limit(20):
         token = str(uuid.uuid4())
         count = db.query(PushEvent).filter(PushEvent.id == eid, due).update({
-            'status': 'processing', 'lease_until': now + timedelta(minutes=10), 'lease_token': token}, synchronize_session=False)
+            'status': 'processing', 'lease_until': now + timedelta(minutes=2), 'lease_token': token}, synchronize_session=False)
         db.commit()
         if count:
             return db.get(PushEvent, eid)
@@ -101,6 +124,7 @@ def deliver(db, event):
     if event.device_id:
         devices = [d for d in devices if d.id == event.device_id]
     retry = False
+    retry_after = []
     for device in devices:
         db.refresh(device)
         grant = db.get(PushGrant, device.grant_hash, populate_existing=True)
@@ -140,11 +164,12 @@ def deliver(db, event):
         else:
             delivery.error_code = f'http_{code}' if code else 'transport_error'
             log.warning('Push delivery failed for event=%s device=%s status=%s', event.id, device.id, delivery.error_code)
-            permanent = code in (400, 401, 403, 404, 410, 413) or 300 <= code < 400
+            permanent, delay = push_failure(code, delivery.attempts)
             if code in (404, 410):
                 device.active = False
-            delivery.status = 'failed' if permanent or delivery.attempts >= 3 else 'pending'
+            delivery.status = 'failed' if permanent else 'pending'
             retry = retry or delivery.status == 'pending'
+            if not permanent: retry_after.append(delay)
         db.commit()
     accepted = db.query(PushDelivery).filter_by(event_id=event.id, status='accepted').count() > 0
     # Provider acceptance does not prove display. An opted-in verified email
@@ -168,7 +193,7 @@ def deliver(db, event):
         db.commit()
     email_retry = send_email_for_event and event.email_status != 'accepted' and event.email_attempts < 3
     if retry or email_retry:
-        event.status = 'pending'; event.available_at = datetime.utcnow() + timedelta(seconds=60 if retry else 120)
+        event.status = 'pending'; event.available_at = datetime.utcnow() + timedelta(seconds=min(retry_after) if retry_after else 120)
     elif accepted:
         event.status = 'accepted'
     elif event.email_status == 'accepted':

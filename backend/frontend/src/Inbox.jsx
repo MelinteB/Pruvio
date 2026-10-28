@@ -30,7 +30,7 @@ export default function Inbox() {
       setBusy(false);
     }
   }
-  return <><Title eyebrow="PRUVS" title={t('Inbox')} action={<button disabled={busy} onClick={() => run(reload)}>{t('Refresh status')}</button>}>{t('Incoming split-bill messages from other people.')}</Title>
+  return <><Title eyebrow={t("PRUVS" )} title={t('Inbox')} action={<button disabled={busy} onClick={() => run(reload)}>{t('Refresh status')}</button>}>{t('Incoming split-bill messages from other people.')}</Title>
  {(error || loadError) && <Message error={error || loadError} />} {location.state?.message && <Message>{location.state.message}</Message>}
  <Panel><div className="row between wrap"><Check label={t('Unread only')} checked={unread} onChange={e => {
           setUnread(e.target.checked);

@@ -1,0 +1,25 @@
+/* v7.1.27: each member receives a distinct, soft accent in the current bill. */
+.pruvs-table-person .pruvs-table-face,
+.core-bill-member > span {
+  background:var(--participant-soft,#e4eeff) !important;
+  border-color:var(--participant-edge,#4978cc) !important;
+  color:var(--participant-text,#234b94) !important;
+}
+.pruvs-table-person {border-color:color-mix(in srgb,var(--participant-edge,#4978cc) 28%,#fff);}
+.core-experience .item[style*="--item-share-background"] {
+  background:var(--item-share-background) !important;
+  border-color:#d2daea;
+  border-left-color:#6685c0;
+}
+.core-experience .item[style*="--item-share-background"]:hover {background:var(--item-share-background) !important;}
+.assignment-tags .participant-assignment {
+  background:var(--participant-soft,#e4eeff) !important;
+  color:var(--participant-text,#234b94) !important;
+  border:1px solid var(--participant-edge,#4978cc);
+  font-weight:650;
+  text-transform:none;
+}
+@media(prefers-contrast:more) {.assignment-tags .participant-assignment {border-width:2px;}}
+
+.pruvs-color-share { border-left:3px solid var(--participant-edge,#4978cc);padding-left:12px; }
+.pruvs-color-share .pruvs-payment-state {color:var(--participant-text,#234b94);}

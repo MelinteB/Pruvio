@@ -7,6 +7,7 @@ import { useApp, useLoad, Title, Panel, Field, Spinner, Message, Badge } from '.
 import RoundTable, { ClosedBillNotice } from './professional/RoundTable';
 import InviteDialog from './professional/InviteDialog';
 import PaymentConfirmation from './PaymentConfirmation';
+import {participantColors, participantStyle, itemShareGradient} from './participant-colors';
 import './payment-confirmation.css';
 import { BillSummaryStrip, BillFlowNav, itemAllocationState } from './professional/CorePages';
 export function Join() {
@@ -44,7 +45,7 @@ export function Join() {
     attemptedAutoJoin.current = true;
     void enterBill();
   }, [autoJoin, data, loading, error]);
-  return <><Title eyebrow="YOU'RE INVITED" title="Share the moment. Split the bill." />{loading ? <Spinner /> : error ? <Message error={error} /> : data && <Panel><Users size={36} /><h2>{t('Split')} · {data.source_name}</h2><p>{data.owner} · {t("Sign in with your own account and select the items you enjoyed.")}</p><Badge>{data.status}</Badge>{err && <Message error={err} />}<div className="row"><button className="primary" disabled={busy} onClick={enterBill}>{busy ? 'Opening your bill…' : data.joined || data.is_owner ? t("Open your bill") : t("Join bill")}</button></div></Panel>}</>;
+  return <><Title eyebrow={t("YOU'RE INVITED" )} title={t("Share the moment. Split the bill." )} />{loading ? <Spinner /> : error ? <Message error={error} /> : data && <Panel><Users size={36} /><h2>{t('Split')} · {data.source_name}</h2><p>{data.owner} · {t("Sign in with your own account and select the items you enjoyed.")}</p><Badge>{data.status}</Badge>{err && <Message error={err} />}<div className="row"><button className="primary" disabled={busy} onClick={enterBill}>{busy ? 'Opening your bill…' : data.joined || data.is_owner ? t("Open your bill") : t("Join bill")}</button></div></Panel>}</>;
 }
 export default function Bill() {
   const {
@@ -69,6 +70,7 @@ export default function Bill() {
     [manualRate,setManualRate]=useState(''),[useManualRate,setUseManualRate]=useState(false),
     [fxPreview,setFxPreview]=useState(null),[fxError,setFxError]=useState(''),[paymentProfiles,setPaymentProfiles]=useState([]),[paymentProfileId,setPaymentProfileId]=useState(''),
     [paymentHistory,setPaymentHistory]=useState([]),[paymentHistoryError,setPaymentHistoryError]=useState(''),[paymentHistoryRevision,setPaymentHistoryRevision]=useState(0);
+  const colors = participantColors(data?.participants || []);
   const [searchParams, setSearchParams] = useSearchParams();
   const requested = searchParams.get('view');
   const section = requested === 'people' ? 'people' : 'items';
@@ -211,40 +213,41 @@ export default function Bill() {
     settled = data.status !== 'open',
     link = location.origin + '/join/' + token,
     payment = data.owner_payment_details, paymentLink = payment?.payment_link || payment?.revolut_payment_link, linkMethod = payment?.payment_link ? 'payment_link' : 'revolut';
-  return <><Title eyebrow="A LITTLE LESS MATH" title={t('Split')+' · '+(data.source_name||t('Receipt'))} action={<button className="secondary" onClick={() => setShare(true)}><Share2 size={17} /> {t("Share bill")}</button>}><span className={'live-dot ' + (live === t("Live") ? 'connected' : '')} />{live} · {data.joined_participants_count}/{data.expected_participants_count} {t("people ·")} <Badge>{data.status}</Badge></Title>{error && <Message error={error} />} {notice && <Message>{notice}</Message>}
- <div className="pruvs-floating-bill-overview" role="region" aria-label="Always-visible shared bill overview"><BillSummaryStrip data={data} mine={mine} currency={data.currency} /></div>
+  return <><Title eyebrow={t("A LITTLE LESS MATH" )} title={t('Split')+' · '+(data.source_name||t('Receipt'))} action={<button className="secondary" onClick={() => setShare(true)}><Share2 size={17} /> {t("Share bill")}</button>}><span className={'live-dot ' + (live === t("Live") ? 'connected' : '')} />{live} · {data.joined_participants_count}/{data.expected_participants_count} {t("people ·")} <Badge>{data.status}</Badge></Title>{error && <Message error={error} />} {notice && <Message>{notice}</Message>}
+ <div className="pruvs-floating-bill-overview" role="region" aria-label={t("Always-visible shared bill overview" )}><BillSummaryStrip data={data} mine={mine} currency={data.currency} /></div>
  <BillFlowNav active={section} onChange={chooseSection} />
  <InviteDialog open={share} onClose={() => setShare(false)} shareUrl={link} billName={data.source_name || 'Shared bill'} onCopied={copied} seatsFull={data.joined_participants_count >= data.expected_participants_count} />
  {section==='people'&&<section id="core-bill-people" className="bill-workspace-people">
-   <Panel title="People at the table">
-     <p className="muted">Everyone can see their current share. Use WhatsApp or SMS to contact a participant; messages are sent outside Pruvs.</p>
+   <Panel title={t("People at the table" )}>
+     <p className="muted">{t("Everyone can see their current share. Use WhatsApp or SMS to contact a participant; messages are sent outside Pruvs.")}</p>
      <RoundTable participants={data.participants} myParticipantId={data.my_participant_id} expectedCount={data.expected_participants_count} currency={data.currency} status={data.status} onInvite={() => setShare(true)}/>
-     <div className="bill-message-list" aria-label="Contact participants">
+     <div className="bill-message-list" aria-label={t("Contact participants" )}>
        {data.participants.filter(p=>p.participant_id!==data.my_participant_id).map(p=>{
          const phone=String(p.phone_number||'').replace(/\D/g,'');
          const message=`Hi ${p.display_name||'there'}, here's our Pruvs bill: ${link}`;
          return <div key={p.participant_id} className="bill-contact-row">
-           <div className="grow"><strong>{p.display_name}</strong><small>{money(p.total,data.currency)} · {p.payment_status==='received'?'Owner confirmed receipt':p.payment_status==='paid'?'Payment reported':'Awaiting payment'}</small></div>
-           {phone?<a className="secondary" href={'https://wa.me/'+phone+'?text='+encodeURIComponent(message)} target="_blank" rel="noreferrer"><MessageCircle size={16}/> WhatsApp</a>:<button className="secondary" onClick={()=>copied(message)}><Copy size={16}/> Copy message</button>}
-           {phone&&<a className="secondary" href={'sms:'+phone+'?body='+encodeURIComponent(message)}>SMS</a>}
-           {owner&&p.user_id&&<button disabled={busy || p.payment_status==='received'} onClick={()=>act('remind',{participant_id:p.participant_id})}>Send reminder</button>}
+           <div className="grow"><strong>{p.display_name}</strong><small>{money(p.total,data.currency)} · {p.payment_status==='received'?t('Owner confirmed receipt'):p.payment_status==='paid'?t('Payment reported'):t('Awaiting payment')}</small></div>
+           {phone?<a className="secondary" href={'https://wa.me/'+phone+'?text='+encodeURIComponent(message)} target="_blank" rel="noreferrer"><MessageCircle size={16}/> {t("WhatsApp")}</a>:<button className="secondary" onClick={()=>copied(message)}><Copy size={16}/> {t("Copy message")}</button>}
+           {phone&&<a className="secondary" href={'sms:'+phone+'?body='+encodeURIComponent(message)}>{t("SMS")}</a>}
+           {owner&&p.user_id&&<button disabled={busy || p.payment_status==='received'} onClick={()=>act('remind',{participant_id:p.participant_id})}>{t("Send reminder")}</button>}
          </div>;
        })}
      </div>
-     <button className="secondary" onClick={()=>setShare(true)}><Share2 size={16}/> Invite more people</button>
+     <button className="secondary" onClick={()=>setShare(true)}><Share2 size={16}/> {t("Invite more people")}</button>
    </Panel>
  </section>}
  <div className="two-column bill-layout v22-bill-layout">{section==='items'&&<div id="core-bill-items"><Panel title={t("Pick what you enjoyed")}><p className="muted">{t("Your choices save automatically and update for everyone.")}</p>{data.items.map(item => {
           const {own, max, unavailable, selectedByMe, fullyAllocated, step} = itemAllocationState(item, data.my_participant_id);
-          return <div key={item.item_id} className={'item ' + (unavailable ? 'unavailable ' : '') + (fullyAllocated ? 'is-fully-allocated ' : '') + (selectedByMe ? 'is-selected-by-me' : '')}><div className="row between"><div className="grow"><strong>{item.name}</strong>{item.translated_name && item.translated_name !== item.name && <small>{item.translated_name}</small>}<small>{item.quantity} × {money(item.unit_price, data.currency)} · {item.remaining_quantity} {t("remaining")}</small>{(selectedByMe || fullyAllocated) && <span className="bill-item-status" role="status"><Check size={14} aria-hidden="true"/>{fullyAllocated ? "Fully allocated" : "Selected by you"}</span>}</div><strong>{money(item.total_price, data.currency)}</strong></div><div className="row between wrap"><div className="assignment-tags">{item.assignments.map(a => <span key={a.assignment_id} className={'badge ' + (a.participant_id === mine.participant_id ? 'blue' : '')}>{a.assigned_to}{a.participant_id === mine.participant_id ? ' (you)' : ''}: {a.quantity}</span>)}</div><div className="quantity"><button aria-label={'Remove ' + item.name} disabled={settled || busy || own <= 0} onClick={() => select(item, Math.max(0, own - step))}><Minus size={15} /></button><input aria-label={'Your quantity for ' + item.name} type="number" min="0" max={max} step={step} value={own} disabled={settled || busy || unavailable} onChange={e => {
+          const colorGradient = itemShareGradient(item, colors);
+          return <div key={item.item_id} className={'item ' + (unavailable ? 'unavailable ' : '') + (fullyAllocated ? 'is-fully-allocated ' : '') + (selectedByMe ? 'is-selected-by-me' : '')} style={colorGradient ? {'--item-share-background': colorGradient} : undefined}><div className="row between"><div className="grow"><strong>{item.name}</strong>{item.translated_name && item.translated_name !== item.name && <small>{item.translated_name}</small>}<small>{item.quantity} × {money(item.unit_price, data.currency)} · {item.remaining_quantity} {t("remaining")}</small>{(selectedByMe || fullyAllocated) && <span className="bill-item-status" role="status"><Check size={14} aria-hidden="true"/>{t(fullyAllocated ? 'Fully allocated' : 'Selected by you')}</span>}</div><strong>{money(item.total_price, data.currency)}</strong></div><div className="row between wrap"><div className="assignment-tags">{item.assignments.map(a => <span key={a.assignment_id} className="badge participant-assignment" style={participantStyle(colors, a.participant_id)}>{a.assigned_to}{a.participant_id === mine.participant_id ? ' (' + t('you') + ')' : ''}: {a.quantity}</span>)}</div><div className="quantity"><button aria-label={'Remove ' + item.name} disabled={settled || busy || own <= 0} onClick={() => select(item, Math.max(0, own - step))}><Minus size={15} /></button><input aria-label={'Your quantity for ' + item.name} type="number" min="0" max={max} step={step} value={own} disabled={settled || busy || unavailable} onChange={e => {
                   const n = Number(e.target.value);
                   if (Number.isFinite(n) && n >= 0 && n <= max) select(item, n);
                 }} /><button aria-label={'Add ' + item.name} disabled={settled || busy || own >= max} onClick={() => select(item, Math.min(max, own + step))}><Plus size={15} /></button></div></div></div>;
         })}</Panel>
- <section id="core-bill-summary" className="bill-workspace-summary" aria-label="Summary and payment confirmation"><h2 className="bill-inline-summary-heading">Summary &amp; payment</h2>
+ <section id="core-bill-summary" className="bill-workspace-summary" aria-label={t("Summary and payment confirmation" )}><h2 className="bill-inline-summary-heading">{t("Summary & payment")}</h2>
    {settled&&<ClosedBillNotice canPay={!owner}/>}
    <PaymentConfirmation data={data} isOwner={owner} isBusy={busy} onAction={act} history={paymentHistory} historyError={paymentHistoryError} onRefresh={() => setPaymentHistoryRevision(current => current + 1)} />
- <div className="bill-summary-details"><Panel title={t("Everyone's share")}><div className="row between wrap"><small>{data.currency_reference?`${data.currency_reference.manual?t('Manual rate'):data.currency_reference.provider.toUpperCase()} · 1 ${data.currency} = ${data.currency_reference.rate} ${data.currency_reference.target}${data.currency_reference.date?' · '+data.currency_reference.date:''}`:t('No currency reference set yet.')}</small>{owner&&<button onClick={openCurrency}>{t('Currency setup')}</button>}</div>{data.currency_reference?.source_url&&<small><a href={data.currency_reference.source_url} target="_blank" rel="noreferrer">{t('Reference source')}</a></small>}{data.participants.map(p => <div className="participant" key={p.participant_id}><div className="row between"><div><strong>{p.display_name}{p.user_id === user.id ? ' · You' : ''}</strong><small>{p.role} · {p.payment_status==='received'?'Owner confirmed':p.payment_status==='paid'?'Payment reported':'Awaiting payment'} {p.payment_method ? '· ' + p.payment_method.replace('_', ' ') : ''}</small></div><strong>{data.currency_reference && Number.isFinite(Number(p.reference_total)) ? money(p.reference_total,data.currency_reference.target) : money(p.total, data.currency)}</strong></div>{data.currency_reference && <small>Original share (settled in {data.currency}): {money(p.total,data.currency)}</small>}<small>{t("Items")} {money(p.item_total, data.currency)} + tip {money(p.tip_share, data.currency)}</small></div>)}</Panel>
+ <div className="bill-summary-details"><Panel title={t("Everyone's share")}><div className="row between wrap"><small>{data.currency_reference?`${data.currency_reference.manual?t('Manual rate'):data.currency_reference.provider.toUpperCase()} · 1 ${data.currency} = ${data.currency_reference.rate} ${data.currency_reference.target}${data.currency_reference.date?' · '+data.currency_reference.date:''}`:t('No currency reference set yet.')}</small>{owner&&<button onClick={openCurrency}>{t('Currency setup')}</button>}</div>{data.currency_reference?.source_url&&<small><a href={data.currency_reference.source_url} target="_blank" rel="noreferrer">{t('Reference source')}</a></small>}{data.participants.map(p => <div className="participant pruvs-color-share" key={p.participant_id} style={participantStyle(colors, p.participant_id)}><div className="row between"><div><strong>{p.display_name}{p.user_id === user.id ? ' · ' + t('You') : ''}</strong><small>{p.role} · {p.payment_status==='received'?t('Owner confirmed'):p.payment_status==='paid'?t('Payment reported'):t('Awaiting payment')} {p.payment_method ? '· ' + p.payment_method.replace('_', ' ') : ''}</small></div><strong>{data.currency_reference && Number.isFinite(Number(p.reference_total)) ? money(p.reference_total,data.currency_reference.target) : money(p.total, data.currency)}</strong></div>{data.currency_reference && <small>{t("Original share (settled in")} {data.currency}): {money(p.total,data.currency)}</small>}<small>{t("Items")} {money(p.item_total, data.currency)} {t("+ tip")} {money(p.tip_share, data.currency)}</small></div>)}</Panel>
  {owner && <div id="core-bill-settle"><Panel title={t("Owner controls")}>{!settled ? <><div className="form-grid"><Field label={t("Tip type")}><select value={tip.mode} onChange={e => setTip({
                   ...tip,
                   mode: e.target.value
@@ -266,5 +269,5 @@ export default function Bill() {
             })}>{mine.payment_status === 'paid' && mine.payment_method === 'bank_transfer' && <Check size={16} />}{t("I paid by bank transfer")}</button><button disabled={busy || ['paid','received'].includes(mine.payment_status)} aria-pressed={mine.payment_status === 'paid' && mine.payment_method === linkMethod} className={mine.payment_status === 'paid' && mine.payment_method === linkMethod ? 'paid-choice' : ''} onClick={() => act('payment', {
               method: linkMethod,
               paid: true
-            })}>{mine.payment_status === 'paid' && mine.payment_method === linkMethod && <Check size={16} />}{t(payment?.payment_link?'I paid via payment link':'I paid by Revolut')}</button><button disabled={busy || ['paid','received'].includes(mine.payment_status)} aria-pressed={mine.payment_status === 'paid' && mine.payment_method === 'cash'} onClick={() => act('payment', {method:'cash',paid:true})}>I paid in cash</button></div>{mine.payment_status === 'paid' && <p className="muted">To change the payment method, withdraw the current report first.</p>}</Panel>}</div></section></div>}</div></>;
+            })}>{mine.payment_status === 'paid' && mine.payment_method === linkMethod && <Check size={16} />}{t(payment?.payment_link?'I paid via payment link':'I paid by Revolut')}</button><button disabled={busy || ['paid','received'].includes(mine.payment_status)} aria-pressed={mine.payment_status === 'paid' && mine.payment_method === 'cash'} onClick={() => act('payment', {method:'cash',paid:true})}>{t("I paid in cash")}</button></div>{mine.payment_status === 'paid' && <p className="muted">{t("To change the payment method, withdraw the current report first.")}</p>}</Panel>}</div></section></div>}</div></>;
 }

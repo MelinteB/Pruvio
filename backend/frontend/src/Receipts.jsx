@@ -99,29 +99,29 @@ export function History({home=false,billsOnly=false}) {
     </Title>
     {home&&<HomeWelcome user={user}/>}
     {error&&<Message error={error}/>}{actionError&&<Message error={actionError}/>}
-    {!home&&<nav className="receipt-status-tabs" aria-label="Receipt and bill views">
+    {!home&&<nav className="receipt-status-tabs" aria-label={t("Receipt and bill views" )}>
       {tabs.map(([value,title])=><button key={value} type="button" className={tab===value?'is-active':''}
         aria-current={tab===value?'page':undefined} onClick={()=>onTab(value)}>{title}</button>)}
     </nav>}
     {tab==='archived'&&!home&&<div className="row wrap receipt-archive-options">
-      <span className="muted">Archived receipts and bills can be restored at any time.</span>
+      <span className="muted">{t("Archived receipts and bills can be restored at any time.")}</span>
       <button type="button" className={showRemoved?'secondary is-active':'secondary'} onClick={()=>{setShowRemoved(v=>!v);setOffset(0)}}>
         {showRemoved?'Show archived':'Manage removed'}
       </button>
     </div>}
-    {home&&data&&<div className="core-summary-strip" aria-label="Your Pruvs activity">
+    {home&&data&&<div className="core-summary-strip" aria-label={t("Your Pruvs activity" )}>
       <div><strong>{data.receipt_count??0}</strong><span>{t('Saved receipts')}</span></div>
       <div><strong>{data.bill_counts?.open??0}</strong><span>{t('Open bills')}</span></div>
       <div><strong>{data.bill_counts?.settled??0}</strong><span>{t('Settled bills')}</span></div>
     </div>}
-    <div className="section-heading"><h2>{label}</h2><small className="muted">Grouped by merchant · newest scans first</small></div>
+    <div className="section-heading"><h2>{label}</h2><small className="muted">{t("Grouped by merchant · newest scans first")}</small></div>
     {loading?<Spinner/>:data&&<>
-      <div className="merchant-tree" aria-label="Merchants and receipts">
+      <div className="merchant-tree" aria-label={t("Merchants and receipts" )}>
         {visible.map(merchant=><details key={merchant.key} className="merchant-group panel">
           <summary className="merchant-header">
             <span className="icon-tile"><ReceiptText size={20}/></span>
-            <span className="merchant-main"><strong>{merchant.name}</strong><small>{merchant.receipts.length} {merchant.receipts.length===1?'receipt':'receipts'} · Latest scan {historyDate(merchant.date)}</small></span>
-            <span className="merchant-right"><span className="merchant-count">{merchant.receipts.reduce((n,e)=>n+e.bills.length,0)} splits</span><ChevronDown size={18}/></span>
+            <span className="merchant-main"><strong>{merchant.name}</strong><small>{merchant.receipts.length} {merchant.receipts.length===1?'receipt':'receipts'} {t("· Latest scan")} {historyDate(merchant.date)}</small></span>
+            <span className="merchant-right"><span className="merchant-count">{merchant.receipts.reduce((n,e)=>n+e.bills.length,0)} {t("splits")}</span><ChevronDown size={18}/></span>
           </summary>
           <div className="merchant-receipts">
             {merchant.receipts.map(entry=>{
@@ -131,27 +131,27 @@ export function History({home=false,billsOnly=false}) {
               return <details key={entry.id} className="merchant-receipt">
                 <summary className="merchant-receipt-header">
                   <span className="merchant-receipt-icon"><CalendarDays size={17}/></span>
-                  <span className="merchant-main"><strong>{historyDate(entry.date)}</strong><small>{own?identifier:'Shared by the bill owner'} · {entry.bills.length} splits</small></span>
+                  <span className="merchant-main"><strong>{historyDate(entry.date)}</strong><small>{own?identifier:'Shared by the bill owner'} · {entry.bills.length} {t("splits")}</small></span>
                   <span className="merchant-right">
                     {own&&<strong>{money(entry.receipt.receipt_total,entry.receipt.currency)}</strong>}
                     <ChevronDown size={16}/>
                   </span>
                 </summary>
                 <div className="merchant-receipt-content">
-                  {owned&&<Link className="secondary" to={'/receipt/'+entry.id}>View receipt</Link>}
+                  {owned&&<Link className="secondary" to={'/receipt/'+entry.id}>{t("View receipt")}</Link>}
                   {entry.receipt?.history_note&&<p className="muted">{entry.receipt.history_note}</p>}
                   {entry.receipt&&controls('receipt',entry.id,entry.receipt.history_note)}
-                  {entry.receipt&&!home&&<button className="danger" onClick={()=>eraseReceipt(entry.id)}>Delete permanently</button>}
+                  {entry.receipt&&!home&&<button className="danger" onClick={()=>eraseReceipt(entry.id)}>{t("Delete permanently")}</button>}
                   {entry.bills.length?entry.bills.map(b=><div key={b.session_id} className="merchant-split">
                     <Link to={'/bill/'+b.token} className="merchant-split-link">
                       <span className="icon-tile"><Users size={17}/></span>
-                      <span className="merchant-main"><strong>Split #{b.session_id}</strong><small>{b.role==='owner'?'You own this split':'You are a participant'} · Your share {money(b.my_total,b.currency)}</small></span>
+                      <span className="merchant-main"><strong>{t("Split #")}{b.session_id}</strong><small>{b.role==='owner'?'You own this split':'You are a participant'} {t("· Your share")} {money(b.my_total,b.currency)}</small></span>
                       <Badge>{b.status}</Badge><ArrowUpRight size={17}/>
                     </Link>
-                    {b.status==='open'&&b.token&&<button type="button" className="secondary pruvs-invite-merchant-action" onClick={() => setInviteSplit({ token:b.token, name:merchant.name })}><UserRoundPlus size={16}/> Invite people</button>}
+                    {b.status==='open'&&b.token&&<button type="button" className="secondary pruvs-invite-merchant-action" onClick={() => setInviteSplit({ token:b.token, name:merchant.name })}><UserRoundPlus size={16}/> {t("Invite people")}</button>}
                     {b.history_note&&<p className="muted">{b.history_note}</p>}
                     {controls('bill',b.session_id,b.history_note)}
-                  </div>):<p className="muted">No splits for this receipt in this view.</p>}
+                  </div>):<p className="muted">{t("No splits for this receipt in this view.")}</p>}
                 </div>
               </details>;
             })}
@@ -159,9 +159,9 @@ export function History({home=false,billsOnly=false}) {
         </details>)}
       </div>
       <InviteDialog open={!!inviteSplit} onClose={() => setInviteSplit(null)} shareUrl={inviteSplit ? `${window.location.origin}/join/${encodeURIComponent(inviteSplit.token)}` : ''} billName={inviteSplit?.name || 'Shared bill'} onCopied={async value => { try { await navigator.clipboard.writeText(value); } catch { setActionError('Copy is unavailable. Select the link and copy it manually.'); } }}/>
-      {!visible.length&&<Empty>{tab==='open'?'No open splits.':tab==='settled'?'No settled splits.':'No receipts in this view.'} {home&&<Link to="/upload">Scan your first receipt</Link>}</Empty>}
-      {home&&merchants.length>5&&<Link className="core-view-all" to="/bills">View all merchants <ArrowUpRight size={16}/></Link>}
-      {!home&&<div className="row pager"><button disabled={!offset} onClick={()=>setOffset(Math.max(0,offset-30))}>Previous</button><span>{data.group_count?offset+1:0}–{Math.min(offset+30,data.group_count)} of {data.group_count}</span><button disabled={offset+30>=data.group_count} onClick={()=>setOffset(offset+30)}>Next</button></div>}
+      {!visible.length&&<Empty>{tab==='open'?'No open splits.':tab==='settled'?'No settled splits.':'No receipts in this view.'} {home&&<Link to="/upload">{t("Scan your first receipt")}</Link>}</Empty>}
+      {home&&merchants.length>5&&<Link className="core-view-all" to="/bills">{t("View all merchants")} <ArrowUpRight size={16}/></Link>}
+      {!home&&<div className="row pager"><button disabled={!offset} onClick={()=>setOffset(Math.max(0,offset-30))}>{t("Previous")}</button><span>{data.group_count?offset+1:0}–{Math.min(offset+30,data.group_count)} {t("of")} {data.group_count}</span><button disabled={offset+30>=data.group_count} onClick={()=>setOffset(offset+30)}>{t("Next")}</button></div>}
     </>}
   </>;
 }
@@ -265,9 +265,9 @@ export function Upload() {
       setBusy(false);
     }
   }
-  return <><CaptureGuide/><Title eyebrow="START WITH A SCAN" title={t("Capture the receipt")}>{t("Upload a photo or PDF. Only validated receipts are saved. Free originals stay on this device; paid originals are backed up privately in the cloud.")}</Title><Panel><label className="dropzone" onDragOver={e => e.preventDefault()} onDrop={e => {e.preventDefault();if(!busy)choose(e.dataTransfer.files[0]);}}><UploadCloud size={42}/><h2>{t("Drop your receipt here")}</h2><p>{t("JPG, PNG, WebP or PDF · up to 10 MB")}</p><input aria-label={t("Choose receipt")} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={busy} onChange={e=>choose(e.target.files[0])}/></label><label className="secondary camera">{t("Take a photo")} <input aria-label={t("Take receipt photo")} type="file" accept="image/*" capture="environment" disabled={busy} onChange={e=>choose(e.target.files[0])}/></label>
-  <div className="capture-preview" aria-label="Receipt preview before processing"><h3>{file ? `Preview · ${file.name}` : t("Receipt preview")}</h3>{!file?<p className="muted">Choose or photograph a receipt to see it here before processing.</p>:file.type==='application/pdf'?<iframe title={t("Receipt PDF preview")} src={preview} className="pdf-preview"/>:<><CropEditor preview={preview} crop={crop} onChange={setCrop}/><div className="row wrap"><button disabled={busy} onClick={()=>transform(false)}>{t("Apply crop")}</button><button disabled={busy} onClick={()=>transform(true)}><RotateCw size={16}/> {t("Rotate")}</button><button disabled={busy||file===original} onClick={()=>{setFile(original);setCrop({x:0,y:0,w:100,h:100})}}>{t('Restore original')}</button><button disabled={busy} onClick={()=>setCrop({x:0,y:0,w:100,h:100})}>{t('Reset selection')}</button></div></>}</div>
-  {membership?.usage?.ocr&&<div className="usage-at-capture"><strong>AI OCR: {membership.usage.ocr.used}/{membership.usage.ocr.allowance} this month</strong><p className="muted">{membership.usage.ocr.remaining>0?`${membership.usage.ocr.remaining} included scans remaining`:`Monthly allowance exhausted. Use 2 PC per extra scan or view Membership.`}</p><label><input type="checkbox" checked={useCredits} onChange={e=>setUseCredits(e.target.checked)} /> Allow spending 2 PC for this scan ONLY if my monthly allowance is exhausted ({membership.credits||0} PC available)</label></div>}
+  return <><CaptureGuide/><Title eyebrow={t("START WITH A SCAN" )} title={t("Capture the receipt")}>{t("Upload a photo or PDF. Only validated receipts are saved. Free originals stay on this device; paid originals are backed up privately in the cloud.")}</Title><Panel><label className="dropzone" onDragOver={e => e.preventDefault()} onDrop={e => {e.preventDefault();if(!busy)choose(e.dataTransfer.files[0]);}}><UploadCloud size={42}/><h2>{t("Drop your receipt here")}</h2><p>{t("JPG, PNG, WebP or PDF · up to 10 MB")}</p><input aria-label={t("Choose receipt")} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={busy} onChange={e=>choose(e.target.files[0])}/></label><label className="secondary camera">{t("Take a photo")} <input aria-label={t("Take receipt photo")} type="file" accept="image/*" capture="environment" disabled={busy} onChange={e=>choose(e.target.files[0])}/></label>
+  <div className="capture-preview" aria-label={t("Receipt preview before processing" )}><h3>{file ? `Preview · ${file.name}` : t("Receipt preview")}</h3>{!file?<p className="muted">{t("Choose or photograph a receipt to see it here before processing.")}</p>:file.type==='application/pdf'?<iframe title={t("Receipt PDF preview")} src={preview} className="pdf-preview"/>:<><CropEditor preview={preview} crop={crop} onChange={setCrop}/><div className="row wrap"><button disabled={busy} onClick={()=>transform(false)}>{t("Apply crop")}</button><button disabled={busy} onClick={()=>transform(true)}><RotateCw size={16}/> {t("Rotate")}</button><button disabled={busy||file===original} onClick={()=>{setFile(original);setCrop({x:0,y:0,w:100,h:100})}}>{t('Restore original')}</button><button disabled={busy} onClick={()=>setCrop({x:0,y:0,w:100,h:100})}>{t('Reset selection')}</button></div></>}</div>
+  {membership?.usage?.ocr&&<div className="usage-at-capture"><strong>{t("AI OCR:")} {membership.usage.ocr.used}/{membership.usage.ocr.allowance} {t("this month")}</strong><p className="muted">{membership.usage.ocr.remaining>0?`${membership.usage.ocr.remaining} included scans remaining`:`Monthly allowance exhausted. Use 2 PC per extra scan or view Membership.`}</p><label><input type="checkbox" checked={useCredits} onChange={e=>setUseCredits(e.target.checked)} /> {t("Allow spending 2 PC for this scan ONLY if my monthly allowance is exhausted (")}{membership.credits||0} {t("PC available)")}</label></div>}
   {error&&<Message error={error}/>}<button className="primary full" disabled={!file||busy} onClick={upload}>{busy?progress<100?`Uploading ${progress}%`:t("Reading your receipt…"):t("Process receipt")}</button><ProcessingStatus busy={busy} progress={progress} />{busy&&<><progress max="100" value={progress}/><button onClick={()=>abort.current.abort()}>{t("Cancel upload")}</button><p className="muted">{t("After upload finishes, processing can continue on the server. You can check History.")}</p></>}</Panel></>;
 
 }
@@ -319,7 +319,7 @@ export function Receipt() {
   if (loading) return <Spinner />;
   if (error) return <Message error={error} />;
   if (!r) return null;
-  return <><Title eyebrow="RECEIPT REVIEW" title={r.merchant_name} action={r.storage_mode==='local'?<button className="secondary" disabled={!localAvailable} onClick={()=>downloadLocalReceipt(user.id,id).catch(e=>setError(e.message))}>{t('Download saved copy')}</button>:r.original_available&&<a className="secondary" href={'/api/v1/receipts/' + id + '/original'} target="_blank" rel="noreferrer">{t("Download saved copy")}</a>}>{r.original_filename} · {r.status.replaceAll('_', ' ')}</Title>{location.state?.restored_original?<Message>{t('This receipt was already saved. Your uploaded copy restored the missing document without OCR.')}</Message>:location.state?.duplicate&&<Message error={t('This receipt is already saved. We opened the existing receipt and did not send it to OCR again.')} />}{r.storage_mode==='local'&&!localAvailable&&<Message error="The original receipt is available only on the device where it was scanned. Browser data clearing can erase this local copy."/>}{!r.original_available&&r.storage_mode!=='local'&&<Panel title={t('Document copy missing')}><p>{t('The saved receipt details remain, but its image or PDF is missing from storage. Choose your copy of this receipt to restore the download without OCR.')}</p><label className="secondary">{busy?t('Restoring…'):t('Restore saved document')} <input aria-label={t('Restore saved document')} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={busy} onChange={e=>{restore(e.target.files[0]);e.target.value=''}} /></label></Panel>}{actionError && <Message error={actionError} />}
+  return <><Title eyebrow={t("RECEIPT REVIEW" )} title={r.merchant_name} action={r.storage_mode==='local'?<button className="secondary" disabled={!localAvailable} onClick={()=>downloadLocalReceipt(user.id,id).catch(e=>setError(e.message))}>{t('Download saved copy')}</button>:r.original_available&&<a className="secondary" href={'/api/v1/receipts/' + id + '/original'} target="_blank" rel="noreferrer">{t("Download saved copy")}</a>}>{r.original_filename} · {r.status.replaceAll('_', ' ')}</Title>{location.state?.restored_original?<Message>{t('This receipt was already saved. Your uploaded copy restored the missing document without OCR.')}</Message>:location.state?.duplicate&&<Message error={t('This receipt is already saved. We opened the existing receipt and did not send it to OCR again.')} />}{r.storage_mode==='local'&&!localAvailable&&<Message error="The original receipt is available only on the device where it was scanned. Browser data clearing can erase this local copy."/>}{!r.original_available&&r.storage_mode!=='local'&&<Panel title={t('Document copy missing')}><p>{t('The saved receipt details remain, but its image or PDF is missing from storage. Choose your copy of this receipt to restore the download without OCR.')}</p><label className="secondary">{busy?t('Restoring…'):t('Restore saved document')} <input aria-label={t('Restore saved document')} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={busy} onChange={e=>{restore(e.target.files[0]);e.target.value=''}} /></label></Panel>}{actionError && <Message error={actionError} />}
  <ReceiptReviewGuide matched={Math.abs(r.receipt_total-r.calculated_total)<=.02} currency={r.currency}/><div className="stats"><Panel><span>{t("Receipt total")}</span><strong>{money(r.receipt_total, r.currency)}</strong></Panel><Panel><span>{t("Extracted items total")}</span><strong>{money(r.calculated_total, r.currency)}</strong></Panel><Panel><span>{t("Items")}</span><strong>{r.items.length}</strong></Panel></div>
  {Math.abs(r.receipt_total - r.calculated_total) > .02 && <Message error={t("The extracted items do not match the receipt total. Review the original receipt before splitting.")} />}
  <Panel title={t("Receipt items")}>{r.items.map(i => <div className="list-row" key={i.id}><div className="grow"><strong>{i.name}</strong>{i.translated_name && i.translated_name !== i.name && <small>{i.translated_name}</small>}<small>{i.quantity} × {money(i.unit_price, r.currency)}</small></div><strong>{money(i.total_price, r.currency)}</strong></div>)}{!r.items.length && <Empty>{t("No items were extracted. Try uploading a clearer image.")}</Empty>}</Panel>
@@ -329,7 +329,7 @@ export function Receipt() {
         }, 'PUT');
         await reload();
       })}>{t("Save currency")}</button></Panel>}
- <Panel title="Share this bill"><p>{t("Include yourself in the total number of people.")}</p><div className="people-action"><Field label={t("People")} type="number" min="1" max="20" value={people} onChange={e => setPeople(Number(e.target.value))} /><button className="primary" disabled={busy || !r.items.length || r.status==='needs_review' || Math.abs(r.receipt_total-r.calculated_total)>.05 || !/^[A-Z]{3}$/.test(r.currency)} onClick={() => run(async () => {
+ <Panel title={t("Share this bill" )}><p>{t("Include yourself in the total number of people.")}</p><div className="people-action"><Field label={t("People")} type="number" min="1" max="20" value={people} onChange={e => setPeople(Number(e.target.value))} /><button className="primary" disabled={busy || !r.items.length || r.status==='needs_review' || Math.abs(r.receipt_total-r.calculated_total)>.05 || !/^[A-Z]{3}$/.test(r.currency)} onClick={() => run(async () => {
           const s = await send('/receipts/' + id + '/split', {
             people
           });

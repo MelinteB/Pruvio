@@ -27,14 +27,14 @@ function AdminMembership({userId}) {
     catch (e) {setNotice(e.message)}
     finally {setSaving(false)}
   }
-  return <section className="admin-membership"><h3>User membership</h3>
-    {error&&<Message error={error}/>}{loading?<Spinner/>:<><p>Assigned plan: <strong>{(data?.plan||'free').toUpperCase()}</strong> · Promotional credits: <strong>{data?.credits ?? 0} PC</strong></p>
-    <p className="muted">Monthly AI OCR: {data?.usage?.ocr?.used ?? '—'} / {data?.usage?.ocr?.allowance ?? '—'} · Reports: {data?.usage?.expense_report?.used ?? '—'} / {data?.usage?.expense_report?.allowance ?? '—'}. Online checkout is handled by Stripe if enabled.</p>
-    <div className="row wrap"><label>Subscription <select aria-label="Assign user subscription" value={plan} onChange={e=>setPlan(e.target.value)}>{['free','plus','business'].map(k=><option key={k} value={k}>{k.toUpperCase()}</option>)}</select></label><button className="primary" disabled={saving||plan===data?.plan} onClick={update}>Assign subscription</button></div>
-    <div className="row wrap"><label>Set Pruvs Credits balance (PC) <input type="number" min="0" step="1" value={balance} onChange={e=>setBalance(e.target.value)}/></label><button disabled={saving||String(data?.credits??0)===balance} onClick={async()=>{
+  return <section className="admin-membership"><h3>{t("User membership")}</h3>
+    {error&&<Message error={error}/>}{loading?<Spinner/>:<><p>{t("Assigned plan:")} <strong>{(data?.plan||'free').toUpperCase()}</strong> {t("· Promotional credits:")} <strong>{data?.credits ?? 0} PC</strong></p>
+    <p className="muted">{t("Monthly AI OCR:")} {data?.usage?.ocr?.used ?? '—'} / {data?.usage?.ocr?.allowance ?? '—'} {t("· Reports:")} {data?.usage?.expense_report?.used ?? '—'} / {data?.usage?.expense_report?.allowance ?? '—'}{t(". Online checkout is handled by Stripe if enabled.")}</p>
+    <div className="row wrap"><label>{t("Subscription")} <select aria-label={t("Assign user subscription" )} value={plan} onChange={e=>setPlan(e.target.value)}>{['free','plus','business'].map(k=><option key={k} value={k}>{k.toUpperCase()}</option>)}</select></label><button className="primary" disabled={saving||plan===data?.plan} onClick={update}>{t("Assign subscription")}</button></div>
+    <div className="row wrap"><label>{t("Set Pruvs Credits balance (PC)")} <input type="number" min="0" step="1" value={balance} onChange={e=>setBalance(e.target.value)}/></label><button disabled={saving||String(data?.credits??0)===balance} onClick={async()=>{
       if(!window.confirm(`Set user #${userId} balance to ${balance} PC?`))return;
       setSaving(true);setNotice('');try{await send('/commerce/admin/users/'+userId+'/credits',{balance:Number(balance),expected_balance:data?.credits??0},'PUT');await reload();setNotice('Balance updated.');}catch(e){setNotice(e.message)}finally{setSaving(false)}
-    }}>Save balance</button></div>
+    }}>{t("Save balance")}</button></div>
     {notice&&<Message>{notice}</Message>}
     </>}
   </section>;
@@ -70,31 +70,31 @@ function PlanConfiguration() {
     window.dispatchEvent(new Event('pruvs:membership-updated'));
   }catch(e){setNote(e.message)}finally{setPending('')}}
   const set=(key,field,value)=>setDraft(d=>({...d,[key]:{...d[key],[field]:value}}));
-  return <Panel title="Subscription plans & pricing">
-    <p className="muted">Edit subscription price, period, quotas and features. Quota changes apply to all accounts immediately; price changes must be published as a new Stripe Price. Existing paying customers retain their existing billed price until migrated separately.</p>
+  return <Panel title={t("Subscription plans & pricing" )}>
+    <p className="muted">{t("Edit subscription price, period, quotas and features. Quota changes apply to all accounts immediately; price changes must be published as a new Stripe Price. Existing paying customers retain their existing billed price until migrated separately.")}</p>
     {error&&<Message error={error}/>}{note&&<Message>{note}</Message>}{loading&&<Spinner/>}
-    {rewardDraft&&<div className="billing-credit-costs"><h3>Referral rewards</h3>
-      <label>PC per qualified referral <input type="number" min="0" step="1" value={rewardDraft.pc_reward} onChange={e=>setRewardDraft(p=>({...p,pc_reward:e.target.value}))}/></label>
-      <label>Bonus AI OCR scans per qualified referral <input type="number" min="0" step="1" value={rewardDraft.ocr_bonus} onChange={e=>setRewardDraft(p=>({...p,ocr_bonus:e.target.value}))}/></label>
-      <button disabled={!!pending} onClick={async()=>{setPending('rewards');setNote('');try{await send('/commerce/admin/referral-rewards',rewardDraft,'PUT');await rewards.reload();setNote('Future referral rewards updated.');}catch(e){setNote(e.message)}finally{setPending('')}}}>Save referral rewards</button></div>}
-    {pcDraft&&<div className="billing-credit-costs"><h3>Promotional PC spending</h3><p className="muted">These credits are separate from Stripe subscription payments and merchant loyalty.</p>
-    <label>Extra OCR scan (PC) <input type="number" min="0" value={pcDraft.ocr_pc} onChange={e=>setPcDraft(p=>({...p,ocr_pc:e.target.value}))}/></label>
-    <label>Extra expense report (PC) <input type="number" min="0" value={pcDraft.report_pc} onChange={e=>setPcDraft(p=>({...p,report_pc:e.target.value}))}/></label>
-    <button disabled={!!pending} onClick={async()=>{setPending('pc');setNote('');try{await send('/commerce/billing/admin/pc-costs',pcDraft,'PUT');await costs.reload();setNote('PC spending costs updated.');window.dispatchEvent(new Event('pruvs:membership-updated'));}catch(e){setNote(e.message)}finally{setPending('')}}}>Save PC costs</button></div>}
-    {['free','plus','business'].map(key=>{const item=draft[key],original=data?.[key];if(!item)return null;return <details key={key} open={key==='plus'} className="billing-plan-config"><summary><strong>{key.toUpperCase()}</strong> — {original?.price_display} per {original?.interval_count>1?original.interval_count+' ':''}{original?.interval}{original?.stripe_ready?' · Stripe published':''}</summary>
+    {rewardDraft&&<div className="billing-credit-costs"><h3>{t("Referral rewards")}</h3>
+      <label>{t("PC per qualified referral")} <input type="number" min="0" step="1" value={rewardDraft.pc_reward} onChange={e=>setRewardDraft(p=>({...p,pc_reward:e.target.value}))}/></label>
+      <label>{t("Bonus AI OCR scans per qualified referral")} <input type="number" min="0" step="1" value={rewardDraft.ocr_bonus} onChange={e=>setRewardDraft(p=>({...p,ocr_bonus:e.target.value}))}/></label>
+      <button disabled={!!pending} onClick={async()=>{setPending('rewards');setNote('');try{await send('/commerce/admin/referral-rewards',rewardDraft,'PUT');await rewards.reload();setNote('Future referral rewards updated.');}catch(e){setNote(e.message)}finally{setPending('')}}}>{t("Save referral rewards")}</button></div>}
+    {pcDraft&&<div className="billing-credit-costs"><h3>{t("Promotional PC spending")}</h3><p className="muted">{t("These credits are separate from Stripe subscription payments and merchant loyalty.")}</p>
+    <label>{t("Extra OCR scan (PC)")} <input type="number" min="0" value={pcDraft.ocr_pc} onChange={e=>setPcDraft(p=>({...p,ocr_pc:e.target.value}))}/></label>
+    <label>{t("Extra expense report (PC)")} <input type="number" min="0" value={pcDraft.report_pc} onChange={e=>setPcDraft(p=>({...p,report_pc:e.target.value}))}/></label>
+    <button disabled={!!pending} onClick={async()=>{setPending('pc');setNote('');try{await send('/commerce/billing/admin/pc-costs',pcDraft,'PUT');await costs.reload();setNote('PC spending costs updated.');window.dispatchEvent(new Event('pruvs:membership-updated'));}catch(e){setNote(e.message)}finally{setPending('')}}}>{t("Save PC costs")}</button></div>}
+    {['free','plus','business'].map(key=>{const item=draft[key],original=data?.[key];if(!item)return null;return <details key={key} open={key==='plus'} className="billing-plan-config"><summary><strong>{key.toUpperCase()}</strong> — {original?.price_display} {t("per")} {original?.interval_count>1?original.interval_count+' ':''}{original?.interval}{original?.stripe_ready?' · Stripe published':''}</summary>
       <div className="form-grid">
-        <Field label="Price (EUR)"><input type="number" step="0.01" min="0" disabled={key==='free'} value={item.price} onChange={e=>set(key,'price',e.target.value)}/></Field>
-        <Field label="Billing interval"><select disabled={key==='free'} value={item.interval} onChange={e=>set(key,'interval',e.target.value)}><option value="month">Month</option><option value="year">Year</option></select></Field>
-        <Field label="Every N intervals"><input disabled={key==='free'} type="number" min="1" max={item.interval==='year'?3:12} value={item.interval_count} onChange={e=>set(key,'interval_count',e.target.value)}/></Field>
-        <Field label="AI scans / calendar month"><input type="number" min="0" value={item.ocr_allowance} onChange={e=>set(key,'ocr_allowance',e.target.value)}/></Field>
-        <Field label="Expense reports / calendar month"><input type="number" min="0" value={item.expense_reports} onChange={e=>set(key,'expense_reports',e.target.value)}/></Field>
-        <Field label="Description"><textarea value={item.description} onChange={e=>set(key,'description',e.target.value)}/></Field>
-        <Field label="Included features (one per line)"><textarea rows="5" value={item.features_text} onChange={e=>set(key,'features_text',e.target.value)}/></Field>
-      </div><button disabled={!!pending} onClick={()=>modify(key,'save')}>Save plan settings</button>
+        <Field label={t("Price (EUR)" )}><input type="number" step="0.01" min="0" disabled={key==='free'} value={item.price} onChange={e=>set(key,'price',e.target.value)}/></Field>
+        <Field label={t("Billing interval" )}><select disabled={key==='free'} value={item.interval} onChange={e=>set(key,'interval',e.target.value)}><option value="month">{t("Month")}</option><option value="year">{t("Year")}</option></select></Field>
+        <Field label={t("Every N intervals" )}><input disabled={key==='free'} type="number" min="1" max={item.interval==='year'?3:12} value={item.interval_count} onChange={e=>set(key,'interval_count',e.target.value)}/></Field>
+        <Field label={t("AI scans / calendar month" )}><input type="number" min="0" value={item.ocr_allowance} onChange={e=>set(key,'ocr_allowance',e.target.value)}/></Field>
+        <Field label={t("Expense reports / calendar month" )}><input type="number" min="0" value={item.expense_reports} onChange={e=>set(key,'expense_reports',e.target.value)}/></Field>
+        <Field label={t("Description" )}><textarea value={item.description} onChange={e=>set(key,'description',e.target.value)}/></Field>
+        <Field label={t("Included features (one per line)" )}><textarea rows="5" value={item.features_text} onChange={e=>set(key,'features_text',e.target.value)}/></Field>
+      </div><button disabled={!!pending} onClick={()=>modify(key,'save')}>{t("Save plan settings")}</button>
       {key!=='free'&&<div className="row wrap"><button className="secondary" disabled={!!pending} onClick={()=>modify(key,'publish')}>{original?.stripe_ready?'Sync product description':'Publish new Stripe Price'}</button>
-      <label>Or attach an existing Stripe Price ID <input placeholder="price_..." value={item.attach_price_id} onChange={e=>set(key,'attach_price_id',e.target.value)}/></label>
-      <button className="secondary" disabled={!!pending||!item.attach_price_id} onClick={()=>modify(key,'attach')}>Verify and attach price</button></div>}
-      <small>Stripe Price: {original?.stripe_price_id||'Not published'} · Catalog revision {original?.version}. Only published paid plans can be purchased.</small>
+      <label>{t("Or attach an existing Stripe Price ID")} <input placeholder={t("price_..." )} value={item.attach_price_id} onChange={e=>set(key,'attach_price_id',e.target.value)}/></label>
+      <button className="secondary" disabled={!!pending||!item.attach_price_id} onClick={()=>modify(key,'attach')}>{t("Verify and attach price")}</button></div>}
+      <small>{t("Stripe Price:")} {original?.stripe_price_id||'Not published'} {t("· Catalog revision")} {original?.version}{t(". Only published paid plans can be purchased.")}</small>
     </details>})}
   </Panel>;
 }
@@ -106,12 +106,12 @@ function InvoiceEmailQueue(){
     const result=await send('/commerce/billing/admin/invoice-emails/'+encodeURIComponent(row.invoice_id)+'/retry',{});
     setNote(result.ok?'Invoice email sent or already delivered.':'Email not delivered. Verify RESEND_API_KEY and PRUVS_INVOICE_FROM_EMAIL in Render.');await reload();
   }catch(e){setNote(e.message)}finally{setBusy(false)}}
-  return <details className="panel"><summary><strong>Subscription invoice email delivery</strong></summary>
-    <p className="muted">Invoices are generated by Stripe. Optional Pruvs emails use a verified Resend sender and secure invoice links. Never enter email-service keys here.</p>
+  return <details className="panel"><summary><strong>{t("Subscription invoice email delivery")}</strong></summary>
+    <p className="muted">{t("Invoices are generated by Stripe. Optional Pruvs emails use a verified Resend sender and secure invoice links. Never enter email-service keys here.")}</p>
     {error&&<Message error={error}/>}{note&&<Message>{note}</Message>}
-    <button className="secondary" disabled={busy} onClick={reload}>Refresh delivery status</button>
-    {!data?.length?<p>No invoice email records.</p>:<ul>{data.map(r=><li key={r.invoice_id}>{r.invoice_id} · User #{r.user_id} · {r.state} · Attempts {r.attempts}
-      {r.error&&<small>{r.error}</small>}{r.state!=='sent'&&<button disabled={busy||r.attempts>=5} onClick={()=>retry(r)}>Retry email</button>}</li>)}</ul>}
+    <button className="secondary" disabled={busy} onClick={reload}>{t("Refresh delivery status")}</button>
+    {!data?.length?<p>{t("No invoice email records.")}</p>:<ul>{data.map(r=><li key={r.invoice_id}>{r.invoice_id} {t("· User #")}{r.user_id} · {r.state} {t("· Attempts")} {r.attempts}
+      {r.error&&<small>{r.error}</small>}{r.state!=='sent'&&<button disabled={busy||r.attempts>=5} onClick={()=>retry(r)}>{t("Retry email")}</button>}</li>)}</ul>}
   </details>;
 }
 
@@ -127,8 +127,8 @@ function PendingUpgrades() {
       setNotice(approve?'Plan assigned. No payment collected.':'Request declined.');await reload();
     }catch(e){setNotice(e.message)}finally{setBusy(false)}
   }
-  return <Panel title="Subscription upgrade requests">{error&&<Message error={error}/>}{notice&&<Message>{notice}</Message>}
-    {!data?.length?<p className="muted">No pending upgrade requests.</p>:data.map(row=><div key={row.id} className="list-row"><div className="grow"><strong>{row.name||row.email||'User'} · #{row.user_id}</strong><small>{row.current_plan.toUpperCase()} → {row.requested_plan.toUpperCase()} · {row.requested_at.slice(0,16)} UTC</small></div><button disabled={busy} onClick={()=>act(row,true)}>Assign plan</button><button disabled={busy} onClick={()=>act(row,false)}>Decline</button></div>)}
+  return <Panel title={t("Subscription upgrade requests" )}>{error&&<Message error={error}/>}{notice&&<Message>{notice}</Message>}
+    {!data?.length?<p className="muted">{t("No pending upgrade requests.")}</p>:data.map(row=><div key={row.id} className="list-row"><div className="grow"><strong>{row.name||row.email||'User'} · #{row.user_id}</strong><small>{row.current_plan.toUpperCase()} → {row.requested_plan.toUpperCase()} · {row.requested_at.slice(0,16)} UTC</small></div><button disabled={busy} onClick={()=>act(row,true)}>{t("Assign plan")}</button><button disabled={busy} onClick={()=>act(row,false)}>{t("Decline")}</button></div>)}
   </Panel>;
 }
 
@@ -233,21 +233,21 @@ export default function Admin() {
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     });
   }
-  return <><Title eyebrow="ADMINISTRATION" title={t("Admin operations")}>{t("Focus on users, receipts, shared bills and reports. Advanced tools are available only when needed.")}</Title>{error && <Message error={error} />} {notice && <Message>{notice}</Message>} {catalog.error && <Message error={catalog.error} />}
- <div className="stats">{operational.data && <><Panel><span>OCR completions this month</span><strong>{operational.data.ocr_completed}</strong><small>{operational.data.ocr_attempts} external OCR log entries</small></Panel><Panel><span>Messages / notification events</span><strong>{operational.data.notification_events}</strong><small>{operational.data.notification_unread} unread outbox events</small></Panel></>}{['users', 'cases', 'split_bill_sessions'].map(key => <Panel key={key}><span>{catalog.data?.find(c => c.key === key)?.label || key}</span><strong>{catalog.data?.find(c => c.key === key)?.count ?? '—'}</strong></Panel>)}</div>
+  return <><Title eyebrow={t("ADMINISTRATION" )} title={t("Admin operations")}>{t("Focus on users, receipts, shared bills and reports. Advanced tools are available only when needed.")}</Title>{error && <Message error={error} />} {notice && <Message>{notice}</Message>} {catalog.error && <Message error={catalog.error} />}
+ <div className="stats">{operational.data && <><Panel><span>{t("OCR completions this month")}</span><strong>{operational.data.ocr_completed}</strong><small>{operational.data.ocr_attempts} {t("external OCR log entries")}</small></Panel><Panel><span>{t("Messages / notification events")}</span><strong>{operational.data.notification_events}</strong><small>{operational.data.notification_unread} {t("unread outbox events")}</small></Panel></>}{['users', 'cases', 'split_bill_sessions'].map(key => <Panel key={key}><span>{catalog.data?.find(c => c.key === key)?.label || key}</span><strong>{catalog.data?.find(c => c.key === key)?.count ?? '—'}</strong></Panel>)}</div>
  <section className="v22-admin-advanced">
-   <button type="button" className="secondary v22-admin-billing-toggle" aria-expanded={showBilling} onClick={()=>setShowBilling(v=>!v)}>{showBilling?'Hide':'Show'} subscriptions, billing and advanced finance operations</button>
+   <button type="button" className="secondary v22-admin-billing-toggle" aria-expanded={showBilling} onClick={()=>setShowBilling(v=>!v)}>{showBilling?'Hide':'Show'} {t("subscriptions, billing and advanced finance operations")}</button>
    {showBilling&&<div className="v22-admin-billing"><PendingUpgrades/><InvoiceEmailQueue/><PlanConfiguration/></div>}
  </section>
- <div className="admin-layout"><aside className="panel admin-menu"><h3>Key operations</h3>
+ <div className="admin-layout"><aside className="panel admin-menu"><h3>{t("Key operations")}</h3>
    {['users','cases','split_bill_sessions','expense_reports','push_events'].map(key=>{
      const item=catalog.data?.find(c=>c.key===key);
      if(!item)return null;
      return <button key={item.key} className={entity===item.key?'active':''} onClick={()=>selectEntity(item.key)}><span>{item.label}</span><small>{item.count}</small></button>;
    })}
    <details open={showAdvanced} onToggle={e=>setShowAdvanced(e.currentTarget.open)}>
-     <summary>Advanced records</summary>
-     <p className="muted">Technical and rarely used operations. Changes may affect live data.</p>
+     <summary>{t("Advanced records")}</summary>
+     <p className="muted">{t("Technical and rarely used operations. Changes may affect live data.")}</p>
      {(catalog.data||[]).filter(item=>!['users','cases','split_bill_sessions','expense_reports','push_events'].includes(item.key)).map(item=><button key={item.key} className={entity===item.key?'active':''} onClick={()=>selectEntity(item.key)}><span>{item.label}</span><small>{item.count}</small></button>)}
    </details></aside><div>
  {record ? <Panel><button className="text-button" onClick={() => {
@@ -286,7 +286,7 @@ export default function Admin() {
                 setBills(await request(`/admin/users/${record.record.id}/bills?offset=${n}`));
                 setBillOffset(n);
               })}>{t("Next")}</button></div>}</>}
- {bill && <div className="bill-inspector"><button onClick={()=>run(async()=>{const r=await fetch(`/api/v1/admin/users/${record.record.id}/bills/${bill.case.id}/export`,{headers:headers(),credentials:'same-origin'});if(!r.ok)throw new Error('Export failed.');const url=URL.createObjectURL(await r.blob()),a=document.createElement('a');a.href=url;a.download=`pruvs-user-${record.record.id}-bill-${bill.case.id}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)})}><Download size={16}/>Download full details (JSON)</button><h2>{bill.receipt.merchant_name} · {money(bill.receipt.receipt_total, bill.receipt.currency)}</h2><Badge>{bill.case.status}</Badge><h3>{t("Receipt items")}</h3><Table rows={bill.receipt.items} />{bill.documents?.map(doc => <a key={doc.id} className="secondary" target="_blank" rel="noreferrer" href={`/api/v1/admin/users/${record.record.id}/bills/${bill.case.id}/documents/${doc.id}/file`}>{t("Open original receipt")} #{doc.id}</a>)}{bill.splits.map(s => <section key={s.session_id}><h3>Split #{s.session_id} · {s.status}</h3><p>{t("Remaining")} {money(s.remaining_total, s.currency)} · Tip {money(s.tip_total, s.currency)}</p><Table rows={s.participants} /><h4>{t("Selections")}</h4><Table rows={s.assignment_records} /></section>)}{['documents', 'external_ocr_requests', 'external_ocr_usage', 'receipt_corrections', 'messages', 'reminders'].map(key => <details key={key}><summary>{key.replaceAll('_', ' ')} ({bill[key]?.length || 0})</summary><pre>{JSON.stringify(bill[key], null, 2)}</pre></details>)}</div>}
+ {bill && <div className="bill-inspector"><button onClick={()=>run(async()=>{const r=await fetch(`/api/v1/admin/users/${record.record.id}/bills/${bill.case.id}/export`,{headers:headers(),credentials:'same-origin'});if(!r.ok)throw new Error('Export failed.');const url=URL.createObjectURL(await r.blob()),a=document.createElement('a');a.href=url;a.download=`pruvs-user-${record.record.id}-bill-${bill.case.id}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)})}><Download size={16}/>{t("Download full details (JSON)")}</button><h2>{bill.receipt.merchant_name} · {money(bill.receipt.receipt_total, bill.receipt.currency)}</h2><Badge>{bill.case.status}</Badge><h3>{t("Receipt items")}</h3><Table rows={bill.receipt.items} />{bill.documents?.map(doc => <a key={doc.id} className="secondary" target="_blank" rel="noreferrer" href={`/api/v1/admin/users/${record.record.id}/bills/${bill.case.id}/documents/${doc.id}/file`}>{t("Open original receipt")} #{doc.id}</a>)}{bill.splits.map(s => <section key={s.session_id}><h3>{t("Split #")}{s.session_id} · {s.status}</h3><p>{t("Remaining")} {money(s.remaining_total, s.currency)} {t("· Tip")} {money(s.tip_total, s.currency)}</p><Table rows={s.participants} /><h4>{t("Selections")}</h4><Table rows={s.assignment_records} /></section>)}{['documents', 'external_ocr_requests', 'external_ocr_usage', 'receipt_corrections', 'messages', 'reminders'].map(key => <details key={key}><summary>{key.replaceAll('_', ' ')} ({bill[key]?.length || 0})</summary><pre>{JSON.stringify(bill[key], null, 2)}</pre></details>)}</div>}
  {!!record.related?.length && <><h3>{t("Related records")}</h3><div className="row wrap">{record.related.map(([e, f, v, label], i) => <button key={i} onClick={() => {
                 selectEntity(e);
                 setFilter({

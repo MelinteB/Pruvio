@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.db.database import get_db
-from app.models.push_notification import PushDevice, PushEvent
+from app.models.push_notification import PushDevice, PushEvent, PushDelivery
 from app.services import push_service as service
 import os
 
@@ -45,13 +45,23 @@ def state(response: Response, grant=Depends(authenticate), db: Session = Depends
     db.commit()
     devices = db.query(PushDevice).filter_by(user_id=grant.user_id).order_by(PushDevice.updated_at.desc()).limit(50).all()
     events = db.query(PushEvent).filter_by(user_id=grant.user_id).order_by(PushEvent.created_at.desc()).limit(50).all()
+    # Report only the caller's events. Never expose subscription endpoints,
+    # private payloads or another user's delivery attempts.
+    event_ids = [e.id for e in events]
+    deliveries = (db.query(PushDelivery).filter(PushDelivery.event_id.in_(event_ids)).all() if event_ids else [])
+    attempts = {}
+    for delivery in deliveries:
+        summary = attempts.setdefault(delivery.event_id, {'accepted': 0, 'pending': 0, 'failed': 0})
+        if delivery.status in summary:
+            summary[delivery.status] += 1
     return {'enabled': service.enabled(), 'worker_enabled': os.getenv('PRUVS_PUSH_WORKER_ENABLED', 'true').lower() == 'true', 'public_key': os.getenv('PRUVS_VAPID_PUBLIC_KEY', ''),
             'preferences': {key: bool(getattr(pref, key)) for key in PreferenceRequest.model_fields},
             'devices': [{'id': d.id, 'label': d.label, 'active': d.active,
                          'current_login': d.grant_hash == grant.token_hash,
                          'confirmed_at': d.confirmed_at.isoformat() if d.confirmed_at else None} for d in devices],
             'events': [{'id': e.id, 'title': e.title, 'body': e.body, 'status': e.status, 'email_status': e.email_status,
-                        'created_at': e.created_at.isoformat(), 'url': f'/notifications/open/{e.id}'} for e in events]}
+                        'created_at': e.created_at.isoformat(), 'url': f'/notifications/open/{e.id}',
+                        'delivery': attempts.get(e.id, {'accepted': 0, 'pending': 0, 'failed': 0})} for e in events]}
 
 
 @router.post('/subscribe')

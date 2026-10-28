@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import React, { useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Copy, Mail, MessageCircle, Phone, Share2, Smartphone, UserRoundPlus, X } from 'lucide-react';
@@ -95,34 +96,34 @@ export default function InviteDialog({ open = false, onClose = () => {}, shareUr
   return <div className="pruvs-invite-overlay" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
     <section ref={dialogRef} className="pruvs-invite-dialog" role="dialog" aria-modal="true" aria-labelledby="pruvs-invite-title" aria-describedby="pruvs-invite-description">
       <header className="pruvs-invite-header">
-        <div><span className="pruvs-invite-eyebrow">PRUVS · SHARED BILL</span><h2 id="pruvs-invite-title">Invite people to your bill</h2><p id="pruvs-invite-description">{billName}</p></div>
-        <button ref={closeRef} type="button" className="pruvs-invite-close" aria-label="Close invitation" onClick={onClose}><X size={20}/></button>
+        <div><span className="pruvs-invite-eyebrow">{t("PRUVS · SHARED BILL")}</span><h2 id="pruvs-invite-title">{t("Invite people to your bill")}</h2><p id="pruvs-invite-description">{billName}</p></div>
+        <button ref={closeRef} type="button" className="pruvs-invite-close" aria-label={t("Close invitation" )} onClick={onClose}><X size={20}/></button>
       </header>
       <div className="pruvs-invite-body">
-        {seatsFull && <p className="pruvs-invite-hint" role="note">All planned seats are filled. The bill owner can increase the people count in Summary before someone new joins.</p>}
+        {seatsFull && <p className="pruvs-invite-hint" role="note">{t("All planned seats are filled. The bill owner can increase the people count in Summary before someone new joins.")}</p>}
         <div className="pruvs-invite-share-layout">
-          <div className="pruvs-invite-qr"><QRCodeSVG value={shareUrl} size={128} marginSize={2}/><small>Scan to join</small></div>
-          <div className="pruvs-invite-share-options"><label htmlFor="pruvs-invite-link">Private invitation link</label><div className="pruvs-invite-copyline"><input id="pruvs-invite-link" value={shareUrl} readOnly/><button type="button" onClick={() => onCopied(shareUrl)}><Copy size={16}/> Copy</button></div>
+          <div className="pruvs-invite-qr"><QRCodeSVG value={shareUrl} size={128} marginSize={2}/><small>{t("Scan to join")}</small></div>
+          <div className="pruvs-invite-share-options"><label htmlFor="pruvs-invite-link">{t("Private invitation link")}</label><div className="pruvs-invite-copyline"><input id="pruvs-invite-link" value={shareUrl} readOnly/><button type="button" onClick={() => onCopied(shareUrl)}><Copy size={16}/> {t("Copy")}</button></div>
             <div className="pruvs-invite-buttons">
-              {typeof navigator.share === 'function' && <button type="button" onClick={nativeShare}><Share2 size={16}/> Share</button>}
-              <a href={waShareUrl} target="_blank" rel="noopener noreferrer"><MessageCircle size={16}/> WhatsApp</a>
-              <a href={`sms:?body=${encodeURIComponent(message)}`}><Phone size={16}/> SMS</a>
-              <a href={`mailto:?subject=${encodeURIComponent(shareTitle)}&body=${encodeURIComponent(message)}`}><Mail size={16}/> Email</a>
+              {typeof navigator.share === 'function' && <button type="button" onClick={nativeShare}><Share2 size={16}/> {t("Share")}</button>}
+              <a href={waShareUrl} target="_blank" rel="noopener noreferrer"><MessageCircle size={16}/> {t("WhatsApp")}</a>
+              <a href={`sms:?body=${encodeURIComponent(message)}`}><Phone size={16}/> {t("SMS")}</a>
+              <a href={`mailto:?subject=${encodeURIComponent(shareTitle)}&body=${encodeURIComponent(message)}`}><Mail size={16}/> {t("Email")}</a>
             </div>
           </div>
         </div>
-        <div className="pruvs-invite-section"><div className="pruvs-invite-section-title"><h3>Invite from contacts</h3><small>Contacts stay on this device and are not uploaded to Pruvs.</small></div>
+        <div className="pruvs-invite-section"><div className="pruvs-invite-section-title"><h3>{t("Invite from contacts")}</h3><small>{t("Contacts stay on this device and are not uploaded to Pruvs.")}</small></div>
           <button type="button" className="pruvs-invite-picker" onClick={pickContacts} disabled={!contactsAvailable}><Smartphone size={18}/> {contactsAvailable ? 'Choose phone contacts' : 'Contacts unavailable in this browser'}</button>
-          <form className="pruvs-invite-manual" onSubmit={addContact}><input aria-label="Contact name" placeholder="Name (optional)" value={manualName} onChange={e => setManualName(e.target.value)}/><input type="tel" aria-label="International phone number" placeholder="+40…" value={manualPhone} onChange={e => setManualPhone(e.target.value)}/><button type="submit"><UserRoundPlus size={17}/> Add</button></form>
+          <form className="pruvs-invite-manual" onSubmit={addContact}><input aria-label={t("Contact name" )} placeholder={t("Name (optional)" )} value={manualName} onChange={e => setManualName(e.target.value)}/><input type="tel" aria-label={t("International phone number" )} placeholder="+40…" value={manualPhone} onChange={e => setManualPhone(e.target.value)}/><button type="submit"><UserRoundPlus size={17}/> {t("Add")}</button></form>
           {error && <p className="pruvs-invite-error" role="alert">{error}</p>}
-          {contacts.length > 0 && <div className="pruvs-invite-contacts" aria-label="Selected contacts">{contacts.map((contact, index) => {
+          {contacts.length > 0 && <div className="pruvs-invite-contacts" aria-label={t("Selected contacts" )}>{contacts.map((contact, index) => {
             const number = normalizeInvitePhone(contact.tel);
-            return <div className="pruvs-invite-contact" key={`${contact.tel}-${index}`}><span><strong>{contact.name}</strong><small>{contact.tel}</small></span>{number ? <a target="_blank" rel="noopener noreferrer" href={`https://wa.me/${number}?text=${encodeURIComponent(message)}`}>WhatsApp</a> : <small>Requires +country code</small>}<button type="button" aria-label={`Remove ${contact.name}`} onClick={() => setContacts(list => list.filter((_,i) => i !== index))}><X size={15}/></button></div>;
+            return <div className="pruvs-invite-contact" key={`${contact.tel}-${index}`}><span><strong>{contact.name}</strong><small>{contact.tel}</small></span>{number ? <a target="_blank" rel="noopener noreferrer" href={`https://wa.me/${number}?text=${encodeURIComponent(message)}`}>{t("WhatsApp")}</a> : <small>{t("Requires +country code")}</small>}<button type="button" aria-label={`Remove ${contact.name}`} onClick={() => setContacts(list => list.filter((_,i) => i !== index))}><X size={15}/></button></div>;
           })}</div>}
         </div>
 
       </div>
-      <footer className="pruvs-invite-footer"><small>People must sign in to Pruvs before joining. Sharing a link does not send it automatically.</small><button type="button" onClick={onClose}>Done</button></footer>
+      <footer className="pruvs-invite-footer"><small>{t("People must sign in to Pruvs before joining. Sharing a link does not send it automatically.")}</small><button type="button" onClick={onClose}>{t("Done")}</button></footer>
     </section>
   </div>;
 }
