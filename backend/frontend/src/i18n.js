@@ -1,4 +1,11 @@
 const ro={
+  "Download your account activity": "Descarcă activitatea contului",
+  "Download my activity": "Descarcă activitatea mea",
+  "Your activity snapshot is ready.": "Fișierul cu activitatea ta este pregătit.",
+  "Privacy & account deletion": "Confidențialitate și ștergerea contului",
+  "Control your personal data": "Controlează-ți datele personale",
+  "Download a JSON snapshot of your profile, saved receipt items, your bill participation and your payment events. It excludes receipt images and other users’ private details. Keep the downloaded file secure.": "Descarcă un fișier JSON cu profilul, articolele din bonurile salvate, participarea ta la note și evenimentele de plată. Nu include imaginile bonurilor sau datele private ale altor utilizatori. Păstrează fișierul în siguranță.",
+  "For a complete personal data access request, contact Pruvs support. This download is not a full GDPR data export.": "Pentru o solicitare completă de acces la datele personale, contactează asistența Pruvs. Această descărcare nu este un export GDPR complet.",
   "Home": "Acasă",
   "Scan": "Scanează",
   "History": "Istoric",
@@ -429,7 +436,7 @@ Object.assign(ro,{'Open payment link':'Deschide linkul de plată','I paid via pa
 Object.assign(ro, {'Skip to content':'Sari la conținut','Main navigation':'Navigare principală','Open Admin dashboard':'Deschide panoul de administrare'});
 
 
-// v7.1.27: organized workspace, membership, payment and invitation translations.
+// v7.1.28: organized workspace, membership, payment and invitation translations.
 Object.assign(ro, {
   "AI RECEIPT SCANNING": "SCANAREA INTELIGENTĂ A BONURILOR",
   "Always-visible shared bill overview": "Rezumatul notei, mereu vizibil",
@@ -644,7 +651,7 @@ Object.assign(ro, {
   "Notifications may be delayed by device settings or lost connectivity.": "Notificările pot întârzia din cauza setărilor dispozitivului sau a conexiunii."
 });
 
-// v7.1.27: complete remaining static labels and push diagnostics.
+// v7.1.28: complete remaining static labels and push diagnostics.
 Object.assign(ro, {
   "(UTC)": "(UTC)",
   "+ tip": "+ bacșiș",
@@ -660,7 +667,7 @@ Object.assign(ro, {
   "PC per": "PC per",
   "PC ·": "PC ·",
   "PRUVS · SHARED BILL": "PRUVS · NOTĂ COMUNĂ",
-  "Pruvs · Core Experience 7.1.27": "Pruvs · Experiența principală 7.1.27",
+  "Pruvs · Core Experience 7.1.28": "Pruvs · Experiența principală 7.1.28",
   "Resume subscription": "Reia abonamentul",
   "Retry email": "Retrimite e-mailul",
   "SHARED BILL OVERVIEW": "REZUMATUL NOTEI COMUNE",

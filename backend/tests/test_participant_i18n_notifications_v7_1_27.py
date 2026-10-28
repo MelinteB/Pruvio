@@ -1,4 +1,4 @@
-"""v7.1.27: notification delivery behavior and privacy, plus interface contracts."""
+"""v7.1.28: notification delivery behavior and privacy, plus interface contracts."""
 import os
 import unittest
 from datetime import datetime, timedelta
@@ -26,10 +26,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class NotificationReliabilityTests(unittest.TestCase):
     def test_release_and_source_alignment(self):
-        self.assertEqual(RELEASE, '7.1.27')
-        self.assertIn("version:'7.1.27'", (ROOT / 'frontend/scripts/stamp-build.mjs').read_text())
-        self.assertIn('pruvs-shell-v7.1.27', (ROOT / 'app/static/react-service-worker.js').read_text())
-        self.assertIn("CLIENT_RELEASE = '7.1.27'", (ROOT / 'frontend/src/professional/ReleaseUpdateBanner.jsx').read_text())
+        self.assertEqual(RELEASE, '7.1.28')
+        self.assertIn("version:'7.1.28'", (ROOT / 'frontend/scripts/stamp-build.mjs').read_text())
+        self.assertIn('pruvs-shell-v7.1.28', (ROOT / 'app/static/react-service-worker.js').read_text())
+        self.assertIn("CLIENT_RELEASE = '7.1.28'", (ROOT / 'frontend/src/professional/ReleaseUpdateBanner.jsx').read_text())
 
     def test_transient_and_permanent_provider_failures(self):
         for code in (0, 408, 429, 500, 502, 503):

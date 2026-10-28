@@ -4,7 +4,7 @@ import { setLanguage, t } from './i18n';
 
 afterEach(()=>setLanguage('en'));
 
-describe('Pruvs 7.1.27 participant colors and Romanian language',()=>{
+describe('Pruvs 7.1.28 participant colors and Romanian language',()=>{
   const participants=[{participant_id:33},{participant_id:11},{participant_id:22}];
   it('uses soft colors consistently when participants reorder',()=>{
     const a=participantColors(participants);

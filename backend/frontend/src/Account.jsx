@@ -168,7 +168,23 @@ export default function Account() {
             await keys.reload();
           }, t("Passkey added."))}><Fingerprint size={17} /> {t("Add passkey")}</button></Panel>}
  </AccountSection>
-<AccountSection id="account-privacy" title={t("Privacy & account deletion" )} description={t("Control your personal data" )}><Panel title={t("Delete account")} className="danger-panel"><p>{t("This permanently removes your account and owned records. Email verification is required.")}</p>{deletion ? <><Field label={t("Email verification code")} value={deleteCode} onChange={e => setDeleteCode(e.target.value)} /><button className="danger" disabled={busy} onClick={() => {
+<AccountSection id="account-privacy" title={t("Privacy & account deletion")} description={t("Control your personal data")}><Panel title={t("Download your account activity")}>
+  <p className="muted">{t("Download a JSON snapshot of your profile, saved receipt items, your bill participation and your payment events. It excludes receipt images and other users’ private details. Keep the downloaded file secure.")}</p>
+  <p className="muted">{t("For a complete personal data access request, contact Pruvs support. This download is not a full GDPR data export.")}</p>
+  <button type="button" disabled={busy} onClick={() => run(async () => {
+    const data = await send('/account/data-export');
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    try {
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'pruvs-account-activity-' + new Date().toISOString().slice(0, 10) + '.json';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } finally { setTimeout(() => URL.revokeObjectURL(url), 5000); }
+  }, t("Your activity snapshot is ready."))}>{t("Download my activity")}</button>
+</Panel><Panel title={t("Delete account")} className="danger-panel"><p>{t("This permanently removes your account and owned records. Email verification is required.")}</p>{deletion ? <><Field label={t("Email verification code")} value={deleteCode} onChange={e => setDeleteCode(e.target.value)} /><button className="danger" disabled={busy} onClick={() => {
               if (confirm(t("Permanently delete your Pruvs account and owned data?"))) run(async () => {
                 await send('/account/delete/confirm', {
                   challenge_id: deletion.challenge_id,

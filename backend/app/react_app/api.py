@@ -128,6 +128,16 @@ def passkey_login_verify(body:dict,request:Request,response:Response,db=Depends(
     user=passkeys.complete_passkey_authentication(db,challenge=consume(db,request,body.get('challenge_id'),'login'),browser_credential=body.get('credential',{}))
     return issue(db,user,request,response)
 
+@router.post('/account/data-export')
+def account_data_export(request:Request,identity=Depends(current),db=Depends(get_db)):
+    """One-time authenticated snapshot; not a public file or cached download."""
+    from app.react_app.data_export import snapshot
+    limit(db,request,'account-data-export',5)
+    return Response(content=json.dumps(snapshot(db,identity[0]),ensure_ascii=False,allow_nan=False),
+        media_type='application/json; charset=utf-8',
+        headers={'Cache-Control':'private, no-store, max-age=0',
+                 'Pragma':'no-cache','X-Content-Type-Options':'nosniff'})
+
 @router.get('/account/passkeys')
 def list_passkeys(identity=Depends(current),db=Depends(get_db)):
     return [{'id':p.id,'name':p.device_name,'created_at':p.created_at,'last_used_at':p.last_used_at} for p in passkeys.list_user_passkeys(db,identity[0].id)]

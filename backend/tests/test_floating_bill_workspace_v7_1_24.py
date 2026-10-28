@@ -1,4 +1,4 @@
-"""v7.1.27 sticky bill overview and inline allocation summary source regressions."""
+"""v7.1.28 sticky bill overview and inline allocation summary source regressions."""
 import unittest
 from pathlib import Path
 from app.reliability import RELEASE
@@ -7,9 +7,9 @@ ROOT=Path(__file__).resolve().parents[1]
 
 class FloatingBillWorkspaceTests(unittest.TestCase):
     def test_release_alignment(self):
-        self.assertEqual(RELEASE,'7.1.27')
-        self.assertIn("version:'7.1.27'",(ROOT/'frontend/scripts/stamp-build.mjs').read_text())
-        self.assertIn('pruvs-shell-v7.1.27',(ROOT/'app/static/react-service-worker.js').read_text())
+        self.assertEqual(RELEASE,'7.1.28')
+        self.assertIn("version:'7.1.28'",(ROOT/'frontend/scripts/stamp-build.mjs').read_text())
+        self.assertIn('pruvs-shell-v7.1.28',(ROOT/'app/static/react-service-worker.js').read_text())
     def test_overview_stays_on_screen(self):
         bill=(ROOT/'frontend/src/Bill.jsx').read_text()
         css=(ROOT/'frontend/src/floating-bill-workspace.css').read_text()
