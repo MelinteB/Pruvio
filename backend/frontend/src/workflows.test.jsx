@@ -58,15 +58,15 @@ describe('production user flows', () => {
     }));
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/bill/example'));
   });
-  it('prefills username from the full name and requires notification consent', () => {
+  it('prefills username and leaves notification consent optional', () => {
     shell(<Auth mode="register" />, '/register');
     fireEvent.change(screen.getByLabelText('Full name'), {target:{value:'Ana Popescu'}});
     expect(screen.getByLabelText('Username').value).toBe('ana.popescu');
-    const consent=screen.getByLabelText('Allow device notifications before email verification (required)');
+    const consent=screen.getByLabelText('Receive bill and payment notifications (optional)');
     expect(consent.checked).toBe(false);
-    expect(consent.required).toBe(true);
+    expect(consent.required).toBe(false);
   });
-  it('offers notification enrolment once after completing registration', async () => {
+  it('opens Pruvs directly after verification without notification enrolment', async () => {
     sessionStorage.setItem('pruvs-pending-register', JSON.stringify({
       email: 'new@example.com', challenge: { email: 'new@example.com', challenge_id: 'challenge' }, expires: Date.now() + 60000
     }));
@@ -74,8 +74,8 @@ describe('production user flows', () => {
     shell(<Auth mode="register" />, '/register');
     fireEvent.change(screen.getByLabelText('Email verification code'), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
-    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/notifications'));
-    expect(sessionStorage.getItem('pruvs-next')).toBe('/');
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/'));
+    expect(sessionStorage.getItem('pruvs-next')).toBeNull();
   });
   it('opens the recipient bill from Inbox and supports mark read', async () => {
     request.mockImplementation(path => Promise.resolve(path.startsWith('/inbox') ? {

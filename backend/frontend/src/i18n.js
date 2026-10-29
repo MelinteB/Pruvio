@@ -776,3 +776,8 @@ Object.assign(ro, {
   "Your name and username": "Numele și utilizatorul tău",
   "Your subscription, usage and credits": "Abonamentul, utilizarea și creditele tale"
 });
+
+Object.assign(ro,{
+ 'Receive bill and payment notifications (optional)':'Primește notificări despre note și plăți (opțional)',
+ 'You can read bill activity in Inbox. Enable device push alerts later in Account, if your browser supports them.':'Poți urmări activitatea notelor în Mesaje. Activează ulterior notificările pe dispozitiv din Cont, dacă browserul le acceptă.'
+});

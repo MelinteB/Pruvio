@@ -67,13 +67,15 @@ def logout(response:Response,identity=Depends(current),db=Depends(get_db)):
 def register(body:dict,request:Request,db=Depends(get_db)):
     limit(db,request,'registration',10)
     if not body.get('password'):raise ValueError('Password is required.')
-    if body.get('notifications_opt_in') is not True or body.get('notification_permission') != 'granted':
-        raise ValueError('Allow device notifications before requesting the email code.')
+    # Registration must work without a supported push browser or OS permission.
+    # Only an explicit boolean true is considered notification consent; permission
+    # strings supplied by the browser are not a trustworthy proof of delivery.
+    notifications_opt_in = body.get('notifications_opt_in') is True
     result=onboarding.start_registration(db,phone_number=body.get('phone_number',''),display_name=body.get('name',''),
         email=body.get('email',''),username=body.get('username',''),password=body.get('password'),
         accepted_terms=body.get('accepted_terms') is True,accepted_privacy=body.get('accepted_privacy') is True,
         marketing_opt_in=body.get('marketing_opt_in') is True)
-    result['user'].notifications_opt_in=True
+    result['user'].notifications_opt_in=notifications_opt_in
     db.commit()
     return {'challenge_id':result['challenge_id'],'delivery':result['email_delivery'],'email':result['user'].email}
 

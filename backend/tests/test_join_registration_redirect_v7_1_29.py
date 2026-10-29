@@ -9,8 +9,8 @@ class RegistrationJoinTests(unittest.TestCase):
         self.assertIn('params.get(\'next\') || pending?.next',auth)
         self.assertIn('const invited = invitedBillDestination(returnTo)',auth)
         self.assertIn('navigate(invited, { replace: true })',auth)
-        self.assertIn("navigate('/notifications?enrol=1'",auth)
-        self.assertLess(auth.index('navigate(invited, { replace: true })'),auth.index("navigate('/notifications?enrol=1'"))
+        self.assertIn('navigate(safeNext(returnTo), { replace: true })',auth)
+        self.assertLess(auth.index('navigate(invited, { replace: true })'),auth.index('navigate(safeNext(returnTo), { replace: true })'))
     def test_authenticated_register_route_keeps_token(self):
         app=(ROOT/'frontend/src/main.jsx').read_text()
         self.assertIn('invitedBillDestination(new URLSearchParams(location.search).get("next"))',app)

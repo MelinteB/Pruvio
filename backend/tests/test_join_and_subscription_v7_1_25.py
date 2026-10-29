@@ -21,7 +21,7 @@ class JoinSubscriptionNavigationTests(unittest.TestCase):
         notifications=(ROOT/'Notifications.jsx').read_text()
         self.assertIn("const returnTo = params.get('next') || pending?.next",auth)
         self.assertIn('const invited = invitedBillDestination(returnTo)',auth)
-        self.assertIn("sessionStorage.setItem('pruvs-next'",auth)
+        self.assertIn("sessionStorage.removeItem('pruvs-next')",auth)
         self.assertIn("safeNext(sessionStorage.getItem('pruvs-next'))",notifications)
     def test_free_badge_opens_a_dedicated_subscription_page(self):
         main=(ROOT/'main.jsx').read_text()

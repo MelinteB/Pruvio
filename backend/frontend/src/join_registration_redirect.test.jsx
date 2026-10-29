@@ -35,6 +35,7 @@ function appAt(path) {
       <Route path="/register" element={<Auth mode="register"/>}/>
       <Route path="/login" element={<Auth/>}/>
       <Route path="/notifications" element={<p>Notification enrollment</p>}/>
+      <Route path="/" element={<p>Home after signup</p>}/>
       <Route path="/join/:token" element={<Join/>}/>
       <Route path="/bill/:token" element={<p>The invited split session is open</p>}/>
     </Routes>
@@ -86,14 +87,14 @@ describe('new-account join invitation regression', () => {
     fireEvent.click(screen.getByRole('button',{name:'Confirm'}));
     await waitFor(() => expect(screen.getByTestId('route').textContent).toBe('/bill/meal_42'));
   });
-  it('keeps notification onboarding for accounts not created from an invitation', async () => {
+  it('opens Home directly after ordinary registration', async () => {
     startVerification();
     send.mockResolvedValue({user:{id:19},csrf:'test'});
     appAt('/register');
     fireEvent.change(screen.getByLabelText('Email verification code'),{target:{value:'123456'}});
     fireEvent.click(screen.getByRole('button',{name:'Confirm'}));
-    await waitFor(() => expect(screen.getByText('Notification enrollment')).toBeTruthy());
-    expect(sessionStorage.getItem('pruvs-next')).toBe('/');
+    await waitFor(() => expect(screen.getByTestId('route').textContent).toBe('/'));
+    expect(sessionStorage.getItem('pruvs-next')).toBeNull();
     expect(send).not.toHaveBeenCalledWith('/bills/meal_42/join');
   });
   it('does not redirect registrations to external pages', async () => {
@@ -102,7 +103,7 @@ describe('new-account join invitation regression', () => {
     appAt('/register?next=https%3A%2F%2Fevil.example');
     fireEvent.change(screen.getByLabelText('Email verification code'),{target:{value:'123456'}});
     fireEvent.click(screen.getByRole('button',{name:'Confirm'}));
-    await waitFor(() => expect(screen.getByText('Notification enrollment')).toBeTruthy());
-    expect(sessionStorage.getItem('pruvs-next')).toBe('/');
+    await waitFor(() => expect(screen.getByTestId('route').textContent).toBe('/'));
+    expect(sessionStorage.getItem('pruvs-next')).toBeNull();
   });
 });
