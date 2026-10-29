@@ -5,6 +5,7 @@ import { ArrowUpRight, ScanLine, ReceiptText, Users, UploadCloud, RotateCw, Chev
 import { request, send, uploadFile, money } from './api';
 import { useApp, useLoad, Title, Panel, Spinner, Message, Field, Badge, Empty } from './common';
 import CropEditor from './CropEditor';
+import { ReceiptPaper } from './ReceiptPaper';
 import { HomeWelcome, ProcessingStatus } from './professional/BrandExperience';
 import { CaptureGuide, ReceiptReviewGuide } from './professional/CorePages';
 import InviteDialog from './professional/InviteDialog';
@@ -320,9 +321,9 @@ export function Receipt() {
   if (error) return <Message error={error} />;
   if (!r) return null;
   return <><Title eyebrow={t("RECEIPT REVIEW" )} title={r.merchant_name} action={r.storage_mode==='local'?<button className="secondary" disabled={!localAvailable} onClick={()=>downloadLocalReceipt(user.id,id).catch(e=>setError(e.message))}>{t('Download saved copy')}</button>:r.original_available&&<a className="secondary" href={'/api/v1/receipts/' + id + '/original'} target="_blank" rel="noreferrer">{t("Download saved copy")}</a>}>{r.original_filename} · {r.status.replaceAll('_', ' ')}</Title>{location.state?.restored_original?<Message>{t('This receipt was already saved. Your uploaded copy restored the missing document without OCR.')}</Message>:location.state?.duplicate&&<Message error={t('This receipt is already saved. We opened the existing receipt and did not send it to OCR again.')} />}{r.storage_mode==='local'&&!localAvailable&&<Message error="The original receipt is available only on the device where it was scanned. Browser data clearing can erase this local copy."/>}{!r.original_available&&r.storage_mode!=='local'&&<Panel title={t('Document copy missing')}><p>{t('The saved receipt details remain, but its image or PDF is missing from storage. Choose your copy of this receipt to restore the download without OCR.')}</p><label className="secondary">{busy?t('Restoring…'):t('Restore saved document')} <input aria-label={t('Restore saved document')} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={busy} onChange={e=>{restore(e.target.files[0]);e.target.value=''}} /></label></Panel>}{actionError && <Message error={actionError} />}
- <ReceiptReviewGuide matched={Math.abs(r.receipt_total-r.calculated_total)<=.02} currency={r.currency}/><div className="stats"><Panel><span>{t("Receipt total")}</span><strong>{money(r.receipt_total, r.currency)}</strong></Panel><Panel><span>{t("Extracted items total")}</span><strong>{money(r.calculated_total, r.currency)}</strong></Panel><Panel><span>{t("Items")}</span><strong>{r.items.length}</strong></Panel></div>
+ <ReceiptReviewGuide matched={Math.abs(r.receipt_total-r.calculated_total)<=.02} currency={r.currency}/>
  {Math.abs(r.receipt_total - r.calculated_total) > .02 && <Message error={t("The extracted items do not match the receipt total. Review the original receipt before splitting.")} />}
- <Panel title={t("Receipt items")}>{r.items.map(i => <div className="list-row" key={i.id}><div className="grow"><strong>{i.name}</strong>{i.translated_name && i.translated_name !== i.name && <small>{i.translated_name}</small>}<small>{i.quantity} × {money(i.unit_price, r.currency)}</small></div><strong>{money(i.total_price, r.currency)}</strong></div>)}{!r.items.length && <Empty>{t("No items were extracted. Try uploading a clearer image.")}</Empty>}</Panel>
+ <ReceiptPaper receipt={r} />
  {!/^[A-Z]{3}$/.test(r.currency) && r.items.length > 0 && <Panel title={t("Confirm the currency")}><p>{t("The receipt currency could not be identified.")}</p><select value={currency} onChange={e => setCurrency(e.target.value)}>{Object.entries(config?.currencies || {}).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select><button disabled={busy} onClick={() => run(async () => {
         await send('/receipts/' + id + '/currency', {
           currency

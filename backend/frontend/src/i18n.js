@@ -781,3 +781,10 @@ Object.assign(ro,{
  'Receive bill and payment notifications (optional)':'Primește notificări despre note și plăți (opțional)',
  'You can read bill activity in Inbox. Enable device push alerts later in Account, if your browser supports them.':'Poți urmări activitatea notelor în Mesaje. Activează ulterior notificările pe dispozitiv din Cont, dacă browserul le acceptă.'
 });
+
+// v7.1.31 — thermal receipt review copy (the OCR product names remain unchanged).
+Object.assign(ro, {
+  'Item': 'Articol',
+  'Amount': 'Valoare',
+  'Extracted from receipt · check against the original': 'Extras din bon · verifică informațiile cu originalul'
+});

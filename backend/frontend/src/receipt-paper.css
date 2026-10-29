@@ -1,0 +1,83 @@
+/* v7.1.31 — readable thermal-receipt layout for reviewed OCR data. */
+.pruvs-thermal-wrap {
+  display: flex;
+  justify-content: center;
+  padding: clamp(12px, 2.3vw, 25px);
+  margin: 0 0 21px;
+  border: 1px solid #e5ebf5;
+  border-radius: 18px;
+  background: repeating-linear-gradient(135deg, #f7f9fd, #f7f9fd 8px, #f2f6fc 8px, #f2f6fc 16px);
+}
+.pruvs-thermal-receipt {
+  position: relative;
+  width: 100%;
+  max-width: 535px;
+  padding: 24px clamp(17px, 3vw, 32px) 27px;
+  background: #fff;
+  border: 1px solid #e4e7ed;
+  border-radius: 3px;
+  color: #182338;
+  box-shadow: 0 11px 24px #18315015, 0 2px 5px #18315009;
+  font-variant-numeric: tabular-nums;
+}
+.pruvs-thermal-receipt::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  bottom: -8px;
+  left: -1px;
+  right: -1px;
+  height: 9px;
+  background: linear-gradient(135deg, transparent 50%, #fff 50%) 0 0 / 12px 12px repeat-x,
+              linear-gradient(225deg, transparent 50%, #fff 50%) 0 0 / 12px 12px repeat-x;
+  pointer-events: none;
+}
+.pruvs-thermal-header {text-align: center; padding-bottom: 11px;}
+.pruvs-thermal-eyebrow {font-size: 10px; letter-spacing: .21em; text-transform: uppercase; font-weight: 750; color: #6c7d98;}
+.pruvs-thermal-header h2 {font-size: 18px; line-height: 1.2; letter-spacing: -.02em; overflow-wrap: anywhere; margin: 8px 0 5px;}
+.pruvs-thermal-reference {font-size: 11px; line-height: 1.4; color: #70809a; overflow-wrap: anywhere; margin: 0;}
+.pruvs-thermal-rule {border-top: 1px dashed #9eacc2; margin: 9px 0 11px;}
+.pruvs-thermal-items {width: 100%; border-collapse: collapse; table-layout: fixed;}
+.pruvs-thermal-items th {font-size: 10px; color: #6d7b94; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; padding: 0 0 7px; text-align: left;}
+.pruvs-thermal-items th:last-child {text-align: right; width: 33%;}
+.pruvs-thermal-items td {padding: 5px 0 7px; vertical-align: top; border-bottom: 1px dotted #dfe5ec; font-size: 12px; line-height: 1.3;}
+.pruvs-thermal-items tbody tr:last-child td {border-bottom: 0;}
+.pruvs-thermal-item-detail {padding-right: 11px !important; overflow-wrap: anywhere;}
+.pruvs-thermal-item-name {display: block; color: #1d2a42; font-size: 12px; font-weight: 700; line-height: 1.35;}
+.pruvs-thermal-translation {display:block; font-size: 11px; color: #667895; line-height:1.3; margin-top: 2px;}
+.pruvs-thermal-unit {display:block; font-size: 10px; color: #687996; line-height: 1.4; margin-top: 2px;}
+.pruvs-thermal-item-total {text-align:right; white-space: nowrap; font-weight: 750; font-size: 12px !important;}
+.pruvs-thermal-empty {text-align:center; font-size: 12px; padding: 10px 0; color: #687994;}
+.pruvs-thermal-summary {display:grid; gap: 7px; font-size: 12px;}
+.pruvs-thermal-summary > span {display:flex; justify-content: space-between; gap:10px; color:#52617b;}
+.pruvs-thermal-summary > span strong {color:#263550;}
+.pruvs-thermal-count {font-weight:700;}
+.pruvs-thermal-grand-total {display:flex; justify-content:space-between; align-items:baseline; gap:12px; border-top: 1.5px solid #263550; padding-top: 10px; margin-top: 3px; font-size:15px;}
+.pruvs-thermal-grand-total strong:last-child {font-size: 18px; white-space:nowrap;}
+.pruvs-thermal-review {padding: 8px; border-radius: 6px; background:#fff4eb; color:#83441c; font-size:11px; line-height:1.45; margin: 12px 0 0;}
+.pruvs-thermal-footer {margin-top: 18px; padding-top: 10px; border-top: 1px dashed #a7b3c8; text-align:center; font-size:10px; line-height:1.4; color:#8290a3;}
+/* Compact the shared-bill item rows without altering their Pruvs participant colors. */
+.core-experience .v22-bill-layout #core-bill-items .item {
+  padding-top: 9px;
+  padding-bottom: 9px;
+  margin-block: 3px;
+}
+.core-experience .v22-bill-layout #core-bill-items .item > .row {margin: 5px 0; gap: 8px;}
+.core-experience .v22-bill-layout #core-bill-items .item > .row:first-child strong {font-size: 13px; line-height: 1.35;}
+.core-experience .v22-bill-layout #core-bill-items .item small {font-size: 10.5px; margin-top: 2px; line-height: 1.35;}
+.core-experience .v22-bill-layout #core-bill-items .assignment-tags {gap: 4px;}
+.core-experience .v22-bill-layout #core-bill-items .assignment-tags .badge {padding: 3px 7px; font-size: 10px;}
+.core-experience .v22-bill-layout #core-bill-items .quantity button {min-width: 40px; min-height: 40px;}
+.core-experience .v22-bill-layout #core-bill-items .quantity input {min-height: 40px;}
+@media(max-width: 520px) {
+  .pruvs-thermal-wrap {padding: 8px; border-radius: 13px;}
+  .pruvs-thermal-receipt {padding: 19px 14px 24px;}
+  .pruvs-thermal-header h2 {font-size: 16px;}
+  .pruvs-thermal-grand-total strong:last-child {font-size: 16px;}
+  .core-experience .v22-bill-layout #core-bill-items .item {padding-left: 10px; padding-right: 10px;}
+}
+@media print {
+  .pruvs-thermal-wrap {background:none; border:0; padding:0; margin:0; display:block;}
+  .pruvs-thermal-receipt {box-shadow:none; max-width:80mm; margin:auto; border:0;}
+  .pruvs-thermal-receipt::after {display:none;}
+}
