@@ -1,0 +1,13 @@
+.rewards-tabs{display:flex;gap:.5rem;flex-wrap:wrap;margin:0 0 1.2rem}
+.rewards-tabs button{border-radius:999px; padding:.55rem 1rem}
+.rewards-tabs .selected{background:#e5f6ef;color:#16694f;border-color:#9bd0bd;font-weight:650}
+.rewards-actions{margin-bottom:1.2rem}
+.rewards-actions button,.rewards-card button{display:inline-flex;align-items:center;gap:.4rem}
+.rewards-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem}
+.rewards-card{display:flex;flex-direction:column;gap:.35rem}
+.rewards-card h2{margin:.35rem 0}
+.rewards-card button{margin-top:auto;justify-content:center}
+.rewards-icon{background:#e4f3ed;color:#116c54;display:inline-flex;border-radius:12px;padding:.55rem;width:max-content}
+.rewards-wallet-row{display:flex;justify-content:space-between;align-items:center;gap:1rem;border-bottom:1px solid #e3e8ec;padding:1rem 0;flex-wrap:wrap}
+.rewards-wallet-row:last-child{border-bottom:0}
+.rewards-code{letter-spacing:.1em;font-family:monospace}
