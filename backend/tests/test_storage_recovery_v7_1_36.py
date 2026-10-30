@@ -1,4 +1,4 @@
-"""v7.1.36: no provider network calls, data retained on SQL failure, bounded reads."""
+"""v7.1.37: no provider network calls, data retained on SQL failure, bounded reads."""
 import hashlib
 import io
 import os

@@ -1,4 +1,4 @@
-"""v7.1.36: real ORM ownership, atomic removal, and notification regressions."""
+"""v7.1.37: real ORM ownership, atomic removal, and notification regressions."""
 import importlib
 import pkgutil
 import unittest

@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "_notice": "TEMPLATE ONLY. Never put signed evidence, tickets, credentials, PII, backups or provider secrets in Git. Save populated copy outside the repository. No automation grants launch approval.",
+  "evidence": {
+    "controller_and_legal_text": {"decision": "pending", "reference": null, "reviewer_role": null, "reviewed_at": null},
+    "processor_and_transfer_review": {"decision": "pending", "reference": null, "reviewer_role": null, "reviewed_at": null},
+    "retention_and_legal_holds": {"decision": "pending", "reference": null, "reviewer_role": null, "reviewed_at": null},
+    "postgresql_isolated_restore": {"decision": "pending", "reference": null, "reviewer_role": null, "reviewed_at": null},
+    "receipt_cloud_recovery_and_deletion": {"decision": "pending", "reference": null, "reviewer_role": null, "reviewed_at": null},
+    "account_deletion_and_data_export": {"decision": "pending", "reference": null, "reviewer_role": null, "reviewed_at": null},
+    "cross_user_authorization": {"decision": "pending", "reference": null, "reviewer_role": null, "reviewed_at": null},
+    "ocr_credit_and_duplicate_safety": {"decision": "pending", "reference": null, "reviewer_role": null, "reviewed_at": null},
+    "stripe_live_or_explicitly_disabled": {"decision": "pending", "reference": null, "reviewer_role": null, "reviewed_at": null},
+    "incident_and_support_procedures": {"decision": "pending", "reference": null, "reviewer_role": null, "reviewed_at": null}
+  }
+}

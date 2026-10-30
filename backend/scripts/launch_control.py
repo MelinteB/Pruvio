@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pruvs 7.1.36 release gate: read-only checks, scoped Git staging, live fingerprint.
+"""Pruvs 7.1.37 release gate: read-only checks, scoped Git staging, live fingerprint.
 
 No dependencies other than Python 3.11+ standard library. No secrets or user
 records are loaded or printed. Never commits, pushes, deploys or migrates a DB.
@@ -20,7 +20,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path, PurePosixPath
 
-EXPECTED_RELEASE = '7.1.36'
+EXPECTED_RELEASE = '7.1.37'
 START_RELEASE = (7, 1, 22)
 ASSET_LIMIT = 3_000_000
 RELEASE_DIR_RE = re.compile(r'^pruvs_v(7_1_\d+)(?:_|$)')
@@ -277,7 +277,7 @@ def stage(root: Path, since: str, expected: str, apply: bool) -> int:
 def fetch(base: str, path: str, limit: int = ASSET_LIMIT) -> tuple[bytes, dict]:
     url = base + path
     req = urllib.request.Request(url, headers={
-        'Cache-Control': 'no-cache', 'Pragma': 'no-cache', 'User-Agent': 'PruvsLaunchControl/7.1.36'})
+        'Cache-Control': 'no-cache', 'Pragma': 'no-cache', 'User-Agent': 'PruvsLaunchControl/7.1.37'})
     with urllib.request.urlopen(req, timeout=15) as response:
         if response.status != 200:
             raise GateError(f'Remote endpoint {path} returned HTTP {response.status}')
@@ -354,7 +354,7 @@ def test_and_build(root: Path) -> int:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
-    for name in ('doctor', 'preflight', 'test', 'stage', 'verify-live'):
+    for name in ('doctor', 'preflight', 'test', 'stage', 'verify-live', 'audit-launch'):
         p = sub.add_parser(name)
         p.add_argument('--project', default='.', help='Pruvs Git checkout root')
         if name in ('preflight', 'stage'):
@@ -364,6 +364,9 @@ def main(argv=None) -> int:
             p.add_argument('--apply', action='store_true', help='Actually stage allow-listed files; default is preview')
         if name == 'verify-live':
             p.add_argument('--url', default='https://pruvs.io')
+        if name == 'audit-launch':
+            p.add_argument('--evidence', type=Path, help='Private evidence file outside Git')
+            p.add_argument('--retention-policy', type=Path, help='Reviewed retention worksheet')
     args = parser.parse_args(argv)
     try:
         root = root_path(args.project)
@@ -372,6 +375,12 @@ def main(argv=None) -> int:
         if args.command == 'test': return test_and_build(root)
         if args.command == 'stage': return stage(root, args.since, args.expected, args.apply)
         if args.command == 'verify-live': return live(root, args.url)
+        if args.command == 'audit-launch':
+            command = [sys.executable, str(root / 'backend/scripts/launch_evidence.py'),
+                       '--backend', str(root / 'backend'), '--strict']
+            if args.evidence: command += ['--evidence', str(args.evidence)]
+            if args.retention_policy: command += ['--retention-policy', str(args.retention_policy)]
+            return invoke(command, root, capture=False).returncode
     except (GateError, OSError, ValueError, TypeError, subprocess.SubprocessError) as exc:
         print('STOP:', exc, file=sys.stderr)
         return 2

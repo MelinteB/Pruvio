@@ -1,4 +1,4 @@
-"""Source-level protections for v7.1.36 receipt layout and unchanged split actions."""
+"""Source-level protections for v7.1.37 receipt layout and unchanged split actions."""
 from pathlib import Path
 import unittest
 from app.reliability import RELEASE
@@ -8,9 +8,9 @@ ROOT=Path(__file__).resolve().parents[1]
 
 class CompactReceiptTests(unittest.TestCase):
     def test_version_and_build_alignment(self):
-        self.assertEqual(RELEASE,'7.1.36')
-        self.assertIn("version:'7.1.36'", (ROOT/'frontend/scripts/stamp-build.mjs').read_text())
-        self.assertIn('pruvs-shell-v7.1.36', (ROOT/'app/static/react-service-worker.js').read_text())
+        self.assertEqual(RELEASE,'7.1.37')
+        self.assertIn("version:'7.1.37'", (ROOT/'frontend/scripts/stamp-build.mjs').read_text())
+        self.assertIn('pruvs-shell-v7.1.37', (ROOT/'app/static/react-service-worker.js').read_text())
 
     def test_receipt_uses_paper_component_and_keeps_split_unchanged(self):
         src=(ROOT/'frontend/src/Receipts.jsx').read_text()
