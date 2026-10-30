@@ -1,4 +1,4 @@
-"""v7.1.37: cross-user resource isolation and constrained file-serving tests."""
+"""v7.1.38: cross-user resource isolation and constrained file-serving tests."""
 import importlib
 import importlib.util
 import sys

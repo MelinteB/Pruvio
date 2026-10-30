@@ -1,4 +1,4 @@
-"""v7.1.37: read-only go-live evidence inventory; no claims of legal approval."""
+"""v7.1.38: read-only go-live evidence inventory; no claims of legal approval."""
 from __future__ import annotations
 
 from datetime import date, timedelta
@@ -195,7 +195,7 @@ class LaunchEvidenceTests(unittest.TestCase):
         source=(SCRIPT_DIR/'launch_control.py').read_text(encoding='utf-8')
         self.assertIn("'audit-launch'",source)
         self.assertIn("'--strict'",source)
-        self.assertIn('EXPECTED_RELEASE = \'7.1.37\'',source)
+        self.assertIn('EXPECTED_RELEASE = \'7.1.38\'',source)
 
     def test_cli_refuses_non_backend(self):
         capture=StringIO()

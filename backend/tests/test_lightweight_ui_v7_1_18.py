@@ -7,9 +7,9 @@ BACKEND = Path(__file__).resolve().parents[1]
 
 class LightweightUIReleaseTests(unittest.TestCase):
     def test_release_version_is_aligned(self):
-        self.assertIn('7.1.37', (BACKEND / 'app/reliability.py').read_text(encoding='utf-8'))
-        self.assertIn('7.1.37', (BACKEND / 'frontend/scripts/stamp-build.mjs').read_text(encoding='utf-8'))
-        self.assertIn('pruvs-shell-v7.1.37', (BACKEND / 'app/static/react-service-worker.js').read_text(encoding='utf-8'))
+        self.assertIn('7.1.38', (BACKEND / 'app/reliability.py').read_text(encoding='utf-8'))
+        self.assertIn('7.1.38', (BACKEND / 'frontend/scripts/stamp-build.mjs').read_text(encoding='utf-8'))
+        self.assertIn('pruvs-shell-v7.1.38', (BACKEND / 'app/static/react-service-worker.js').read_text(encoding='utf-8'))
 
     def test_lazy_routes_and_loading_state(self):
         source = (BACKEND / 'frontend/src/main.jsx').read_text(encoding='utf-8')

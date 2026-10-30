@@ -10,7 +10,7 @@ from app.reliability import RELEASE, bounded_seconds, frontend_is_ready, require
 
 class ProductionFoundationTests(unittest.TestCase):
     def test_release(self):
-        self.assertEqual(RELEASE, '7.1.37')
+        self.assertEqual(RELEASE, '7.1.38')
 
     def test_live_interval_bounds(self):
         with patch.dict(os.environ, {'PRUVS_LIVE_ACTIVE_SECONDS': '0.1'}):
@@ -41,7 +41,7 @@ class ProductionFoundationTests(unittest.TestCase):
             self.assertFalse(frontend_is_ready(directory))
             (directory / 'index.html').write_text('<script src="/assets/app.js"></script><link href="/assets/app.css">')
             manifests = {
-                'version': '7.1.37',
+                'version': '7.1.38',
                 'assets': {
                     'dist/assets/app.js': hashlib.sha256(b'').hexdigest(),
                     'dist/assets/app.css': hashlib.sha256(b'').hexdigest(),
