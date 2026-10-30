@@ -178,6 +178,8 @@ def bill_document(uid:int,cid:int,did:int,identity=Depends(admin),db=Depends(get
     from app.services.document_service import resolve_document_path
     path=resolve_document_path(doc)
     if path is None:raise HTTPException(404,'The original file is unavailable on this server.')
+    d.add_audit(db,identity[0].id,'react','export','documents',did,['original_file'])
+    db.commit()
     return FileResponse(path,media_type=doc.mime_type or 'application/octet-stream',
                         filename=doc.original_filename or doc.stored_filename,
                         content_disposition_type='inline',headers={'Cache-Control':'no-store'})

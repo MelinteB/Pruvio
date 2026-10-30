@@ -1,4 +1,4 @@
-"""v7.1.33 real SQLite privacy checks: authenticated user's data only."""
+"""v7.1.34 real SQLite privacy checks: authenticated user's data only."""
 import importlib
 import pkgutil
 import unittest
@@ -96,7 +96,7 @@ class PrivacyExportTests(unittest.TestCase):
         self.assertEqual(exc.exception.status_code, 413)
 
     def test_release_and_translated_ui(self):
-        self.assertEqual(RELEASE, '7.1.33')
+        self.assertEqual(RELEASE, '7.1.34')
         ui = (ROOT / 'frontend/src/Account.jsx').read_text()
         self.assertIn("send('/account/data-export')", ui)
         self.assertIn('URL.revokeObjectURL', ui)

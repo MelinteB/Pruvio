@@ -25,22 +25,41 @@ def upload_root() -> Path:
 
 
 def resolve_document_path(document: Document | None) -> Path | None:
-    """Find a stored original after an upload-directory migration."""
-    if document is None:
+    """Resolve only files inside Pruvs-managed upload directories.
+
+    A database path must never be treated as permission to serve arbitrary
+    operating-system files. This also prevents symlink escape and traversal
+    through historical filenames.
+    """
+    if document is None or not document.case_id:
         return None
-    if document.path and not str(document.path).startswith(("s3://", "local://")):
-        recorded = Path(document.path)
-        if recorded.is_file():
-            return recorded
-    if str(document.path or '').startswith(('s3://','local://')):
+    stored = document.stored_filename or ""
+    if not stored or Path(stored).name != stored or stored in (".", ".."):
         return None
-    filename = document.stored_filename or ""
-    if not filename or Path(filename).name != filename or not document.case_id:
+    raw = str(document.path or "")
+    if raw.startswith(("s3://", "local://")):
         return None
-    for root in (upload_root(), LEGACY_UPLOAD_ROOT):
-        candidate = root / f"case_{document.case_id}" / filename
-        if candidate.resolve().is_relative_to(root.resolve()) and candidate.is_file():
-            return candidate
+
+    roots = tuple(dict.fromkeys((upload_root().resolve(), LEGACY_UPLOAD_ROOT.resolve())))
+
+    def allowed(path: Path) -> Path | None:
+        candidate = path.resolve()
+        # Document files must live under the case folder that owns them.
+        return candidate if any(candidate.is_relative_to(base / f"case_{document.case_id}")
+                                and candidate.is_file() for base in roots) else None
+
+    if raw:
+        recorded = Path(raw)
+        if recorded.is_absolute():
+            found = allowed(recorded)
+            if found is not None:
+                return found
+        # Never interpret untrusted relative paths against the process CWD.
+
+    for base in roots:
+        found = allowed(base / f"case_{document.case_id}" / stored)
+        if found is not None:
+            return found
     return None
 
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB

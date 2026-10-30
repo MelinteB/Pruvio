@@ -1,4 +1,4 @@
-"""v7.1.33 scoped UI regression contract; no DB, external APIs or user data."""
+"""v7.1.34 scoped UI regression contract; no DB, external APIs or user data."""
 import unittest
 from pathlib import Path
 from app.reliability import RELEASE
@@ -7,9 +7,9 @@ ROOT=Path(__file__).resolve().parents[1]
 
 class BlueAllocationInviteTests(unittest.TestCase):
     def test_release_alignment(self):
-        self.assertEqual(RELEASE,'7.1.33')
-        self.assertIn("version:'7.1.33'",(ROOT/'frontend/scripts/stamp-build.mjs').read_text())
-        self.assertIn('pruvs-shell-v7.1.33',(ROOT/'app/static/react-service-worker.js').read_text())
+        self.assertEqual(RELEASE,'7.1.34')
+        self.assertIn("version:'7.1.34'",(ROOT/'frontend/scripts/stamp-build.mjs').read_text())
+        self.assertIn('pruvs-shell-v7.1.34',(ROOT/'app/static/react-service-worker.js').read_text())
     def test_blue_gradient_for_selected_and_fully_allocated(self):
         css=(ROOT/'frontend/src/floating-bill-workspace.css').read_text()
         self.assertIn('.item.is-selected-by-me',css)

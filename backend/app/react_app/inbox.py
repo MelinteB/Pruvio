@@ -40,7 +40,8 @@ def destination(db,uid,url):
     if not match:return None
     s=db.query(SplitBillSession).filter_by(token=match.group(1)).first()
     if not s:return None
-    member=db.query(SplitBillParticipant).filter_by(session_id=s.id,user_id=uid,status='joined').first()
+    from app.react_app.security_rules import joined_member
+    member=joined_member(db,s.id,uid)
     return '/bill/'+s.token if member else None
 
 @router.get('')
@@ -58,7 +59,15 @@ def messages(unread:bool=False,offset:int=Query(0,ge=0),identity=Depends(current
         if e.kind in ('bill_settled','bill_reopened') and target:
             s=db.query(SplitBillSession).filter_by(token=target.split('/')[-1]).first()
             if s.owner_user_id==uid:continue
-        result.append({'id':e.id,'title':e.title,'body':e.body,'kind':e.kind,'created_at':e.created_at,'read':bool(e.read_at or db.get(PruvsInboxRead,(uid,e.id))),'can_open':bool(target)})
+        # The event belongs to this user, but past membership may have been
+        # revoked. Do not expose old merchant, participant or payment details.
+        has_access = bool(target)
+        result.append({'id':e.id,
+                       'title':e.title if has_access else 'Previous bill activity',
+                       'body':e.body if has_access else 'This bill is no longer available to your account.',
+                       'kind':e.kind,'created_at':e.created_at,
+                       'read':bool(e.read_at or db.get(PruvsInboxRead,(uid,e.id))),
+                       'can_open':has_access})
     return {'rows':result,'total':total,'unread_count':unread_count}
 
 @router.post('/read-all')

@@ -6,6 +6,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
+from fastapi import HTTPException
 
 from app.models.case import Case
 from app.services.receipt_currency_service import normalize_currency
@@ -441,6 +442,10 @@ def join_split_bill_session_as_user(db: Session, session: SplitBillSession, user
 
     existing = get_participant_by_session_and_user(db, session, user)
     if existing:
+        # An explicit removal/revocation is not undone by replaying an old
+        # invitation link. The owner must create a new authorized flow.
+        if existing.status in ('removed', 'revoked', 'blocked'):
+            raise HTTPException(403, 'You no longer have access to this bill invitation.')
         existing.display_name = user.name or existing.display_name or user.email or user.phone_number
         existing.phone_number = user.phone_number
         existing.status = "joined"

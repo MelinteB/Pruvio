@@ -1,4 +1,4 @@
-"""v7.1.33 organized workspaces — static source regressions, no user data or DB access."""
+"""v7.1.34 organized workspaces — static source regressions, no user data or DB access."""
 import pathlib
 import unittest
 from app.reliability import RELEASE
@@ -7,9 +7,9 @@ ROOT=pathlib.Path(__file__).resolve().parents[1]
 
 class OrganizedWorkspaceTests(unittest.TestCase):
     def test_release_alignment(self):
-        self.assertEqual(RELEASE,'7.1.33')
-        self.assertIn("version:'7.1.33'",(ROOT/'frontend/scripts/stamp-build.mjs').read_text())
-        self.assertIn('pruvs-shell-v7.1.33',(ROOT/'app/static/react-service-worker.js').read_text())
+        self.assertEqual(RELEASE,'7.1.34')
+        self.assertIn("version:'7.1.34'",(ROOT/'frontend/scripts/stamp-build.mjs').read_text())
+        self.assertIn('pruvs-shell-v7.1.34',(ROOT/'app/static/react-service-worker.js').read_text())
 
     def test_merchant_tree_and_status_views(self):
         source=(ROOT/'frontend/src/Receipts.jsx').read_text()

@@ -1,5 +1,5 @@
 {
-  "version": "7.1.33",
+  "version": "7.1.34",
   "source": {
     "src/Account.jsx": "069f9f17cab7df7385323b87b32ad0d456e9b214f81171063256cc9a079d83d1",
     "src/Admin.jsx": "0f4a01fb05697ed85080905cec798dedf99c37ec60219475546ed0d7413b809c",
@@ -19,7 +19,7 @@
     "src/join-return.js": "b85e860e7f17523107b1ce46b78abf02bf66330756d9a1b86947c89476aad86a",
     "src/lightweight-ui.css": "9c4a14b60e07807ddd2616bf4629eea2cf6a2fc99342bbd0435adbb09413aa64",
     "src/localReceipts.js": "ec28c8a8171a4876f16565620e5b932479037166b9f4df4419d25f260dc092c4",
-    "src/main.jsx": "85c74abd85f61c6ba090316a051198d99168eb10e338c4a47ec12aa5c53c794c",
+    "src/main.jsx": "887f67dfa8f72ba22d76b790b084f37381707dc6649aa7a5aff0e472a3fdfc02",
     "src/Membership.jsx": "de4da2efe23d5dd268c3d057a9b54d26213c989260b55ea48b5dadb34ce0a256",
     "src/Notifications.jsx": "d994944c67a5a3102ffee3078a54bc205cbedd550c213de11a35655b9499e3a8",
     "src/organized-workspace.css": "867354be7d10f1b0a23c7d9e7f2003adde1ef2bcb361eb75b6c11d72c73bb0d1",
@@ -32,7 +32,7 @@
     "src/professional/CorePages.jsx": "55988cb42be617a3cddba21a262d0bd3aca99ed7323ee87fa4efb0cce5be3cba",
     "src/professional/CorePages.jsx.before_restore.bak": "29ff516670ec9d102bcc3fab4a5fee0a3980fcdee74d5fa9d6af71c818791695",
     "src/professional/InviteDialog.jsx": "7314ab51196ae11c52b421cdb4156ae9d7eeb32349eb02001ed22099f46b5723",
-    "src/professional/ReleaseUpdateBanner.jsx": "b95a8c299d3c98e002ff8901a246ff7bd252492a0f23b6eb4086c9dcb1c3df3c",
+    "src/professional/ReleaseUpdateBanner.jsx": "33dd4e9531685c91823736d0f970a2e177bd7e48ca223c39b85845cf4d02cf20",
     "src/professional/RoundTable.jsx": "df8b39f659227b53468f8b43c3b60ae6a6996f8cd201cca9c425965dd50742af",
     "src/professional/support-diagnostics.css": "2591565ef9781b35e71abfd672be36fd7e489f079035e60764b1d28a6ef0d84e",
     "src/professional/SupportDiagnostics.jsx": "c674fa1ca10d19a9c461d4ac12a8ca109e41748e32a704c8981f5e6fe4a0348b",
@@ -48,28 +48,28 @@
     "vite.config.js": "23391e83cf79211d11ce62897d5548e6ea6fb7bce8f50d0ea327daa9ae3b9ab3",
     "package.json": "b3dcac3685a9eea1af1d0a3c92f8baa2baec4070436d6915933ce134ce8e478e",
     "package-lock.json": "dea7fec23f7d3d2676f56fa0aaf35f9a512611fc76ba1e6164c9410d338964eb",
-    "scripts/stamp-build.mjs": "c1e2e41717fa81e01276e9c5bc748be485972ed82ec4401dda53f29bc6545ded"
+    "scripts/stamp-build.mjs": "3b538075e68e6b79b3e3c692e79144833f552b30d6f37d4ec84651aad6a04e85"
   },
   "assets": {
-    "dist/assets/Account-CfD5ZPa8.js": "4ff48c813ced414466c0daad9a92bfbed78f067a091ad310928950cb0ee8debd",
+    "dist/assets/Account-C_NAyLaM.js": "2b0676461970bf1ffb736f3721b47e664bc535cad367bd483327408971034521",
     "dist/assets/Account-X0zPkum5.css": "41132b84fc37e9a4dd439e3edd35dd814024b786ce5a3e031e387d971e641f82",
     "dist/assets/Admin-D86aCJGp.js": "273e90579c1ccffcdab03fe5a391fc1bd6148c25fbf25ae6d11a155eaec3ba21",
     "dist/assets/api-DBifixvU.js": "dfc700869b5cba428bf2dcf23ad284b9b62b5a7a36f70d6d93706239277e72bd",
-    "dist/assets/Auth-CqUOqPaN.js": "5a3ff631ce36d14f72b3a1569e6c62d2d4c6473538a1a8862fc4721e748f21f6",
-    "dist/assets/Bill-CASWI94K.js": "204be3a29ea4b6ce779af2b369946010633a7a2ffc2e02d26e09452574bcf364",
+    "dist/assets/Auth-Dc6ioZS-.js": "b6c94a98d1bf90341442f392b9b4db109c0e7b9e622436fd8aa82265891435c3",
     "dist/assets/Bill-DbUXOrxv.css": "19057bc1125e16ae56b0712ba4db8b2b930adaa11ab25052da690488c9a41b6f",
-    "dist/assets/Expenses-ZS-pPx0k.js": "37ddf8618e33fed8e2cb198b64a6d7a3fbc36116008ebffd6d46c8e90d26242c",
+    "dist/assets/Bill-DPRiSeqZ.js": "b91a814c07b3ffc6ae7c93a26399b5e7ebe327e1ab6544ab0c787578ba71211d",
+    "dist/assets/Expenses-ASlgHeBC.js": "f4ca5c1f983dad8965226a87352ded0f9f3110231c3d9d8d2b25f1183c9cb6a7",
     "dist/assets/fingerprint-pattern-D770SL6a.js": "393d23020bc80a08ed9c07387e360231e926977cda967903a4b80fd4caccdebc",
-    "dist/assets/Inbox-SItyCmT7.js": "315df743920f052f70c59b64f069c9dcdcee196bb23bf4ca3a91a1815a85d305",
+    "dist/assets/Inbox-BkTRGxzF.js": "a497c689f7bc29e7b6dbb3354745010c561ebe3cbd8aa9a56d066bc71d0cf0f3",
     "dist/assets/index-B9c8BbKh.css": "cc52d5775dfe5bd8c3588e7cf2d40c72c0953080374c9acbbaed6aa99176da87",
-    "dist/assets/index-DYRbGgT-.js": "250f3639d40c519c20a001a81a1dbdcb77dfc37dc7ea796842b5e5331f015b8b",
+    "dist/assets/index-CW7i-jvb.js": "aac9552ce2cb90d7e13b8f49a28a15e74285d891c4243381e5be80321364cbae",
     "dist/assets/InviteDialog-B3Z2oOAt.js": "ea3ab423232cd9c1d8c6afb6b7def3a7a19cebbd25b970ccc2052b4e14b5f6c7",
-    "dist/assets/Membership-BIZYMNdV.js": "6eac1cb8a830a1a8b7e81c3f89fa578431ba993ecb786d787777d2e784b6db94",
-    "dist/assets/Notifications-DW_REGyI.js": "8c89862728c7a2ba5d1af00d5ce446d9745a1e2f0cd252e57c967659d1c56052",
-    "dist/assets/Receipts-CxUrB7YU.js": "86492e881c6f1136d0931fd6e9c6033829ce43b3ac6d55967e9f055160ba7ce3",
+    "dist/assets/Membership-C9cHwXrL.js": "14fb542be48eecdc3916922ffd9f0b54aa6ee43a9252e58a2e4b642eb7fb73ec",
+    "dist/assets/Notifications-CFWIgVwp.js": "75141a2a2e3c98ab7b518a895afb0181372fe344885a61a5740799c10fd5a694",
+    "dist/assets/Receipts-B8ZC0Kx3.js": "b1b3b6e1ff804ac8d78d209c254abff3ccb66f8c34a6f809259bee38858fd1e1",
     "dist/assets/smartphone-DQgUpokj.js": "b96933b3bd418768e9329db8af2588d1a0b4ec87d0ae85849e386b0ea21e8f7d",
-    "dist/assets/TripProfiles-HYDs9e-i.js": "e3b98a0a8514e8f9b5c7214a34cabc8f051bbff43d8832a329ad3661eb83e93a",
+    "dist/assets/TripProfiles-Bpc5HyJz.js": "2aa443810511b67283ea0a4549c5d439ca015780e6c8ab743c6bcb2b386811af",
     "dist/assets/x-ByBe1V_u.js": "63bf617f18989b186e9cbb71e2eea5b4406b49eb67884d5f08f735a1ebb0f1e9",
-    "dist/index.html": "d57d5a764e1013487d6c5000b0f6438fea7c79d9bf793e57699468a71c9c5f64"
+    "dist/index.html": "978fb271aa30036a4069b4ae1fdd8bac5541740a1ca79230fbcf25bc1e908fbc"
   }
 }

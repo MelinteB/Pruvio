@@ -389,12 +389,8 @@ def create_split(case_id:int,body:dict,identity=Depends(current),db=Depends(get_
     return {'token':session.token}
 
 def member(db,token,uid,owner=False,lock=False):
-    query=db.query(SplitBillSession).filter_by(token=token)
-    s=(query.with_for_update() if lock else query).first()
-    if not s:raise HTTPException(404,'Bill not found.')
-    p=db.query(SplitBillParticipant).filter_by(session_id=s.id,user_id=uid,status='joined').first()
-    if not p or (owner and s.owner_user_id!=uid):raise HTTPException(403,'You do not have access to this bill action.')
-    return s,p
+    from app.react_app.security_rules import require_bill_access
+    return require_bill_access(db,token,uid,owner=owner,lock=lock)
 
 def summary(db,s,uid):
     from app.react_app.receipt_labels import receipt_label
@@ -430,6 +426,10 @@ def invitation(token:str,identity=Depends(current),db=Depends(get_db)):
     s=bills.get_split_bill_session_by_token(db,token)
     if not s:raise HTTPException(404,'Invitation not found.')
     mine=db.query(SplitBillParticipant).filter_by(session_id=s.id,user_id=identity[0].id,status='joined').first()
+    # An expired bearer invitation must not disclose receipt/owner metadata to new accounts.
+    from app.react_app.security_rules import invitation_is_current
+    if not mine and not invitation_is_current(s):
+        raise HTTPException(404,'Invitation not found.')
     owner=db.get(User,s.owner_user_id)
     return {'token':token,'owner':owner.name if owner else 'Pruvs user','source_name':receipt_label(db,s.case_id),
             'status':s.status,'joined':bool(mine),'is_owner':s.owner_user_id==identity[0].id}
@@ -437,7 +437,9 @@ def invitation(token:str,identity=Depends(current),db=Depends(get_db)):
 @router.post('/bills/{token}/join')
 def join(token:str,identity=Depends(current),db=Depends(get_db)):
     s=db.query(SplitBillSession).filter_by(token=token).with_for_update().first()
-    if not s:raise HTTPException(404,'Invitation not found.')
+    from app.react_app.security_rules import invitation_is_current
+    if not invitation_is_current(s):
+        raise HTTPException(404,'Invitation not found.')
     if s.owner_user_id==identity[0].id:raise ValueError('The owner is already part of this bill.')
     bills.join_split_bill_session_as_user(db,s,identity[0])
     from app.react_app.commerce import new_referral
