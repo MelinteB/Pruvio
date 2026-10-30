@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pruvs 7.1.35 release gate: read-only checks, scoped Git staging, live fingerprint.
+"""Pruvs 7.1.36 release gate: read-only checks, scoped Git staging, live fingerprint.
 
 No dependencies other than Python 3.11+ standard library. No secrets or user
 records are loaded or printed. Never commits, pushes, deploys or migrates a DB.
@@ -20,7 +20,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path, PurePosixPath
 
-EXPECTED_RELEASE = '7.1.35'
+EXPECTED_RELEASE = '7.1.36'
 START_RELEASE = (7, 1, 22)
 ASSET_LIMIT = 3_000_000
 RELEASE_DIR_RE = re.compile(r'^pruvs_v(7_1_\d+)(?:_|$)')
@@ -277,7 +277,7 @@ def stage(root: Path, since: str, expected: str, apply: bool) -> int:
 def fetch(base: str, path: str, limit: int = ASSET_LIMIT) -> tuple[bytes, dict]:
     url = base + path
     req = urllib.request.Request(url, headers={
-        'Cache-Control': 'no-cache', 'Pragma': 'no-cache', 'User-Agent': 'PruvsLaunchControl/7.1.35'})
+        'Cache-Control': 'no-cache', 'Pragma': 'no-cache', 'User-Agent': 'PruvsLaunchControl/7.1.36'})
     with urllib.request.urlopen(req, timeout=15) as response:
         if response.status != 200:
             raise GateError(f'Remote endpoint {path} returned HTTP {response.status}')

@@ -340,7 +340,7 @@ def original(case_id:int,identity=Depends(current),db=Depends(get_db)):
     from app.services.receipt_storage import is_cloud, read_paid
     if is_cloud(doc):
         from urllib.parse import quote
-        return Response(content=read_paid(doc),media_type=doc.mime_type or 'application/octet-stream',
+        return Response(content=read_paid(doc, user_id=identity[0].id, case_id=case_id),media_type=doc.mime_type or 'application/octet-stream',
                         headers={'Cache-Control':'no-store','Content-Disposition':"attachment; filename*=UTF-8''"+quote(doc.original_filename or 'receipt')})
     path=resolve_document_path(doc)
     if path is None:raise HTTPException(404,'Original is stored on the device where it was scanned. Open Pruvs on that device to view it.')

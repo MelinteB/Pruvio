@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 // This constant identifies the code running in the user's browser. The server
 // exposes /api/v1/release; a newer release can be offered without clearing
 // IndexedDB or other local Pruvs receipts.
-export const CLIENT_RELEASE = '7.1.35';
+export const CLIENT_RELEASE = '7.1.36';
 
 export function isNewerRelease(server, client = CLIENT_RELEASE) {
   const parse = value => {

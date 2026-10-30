@@ -1,4 +1,4 @@
-"""v7.1.35 sharing & invitations source contracts (no database/network required)."""
+"""v7.1.36 sharing & invitations source contracts (no database/network required)."""
 import unittest
 from pathlib import Path
 from app.reliability import RELEASE
@@ -8,10 +8,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class SharingInvitesTests(unittest.TestCase):
     def test_release_alignment(self):
-        self.assertEqual(RELEASE, '7.1.35')
-        self.assertIn("version:'7.1.35'", (ROOT/'frontend/scripts/stamp-build.mjs').read_text())
-        self.assertIn('pruvs-shell-v7.1.35', (ROOT/'app/static/react-service-worker.js').read_text())
-        self.assertIn("CLIENT_RELEASE = '7.1.35'", (ROOT/'frontend/src/professional/ReleaseUpdateBanner.jsx').read_text())
+        self.assertEqual(RELEASE, '7.1.36')
+        self.assertIn("version:'7.1.36'", (ROOT/'frontend/scripts/stamp-build.mjs').read_text())
+        self.assertIn('pruvs-shell-v7.1.36', (ROOT/'app/static/react-service-worker.js').read_text())
+        self.assertIn("CLIENT_RELEASE = '7.1.36'", (ROOT/'frontend/src/professional/ReleaseUpdateBanner.jsx').read_text())
 
     def test_modal_replaces_inline_share(self):
         bill=(ROOT/'frontend/src/Bill.jsx').read_text()

@@ -1,5 +1,6 @@
 import os
 import io
+import tempfile
 from pathlib import Path
 from uuid import uuid4
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -133,6 +134,20 @@ def get_documents_by_case(db: Session, case_id: int):
     )
 
 
+def _atomic_write_original(target: Path, content: bytes) -> None:
+    """Never expose a partial original at its final storage path."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix='.pruvs-upload-', dir=target.parent)
+    try:
+        with os.fdopen(fd, 'wb') as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, target)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
 def save_document_bytes(
     db: Session,
     case: Case,
@@ -163,7 +178,7 @@ def save_document_bytes(
     stored_filename = f"{uuid4().hex}{extension}"
     stored_path = case_folder / stored_filename
 
-    stored_path.write_bytes(file_bytes)
+    _atomic_write_original(stored_path, file_bytes)
 
     document = Document(
         case_id=case.id,
@@ -176,9 +191,14 @@ def save_document_bytes(
         ocr_text=None
     )
 
-    db.add(document)
-    db.commit()
-    db.refresh(document)
+    try:
+        db.add(document)
+        db.commit()
+        db.refresh(document)
+    except Exception:
+        db.rollback()
+        stored_path.unlink(missing_ok=True)
+        raise
 
     return document
 
@@ -201,7 +221,7 @@ def restore_missing_original(db: Session, case: Case, document: Document | None,
     folder.mkdir(parents=True, exist_ok=True)
     filename = f"{uuid4().hex}{extension}"
     path = folder / filename
-    path.write_bytes(file_bytes)
+    _atomic_write_original(path, file_bytes)
     try:
         document.path = str(path)
         document.stored_filename = filename
