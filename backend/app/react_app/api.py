@@ -326,7 +326,7 @@ def receipt(case_id:int,identity=Depends(current),db=Depends(get_db)):
     doc=db.query(Document).filter_by(case_id=case_id).order_by(Document.id.desc()).first()
     from app.services.receipt_storage import is_cloud
     result['original_available']=is_cloud(doc) or resolve_document_path(doc) is not None
-    result['storage_mode']='local' if str(getattr(doc,'path','')).startswith('local://') else 'cloud' if is_cloud(doc) else 'legacy' 
+    result['storage_mode']='local' if str(getattr(doc,'path','')).startswith('local://') else 'cloud' if is_cloud(doc) else 'legacy'
     return result
 
 @router.get('/receipts/{case_id}/original')

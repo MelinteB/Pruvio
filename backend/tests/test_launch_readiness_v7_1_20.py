@@ -17,7 +17,7 @@ class LaunchReadinessTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.frontend = Path(self.temp.name)
         (self.frontend / 'assets').mkdir()
-        self.build('7.1.31')
+        self.build('7.1.32')
 
     def build(self, version, javascript=b'console.log("pruvs")', css=b'body{margin:0}'):
         assets = self.frontend / 'assets'
@@ -36,7 +36,7 @@ class LaunchReadinessTests(unittest.TestCase):
         (self.frontend / 'build-manifest.json').write_text(json.dumps(manifest), encoding='utf-8')
 
     def test_version_and_build_identifier(self):
-        self.assertEqual(RELEASE, '7.1.31')
+        self.assertEqual(RELEASE, '7.1.32')
         status = frontend_build_report(self.frontend, verify_hashes=True)
         self.assertEqual(status['status'], 'ready')
         self.assertEqual(status['build_version'], RELEASE)
@@ -85,7 +85,7 @@ class LaunchReadinessTests(unittest.TestCase):
         with patch.dict(os.environ, {'PRUVS_REQUIRE_BUILD_MATCH': 'true'}):
             with self.assertRaisesRegex(RuntimeError, 'does not match'):
                 require_build_match_if_enabled(self.frontend)
-        self.build('7.1.31')
+        self.build('7.1.32')
         with patch.dict(os.environ, {'PRUVS_REQUIRE_BUILD_MATCH': 'true'}):
             require_build_match_if_enabled(self.frontend)
 
@@ -95,9 +95,9 @@ class LaunchReadinessTests(unittest.TestCase):
         notice = (backend / 'frontend/src/professional/ReleaseUpdateBanner.jsx').read_text(encoding='utf8')
         worker = (backend / 'app/static/react-service-worker.js').read_text(encoding='utf8')
         self.assertIn('<ReleaseUpdateBanner />', main)
-        self.assertIn("CLIENT_RELEASE = '7.1.31'", notice)
+        self.assertIn("CLIENT_RELEASE = '7.1.32'", notice)
         self.assertIn('cache: \'no-store\'', notice)
-        self.assertIn('pruvs-shell-v7.1.31', worker)
+        self.assertIn('pruvs-shell-v7.1.32', worker)
         self.assertIn('require_build_match_if_enabled(FRONTEND)', (backend / 'app/react_main.py').read_text(encoding='utf8'))
 
 

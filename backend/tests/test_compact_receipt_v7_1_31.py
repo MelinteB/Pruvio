@@ -1,4 +1,4 @@
-"""Source-level protections for v7.1.31 receipt layout and unchanged split actions."""
+"""Source-level protections for v7.1.32 receipt layout and unchanged split actions."""
 from pathlib import Path
 import unittest
 from app.reliability import RELEASE
@@ -8,9 +8,9 @@ ROOT=Path(__file__).resolve().parents[1]
 
 class CompactReceiptTests(unittest.TestCase):
     def test_version_and_build_alignment(self):
-        self.assertEqual(RELEASE,'7.1.31')
-        self.assertIn("version:'7.1.31'", (ROOT/'frontend/scripts/stamp-build.mjs').read_text())
-        self.assertIn('pruvs-shell-v7.1.31', (ROOT/'app/static/react-service-worker.js').read_text())
+        self.assertEqual(RELEASE,'7.1.32')
+        self.assertIn("version:'7.1.32'", (ROOT/'frontend/scripts/stamp-build.mjs').read_text())
+        self.assertIn('pruvs-shell-v7.1.32', (ROOT/'app/static/react-service-worker.js').read_text())
 
     def test_receipt_uses_paper_component_and_keeps_split_unchanged(self):
         src=(ROOT/'frontend/src/Receipts.jsx').read_text()
@@ -35,7 +35,7 @@ class CompactReceiptTests(unittest.TestCase):
         self.assertIn('--item-share-background',(ROOT/'frontend/src/participant-colors.css').read_text())
 
     def test_ro_translation_of_new_labels(self):
-        text=(ROOT/'frontend/src/i18n.js').read_text()
+        text=(ROOT/'frontend/src/i18n.js').read_text(encoding='utf-8')
         self.assertIn("'Extracted from receipt · check against the original'",text)
         self.assertIn("'Item': 'Articol'",text)
         self.assertIn("'Amount': 'Valoare'",text)
