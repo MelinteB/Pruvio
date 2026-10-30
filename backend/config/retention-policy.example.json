@@ -1,0 +1,101 @@
+{
+  "_notice": "WORKSHEET ONLY — no automatic deletion, approval or GDPR certification.",
+  "categories": {
+    "accounts_and_contact": {
+      "purpose": null,
+      "lawful_basis": null,
+      "retention_rule": null,
+      "deletion_method": null,
+      "reviewer_approval": null,
+      "notes": "Verify processor retention, backups, legal holds and any tax/accounting obligations."
+    },
+    "receipt_originals_and_ocr": {
+      "purpose": null,
+      "lawful_basis": null,
+      "retention_rule": null,
+      "deletion_method": null,
+      "reviewer_approval": null,
+      "notes": "Verify processor retention, backups, legal holds and any tax/accounting obligations."
+    },
+    "receipt_items_and_corrections": {
+      "purpose": null,
+      "lawful_basis": null,
+      "retention_rule": null,
+      "deletion_method": null,
+      "reviewer_approval": null,
+      "notes": "Verify processor retention, backups, legal holds and any tax/accounting obligations."
+    },
+    "shared_bills_and_participants": {
+      "purpose": null,
+      "lawful_basis": null,
+      "retention_rule": null,
+      "deletion_method": null,
+      "reviewer_approval": null,
+      "notes": "Verify processor retention, backups, legal holds and any tax/accounting obligations."
+    },
+    "payment_confirmations": {
+      "purpose": null,
+      "lawful_basis": null,
+      "retention_rule": null,
+      "deletion_method": null,
+      "reviewer_approval": null,
+      "notes": "Verify processor retention, backups, legal holds and any tax/accounting obligations."
+    },
+    "password_reset_and_otp": {
+      "purpose": null,
+      "lawful_basis": null,
+      "retention_rule": null,
+      "deletion_method": null,
+      "reviewer_approval": null,
+      "notes": "Verify processor retention, backups, legal holds and any tax/accounting obligations."
+    },
+    "sessions_passkeys_and_devices": {
+      "purpose": null,
+      "lawful_basis": null,
+      "retention_rule": null,
+      "deletion_method": null,
+      "reviewer_approval": null,
+      "notes": "Verify processor retention, backups, legal holds and any tax/accounting obligations."
+    },
+    "push_and_inbox_events": {
+      "purpose": null,
+      "lawful_basis": null,
+      "retention_rule": null,
+      "deletion_method": null,
+      "reviewer_approval": null,
+      "notes": "Verify processor retention, backups, legal holds and any tax/accounting obligations."
+    },
+    "stripe_billing_and_invoices": {
+      "purpose": null,
+      "lawful_basis": null,
+      "retention_rule": null,
+      "deletion_method": null,
+      "reviewer_approval": null,
+      "notes": "Verify processor retention, backups, legal holds and any tax/accounting obligations."
+    },
+    "security_admin_and_access_logs": {
+      "purpose": null,
+      "lawful_basis": null,
+      "retention_rule": null,
+      "deletion_method": null,
+      "reviewer_approval": null,
+      "notes": "Verify processor retention, backups, legal holds and any tax/accounting obligations."
+    },
+    "backups_and_restore_copies": {
+      "purpose": null,
+      "lawful_basis": null,
+      "retention_rule": null,
+      "deletion_method": null,
+      "reviewer_approval": null,
+      "notes": "Verify processor retention, backups, legal holds and any tax/accounting obligations."
+    },
+    "support_and_dispute_requests": {
+      "purpose": null,
+      "lawful_basis": null,
+      "retention_rule": null,
+      "deletion_method": null,
+      "reviewer_approval": null,
+      "notes": "Verify processor retention, backups, legal holds and any tax/accounting obligations."
+    }
+  }
+}

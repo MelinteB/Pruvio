@@ -30,6 +30,10 @@ def delete_case(db,case_id,strict=True):
             if ('"case_id":'+str(case_id)) in (report.snapshot_json or '').replace(' ',''):
                 raise HTTPException(409,'This receipt is used by an expense report. Remove it from the report before deleting.')
     docs=db.query(Document).filter_by(case_id=case_id).all()
+    from app.services.account_deletion import validate_cloud_document
+    for doc in docs:
+        validate_cloud_document(doc, case.user_id, case_id)
+    paths = [doc.path for doc in docs]
     # On deletion, remote object removal must succeed before database mutation.
     for doc in docs:delete_paid(doc)
     db.query(ExternalOCRUsage).filter_by(case_id=case_id).delete(synchronize_session=False)
@@ -44,4 +48,6 @@ def delete_case(db,case_id,strict=True):
     for doc in docs:db.delete(doc)
     db.delete(case)
     db.commit()
-    for doc in docs:erase_temporary(doc)
+    from types import SimpleNamespace
+    for path in paths:
+        erase_temporary(SimpleNamespace(path=path))

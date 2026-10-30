@@ -788,3 +788,19 @@ Object.assign(ro, {
   'Amount': 'Valoare',
   'Extracted from receipt · check against the original': 'Extras din bon · verifică informațiile cu originalul'
 });
+
+// v7.1.33 — privacy deletion preview.
+Object.assign(ro, {
+  'Preview account deletion': 'Previzualizează ștergerea contului',
+  'Deletion preview loaded.': 'Previzualizarea ștergerii este disponibilă.',
+  'Receipts to delete': 'Bonuri de șters',
+  'Stored documents': 'Documente stocate',
+  'Shared bills affected': 'Note comune afectate',
+  'Deleting a shared bill may remove other participants access to that bill.': 'Ștergerea unei note comune poate elimina accesul celorlalți participanți la acea notă.',
+  'Billing records require support review before account deletion.': 'Înregistrările de facturare necesită verificarea echipei de asistență înainte de ștergere.',
+  'Billing records require a support review before account deletion. Contact Pruvs support.': 'Datele de facturare necesită verificarea echipei de asistență înainte de ștergerea contului. Contactează asistența Pruvs.',
+  'Receipt storage needs support review before account deletion.': 'Stocarea bonurilor necesită verificarea echipei de asistență înainte de ștergerea contului.',
+  'Security logs, backups and billing records may follow separate legally approved retention rules.': 'Jurnalele de securitate, copiile de siguranță și datele de facturare pot avea reguli de păstrare separate, aprobate legal.'
+});
+
+Object.assign(ro, {"Pruvs · Core Experience 7.1.33": "Pruvs · Experiența principală 7.1.33"});

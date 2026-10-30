@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pruvs 7.1.32 release gate: read-only checks, scoped Git staging, live fingerprint.
+"""Pruvs 7.1.33 release gate: read-only checks, scoped Git staging, live fingerprint.
 
 No dependencies other than Python 3.11+ standard library. No secrets or user
 records are loaded or printed. Never commits, pushes, deploys or migrates a DB.
@@ -20,7 +20,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path, PurePosixPath
 
-EXPECTED_RELEASE = '7.1.32'
+EXPECTED_RELEASE = '7.1.33'
 START_RELEASE = (7, 1, 22)
 ASSET_LIMIT = 3_000_000
 RELEASE_DIR_RE = re.compile(r'^pruvs_v(7_1_\d+)(?:_|$)')
@@ -38,33 +38,22 @@ def root_path(value: str | Path) -> Path:
     return root
 
 
-def resolve_executable(args, *, windows=None, finder=None):
-    """Resolve npm's Windows .cmd launcher without using shell=True.
-
-    Windows Node.js generally provides npm.cmd, not npm.exe. Python's
-    CreateProcess lookup does not reliably expand PATHEXT like PowerShell.
-    Git and Python are intentionally left on their existing execution paths.
-    """
+def resolved_command(args, *, windows=None, which=None):
+    """Locate Windows npm.cmd and retain the current Python virtualenv."""
     if windows is None:
         windows = os.name == 'nt'
-    if finder is None:
-        finder = shutil.which
-    if not args:
-        raise GateError('Empty command is not permitted')
-    command = os.fspath(args[0])
-    if windows and command.lower() in ('npm', 'npx'):
-        # Resolve a trusted, explicit executable rather than spawning a shell.
-        for candidate in (command + '.cmd', command + '.exe', command):
-            resolved = finder(candidate)
-            if resolved:
-                return [resolved, *args[1:]]
-        raise GateError('Required command not available: ' + command +
-                        '.cmd; check that Node.js is installed and available in PATH (where.exe npm).')
-    return list(args)
+    if which is None:
+        which = shutil.which
+    command = list(args)
+    if command and command[0] == 'python':
+        command[0] = sys.executable
+    elif command and command[0] == 'npm' and windows:
+        command[0] = which('npm.cmd') or which('npm') or 'npm.cmd'
+    return command
 
 
 def invoke(args, cwd: Path, *, capture=True):
-    args = resolve_executable(args)
+    args = resolved_command(args)
     try:
         return subprocess.run(args, cwd=cwd, text=True, encoding='utf-8', errors='replace',
                               stdout=subprocess.PIPE if capture else None,
@@ -224,7 +213,7 @@ def releases_to_stage(root: Path, since: str, target: str) -> tuple[list[str], d
             if not isinstance(relative, str) or not isinstance(spec, dict):
                 raise GateError('Invalid release manifest entry: ' + folder.name)
             p = PurePosixPath(relative)
-            if p.is_absolute() or not p.parts or '..' in p.parts or p.parts[0] not in ('app', 'frontend', 'tests', 'scripts'):
+            if p.is_absolute() or not p.parts or '..' in p.parts or not (p.parts[0] in ('app', 'frontend', 'tests', 'scripts') or p.parts == ('config', 'retention-policy.example.json')):
                 raise GateError('Unsafe release path: ' + relative)
             target_path = root / 'backend' / Path(*p.parts)
             if (not target_path.is_file() or target_path.is_symlink() or
@@ -288,7 +277,7 @@ def stage(root: Path, since: str, expected: str, apply: bool) -> int:
 def fetch(base: str, path: str, limit: int = ASSET_LIMIT) -> tuple[bytes, dict]:
     url = base + path
     req = urllib.request.Request(url, headers={
-        'Cache-Control': 'no-cache', 'Pragma': 'no-cache', 'User-Agent': 'PruvsLaunchControl/7.1.32'})
+        'Cache-Control': 'no-cache', 'Pragma': 'no-cache', 'User-Agent': 'PruvsLaunchControl/7.1.33'})
     with urllib.request.urlopen(req, timeout=15) as response:
         if response.status != 200:
             raise GateError(f'Remote endpoint {path} returned HTTP {response.status}')

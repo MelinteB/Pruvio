@@ -53,6 +53,11 @@ def audit(backend, environment):
     else:
         messages.append(('OK', 'Authenticated scoped account activity export source present; permission tests still required.'))
 
+    if (backend / 'app/services/account_deletion.py').is_file():
+        messages.append(('OK', 'Storage-aware deletion preview/source present; live cloud storage and user-isolation tests are still required.'))
+    else:
+        messages.append(('BLOCKER', 'Storage-safe account deletion module missing.'))
+    messages.append(('MANUAL', 'Retention jobs remain disabled until policy, legal holds, and backup/processor obligations are approved.'))
     messages.extend([
         ('MANUAL', 'Verify restore of a production database backup into an isolated environment.'),
         ('MANUAL', 'Approve documented retention/deletion periods for receipts, logs, OTP, billing and payment audit records.'),

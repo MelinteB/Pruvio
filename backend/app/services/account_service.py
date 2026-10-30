@@ -197,7 +197,22 @@ def _delete_session(db: Session, session_id: int) -> None:
 
 
 def delete_user_completely(db: Session, user: User) -> None:
+    """Idempotent storage-first erasure; fails closed for billing/unsafe cloud keys.
+
+    Provider deletions precede SQL changes. Remote objects cannot participate in
+    SQL transactions; a transient provider failure leaves the account intact.
+    """
+    from app.services.account_deletion import deletion_plan, remove_cloud_objects, clean_dependent_records
+    from app.services.receipt_storage import erase_temporary
     user_id = user.id
+    cloud_objects = deletion_plan(db, user)
+    # Capture primitive paths now: ORM documents expire after the SQL commit.
+    all_paths = [row.path for row in (db.query(Document).join(Case, Document.case_id == Case.id)
+                .filter(Case.user_id == user_id).all())]
+    # Avoid deleting database records when storage rejects object deletion.
+    remove_cloud_objects(cloud_objects)
+    case_ids = [row.id for row in db.query(Case.id).filter(Case.user_id == user_id).all()]
+    clean_dependent_records(db, user_id, case_ids)
 
     # Remove participation from sessions owned by somebody else.
     participant_ids = [row.id for row in db.query(SplitBillParticipant).filter(SplitBillParticipant.user_id == user_id).all()]
@@ -210,6 +225,16 @@ def delete_user_completely(db: Session, user: User) -> None:
     # Erase this user's actor identifiers from surviving shared bills as well.
     from app.models.payment_confirmation_event import PaymentConfirmationEvent
     db.query(PaymentConfirmationEvent).filter_by(actor_user_id=user_id).delete(synchronize_session=False)
+    # Remove visibility references for bills about to disappear, including
+    # those stored by other participants; unrelated bills remain untouched.
+    from app.models.history_visibility import HistoryVisibility
+    owned_case_ids = [row.id for row in db.query(Case.id).filter(Case.user_id == user_id).all()]
+    disappearing_sessions = [row.id for row in db.query(SplitBillSession.id).filter(
+        (SplitBillSession.owner_user_id == user_id) |
+        (SplitBillSession.case_id.in_(owned_case_ids))).all()]
+    if disappearing_sessions:
+        db.query(HistoryVisibility).filter(HistoryVisibility.kind == 'bill',
+            HistoryVisibility.source_id.in_(disappearing_sessions)).delete(synchronize_session=False)
     # Remove sessions owned by the user.
     owned_session_ids = [row.id for row in db.query(SplitBillSession).filter(SplitBillSession.owner_user_id == user_id).all()]
     for session_id in owned_session_ids:
@@ -245,7 +270,20 @@ def delete_user_completely(db: Session, user: User) -> None:
     db.query(VerificationCode).filter(VerificationCode.user_id == user_id).delete(synchronize_session=False)
     db.query(PasskeyCredential).filter(PasskeyCredential.user_id == user_id).delete(synchronize_session=False)
     db.query(User).filter(User.id == user_id).delete(synchronize_session=False)
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    # Free-plan upload paths are best-effort local cleanup; the persistent
+    # record and cloud storage have already been deleted.
+    from types import SimpleNamespace
+    for path in all_paths:
+        try:
+            erase_temporary(SimpleNamespace(path=path))
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning('A temporary receipt file could not be erased after account deletion.')
 
 
 def confirm_and_delete_account(db: Session, user: User, channel: str, code: str,

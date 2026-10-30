@@ -221,31 +221,35 @@ def contact_confirm(body:dict,request:Request,response:Response,identity=Depends
     u=accounts.confirm_contact_change(db,identity[0],body.get('channel'),body.get('value',''),body.get('code',''),challenge_id=body.get('challenge_id',''))
     revoke_user(db,u.id);db.commit();return issue(db,u,request,response)
 
+@router.get('/account/delete/preview')
+def delete_preview(response: Response,identity=Depends(current),db=Depends(get_db)):
+    """User-scoped deletion impact preview; no secrets, personal records or mutations."""
+    from app.services.account_deletion import inspect_account
+    response.headers['Cache-Control'] = 'private, no-store, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    return inspect_account(db, identity[0])
+
 @router.post('/account/delete/request')
 def delete_request(identity=Depends(current),db=Depends(get_db)):
+    # Check for unresolved external billing before sending a destructive OTP.
+    from app.services.account_deletion import deletion_plan
+    deletion_plan(db, identity[0])
     r=accounts.request_account_deletion_otp(db,identity[0]);return {k:v for k,v in r.items() if k!='debug_otp'}
 
 @router.post('/account/delete/confirm')
 def delete_confirm(body:dict,response:Response,identity=Depends(current),db=Depends(get_db)):
     u=identity[0]
-    # Verify before deleting notification/session data.
-    onboarding.verify_code(db,destination_type='email',destination=u.email,code=body.get('code',''),purpose='account_delete',challenge_id=body.get('challenge_id',''),user_id=u.id)
-    revoke_user(db,u.id)
-    from app.models.push_notification import PushDelivery,PushPreference,PushDevice,PushGrant
-    ids=db.query(PushEvent.id).filter_by(user_id=u.id)
-    db.query(PushDelivery).filter(PushDelivery.event_id.in_(ids)).delete(synchronize_session=False)
-    db.query(PushEvent).filter_by(user_id=u.id).delete();db.query(PushPreference).filter_by(user_id=u.id).delete()
-    db.query(PushDevice).filter_by(user_id=u.id).delete();db.query(PushGrant).filter_by(user_id=u.id).delete()
-    from app.react_app.inbox import PruvsInboxRead
-    db.query(PruvsInboxRead).filter_by(user_id=u.id).delete()
-    from app.models.expense import ExpenseCompany,ExpenseReport,ExpenseTripProfile
-    from app.models.history_visibility import HistoryVisibility
-    db.query(ExpenseReport).filter_by(user_id=u.id).delete()
-    db.query(ExpenseTripProfile).filter_by(user_id=u.id).delete()
-    db.query(ExpenseCompany).filter_by(user_id=u.id).delete()
-    db.query(HistoryVisibility).filter_by(user_id=u.id).delete()
+    from app.services.account_deletion import deletion_plan
+    deletion_plan(db,u)
+    # OTP and current account authentication are mandatory. Receipt storage
+    # must be deleted successfully before database deletion commits.
+    onboarding.verify_code(db,destination_type='email',destination=u.email,
+        code=body.get('code',''),purpose='account_delete',
+        challenge_id=body.get('challenge_id',''),user_id=u.id)
     accounts.delete_user_completely(db,u)
-    response.delete_cookie(COOKIE,path='/');response.delete_cookie(CSRF_COOKIE,path='/');return {'ok':True}
+    response.delete_cookie(COOKIE,path='/')
+    response.delete_cookie(CSRF_COOKIE,path='/')
+    return {'ok':True}
 
 @router.get('/history')
 def history(offset:int=Query(0,ge=0),view:str='active',split_status:str|None=None,identity=Depends(current),db=Depends(get_db)):

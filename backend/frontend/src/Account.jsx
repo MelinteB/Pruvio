@@ -57,6 +57,7 @@ export default function Account() {
     }),
     [contactChallenge, setContactChallenge] = useState(null),
     [deletion, setDeletion] = useState(null),
+    [deletionPreview, setDeletionPreview] = useState(null),
     [deleteCode, setDeleteCode] = useState(''),
     [error, setError] = useState(''),
     [notice, setNotice] = useState(''),
@@ -184,7 +185,17 @@ export default function Account() {
       link.remove();
     } finally { setTimeout(() => URL.revokeObjectURL(url), 5000); }
   }, t("Your activity snapshot is ready."))}>{t("Download my activity")}</button>
-</Panel><Panel title={t("Delete account")} className="danger-panel"><p>{t("This permanently removes your account and owned records. Email verification is required.")}</p>{deletion ? <><Field label={t("Email verification code")} value={deleteCode} onChange={e => setDeleteCode(e.target.value)} /><button className="danger" disabled={busy} onClick={() => {
+</Panel><Panel title={t("Delete account")} className="danger-panel"><p>{t("This permanently removes your account and owned records. Email verification is required.")}</p><button type="button" className="secondary" disabled={busy} onClick={() => run(async () => {
+  const summary = await request('/account/delete/preview');
+  setDeletionPreview(summary);
+}, t('Deletion preview loaded.'))}>{t('Preview account deletion')}</button>
+{deletionPreview && <div className="notice" role="status">
+  <p><strong>{t('Receipts to delete')}:</strong> {deletionPreview.receipts} · <strong>{t('Stored documents')}:</strong> {deletionPreview.receipt_documents} · <strong>{t('Shared bills affected')}:</strong> {deletionPreview.owned_splits}</p>
+  <p>{t('Deleting a shared bill may remove other participants access to that bill.')}</p>
+  {deletionPreview.blockers?.map((reason, index) => <p key={index}>{t(reason)}</p>)}
+  <p>{t('Security logs, backups and billing records may follow separate legally approved retention rules.')}</p>
+</div>}
+{deletion ? <><Field label={t("Email verification code")} value={deleteCode} onChange={e => setDeleteCode(e.target.value)} /><button className="danger" disabled={busy} onClick={() => {
               if (confirm(t("Permanently delete your Pruvs account and owned data?"))) run(async () => {
                 await send('/account/delete/confirm', {
                   challenge_id: deletion.challenge_id,
@@ -193,7 +204,7 @@ export default function Account() {
                 accept(null);
                 nav('/login');
               });
-            }}>{t("Confirm permanent deletion")}</button></> : <button className="danger" disabled={busy} onClick={() => run(async () => {
+            }}>{t("Confirm permanent deletion")}</button></> : <button className="danger" disabled={busy || deletionPreview?.can_delete === false} onClick={() => run(async () => {
             const r = await send('/account/delete/request');
             setDeletion(r);
             if (r.delivery?.sent === false) throw new Error('Verification email could not be sent.');
