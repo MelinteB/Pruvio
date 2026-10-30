@@ -804,3 +804,16 @@ Object.assign(ro, {
 });
 
 Object.assign(ro, {"Pruvs · Core Experience 7.1.33": "Pruvs · Experiența principală 7.1.33"});
+
+// v7.1.35 — owner-controlled removal from active split sessions.
+Object.assign(ro, {
+  'Remove participant': 'Elimină participantul',
+  'Remove participant?': 'Elimini participantul?',
+  'Remove': 'Elimini',
+  'from this split bill?': 'din această notă comună?',
+  'Their selected items will become available again. They will lose access immediately and cannot reuse their invitation. This cannot be undone from the same link.': 'Articolele selectate vor redeveni disponibile. Accesul va fi revocat imediat, iar invitația veche nu va mai funcționa. Acțiunea nu poate fi anulată folosind același link.',
+  'Removing…': 'Se elimină…',
+  'Participant removed. Their selections are now available.': 'Participant eliminat. Articolele selectate sunt din nou disponibile.',
+  'Resolve payment activity before removing this participant.': 'Rezolvă situația plății înainte de a elimina participantul.',
+  'You no longer have access to this bill.': 'Nu mai ai acces la această notă.'
+});

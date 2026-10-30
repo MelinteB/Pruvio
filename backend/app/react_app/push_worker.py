@@ -109,6 +109,19 @@ def deliver(db, event):
     user = active_user(db, event.user_id)
     if not user:
         event.status = 'cancelled'; db.commit(); return
+    # Split notifications created before a revocation may still be queued.
+    # Recheck current membership immediately before provider delivery; never
+    # push or email old bill details to a user who has lost bill access.
+    if event.url.startswith(('/bill/', '/split-bill/sessions/')):
+        from app.react_app.inbox import destination
+        if destination(db, user.id, event.url) is None:
+            event.title = 'Previous bill activity'
+            event.body = 'This bill is no longer available to your account.'
+            event.url = '/history'
+            event.status = 'in_app_only'
+            event.lease_until = None
+            db.commit()
+            return
     pref = preferences(db, user.id)
     category = 'receipts' if event.kind.startswith('receipt') else ('reminders' if event.kind == 'reminder' else 'bills')
     if event.kind != 'test' and (not user.notifications_opt_in or not getattr(pref, category)):
@@ -176,7 +189,7 @@ def deliver(db, event):
     # receives split activity independently, even if a push was accepted.
     split_activity = event.kind in ('reminder', 'split_settled', 'split_reopened',
                                     'bill_settled', 'bill_reopened', 'payment_marked', 'participant_joined',
-                                    'payment_received', 'payment_receipt_reversed', 'payment_withdrawn')
+                                    'payment_received', 'payment_receipt_reversed', 'payment_withdrawn', 'participant_removed')
     send_email_for_event = (event.kind != 'test' and pref.email_enabled and user.email
                             and user.is_email_verified and (split_activity or (not accepted and not retry)))
     if send_email_for_event and event.email_status != 'accepted' and event.email_attempts < 3:

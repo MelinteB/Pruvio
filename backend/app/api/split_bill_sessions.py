@@ -341,7 +341,7 @@ def start_participant_payment(
         raise HTTPException(status_code=404, detail="Split bill session not found.")
 
     participant = get_split_bill_participant_by_token(db, participant_token)
-    if not participant or participant.session_id != session.id:
+    if not participant or participant.session_id != session.id or participant.status != "joined":
         raise HTTPException(status_code=404, detail="Participant not found.")
 
     try:

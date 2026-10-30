@@ -426,6 +426,11 @@ def invitation(token:str,identity=Depends(current),db=Depends(get_db)):
     s=bills.get_split_bill_session_by_token(db,token)
     if not s:raise HTTPException(404,'Invitation not found.')
     mine=db.query(SplitBillParticipant).filter_by(session_id=s.id,user_id=identity[0].id,status='joined').first()
+    # A revoked participant must not use the public invite preview to see bill metadata.
+    revoked=db.query(SplitBillParticipant).filter(
+        SplitBillParticipant.session_id==s.id, SplitBillParticipant.user_id==identity[0].id,
+        SplitBillParticipant.status.in_(('removed','revoked','blocked'))).first()
+    if revoked and not mine:raise HTTPException(404,'Invitation not found.')
     # An expired bearer invitation must not disclose receipt/owner metadata to new accounts.
     from app.react_app.security_rules import invitation_is_current
     if not mine and not invitation_is_current(s):
@@ -498,6 +503,16 @@ def bill_action(token:str,action:str,body:dict,identity=Depends(current),db=Depe
             raise ValueError('Choose a participant to confirm.')
         acknowledge(db,s,body['participant_id'],uid,reverse=action=='reverse_receipt')
     else:raise HTTPException(404,'Unknown bill action.')
+    return summary(db,s,uid)
+
+@router.delete('/bills/{token}/participants/{participant_id}')
+def remove_bill_participant(token:str,participant_id:int,identity=Depends(current),db=Depends(get_db)):
+    # Lock the bill; authorization is based on the signed-in account, not a
+    # participant id in the request or a copied invitation token.
+    uid=identity[0].id
+    s,_=member(db,token,uid,owner=True,lock=True)
+    from app.react_app.participant_removal import remove_participant
+    remove_participant(db,s,uid,participant_id)
     return summary(db,s,uid)
 
 @router.get('/bills/{token}/payment-history')

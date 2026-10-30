@@ -1,4 +1,4 @@
-"""v7.1.34 operational diagnostics regression tests: no DB/network required."""
+"""v7.1.35 operational diagnostics regression tests: no DB/network required."""
 import os
 import re
 import unittest
@@ -12,11 +12,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class OperationalDiagnosticsTests(unittest.TestCase):
     def test_release_and_build_alignment(self):
-        self.assertEqual(RELEASE, '7.1.34')
+        self.assertEqual(RELEASE, '7.1.35')
         stamp=(ROOT/'frontend/scripts/stamp-build.mjs').read_text(encoding='utf8')
-        self.assertIn("version:'7.1.34'",stamp)
-        self.assertIn('pruvs-shell-v7.1.34', (ROOT/'app/static/react-service-worker.js').read_text())
-        self.assertIn("CLIENT_RELEASE = '7.1.34'", (ROOT/'frontend/src/professional/ReleaseUpdateBanner.jsx').read_text())
+        self.assertIn("version:'7.1.35'",stamp)
+        self.assertIn('pruvs-shell-v7.1.35', (ROOT/'app/static/react-service-worker.js').read_text())
+        self.assertIn("CLIENT_RELEASE = '7.1.35'", (ROOT/'frontend/src/professional/ReleaseUpdateBanner.jsx').read_text())
 
     def test_correlation_id_random_and_header_safety(self):
         a,b=new_request_id(),new_request_id()

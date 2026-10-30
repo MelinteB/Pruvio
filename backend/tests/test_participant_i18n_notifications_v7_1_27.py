@@ -1,4 +1,4 @@
-"""v7.1.34: notification delivery behavior and privacy, plus interface contracts."""
+"""v7.1.35: notification delivery behavior and privacy, plus interface contracts."""
 import os
 import unittest
 from datetime import datetime, timedelta
@@ -17,6 +17,9 @@ for module in pkgutil.iter_modules(model_paths):
     importlib.import_module('app.models.' + module.name)
 from app.models.push_notification import PushEvent, PushDevice, PushDelivery, PushGrant
 from app.models.user import User
+from app.models.case import Case
+from app.models.split_bill_session import SplitBillSession
+from app.models.split_bill_participant import SplitBillParticipant
 from app.react_app import push_worker
 from app.api import push_notifications
 from app.reliability import RELEASE
@@ -26,10 +29,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class NotificationReliabilityTests(unittest.TestCase):
     def test_release_and_source_alignment(self):
-        self.assertEqual(RELEASE, '7.1.34')
-        self.assertIn("version:'7.1.34'", (ROOT / 'frontend/scripts/stamp-build.mjs').read_text())
-        self.assertIn('pruvs-shell-v7.1.34', (ROOT / 'app/static/react-service-worker.js').read_text())
-        self.assertIn("CLIENT_RELEASE = '7.1.34'", (ROOT / 'frontend/src/professional/ReleaseUpdateBanner.jsx').read_text())
+        self.assertEqual(RELEASE, '7.1.35')
+        self.assertIn("version:'7.1.35'", (ROOT / 'frontend/scripts/stamp-build.mjs').read_text())
+        self.assertIn('pruvs-shell-v7.1.35', (ROOT / 'app/static/react-service-worker.js').read_text())
+        self.assertIn("CLIENT_RELEASE = '7.1.35'", (ROOT / 'frontend/src/professional/ReleaseUpdateBanner.jsx').read_text())
 
     def test_transient_and_permanent_provider_failures(self):
         for code in (0, 408, 429, 500, 502, 503):
@@ -52,6 +55,9 @@ class NotificationReliabilityTests(unittest.TestCase):
         self.db.add_all([
             User(id=11, username='alpha', username_key='alpha', phone_number='+40000000011', name='Alpha', status='active', notifications_opt_in=True),
             User(id=12, username='beta', username_key='beta', phone_number='+40000000012', name='Beta', status='active', notifications_opt_in=True),
+            Case(id=11, user_id=11, module='receipt', status='processed'),
+            SplitBillSession(id=11, case_id=11, owner_user_id=11, token='example', status='open'),
+            SplitBillParticipant(id=11, session_id=11, user_id=11, role='owner', status='joined', display_name='Alpha', participant_token='owner-alpha'),
             PushGrant(token_hash='a'*64, user_id=11, active=True, expires_at=now+timedelta(days=2)),
             PushDevice(id='device-11', user_id=11, grant_hash='a'*64, endpoint_hash='b'*64, subscription='{}', label='Test', active=True, confirmed_at=now),
             PushEvent(id='event-11', user_id=11, kind='payment_marked', title='Payment reported', body='Test', url='/bill/example', status='pending', available_at=now, expires_at=now+timedelta(days=1), created_at=now),

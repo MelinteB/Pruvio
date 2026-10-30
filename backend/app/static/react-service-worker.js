@@ -1,4 +1,4 @@
-const CACHE = 'pruvs-shell-v7.1.34';
+const CACHE = 'pruvs-shell-v7.1.35';
 
 // v6.12: device notifications also work when no Pruvs page is open.
 self.addEventListener('push', event => {

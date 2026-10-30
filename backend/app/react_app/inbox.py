@@ -15,12 +15,12 @@ class PruvsInboxRead(Base):
     read_at=Column(DateTime,nullable=False,default=datetime.utcnow)
 
 router=APIRouter(prefix='/api/v1/inbox')
-KINDS=('split_settled','split_reopened','reminder','bill_settled','bill_reopened','payment_marked','participant_joined','payment_received','payment_receipt_reversed','payment_withdrawn')
+KINDS=('split_settled','split_reopened','reminder','bill_settled','bill_reopened','payment_marked','participant_joined','payment_received','payment_receipt_reversed','payment_withdrawn','participant_removed')
 
 def incoming(db,uid):
     # Includes historical v6.12 kind names. Current membership is checked on opening.
     own=exists().where(and_(SplitBillSession.owner_user_id==uid,or_(PushEvent.url=='/bill/'+SplitBillSession.token,PushEvent.url=='/split-bill/sessions/'+SplitBillSession.token+'/join',PushEvent.url=='/split-bill/sessions/'+SplitBillSession.token+'/widget-ui')))
-    return db.query(PushEvent).filter(PushEvent.user_id==uid,PushEvent.kind.in_(KINDS),or_(PushEvent.kind.in_(('payment_marked','participant_joined','payment_received','payment_receipt_reversed','payment_withdrawn')),~own))
+    return db.query(PushEvent).filter(PushEvent.user_id==uid,PushEvent.kind.in_(KINDS),or_(PushEvent.kind.in_(('payment_marked','participant_joined','payment_received','payment_receipt_reversed','payment_withdrawn','participant_removed')),~own))
 
 def count_unread(db, uid):
     return (incoming(db, uid)
@@ -62,9 +62,10 @@ def messages(unread:bool=False,offset:int=Query(0,ge=0),identity=Depends(current
         # The event belongs to this user, but past membership may have been
         # revoked. Do not expose old merchant, participant or payment details.
         has_access = bool(target)
+        removed_notice = e.kind == 'participant_removed' and e.url == '/history'
         result.append({'id':e.id,
-                       'title':e.title if has_access else 'Previous bill activity',
-                       'body':e.body if has_access else 'This bill is no longer available to your account.',
+                       'title':e.title if has_access or removed_notice else 'Previous bill activity',
+                       'body':e.body if has_access or removed_notice else 'This bill is no longer available to your account.',
                        'kind':e.kind,'created_at':e.created_at,
                        'read':bool(e.read_at or db.get(PruvsInboxRead,(uid,e.id))),
                        'can_open':has_access})

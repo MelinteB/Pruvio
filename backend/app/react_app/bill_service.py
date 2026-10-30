@@ -127,7 +127,8 @@ def create_pending_user_if_missing(
 def get_joined_participants(db: Session, session: SplitBillSession) -> list[SplitBillParticipant]:
     return (
         db.query(SplitBillParticipant)
-        .filter(SplitBillParticipant.session_id == session.id)
+        .filter(SplitBillParticipant.session_id == session.id,
+                SplitBillParticipant.status == "joined")
         .order_by(SplitBillParticipant.created_at.asc())
         .all()
     )
@@ -136,7 +137,8 @@ def get_joined_participants(db: Session, session: SplitBillSession) -> list[Spli
 def get_joined_participants_count(db: Session, session: SplitBillSession) -> int:
     return (
         db.query(SplitBillParticipant)
-        .filter(SplitBillParticipant.session_id == session.id)
+        .filter(SplitBillParticipant.session_id == session.id,
+                SplitBillParticipant.status == "joined")
         .count()
     )
 
@@ -379,6 +381,8 @@ def join_split_bill_session(
     if not existing:
         existing = get_participant_by_session_and_phone(db, session, normalized_phone)
     if existing:
+        if existing.status in ("removed", "revoked", "blocked"):
+            raise ValueError("You no longer have access to this bill invitation.")
         existing.user_id = existing.user_id or user.id
         existing.phone_number = existing.phone_number or normalized_phone
         if display_name:
@@ -773,7 +777,7 @@ def save_participant_selection(
     session = locked_session
 
     participant = get_split_bill_participant_by_id(db, participant_id)
-    if not participant or participant.session_id != session.id:
+    if not participant or participant.session_id != session.id or participant.status != "joined":
         raise ValueError("Participant does not belong to this split bill session.")
 
     valid_items = get_session_items(db, session)

@@ -1,4 +1,4 @@
-"""v7.1.34: cross-user resource isolation and constrained file-serving tests."""
+"""v7.1.35: cross-user resource isolation and constrained file-serving tests."""
 import importlib
 import importlib.util
 import sys
@@ -165,10 +165,11 @@ class SecurityAuthorizationTests(unittest.TestCase):
         try:
             alias.symlink_to(secret)
         except OSError as exc:
-            # Windows requires symlink privileges unless Developer Mode permits it.
-            # Do not hide other filesystem errors or skip on platforms with symlinks.
+            # On Windows, an unprivileged account may not create symlinks.
+            # Skip only for WinError 1314; all other errors remain test failures.
+            # The real path-escape assertion runs on Linux and capable hosts.
             if getattr(exc, 'winerror', None) == 1314:
-                self.skipTest('Windows denied symlink creation (WinError 1314); run this test in Linux CI')
+                self.skipTest('Windows denied test symlink creation (WinError 1314); verify in Linux CI')
             raise
         doc=Document(case_id=111,path=str(alias),stored_filename='alias.pdf')
         self.assertIsNone(resolve_document_path(doc))

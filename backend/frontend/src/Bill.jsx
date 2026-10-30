@@ -1,11 +1,13 @@
 import { t } from "./i18n";
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Users, Share2, Copy, Minus, Plus, Check, ExternalLink, MessageCircle } from 'lucide-react';
+import { Users, Share2, Copy, Minus, Plus, Check, ExternalLink, MessageCircle, UserRoundX } from 'lucide-react';
 import { request, send, money, copy } from './api';
 import { useApp, useLoad, Title, Panel, Field, Spinner, Message, Badge } from './common';
 import RoundTable, { ClosedBillNotice } from './professional/RoundTable';
 import InviteDialog from './professional/InviteDialog';
+import RemoveParticipantDialog from './professional/RemoveParticipantDialog';
+import './remove-participant.css';
 import PaymentConfirmation from './PaymentConfirmation';
 import {participantColors, participantStyle, itemShareGradient} from './participant-colors';
 import './payment-confirmation.css';
@@ -59,6 +61,8 @@ export default function Bill() {
     [live, setLive] = useState(t("Connecting")),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState(''),
+    [removeTarget, setRemoveTarget] = useState(null),
+    [removeError, setRemoveError] = useState(''),
     [share, setShare] = useState(false),
     [tip, setTip] = useState({
       mode: 'none',
@@ -138,6 +142,7 @@ export default function Bill() {
       ws.onclose = e => {
         if (!active) return;
         setLive(e.code === 1008 ? t("Sign in again") : t("Reconnecting"));
+        if (e.code === 1008) { setData(null); setError(t('You no longer have access to this bill.')); }
         if (e.code !== 1008) {
           // Bounded exponential backoff reduces reconnect storms during outages.
           const delay = Math.min(30000, 1500 * (2 ** Math.min(retryCount++, 5)));
@@ -199,6 +204,24 @@ export default function Bill() {
       setBusy(false);
     }
   }
+  async function confirmRemoval() {
+    if (!removeTarget || saving.current || busy) return;
+    saving.current = true;
+    setBusy(true);
+    setRemoveError('');
+    try {
+      const updated = await send('/bills/' + encodeURIComponent(token) + '/participants/' + removeTarget.participant_id, {}, 'DELETE');
+      setData(updated);
+      setNotice(t('Participant removed. Their selections are now available.'));
+      setRemoveTarget(null);
+      setPaymentHistoryRevision(value => value + 1);
+    } catch (e) {
+      setRemoveError(e.message);
+    } finally {
+      saving.current = false;
+      setBusy(false);
+    }
+  }
   async function copied(value) {
     try {
       await copy(value);
@@ -217,6 +240,7 @@ export default function Bill() {
  <div className="pruvs-floating-bill-overview" role="region" aria-label={t("Always-visible shared bill overview" )}><BillSummaryStrip data={data} mine={mine} currency={data.currency} /></div>
  <BillFlowNav active={section} onChange={chooseSection} />
  <InviteDialog open={share} onClose={() => setShare(false)} shareUrl={link} billName={data.source_name || 'Shared bill'} onCopied={copied} seatsFull={data.joined_participants_count >= data.expected_participants_count} />
+ <RemoveParticipantDialog participant={removeTarget} busy={busy} error={removeError} onCancel={() => { if (!busy) {setRemoveTarget(null);setRemoveError('');} }} onConfirm={confirmRemoval} />
  {section==='people'&&<section id="core-bill-people" className="bill-workspace-people">
    <Panel title={t("People at the table" )}>
      <p className="muted">{t("Everyone can see their current share. Use WhatsApp or SMS to contact a participant; messages are sent outside Pruvs.")}</p>
@@ -230,6 +254,7 @@ export default function Bill() {
            {phone?<a className="secondary" href={'https://wa.me/'+phone+'?text='+encodeURIComponent(message)} target="_blank" rel="noreferrer"><MessageCircle size={16}/> {t("WhatsApp")}</a>:<button className="secondary" onClick={()=>copied(message)}><Copy size={16}/> {t("Copy message")}</button>}
            {phone&&<a className="secondary" href={'sms:'+phone+'?body='+encodeURIComponent(message)}>{t("SMS")}</a>}
            {owner&&p.user_id&&<button disabled={busy || p.payment_status==='received'} onClick={()=>act('remind',{participant_id:p.participant_id})}>{t("Send reminder")}</button>}
+           {owner && !settled && p.role !== 'owner' && <button type="button" className="pruvs-remove-trigger" disabled={busy || (p.payment_status || 'unpaid') !== 'unpaid'} title={(p.payment_status || 'unpaid') !== 'unpaid' ? t('Resolve payment activity before removing this participant.') : undefined} onClick={() => {setRemoveTarget(p);setRemoveError('')}}><UserRoundX size={16} />{t('Remove participant')}</button>}
          </div>;
        })}
      </div>
