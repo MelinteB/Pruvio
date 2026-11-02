@@ -60,14 +60,14 @@ def customer_token(secret, user_id, now=None):
     return payload + '.' + sig
 
 
-def call_business(path, *, method='GET', user_id=None, params=None):
+def call_business(path, *, method='GET', user_id=None, params=None, body=None):
     """Only sends fixed server-authored paths to the configured Business service.
 
     Network failures do not disclose URLs, credentials, or upstream diagnostics.
     Mutating requests are never retried to avoid duplicate operations.
     """
     base, secret = config()
-    valid_prefixes = ('/v1/discover', '/v1/customer/')
+    valid_prefixes = ('/v1/discover', '/v1/promotions', '/v1/customer/')
     if not isinstance(path, str) or not any(path == p or path.startswith(p) for p in valid_prefixes):
         raise ValueError('Unsupported Business API operation')
     if method not in ('GET', 'POST'):
@@ -82,7 +82,7 @@ def call_business(path, *, method='GET', user_id=None, params=None):
     if method == 'POST':
         headers['Content-Type'] = 'application/json'
     req = request.Request(url, method=method, headers=headers,
-                          data=b'{}' if method == 'POST' else None)
+                          data=json.dumps(body if body is not None else {},separators=(',',':')).encode('utf-8') if method == 'POST' else None)
     try:
         with request.urlopen(req, timeout=9) as res:
             if res.status not in (200, 201):
@@ -104,3 +104,17 @@ def call_business(path, *, method='GET', user_id=None, params=None):
         raise
     except (error.URLError, TimeoutError, OSError, ValueError, UnicodeError):
         raise HTTPException(503, 'Loyalty service is temporarily unavailable.') from None
+
+
+def receipt_proof(secret, user_id, case_id, store_id, amount_minor, currency):
+    """Short-lived signed statement about an owned Pruvs receipt; code verified by Business."""
+    now=int(time.time())
+    body={'iss':'pruvs-core','aud':'pruvs-business','typ':'receipt_proof',
+          'sub':pseudonym(secret,'customer-v1',user_id),
+          'receipt_id':pseudonym(secret,'receipt-v1',f'{user_id}:{case_id}'),
+          'store_id':store_id,'amount_minor':amount_minor,'currency':currency,
+          'iat':now,'exp':now+300,'jti':secrets.token_hex(16)}
+    a=_base64url(json.dumps({'alg':'HS256','typ':'JWT'},separators=(',',':')).encode())
+    b=_base64url(json.dumps(body,separators=(',',':')).encode())
+    sig=_base64url(hmac.new(secret.encode(),(a+'.'+b).encode(),hashlib.sha256).digest())
+    return a+'.'+b+'.'+sig
