@@ -1,5 +1,5 @@
 {
-  "version": "7.1.38",
+  "version": "7.1.39",
   "source": {
     "src/Account.jsx": "069f9f17cab7df7385323b87b32ad0d456e9b214f81171063256cc9a079d83d1",
     "src/Admin.jsx": "0f4a01fb05697ed85080905cec798dedf99c37ec60219475546ed0d7413b809c",
@@ -57,7 +57,7 @@
     "vite.config.js": "23391e83cf79211d11ce62897d5548e6ea6fb7bce8f50d0ea327daa9ae3b9ab3",
     "package.json": "b3dcac3685a9eea1af1d0a3c92f8baa2baec4070436d6915933ce134ce8e478e",
     "package-lock.json": "dea7fec23f7d3d2676f56fa0aaf35f9a512611fc76ba1e6164c9410d338964eb",
-    "scripts/stamp-build.mjs": "40765a40887b44786a850d7c80f19f0934f4de70ca3af4ae6203b44d7a59b5cc"
+    "scripts/stamp-build.mjs": "edf6938e3789cf2244b2ae013fdf5efb588e7c198f5348e54be155ecbaadc58e"
   },
   "assets": {
     "dist/assets/Account-C0i93cy8.js": "8be6e1b0e5b44117ef3109c5b0b9a767b74419aece7944d2b557bff99e562888",
