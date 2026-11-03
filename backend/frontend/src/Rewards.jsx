@@ -5,14 +5,16 @@ import {Title, Panel, Message, Spinner} from './common';
 import {request, send, money} from './api';
 import './rewards.css';
 import './rewards-v05.css';
+import ReceiptSubmission from './ReceiptSubmission';
 
 export default function Rewards(){
   const [status,setStatus]=useState(null);
   const [offers,setOffers]=useState([]);
   const [promotions,setPromotions]=useState([]);
+  const [claims,setClaims]=useState([]);
   const [wallet,setWallet]=useState({memberships:[], rewards:[]});
   const [receipts,setReceipts]=useState([]);
-  const [tab,setTab]=useState('offers');
+  const [tab,setTab]=useState(()=>typeof window!=='undefined'&&(window.location.hash.startsWith('#loyalty=')||new URLSearchParams(window.location.search).get('tab')==='receipts')?'receipts':'offers');
   const [busy,setBusy]=useState('');
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState('');
@@ -23,12 +25,12 @@ export default function Rewards(){
     setError('');setLoading(true);
     try{
       const s=await request('/loyalty/status');setStatus(s);
-      if(!s.enabled){setOffers([]);setPromotions([]);setWallet({memberships:[],rewards:[]});return;}
+      if(!s.enabled){setOffers([]);setPromotions([]);setClaims([]);setWallet({memberships:[],rewards:[]});return;}
       const qp=locationOverride ? '?latitude='+encodeURIComponent(locationOverride.latitude)+'&longitude='+encodeURIComponent(locationOverride.longitude)+'&radius_km=10' : '';
-      const [o,w,r,pr]=await Promise.all([
-        request('/loyalty/offers'+qp),request('/loyalty/wallet'),request('/loyalty/receipts'),request('/loyalty/promotions').catch(()=>[])
+      const [o,w,r,pr,cl]=await Promise.all([
+        request('/loyalty/offers'+qp),request('/loyalty/wallet'),request('/loyalty/receipts'),request('/loyalty/promotions').catch(()=>[]),s.receipt_v06_enabled?request('/loyalty/claims').catch(()=>[]):Promise.resolve([])
       ]);
-      setOffers(Array.isArray(o)?o:[]);setWallet(w);setReceipts(r.receipts||[]);setPromotions(Array.isArray(pr)?pr:[]);
+      setOffers(Array.isArray(o)?o:[]);setWallet(w);setReceipts(r.receipts||[]);setPromotions(Array.isArray(pr)?pr:[]);setClaims(Array.isArray(cl)?cl:[]);
     }catch(e){setError(e.message);}finally{setLoading(false);}
   }
   useEffect(()=>{refresh(null);},[]);
@@ -80,8 +82,8 @@ export default function Rewards(){
       </Panel>
     </>}
     {!loading && status?.enabled && tab==='receipts' && <Panel title="Your recent receipts">
-      <p className="muted">These receipts belong to your Pruvs account. They are not yet eligible for automatic loyalty points because merchant verification has not been connected.</p>
-      {receipts.map(r=><div key={r.case_id} className="rewards-wallet-row"><div><strong>{r.merchant_name}</strong><p>{money(r.receipt_total,r.currency||'RON')}</p></div><Link to={'/receipt/'+r.case_id}>View receipt</Link>{status.receipt_claims_enabled&&<PilotReceiptClaim caseId={r.case_id} programs={offers.filter(o=>joined.has(o.program.id))} onSuccess={msg=>setMessage(msg)}/>}</div>)}
+      <p className="muted">Choose a receipt, enter your merchant's one-time purchase code and consent to share that receipt for review. No stamp is awarded until approval.</p>
+      {receipts.map(r=><div key={r.case_id} className="rewards-wallet-row"><div><strong>{r.merchant_name}</strong><p>{money(r.receipt_total,r.currency||'RON')}</p></div><Link to={'/receipt/'+r.case_id}>View receipt</Link>{status.receipt_v06_enabled&&<ReceiptSubmission caseId={r.case_id} receiptRef={r.receipt_ref} claims={claims} programs={offers.filter(o=>joined.has(o.program.id))} onSuccess={msg=>{setMessage(msg);refresh()}}/>}</div>)}
       {!receipts.length&&<p>No receipts found. <Link to="/upload">Scan a receipt</Link> to begin.</p>}
       <div className="row"><Ticket size={18}/><small>Receipt earning will require a verified merchant/POS reference and explicit merchant approval.</small></div>
     </Panel>}

@@ -250,7 +250,9 @@ async def live(websocket: WebSocket, token: str):
 @app.get('/rewards',include_in_schema=False)
 @app.get('/rewards/merchant/{code}',include_in_schema=False)
 def legacy_rewards(code:str|None=None):
-    return RedirectResponse('/account#membership',status_code=302)
+    if code is not None or os.getenv('PRUVS_LOYALTY_ENABLED','false').lower()!='true':
+        return RedirectResponse('/account#membership',status_code=302)
+    return FileResponse(FRONTEND/'index.html',media_type='text/html',headers={'Cache-Control':'no-store'})
 
 @app.get('/{path:path}',include_in_schema=False)
 def frontend(path:str):
