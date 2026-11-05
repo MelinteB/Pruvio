@@ -19,6 +19,7 @@ from app.models.receipt_fingerprint import ReceiptFingerprint
 from app.services.document_service import MAX_FILE_SIZE_BYTES, resolve_document_path, restore_missing_original
 from app.services.receipt_duplicates import fingerprint, same_image
 from app.models.receipt_item import ReceiptItem
+from app.models.receipt_group import ReceiptGroupMembership
 from app.models.split_bill_session import SplitBillSession
 from app.models.split_bill_participant import SplitBillParticipant
 from app.models.react_session import ReactChallenge
@@ -252,7 +253,7 @@ def delete_confirm(body:dict,response:Response,identity=Depends(current),db=Depe
     return {'ok':True}
 
 @router.get('/history')
-def history(offset:int=Query(0,ge=0),view:str='active',split_status:str|None=None,identity=Depends(current),db=Depends(get_db)):
+def history(offset:int=Query(0,ge=0),view:str='active',split_status:str|None=None,group_id:str|None=None,identity=Depends(current),db=Depends(get_db)):
     from app.models.history_visibility import HistoryVisibility
     from app.react_app.receipt_labels import receipt_labels
     if view not in ('active','archived','removed'):raise ValueError('Unknown history view.')
@@ -269,16 +270,37 @@ def history(offset:int=Query(0,ge=0),view:str='active',split_status:str|None=Non
     # Read joined/shared bill cases in bounded batches, not db.get() per case.
     for index in range(0,len(missing),400):
         case_by_id.update({c.id:c for c in db.query(Case).filter(Case.id.in_(missing[index:index+400])).all()})
+    # Filter BEFORE pagination so older receipts in selected groups remain accessible.
+    if group_id is not None:
+        if group_id=='ungrouped':
+            owned={cid for cid in case_ids if cid in case_by_id and case_by_id[cid].user_id==uid}
+            grouped={r.case_id for r in db.query(ReceiptGroupMembership.case_id)
+                     .filter(ReceiptGroupMembership.case_id.in_(owned)).all()}
+            case_ids=owned-grouped
+        else:
+            if not group_id.isascii() or not group_id.isdecimal():
+                raise ValueError('Invalid receipt group filter.')
+            from app.react_app.receipt_groups_v7140 import owned_group
+            owned_group(db,uid,int(group_id))
+            grouped={r.case_id for r in db.query(ReceiptGroupMembership.case_id)
+                     .filter_by(group_id=int(group_id)).all()}
+            case_ids=case_ids & grouped
+        selected=[c for c in selected if c.id in case_ids]
+        visible_bills=[b for b in visible_bills if b['case_id'] in case_ids]
     ordered=sorted((cid for cid in case_ids if cid in case_by_id),
                    key=lambda cid:(case_by_id[cid].created_at or datetime.min,cid),reverse=True)
     page_ids=set(ordered[offset:offset+30])
+    group_by_case={row.case_id:row.group_id for row in db.query(ReceiptGroupMembership)
+                   .filter(ReceiptGroupMembership.case_id.in_(list(page_ids))).all()}
     cases=[c for c in selected if c.id in page_ids]
     receipt_rows=[{**receipts.get_receipt_view(db,c.id,user_id=uid,ensure_translations=False),
                    'history_note':states.get(('receipt',c.id)).note if ('receipt',c.id) in states else '',
-                   'scan_date':c.created_at.isoformat() if c.created_at else None} for c in cases]
+                   'scan_date':c.created_at.isoformat() if c.created_at else None,
+                   'group_id':group_by_case.get(c.id)} for c in cases]
     names=receipt_labels(db,{b['case_id'] for b in visible_bills if b['case_id'] in page_ids})
     bill_rows=[{**b,'source_name':names[b['case_id']],
                 'source_owned':case_by_id[b['case_id']].user_id==uid,
+                'group_id':group_by_case.get(b['case_id']) if case_by_id[b['case_id']].user_id==uid else None,
                 'scan_date':case_by_id[b['case_id']].created_at.isoformat() if case_by_id[b['case_id']].created_at else None,
                 'history_note':states.get(('bill',b['session_id'])).note if ('bill',b['session_id']) in states else ''}
                for b in visible_bills if b['case_id'] in page_ids]
@@ -294,6 +316,15 @@ def upload(request:Request,file:UploadFile=File(...),identity=Depends(current),d
     from app.react_app.usage import reserve, finish
     from app.reliability import ocr_capacity, OCRBusy
     uid=identity[0].id
+    # Validate folder ownership before OCR and before consuming credits.
+    raw_group=request.headers.get('X-Pruvs-Group-ID','').strip()
+    group_id=None
+    if raw_group:
+        if not raw_group.isascii() or not raw_group.isdecimal():
+            raise ValueError('Invalid receipt group.')
+        group_id=int(raw_group)
+        from app.react_app.receipt_groups_v7140 import owned_group
+        owned_group(db,uid,group_id)
     plan=account_plan(db,uid)
     from app.services.receipt_storage import ready
     if plan!='free' and not ready():
@@ -313,6 +344,10 @@ def upload(request:Request,file:UploadFile=File(...),identity=Depends(current),d
                 raise
             success=not result.get('duplicate',False) and getattr(result['case'],'status','') not in ('processing_failed','failed')
             finish(token,success)
+            if group_id is not None:
+                from app.react_app.receipt_groups_v7140 import assign_group
+                # Reuses the authenticated owner and verifies the resulting case.
+                assign_group(group_id,result['case'].id,identity,db)
             return {'case_id':result['case'].id,'duplicate':result.get('duplicate',False),'restored_original':result.get('restored_original',False)}
     except OCRBusy as exc:
         raise HTTPException(503,str(exc),headers={'Retry-After':'10'}) from exc
@@ -326,6 +361,8 @@ def owned_case(db,case_id,uid):
 def receipt(case_id:int,identity=Depends(current),db=Depends(get_db)):
     owned_case(db,case_id,identity[0].id)
     result=receipts.get_receipt_view(db,case_id,user_id=identity[0].id)
+    group=db.get(ReceiptGroupMembership,case_id)
+    result['group_id']=group.group_id if group else None
     result['has_split']=db.query(SplitBillSession).filter_by(case_id=case_id).first() is not None
     doc=db.query(Document).filter_by(case_id=case_id).order_by(Document.id.desc()).first()
     from app.services.receipt_storage import is_cloud
@@ -395,6 +432,8 @@ def member(db,token,uid,owner=False,lock=False):
 def summary(db,s,uid):
     from app.react_app.receipt_labels import receipt_label
     result=bills.get_split_bill_session_summary(db,s,ensure_translations=False)
+    from app.react_app.split_v7140 import annotate_summary
+    annotate_summary(db,s,result)
     result['source_name']=receipt_label(db,s.case_id)
     result['my_participant_id']=next(p['participant_id'] for p in result['participants'] if p['user_id']==uid)
     settings=json.loads(s.fx_settings_json) if s.fx_settings_json else None
@@ -458,6 +497,12 @@ def bill(token:str,identity=Depends(current),db=Depends(get_db)):
 @router.put('/bills/{token}/selection')
 def selection(token:str,body:dict,identity=Depends(current),db=Depends(get_db)):
     s,p=member(db,token,identity[0].id,lock=True)
+    from app.react_app.split_v7140 import state_for,check_revision
+    state=state_for(db,s.id)
+    if state and state.mode=='equal':
+        raise HTTPException(409,'Switch back to item selection before editing quantities.')
+    if 'expected_revision' in body:
+        check_revision(state,body['expected_revision'])
     quantities={int(k):float(v) for k,v in body.get('quantities',{}).items()}
     if len(quantities)>500 or any(not math.isfinite(v) or v<0 for v in quantities.values()):raise ValueError('Invalid item quantities.')
     bills.save_participant_selection(db,s,p.id,selected_quantities=quantities)
@@ -489,7 +534,12 @@ def bill_action(token:str,action:str,body:dict,identity=Depends(current),db=Depe
         value=float(body.get('value',0))
         if not math.isfinite(value) or not 0<=value<=1000000:raise ValueError('Invalid tip amount.')
         bills.update_session_tip(db,s,uid,str(body.get('mode','none')),value)
-    elif action=='people':bills.update_expected_participants_count(db,s,uid,int(body.get('people',2)))
+    elif action=='people':
+        from app.react_app.split_v7140 import state_for
+        state=state_for(db,s.id)
+        if state and state.mode=='equal':
+            raise HTTPException(409,'Switch back to item selection before changing participants.')
+        bills.update_expected_participants_count(db,s,uid,int(body.get('people',2)))
     elif action=='remind':
         if int(body.get('participant_id',0))==p.id:raise ValueError('Reminders are for other participants.')
         bills.send_participant_reminder(db,s,uid,int(body.get('participant_id',0)),str(body.get('message','Please complete your Pruvs bill payment.'))[:500])
@@ -505,12 +555,38 @@ def bill_action(token:str,action:str,body:dict,identity=Depends(current),db=Depe
     else:raise HTTPException(404,'Unknown bill action.')
     return summary(db,s,uid)
 
+
+@router.post('/bills/{token}/allocation/{operation}')
+def allocation_action(token:str,operation:str,body:dict,identity=Depends(current),db=Depends(get_db)):
+    if os.getenv('PRUVS_CORE_V7140_ENABLED','false').lower()!='true':
+        raise HTTPException(404,'This staging feature is not enabled.')
+    s,_=member(db,token,identity[0].id,owner=True,lock=True)
+    from app.react_app import split_v7140 as allocation
+    expected=body.get('expected_revision')
+    if operation=='equal':allocation.set_equal_mode(db,s,identity[0].id,expected)
+    elif operation=='items':allocation.restore_item_mode(db,s,identity[0].id,expected)
+    elif operation in ('share','unshare'):
+        item_id=body.get('item_id')
+        if type(item_id) is not int:raise ValueError('Choose an item from this bill.')
+        if operation=='share':
+            ids=body.get('participant_ids')
+            if not isinstance(ids,list) or any(type(i) is not int for i in ids):
+                raise ValueError('Select joined participants.')
+            allocation.share_item(db,s,identity[0].id,item_id,ids,expected)
+        else:allocation.unshare_item(db,s,identity[0].id,item_id,expected)
+    else:raise HTTPException(404,'Unknown allocation action.')
+    return summary(db,s,identity[0].id)
+
 @router.delete('/bills/{token}/participants/{participant_id}')
 def remove_bill_participant(token:str,participant_id:int,identity=Depends(current),db=Depends(get_db)):
     # Lock the bill; authorization is based on the signed-in account, not a
     # participant id in the request or a copied invitation token.
     uid=identity[0].id
     s,_=member(db,token,uid,owner=True,lock=True)
+    from app.react_app.split_v7140 import state_for
+    state=state_for(db,s.id)
+    if state and state.mode=='equal':
+        raise HTTPException(409,'Switch back to item selection before removing participants.')
     from app.react_app.participant_removal import remove_participant
     remove_participant(db,s,uid,participant_id)
     return summary(db,s,uid)

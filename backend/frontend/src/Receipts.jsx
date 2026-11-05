@@ -10,6 +10,7 @@ import { HomeWelcome, ProcessingStatus } from './professional/BrandExperience';
 import { CaptureGuide, ReceiptReviewGuide } from './professional/CorePages';
 import InviteDialog from './professional/InviteDialog';
 import {saveLocalReceipt,deleteLocalReceipt,downloadLocalReceipt,getLocalReceipt} from './localReceipts';
+const CORE_V7140 = import.meta.env.VITE_PRUVS_CORE_V7140_ENABLED === 'true';
 export function groupHistory(data){
   const grouped=new Map();
   for(const r of data?.receipts||[])grouped.set(r.case_id,{receipt:r,bills:[]});
@@ -48,10 +49,46 @@ export function History({home=false,billsOnly=false}) {
   const [showRemoved,setShowRemoved]=useState(false);
   const [actionError,setActionError]=useState('');
   const [inviteSplit,setInviteSplit]=useState(null);
+  const [groups,setGroups]=useState([]);
+  const [selectedGroup,setSelectedGroup]=useState('all');
+  async function refreshGroups(){
+    if(!CORE_V7140||home)return;
+    const result=await request('/receipt-groups');
+    setGroups(result.groups||[]);
+  }
+  useEffect(()=>{if(CORE_V7140&&!home)refreshGroups().catch(e=>setActionError(e.message))},[user?.id,home]);
+  async function createGroup(){
+    const name=window.prompt('New receipt group name');
+    if(!name?.trim())return;
+    try{await send('/receipt-groups',{name:name.trim()});await refreshGroups()}
+    catch(e){setActionError(e.message)}
+  }
+  async function changeGroup(caseId,groupId){
+    setActionError('');
+    try{
+      if(groupId)await send('/receipt-groups/'+groupId+'/receipts/'+caseId,{},'PUT');
+      else await request('/receipt-groups/receipts/'+caseId,{method:'DELETE'});
+      await reload();await refreshGroups();
+    }catch(e){setActionError(e.message)}
+  }
+  async function renameGroup(){
+    const group=groups.find(g=>String(g.id)===selectedGroup);
+    if(!group)return;
+    const name=window.prompt('Rename receipt group',group.name);
+    if(!name?.trim())return;
+    try{await send('/receipt-groups/'+group.id,{name:name.trim()},'PUT');await refreshGroups()}
+    catch(e){setActionError(e.message)}
+  }
+  async function deleteGroup(){
+    const group=groups.find(g=>String(g.id)===selectedGroup);
+    if(!group||!window.confirm('Delete the group? All receipts remain saved and become ungrouped.'))return;
+    try{await request('/receipt-groups/'+group.id,{method:'DELETE'});setSelectedGroup('all');await refreshGroups();await reload()}
+    catch(e){setActionError(e.message)}
+  }
   const historyView=tab==='archived'?(showRemoved?'removed':'archived'):'active';
   const isSplitTab=tab==='open'||tab==='settled';
   const {data,reload,error,loading}=useLoad(
-    ()=>request('/history?offset='+offset+'&view='+historyView+(isSplitTab?'&split_status='+tab:'')),[offset,historyView,tab]
+    ()=>request('/history?offset='+offset+'&view='+historyView+(isSplitTab?'&split_status='+tab:'')+(CORE_V7140&&selectedGroup!=='all'?'&group_id='+encodeURIComponent(selectedGroup):'')),[offset,historyView,tab,selectedGroup]
   );
   const tabs=[['receipts','Receipts'],['open','Open'],['settled','Settled'],['archived','Archived']];
   const onTab=(value)=>{setTab(value);setOffset(0);setShowRemoved(false)};
@@ -84,6 +121,11 @@ export function History({home=false,billsOnly=false}) {
       bills:entry.bills.filter(b=>!isSplitTab||b.status===tab)
     })).filter(entry=>{
       if(home)return true;
+      const groupId=entry.receipt?.group_id??entry.bills?.[0]?.group_id;
+      if(CORE_V7140&&selectedGroup!=='all'){
+        if(selectedGroup==='ungrouped'&&groupId!=null)return false;
+        if(selectedGroup!=='ungrouped'&&String(groupId)!==selectedGroup)return false;
+      }
       if(isSplitTab)return entry.bills.length>0;
       if(billsOnly && tab==='receipts')return true;
       return entry.receipt||entry.bills.length;
@@ -99,6 +141,19 @@ export function History({home=false,billsOnly=false}) {
       {home?t('Good moments. Fair shares.'):'Organized by merchant and scan date. Expand a receipt to see its splits.'}
     </Title>
     {home&&<HomeWelcome user={user}/>}
+    {CORE_V7140&&!home&&<div className="pruvs-groups-bar" aria-label="Organize receipts into groups">
+      <label htmlFor="pruvs-group-filter">Receipt group</label>
+      <select id="pruvs-group-filter" value={selectedGroup} onChange={e=>{setSelectedGroup(e.target.value);setOffset(0)}}>
+        <option value="all">All receipts</option>
+        <option value="ungrouped">Ungrouped receipts</option>
+        {groups.map(g=><option key={g.id} value={g.id}>{g.name} ({g.receipt_count})</option>)}
+      </select>
+      <button type="button" onClick={createGroup}>New group</button>
+      {groups.some(g=>String(g.id)===selectedGroup)&&<>
+        <button type="button" onClick={renameGroup}>Rename</button>
+        <button type="button" className="danger" onClick={deleteGroup}>Delete group</button>
+      </>}
+    </div>}
     {error&&<Message error={error}/>}{actionError&&<Message error={actionError}/>}
     {!home&&<nav className="receipt-status-tabs" aria-label={t("Receipt and bill views" )}>
       {tabs.map(([value,title])=><button key={value} type="button" className={tab===value?'is-active':''}
@@ -140,6 +195,13 @@ export function History({home=false,billsOnly=false}) {
                 </summary>
                 <div className="merchant-receipt-content">
                   {owned&&<Link className="secondary" to={'/receipt/'+entry.id}>{t("View receipt")}</Link>}{owned&&import.meta.env.VITE_PRUVS_LOYALTY_UI_ENABLED==='true'&&<Link className="secondary" to={'/rewards?tab=receipts&case='+entry.id}>Earn rewards</Link>}
+                  {CORE_V7140&&owned&&!home&&<label className="pruvs-receipt-group-picker">
+                    Move receipt to group
+                    <select value={entry.receipt?.group_id??entry.bills?.[0]?.group_id??''} onChange={e=>changeGroup(entry.id,e.target.value)}>
+                      <option value="">Ungrouped</option>
+                      {groups.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}
+                    </select>
+                  </label>}
                   {entry.receipt?.history_note&&<p className="muted">{entry.receipt.history_note}</p>}
                   {entry.receipt&&controls('receipt',entry.id,entry.receipt.history_note)}
                   {entry.receipt&&!home&&<button className="danger" onClick={()=>eraseReceipt(entry.id)}>{t("Delete permanently")}</button>}
@@ -183,6 +245,16 @@ export function Upload() {
       h: 100
     });
   const abort = useRef();
+  const [groups,setGroups]=useState([]),[groupId,setGroupId]=useState('');
+  useEffect(()=>{if(CORE_V7140)request('/receipt-groups').then(r=>setGroups(r.groups||[])).catch(()=>{})},[user?.id]);
+  async function newGroup(){
+    const name=window.prompt('New receipt group name');
+    if(!name?.trim())return;
+    try{
+      const g=await send('/receipt-groups',{name:name.trim()});
+      setGroups(existing=>[...existing,g]);setGroupId(String(g.id));
+    }catch(e){setError(e.message)}
+  }
   useEffect(() => {
     if (!file) return;
     const url = URL.createObjectURL(file);
@@ -248,7 +320,7 @@ export function Upload() {
       // The pending copy is removed whether OCR succeeds or rejects the scan.
       if(membership?.plan==='free') await saveLocalReceipt(user.id,0,file);
       let r, savedLocally=true;
-      try{r=await uploadFile(file, setProgress, abort.current.signal, {useCredits});
+      try{r=await uploadFile(file, setProgress, abort.current.signal, {useCredits,groupId});
         try{await saveLocalReceipt(user.id,r.case_id,file)}
         catch(storageError){
           savedLocally=false;
@@ -268,6 +340,13 @@ export function Upload() {
   }
   return <><CaptureGuide/><Title eyebrow={t("START WITH A SCAN" )} title={t("Capture the receipt")}>{t("Upload a photo or PDF. Only validated receipts are saved. Free originals stay on this device; paid originals are backed up privately in the cloud.")}</Title><Panel><label className="dropzone" onDragOver={e => e.preventDefault()} onDrop={e => {e.preventDefault();if(!busy)choose(e.dataTransfer.files[0]);}}><UploadCloud size={42}/><h2>{t("Drop your receipt here")}</h2><p>{t("JPG, PNG, WebP or PDF · up to 10 MB")}</p><input aria-label={t("Choose receipt")} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={busy} onChange={e=>choose(e.target.files[0])}/></label><label className="secondary camera">{t("Take a photo")} <input aria-label={t("Take receipt photo")} type="file" accept="image/*" capture="environment" disabled={busy} onChange={e=>choose(e.target.files[0])}/></label>
   <div className="capture-preview" aria-label={t("Receipt preview before processing" )}><h3>{file ? `Preview · ${file.name}` : t("Receipt preview")}</h3>{!file?<p className="muted">{t("Choose or photograph a receipt to see it here before processing.")}</p>:file.type==='application/pdf'?<iframe title={t("Receipt PDF preview")} src={preview} className="pdf-preview"/>:<><CropEditor preview={preview} crop={crop} onChange={setCrop}/><div className="row wrap"><button disabled={busy} onClick={()=>transform(false)}>{t("Apply crop")}</button><button disabled={busy} onClick={()=>transform(true)}><RotateCw size={16}/> {t("Rotate")}</button><button disabled={busy||file===original} onClick={()=>{setFile(original);setCrop({x:0,y:0,w:100,h:100})}}>{t('Restore original')}</button><button disabled={busy} onClick={()=>setCrop({x:0,y:0,w:100,h:100})}>{t('Reset selection')}</button></div></>}</div>
+  {CORE_V7140&&<div className="pruvs-group-upload-picker">
+    <label htmlFor="pruvs-upload-group">Save receipt in group (optional)</label>
+    <div className="row wrap"><select id="pruvs-upload-group" value={groupId} disabled={busy} onChange={e=>setGroupId(e.target.value)}>
+      <option value="">Ungrouped</option>
+      {groups.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}
+    </select><button type="button" disabled={busy} onClick={newGroup}>New group</button></div>
+  </div>}
   {membership?.usage?.ocr&&<div className="usage-at-capture"><strong>{t("AI OCR:")} {membership.usage.ocr.used}/{membership.usage.ocr.allowance} {t("this month")}</strong><p className="muted">{membership.usage.ocr.remaining>0?`${membership.usage.ocr.remaining} included scans remaining`:`Monthly allowance exhausted. Use 2 PC per extra scan or view Membership.`}</p><label><input type="checkbox" checked={useCredits} onChange={e=>setUseCredits(e.target.checked)} /> {t("Allow spending 2 PC for this scan ONLY if my monthly allowance is exhausted (")}{membership.credits||0} {t("PC available)")}</label></div>}
   {error&&<Message error={error}/>}<button className="primary full" disabled={!file||busy} onClick={upload}>{busy?progress<100?`Uploading ${progress}%`:t("Reading your receipt…"):t("Process receipt")}</button><ProcessingStatus busy={busy} progress={progress} />{busy&&<><progress max="100" value={progress}/><button onClick={()=>abort.current.abort()}>{t("Cancel upload")}</button><p className="muted">{t("After upload finishes, processing can continue on the server. You can check History.")}</p></>}</Panel></>;
 

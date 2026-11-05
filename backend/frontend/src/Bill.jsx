@@ -12,6 +12,7 @@ import PaymentConfirmation from './PaymentConfirmation';
 import {participantColors, participantStyle, itemShareGradient} from './participant-colors';
 import './payment-confirmation.css';
 import { BillSummaryStrip, BillFlowNav, itemAllocationState } from './professional/CorePages';
+const CORE_V7140=import.meta.env.VITE_PRUVS_CORE_V7140_ENABLED==='true';
 export function Join() {
   const {
       token
@@ -180,6 +181,16 @@ export default function Bill() {
       setBusy(false);
     }
   }
+  async function applyAllocation(operation,params={}){
+    if(saving.current||!CORE_V7140)return;
+    saving.current=true;setBusy(true);setError('');
+    try{
+      const r=await send('/bills/'+encodeURIComponent(token)+'/allocation/'+operation,
+        {...params,expected_revision:data.allocation_revision??0});
+      setData(r);
+    }catch(e){setError(e.message);try{setData(await request('/bills/'+encodeURIComponent(token)))}catch{}}
+    finally{saving.current=false;setBusy(false)}
+  }
   async function select(item, quantity) {
     if (saving.current) return;
     const snapshot = data;
@@ -191,7 +202,8 @@ export default function Bill() {
     setError('');
     try {
       setData(await send('/bills/' + token + '/selection', {
-        quantities
+        quantities,
+        ...(CORE_V7140?{expected_revision:data.allocation_revision??0}:{})
       }, 'PUT'));
     } catch (e) {
       setError(e.message);
@@ -239,6 +251,15 @@ export default function Bill() {
   return <><Title eyebrow={t("A LITTLE LESS MATH" )} title={t('Split')+' · '+(data.source_name||t('Receipt'))} action={<button className="secondary" onClick={() => setShare(true)}><Share2 size={17} /> {t("Share bill")}</button>}><span className={'live-dot ' + (live === t("Live") ? 'connected' : '')} />{live} · {data.joined_participants_count}/{data.expected_participants_count} {t("people ·")} <Badge>{data.status}</Badge></Title>{error && <Message error={error} />} {notice && <Message>{notice}</Message>}
  <div className="pruvs-floating-bill-overview" role="region" aria-label={t("Always-visible shared bill overview" )}><BillSummaryStrip data={data} mine={mine} currency={data.currency} /></div>
  <BillFlowNav active={section} onChange={chooseSection} />
+ {CORE_V7140&&owner&&section==='items'&&<Panel title="How to divide this bill">
+   <p className="muted">Choose individual items, or split the entire receipt equally after everyone has joined. Switching back restores the earlier item selections.</p>
+   <div className="row wrap">
+     <button type="button" className={data.allocation_mode==='equal'?'primary':'secondary'} disabled={busy||settled||data.allocation_mode==='equal'||data.joined_participants_count!==data.expected_participants_count||data.joined_participants_count<2} onClick={()=>{
+       if(window.confirm('Replace the current selections with an equal split? You can restore them afterwards.'))applyAllocation('equal')
+     }}>Split equally</button>
+     <button type="button" className={data.allocation_mode==='items'?'primary':'secondary'} disabled={busy||settled||data.allocation_mode!=='equal'} onClick={()=>applyAllocation('items')}>Return to individual items</button>
+   </div><small>Current mode: {data.allocation_mode==='equal'?'Equal shares':'Individual items'} · Revision {data.allocation_revision??0}</small>
+ </Panel>}
  <InviteDialog open={share} onClose={() => setShare(false)} shareUrl={link} billName={data.source_name || 'Shared bill'} onCopied={copied} seatsFull={data.joined_participants_count >= data.expected_participants_count} />
  <RemoveParticipantDialog participant={removeTarget} busy={busy} error={removeError} onCancel={() => { if (!busy) {setRemoveTarget(null);setRemoveError('');} }} onConfirm={confirmRemoval} />
  {section==='people'&&<section id="core-bill-people" className="bill-workspace-people">
@@ -254,7 +275,7 @@ export default function Bill() {
            {phone?<a className="secondary" href={'https://wa.me/'+phone+'?text='+encodeURIComponent(message)} target="_blank" rel="noreferrer"><MessageCircle size={16}/> {t("WhatsApp")}</a>:<button className="secondary" onClick={()=>copied(message)}><Copy size={16}/> {t("Copy message")}</button>}
            {phone&&<a className="secondary" href={'sms:'+phone+'?body='+encodeURIComponent(message)}>{t("SMS")}</a>}
            {owner&&p.user_id&&<button disabled={busy || p.payment_status==='received'} onClick={()=>act('remind',{participant_id:p.participant_id})}>{t("Send reminder")}</button>}
-           {owner && !settled && p.role !== 'owner' && <button type="button" className="pruvs-remove-trigger" disabled={busy || (p.payment_status || 'unpaid') !== 'unpaid'} title={(p.payment_status || 'unpaid') !== 'unpaid' ? t('Resolve payment activity before removing this participant.') : undefined} onClick={() => {setRemoveTarget(p);setRemoveError('')}}><UserRoundX size={16} />{t('Remove participant')}</button>}
+           {owner && !settled && (!CORE_V7140||data.allocation_mode!=='equal') && p.role !== 'owner' && <button type="button" className="pruvs-remove-trigger" disabled={busy || (p.payment_status || 'unpaid') !== 'unpaid'} title={(p.payment_status || 'unpaid') !== 'unpaid' ? t('Resolve payment activity before removing this participant.') : undefined} onClick={() => {setRemoveTarget(p);setRemoveError('')}}><UserRoundX size={16} />{t('Remove participant')}</button>}
          </div>;
        })}
      </div>
@@ -264,10 +285,20 @@ export default function Bill() {
  <div className="two-column bill-layout v22-bill-layout">{section==='items'&&<div id="core-bill-items"><Panel title={t("Pick what you enjoyed")}><p className="muted">{t("Your choices save automatically and update for everyone.")}</p>{data.items.map(item => {
           const {own, max, unavailable, selectedByMe, fullyAllocated, step} = itemAllocationState(item, data.my_participant_id);
           const colorGradient = itemShareGradient(item, colors);
-          return <div key={item.item_id} className={'item ' + (unavailable ? 'unavailable ' : '') + (fullyAllocated ? 'is-fully-allocated ' : '') + (selectedByMe ? 'is-selected-by-me' : '')} style={colorGradient ? {'--item-share-background': colorGradient} : undefined}><div className="row between"><div className="grow"><strong>{item.name}</strong>{item.translated_name && item.translated_name !== item.name && <small>{item.translated_name}</small>}<small>{item.quantity} × {money(item.unit_price, data.currency)} · {item.remaining_quantity} {t("remaining")}</small>{(selectedByMe || fullyAllocated) && <span className="bill-item-status" role="status"><Check size={14} aria-hidden="true"/>{t(fullyAllocated ? 'Fully allocated' : 'Selected by you')}</span>}</div><strong>{money(item.total_price, data.currency)}</strong></div><div className="row between wrap"><div className="assignment-tags">{item.assignments.map(a => <span key={a.assignment_id} className="badge participant-assignment" style={participantStyle(colors, a.participant_id)}>{a.assigned_to}{a.participant_id === mine.participant_id ? ' (' + t('you') + ')' : ''}: {a.quantity}</span>)}</div><div className="quantity"><button aria-label={'Remove ' + item.name} disabled={settled || busy || own <= 0} onClick={() => select(item, Math.max(0, own - step))}><Minus size={15} /></button><input aria-label={'Your quantity for ' + item.name} type="number" min="0" max={max} step={step} value={own} disabled={settled || busy || unavailable} onChange={e => {
+          return <div key={item.item_id} className={'item ' + (unavailable ? 'unavailable ' : '') + (fullyAllocated ? 'is-fully-allocated ' : '') + (selectedByMe ? 'is-selected-by-me' : '')} style={colorGradient ? {'--item-share-background': colorGradient} : undefined}><div className="row between"><div className="grow"><strong>{item.name}</strong>{item.translated_name && item.translated_name !== item.name && <small>{item.translated_name}</small>}<small>{item.quantity} × {money(item.unit_price, data.currency)} · {item.remaining_quantity} {t("remaining")}</small>
+ {CORE_V7140&&item.shared_item&&<small className="muted">Shared among {item.assignments.length} people; physical quantity remains {item.quantity}.</small>}{(selectedByMe || fullyAllocated) && <span className="bill-item-status" role="status"><Check size={14} aria-hidden="true"/>{t(fullyAllocated ? 'Fully allocated' : 'Selected by you')}</span>}</div><strong>{money(item.total_price, data.currency)}</strong></div><div className="row between wrap"><div className="assignment-tags">{item.assignments.map(a => <span key={a.assignment_id} className="badge participant-assignment" style={participantStyle(colors, a.participant_id)}>{a.assigned_to}{a.participant_id === mine.participant_id ? ' (' + t('you') + ')' : ''}: {CORE_V7140&&(item.shared_item||data.allocation_mode==='equal')?money(a.amount,data.currency):a.quantity}</span>)}</div><div className="quantity"><button aria-label={'Remove ' + item.name} disabled={settled || busy || (CORE_V7140&&(item.shared_item||data.allocation_mode==='equal')) || own <= 0} onClick={() => select(item, Math.max(0, own - step))}><Minus size={15} /></button><input aria-label={'Your quantity for ' + item.name} type="number" min="0" max={max} step={step} value={own} disabled={settled || busy || unavailable || (CORE_V7140&&(item.shared_item||data.allocation_mode==='equal'))} onChange={e => {
                   const n = Number(e.target.value);
                   if (Number.isFinite(n) && n >= 0 && n <= max) select(item, n);
-                }} /><button aria-label={'Add ' + item.name} disabled={settled || busy || own >= max} onClick={() => select(item, Math.min(max, own + step))}><Plus size={15} /></button></div></div></div>;
+                }} /><button aria-label={'Add ' + item.name} disabled={settled || busy || own >= max || (CORE_V7140&&(item.shared_item||data.allocation_mode==='equal'))} onClick={() => select(item, Math.min(max, own + step))}><Plus size={15} /></button></div>
+ {CORE_V7140&&owner&&!settled&&data.allocation_mode!=='equal'&&<div className="row wrap">
+   {!item.shared_item&&item.assignments.length===0&&data.joined_participants_count>=2&&<button type="button" disabled={busy} onClick={()=>{
+     if(window.confirm('Share this item equally among everyone who has joined?'))
+       applyAllocation('share',{item_id:item.item_id,participant_ids:data.participants.map(p=>p.participant_id)})
+   }}>Share with everyone</button>}
+   {item.shared_item&&<button type="button" disabled={busy} onClick={()=>{
+     if(window.confirm('Clear the shared allocations for this item?'))applyAllocation('unshare',{item_id:item.item_id})
+   }}>Undo shared item</button>}
+ </div>}</div></div>;
         })}</Panel>
  <section id="core-bill-summary" className="bill-workspace-summary" aria-label={t("Summary and payment confirmation" )}><h2 className="bill-inline-summary-heading">{t("Summary & payment")}</h2>
    {settled&&<ClosedBillNotice canPay={!owner}/>}
@@ -279,7 +310,7 @@ export default function Bill() {
                 })}><option value="none">{t("No tip")}</option><option value="percent">{t("Percentage")}</option><option value="fixed">{t("Fixed amount")}</option></select></Field><Field label={t("Tip value")} type="number" min="0" max={tip.mode === 'percent' ? 100 : undefined} value={tip.value} onChange={e => setTip({
                 ...tip,
                 value: Number(e.target.value)
-              })} /></div><button disabled={busy} onClick={() => act('tip', tip)}>{t("Save tip")}</button><div className="people-action"><Field label={t("People")} type="number" min={data.joined_participants_count} max="20" value={people} onChange={e => setPeople(Number(e.target.value))} /><button disabled={busy} onClick={() => act('people', {
+              })} /></div><button disabled={busy} onClick={() => act('tip', tip)}>{t("Save tip")}</button><div className="people-action"><Field label={t("People")} type="number" min={data.joined_participants_count} max="20" value={people} onChange={e => setPeople(Number(e.target.value))} /><button disabled={busy||(CORE_V7140&&data.allocation_mode==='equal')} onClick={() => act('people', {
                 people
               })}>{t("Update")}</button></div><Field label={t('Receive payment with')}><select value={paymentProfileId} onChange={e=>setPaymentProfileId(e.target.value)}><option value="">{t('Default payment details')}</option>{paymentProfiles.map(profile=><option key={profile.id} value={profile.id}>{profile.label} · {profile.bank_name||'Link'}</option>)}</select></Field><button className="primary full" disabled={busy || !data.can_close} onClick={() => act('settle',{payment_profile_id:paymentProfileId?Number(paymentProfileId):null})}>{t("Settle bill")} <Check size={17} /></button>{!data.can_close && <p className="muted">{data.close_block_reason}</p>}</> : <><p>{t("Reopening allows selections to change and resets payment status.")}</p><button disabled={busy} onClick={() => {
               if (confirm(t("Reopen and reset all current payment confirmations? This does not undo any bank transfers."))) act('reopen');
