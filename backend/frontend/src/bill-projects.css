@@ -1,0 +1,22 @@
+.pruvs-projects-view{max-width:1180px;margin:auto;display:grid;gap:16px}
+.pruvs-project-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.pruvs-project-row input{min-width:240px;flex:1}
+.pruvs-project-cards,.pruvs-project-candidates,.pruvs-project-records,.pruvs-project-people{display:grid;gap:10px}
+.pruvs-project-card{display:flex;align-items:center;gap:14px;padding:18px;border:1px solid #d9e4f5;border-radius:16px;background:white;text-decoration:none;color:inherit}
+.pruvs-project-card span:nth-child(2){display:grid;gap:4px;flex:1}.pruvs-project-card small,.pruvs-project-candidate small,.pruvs-project-record small,.pruvs-project-person small{display:block;color:#687794;font-size:.85em}
+.pruvs-project-heading,.pruvs-project-record,.pruvs-project-person,.pruvs-project-member{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.pruvs-project-record,.pruvs-project-person,.pruvs-project-member{padding:12px 0;border-bottom:1px solid #e4ebf7;flex-wrap:wrap}
+.pruvs-project-record>div,.pruvs-project-person>div:first-child{flex:1}
+.pruvs-project-candidate{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid #e2e9f4;border-radius:10px;cursor:pointer}
+.pruvs-project-candidate input{flex-shrink:0;width:18px;height:18px}
+.pruvs-project-candidates{max-height:280px;overflow-y:auto}
+.pruvs-project-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;align-items:center}
+.pruvs-project-totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:14px 0}
+.pruvs-project-totals>div{padding:16px;border:1px solid #dde6f4;border-radius:12px;display:grid;gap:8px}
+.pruvs-project-totals h3{margin:0;font-size:14px}.pruvs-project-totals strong{font-size:24px;color:#122554}
+.pruvs-project-totals span{font-size:13px;color:#546580}
+.pruvs-project-person-currency{display:grid;gap:4px;margin-bottom:6px;text-align:right}
+.pruvs-project-member{align-items:flex-start}.pruvs-project-payment{font-size:13px;max-width:360px;overflow-wrap:anywhere}
+.pruvs-project-payment-self{display:grid;gap:8px;padding:15px;background:#f6f9fe;border-radius:12px;margin-top:16px}
+.pruvs-project-payment-self select{max-width:420px}
+.pruvs-project-entry{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:14px 0}
+@media(max-width:650px){.pruvs-project-row{display:grid}.pruvs-project-row input{min-width:0}.pruvs-project-person-currency{text-align:left}.pruvs-project-record{align-items:flex-start}}
