@@ -11,11 +11,12 @@ export function normalizeInvitePhone(value) {
   const digits = raw.replace(/\D/g, '');
   return /^[1-9]\d{7,14}$/.test(digits) ? digits : '';
 }
-export function invitationText(billName, shareUrl) {
-  return `Join our Pruvs bill (${String(billName || 'Shared bill').trim()}): ${shareUrl}`;
+export function invitationText(billName, shareUrl, kind = 'bill') {
+  const label = kind === 'group' ? 'group' : 'bill';
+  return `Join our Pruvs ${label} (${String(billName || 'Shared bill').trim()}): ${shareUrl}`;
 }
 
-export default function InviteDialog({ open = false, onClose = () => {}, shareUrl = '', billName = 'Shared bill', onCopied = async () => {}, seatsFull = false }) {
+export default function InviteDialog({ open = false, onClose = () => {}, shareUrl = '', billName = 'Shared bill', onCopied = async () => {}, seatsFull = false, kind = 'bill' }) {
   const dialogRef = useRef(null);
   const closeRef = useRef(null);
   const onCloseRef = useRef(onClose);
@@ -26,7 +27,7 @@ export default function InviteDialog({ open = false, onClose = () => {}, shareUr
   const [error, setError] = useState('');
   const contactsAvailable = typeof navigator !== 'undefined' && typeof navigator.contacts?.select === 'function';
   const shareTitle = `Pruvs · ${String(billName || 'Shared bill').trim() || 'Shared bill'}`;
-  const message = invitationText(billName, shareUrl);
+  const message = invitationText(billName, shareUrl, kind);
   const waShareUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
 
   useEffect(() => {
@@ -96,7 +97,7 @@ export default function InviteDialog({ open = false, onClose = () => {}, shareUr
   return <div className="pruvs-invite-overlay" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
     <section ref={dialogRef} className="pruvs-invite-dialog" role="dialog" aria-modal="true" aria-labelledby="pruvs-invite-title" aria-describedby="pruvs-invite-description">
       <header className="pruvs-invite-header">
-        <div><span className="pruvs-invite-eyebrow">{t("PRUVS · SHARED BILL")}</span><h2 id="pruvs-invite-title">{t("Invite people to your bill")}</h2><p id="pruvs-invite-description">{billName}</p></div>
+        <div><span className="pruvs-invite-eyebrow">{kind === 'group' ? 'PRUVS · GROUP BILLS' : t("PRUVS · SHARED BILL")}</span><h2 id="pruvs-invite-title">{kind === 'group' ? 'Invite people to your group' : t("Invite people to your bill")}</h2><p id="pruvs-invite-description">{billName}</p></div>
         <button ref={closeRef} type="button" className="pruvs-invite-close" aria-label={t("Close invitation" )} onClick={onClose}><X size={20}/></button>
       </header>
       <div className="pruvs-invite-body">

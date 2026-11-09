@@ -11,6 +11,7 @@ import { CaptureGuide, ReceiptReviewGuide } from './professional/CorePages';
 import InviteDialog from './professional/InviteDialog';
 import {saveLocalReceipt,deleteLocalReceipt,downloadLocalReceipt,getLocalReceipt} from './localReceipts';
 const CORE_V7140 = import.meta.env.VITE_PRUVS_CORE_V7140_ENABLED === 'true';
+const CORE_PROJECTS_ENABLED = import.meta.env.VITE_PRUVS_CORE_V7141_PROJECTS_ENABLED === 'true';
 export function groupHistory(data){
   const grouped=new Map();
   for(const r of data?.receipts||[])grouped.set(r.case_id,{receipt:r,bills:[]});
@@ -141,6 +142,7 @@ export function History({home=false,billsOnly=false}) {
       {home?t('Good moments. Fair shares.'):'Organized by merchant and scan date. Expand a receipt to see its splits.'}
     </Title>
     {home&&<HomeWelcome user={user}/>}
+    {billsOnly&&!home&&CORE_PROJECTS_ENABLED&&<div className="pruvs-project-entry"><div><strong>Shared Projects</strong><p className="muted">Combine receipts and split bills, invite participants, and see everyone's balances.</p></div><Link className="primary" to="/projects">Create or open a project</Link></div>}
     {CORE_V7140&&!home&&<div className="pruvs-groups-bar" aria-label="Organize receipts into groups">
       <label htmlFor="pruvs-group-filter">Receipt group</label>
       <select id="pruvs-group-filter" value={selectedGroup} onChange={e=>{setSelectedGroup(e.target.value);setOffset(0)}}>
@@ -230,6 +232,8 @@ export function History({home=false,billsOnly=false}) {
 }
 export function Upload() {
   const nav = useNavigate();
+  const location=useLocation();
+  const fromProject=new URLSearchParams(location.search).get('project_id');
   const {membership,refreshMembership,user}=useApp();
   const [file, setFile] = useState(null),
     [original, setOriginal] = useState(null),
@@ -330,7 +334,12 @@ export function Upload() {
         }
       }finally{if(membership?.plan==='free')await deleteLocalReceipt(user.id,0).catch(()=>{});}
       await refreshMembership?.();
-      nav('/receipt/' + r.case_id, {state:{...(r.duplicate?{duplicate:true,restored_original:r.restored_original}:{}),savedLocally}});
+      if(fromProject&&CORE_PROJECTS_ENABLED){
+        if(!/^\d+$/.test(fromProject))throw new Error('Invalid project selection.');
+        try {await send('/bill-projects/'+fromProject+'/items',{items:[{kind:'receipt',source_id:r.case_id}]});}
+        catch(err){throw new Error('Receipt saved, but linking it to the project failed. Open History to attach it manually: '+err.message);}
+        nav('/projects/'+fromProject);
+      } else nav('/receipt/' + r.case_id, {state:{...(r.duplicate?{duplicate:true,restored_original:r.restored_original}:{}),savedLocally}});
     } catch (e) {
       if(e.status===402&&e.code==='subscription_limit'){nav(e.detail?.membership_url||'/account?limit=ocr#membership');return;}
       setError(e.message);
