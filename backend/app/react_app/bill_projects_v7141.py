@@ -23,6 +23,7 @@ from app.models.payment_profile import PaymentProfile
 from app.models.group_project_v7141 import BillProject, BillProjectItem, BillProjectMember
 from app.models.group_project_invite_v7142 import BillProjectInvite
 from app.models.project_activity_v7143 import ProjectOptions, ProjectManualBill, ProjectExpenseShare, ProjectChatMessage
+from app.models.project_cover_v7144 import ProjectCoverV7144
 from app.services.project_allocations_v7143 import allocate_minor, to_minor
 from app.services.group_settlement_v7142 import settlement_plan
 from app.react_app.auth import current, limit
@@ -31,6 +32,31 @@ from fastapi import Request
 from app.react_app.bill_service import get_split_bill_session_summary
 
 router = APIRouter(prefix='/api/v1/bill-projects', tags=['Shared bill projects'])
+
+COVER_KEYS = frozenset({'mountain','beach','city','camping','family','party','home',
+                        'roadtrip','food','work','sports','birthday','wedding','nature','default'})
+
+
+def checked_cover(value):
+    if not isinstance(value,str) or value not in COVER_KEYS:
+        raise ValueError('Choose one of the available Project covers.')
+    return value
+
+
+def cover_of(db, project_id):
+    stored = db.get(ProjectCoverV7144, project_id)
+    return stored.cover_key if stored else None
+
+
+def receipt_labels_safe(db, case_ids):
+    if not case_ids: return {}
+    try:
+        from app.react_app.receipt_labels import receipt_labels
+        return receipt_labels(db, case_ids)
+    except ImportError:
+        # Restricted offline regression env has no optional OCR dependencies.
+        return {cid: f'Receipt #{cid}' for cid in case_ids}
+
 
 
 def enabled():
@@ -105,13 +131,7 @@ def _project_summary(db, project, caller_id):
     completed = []
     pending_source_count = 0
     label_ids={db.get(SplitBillSession,x.source_id).case_id for x in rows if x.kind=="split" and db.get(SplitBillSession,x.source_id)} | {x.source_id for x in rows if x.kind=="receipt"}
-    try:
-        from app.react_app.receipt_labels import receipt_labels
-        labels=receipt_labels(db,label_ids)
-    except ImportError:
-        # Offline regression environments may not install cloud OCR providers.
-        # Production still uses the canonical OCR merchant-name helper.
-        labels={cid:f'Receipt #{cid}' for cid in label_ids}
+    labels=receipt_labels_safe(db,label_ids)
 
     for link in rows:
         if link.kind != 'split': continue
@@ -140,7 +160,7 @@ def _project_summary(db, project, caller_id):
           'merchant':labels.get(session.case_id,'Receipt #'+str(session.case_id)),
           'fx_reference':fx,
           'allocations':[{'name':p['display_name'],'amount':p['total'],'currency':curr,'payment_status':p['payment_status']} for p in summary['participants']],
-          'currency':curr,'total':summary['grand_total'],'status':session.status,
+          'paid_by_user_id':session.owner_user_id,'currency':curr,'total':summary['grand_total'],'status':session.status,
           'participants_count':len(summary['participants']), 'token':session.token,
           'unassigned':summary['remaining_total'],
           'added_by_user_id':link.added_by_user_id,'readable_by_me':(caller_id==session.owner_user_id or
@@ -204,7 +224,7 @@ def _project_summary(db, project, caller_id):
         items.append({'kind':'receipt','source_id':case.id,'case_id':case.id,
             'merchant':labels.get(case.id,'Receipt #'+str(case.id)),
             'allocations':[{'user_id':a.user_id,'name':users[a.user_id].name if a.user_id in users else 'Member','amount':a.amount_minor/100,'currency':next(iter(currencies),'RON'),'payment_status':a.payment_status} for a in allocated_rows],
-            'allocated':bool(allocated_rows),
+            'allocated':bool(allocated_rows),'paid_by_user_id':allocated_rows[0].paid_by_user_id if allocated_rows else case.user_id,
             'currency':next(iter(currencies), 'RON') if len(currencies)==1 else 'MULTI',
             'total':sum(currencies.values())/100 if len(currencies)==1 else None,
             'totals_by_currency':{key:value/100 for key,value in currencies.items()},
@@ -261,6 +281,7 @@ def _project_summary(db, project, caller_id):
             'currency':curr,'amount_minor':cents,'amount':cents/100} for (payer,payee,curr),cents in sorted(by_pair.items())]
     return {'id':project.id,'name':project.name,
          'smart_settle':smart_settle,'primary_currency':options.primary_currency if options else 'RON',
+         'cover_key':cover_of(db,project.id),
          'project_settled':bool(completed) and all(completed),
          'outstanding_by_currency':{c:round(v/100,2) for c,v in due_by_currency.items()},
          'settlement_rule':'Group is settled only when every source Split Bill and project allocation is confirmed.','owner_user_id':project.owner_user_id,
@@ -278,7 +299,8 @@ def list_projects(identity=Depends(current), db=Depends(get_db)):
           .filter(BillProjectMember.user_id==uid)
           .order_by(BillProject.created_at.desc()).all())
     return {'projects':[{'id':p.id,'name':p.name,'owner_user_id':p.owner_user_id,
-              'membership_status':m.status,'created_at':p.created_at.isoformat()} for p,m in rows]}
+              'membership_status':m.status,'cover_key':cover_of(db,p.id),
+              'created_at':p.created_at.isoformat()} for p,m in rows]}
 
 @router.get('/candidates')
 def candidates(identity=Depends(current),db=Depends(get_db)):
@@ -288,17 +310,19 @@ def candidates(identity=Depends(current),db=Depends(get_db)):
               .order_by(SplitBillSession.created_at.desc()).limit(150).all())
     case_ids={c.id for c in cases} | {s.case_id for s in sessions}
     amounts=defaultdict(lambda:defaultdict(int))
+    labels = {}
     if case_ids:
         for line in db.query(ReceiptItem).filter(ReceiptItem.case_id.in_(case_ids)).all():
             amounts[line.case_id][currency_code(line.currency)]+=amount_minor(line.total_price)
-        labels=receipt_labels(db,case_ids)
+        labels=receipt_labels_safe(db,case_ids)
     return {'items':(
        [{'kind':'receipt','source_id':c.id,'label':labels.get(c.id,f'Receipt #{c.id}')+' · receipt #'+str(c.id),
-         'date':c.created_at.isoformat() if c.created_at else '',
+         'case_id':c.id,'date':c.created_at.isoformat() if c.created_at else '',
          'totals':{k:v/100 for k,v in amounts[c.id].items()}} for c in cases] +
        [{'kind':'split','source_id':s.id,'label':labels.get(s.case_id,f'Receipt #{s.case_id}')+' · split #'+str(s.id),
-         'date':s.created_at.isoformat() if s.created_at else '',
-         'currency':s.currency or 'RON','status':s.status} for s in sessions])}
+         'case_id':s.case_id,'date':s.created_at.isoformat() if s.created_at else '',
+         'currency':s.currency or 'RON','status':s.status,
+         'total':get_split_bill_session_summary(db,s,ensure_translations=False)['grand_total']} for s in sessions])}
 
 @router.post('')
 def create_project(body:dict,identity=Depends(current),db=Depends(get_db)):
@@ -309,6 +333,8 @@ def create_project(body:dict,identity=Depends(current),db=Depends(get_db)):
     currency=currency_code(body.get('primary_currency') or 'RON')
     db.add(ProjectOptions(project_id=project.id,smart_settle=body.get('smart_settle') is not False,primary_currency=currency))
     db.add(BillProjectMember(project_id=project.id,user_id=identity[0].id,status='owner',joined_at=datetime.utcnow()))
+    if body.get('cover_key'):
+        db.add(ProjectCoverV7144(project_id=project.id,cover_key=checked_cover(body['cover_key'])))
     db.commit()
     return {'id':project.id,'name':project.name}
 
@@ -408,6 +434,7 @@ def delete_project(project_id:int,identity=Depends(current),db=Depends(get_db)):
     db.query(ProjectChatMessage).filter_by(project_id=project_id).delete(synchronize_session=False)
     db.query(ProjectExpenseShare).filter_by(project_id=project_id).delete(synchronize_session=False)
     db.query(ProjectManualBill).filter_by(project_id=project_id).delete(synchronize_session=False)
+    db.query(ProjectCoverV7144).filter_by(project_id=project_id).delete(synchronize_session=False)
     db.query(ProjectOptions).filter_by(project_id=project_id).delete(synchronize_session=False)
     db.query(BillProjectInvite).filter_by(project_id=project_id).delete(synchronize_session=False)
     db.query(BillProjectItem).filter_by(project_id=project_id).delete(synchronize_session=False)
@@ -590,7 +617,19 @@ def update_project_options(project_id:int,body:dict,identity=Depends(current),db
     if 'smart_settle' in body:
         if type(body['smart_settle']) is not bool:raise ValueError('Smart settle must be enabled or disabled.')
         options.smart_settle=body['smart_settle']
-    db.commit();return {'smart_settle':options.smart_settle}
+    if 'cover_key' in body:
+        key = body['cover_key']
+        row = db.get(ProjectCoverV7144, project_id)
+        if key is None:
+            if row: db.delete(row)
+        else:
+            key = checked_cover(key)
+            if row: row.cover_key = key
+            else: db.add(ProjectCoverV7144(project_id=project_id,cover_key=key))
+    db.commit()
+    answer={'smart_settle':options.smart_settle}
+    if 'cover_key' in body: answer['cover_key']=cover_of(db,project_id)
+    return answer
 
 
 @router.post('/{project_id}/manual')

@@ -125,7 +125,7 @@ function App() {
   useEffect(() => {
     refresh().catch(() => {});
     request('/config').then(setConfig).catch(() => {});
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js?v=7.1.43', {
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js?v=7.1.44', {
       scope: '/'
     }).catch(() => {});
     const focus = () => refresh().catch(() => {});
