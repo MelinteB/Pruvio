@@ -12,6 +12,7 @@ import hashlib
 import re
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from app.db.database import get_db
 from app.models.case import Case
 from app.models.receipt_item import ReceiptItem
@@ -21,6 +22,8 @@ from app.models.split_bill_participant import SplitBillParticipant
 from app.models.payment_profile import PaymentProfile
 from app.models.group_project_v7141 import BillProject, BillProjectItem, BillProjectMember
 from app.models.group_project_invite_v7142 import BillProjectInvite
+from app.models.project_activity_v7143 import ProjectOptions, ProjectManualBill, ProjectExpenseShare, ProjectChatMessage
+from app.services.project_allocations_v7143 import allocate_minor, to_minor
 from app.services.group_settlement_v7142 import settlement_plan
 from app.react_app.auth import current, limit
 from app.usernames import username_key
@@ -98,6 +101,18 @@ def _project_summary(db, project, caller_id):
     obligations = []
     items = []
     split_case_ids = set()
+    source_case_ids = set()
+    completed = []
+    pending_source_count = 0
+    label_ids={db.get(SplitBillSession,x.source_id).case_id for x in rows if x.kind=="split" and db.get(SplitBillSession,x.source_id)} | {x.source_id for x in rows if x.kind=="receipt"}
+    try:
+        from app.react_app.receipt_labels import receipt_labels
+        labels=receipt_labels(db,label_ids)
+    except ImportError:
+        # Offline regression environments may not install cloud OCR providers.
+        # Production still uses the canonical OCR merchant-name helper.
+        labels={cid:f'Receipt #{cid}' for cid in label_ids}
+
     for link in rows:
         if link.kind != 'split': continue
         session = db.get(SplitBillSession,link.source_id)
@@ -105,11 +120,26 @@ def _project_summary(db, project, caller_id):
         summary = get_split_bill_session_summary(db, session, ensure_translations=False)
         curr = currency_code(summary['currency'])
         split_case_ids.add(session.case_id)
+        source_case_ids.add(session.case_id)
         bucket=totals[curr]
         bucket['bill_total']+=amount_minor(summary['grand_total'])
         bucket['allocated']+=sum(amount_minor(p['total']) for p in summary['participants'])
         bucket['unassigned']+=amount_minor(summary['remaining_total'])
+        completed.append(bool(summary['remaining_total'] < .005 and all(p['payment_status']=='received' or p['user_id']==session.owner_user_id or p['total'] < .005 for p in summary['participants'])))
+        fx = None
+        if session.fx_settings_json:
+            try:
+                import json
+                quoted=json.loads(session.fx_settings_json)
+                if quoted.get('base')==curr and quoted.get('target') and Decimal(str(quoted.get('rate'))) > 0:
+                    fx={'currency':currency_code(quoted['target']),'rate':str(quoted['rate']),
+                        'total':float((Decimal(str(summary['grand_total']))*Decimal(str(quoted['rate']))).quantize(Decimal('0.01'),rounding=ROUND_HALF_UP)),
+                        'label':'FX reference only — original split remains payable in '+curr}
+            except (ValueError,TypeError,ArithmeticError):pass
         items.append({'kind':'split','source_id':session.id,'case_id':session.case_id,
+          'merchant':labels.get(session.case_id,'Receipt #'+str(session.case_id)),
+          'fx_reference':fx,
+          'allocations':[{'name':p['display_name'],'amount':p['total'],'currency':curr,'payment_status':p['payment_status']} for p in summary['participants']],
           'currency':curr,'total':summary['grand_total'],'status':session.status,
           'participants_count':len(summary['participants']), 'token':session.token,
           'unassigned':summary['remaining_total'],
@@ -154,12 +184,49 @@ def _project_summary(db, project, caller_id):
             if not included:
                 totals[curr]['bill_total']+=val
                 totals[curr]['unassigned']+=val
+        allocated_rows=(db.query(ProjectExpenseShare).filter_by(project_id=project.id,kind='receipt',source_id=case.id).all())
+        if allocated_rows and not included:
+            if len(currencies)!=1:raise ValueError('Allocated receipt must use one currency.')
+            only_currency=next(iter(currencies))
+            subtotal=sum(x.amount_minor for x in allocated_rows)
+            if subtotal!=currencies[only_currency]:raise ValueError('Incomplete project receipt allocation.')
+            totals[only_currency]['allocated']+=subtotal
+            totals[only_currency]['unassigned']-=subtotal
+            for a in allocated_rows:
+                payment=a.payment_status
+                totals[only_currency]['confirmed']+=a.amount_minor if payment=='confirmed' else 0
+                totals[only_currency]['reported']+=a.amount_minor if payment in ('reported','confirmed') else 0
+                if a.user_id!=a.paid_by_user_id:
+                    due=a.amount_minor if payment!='confirmed' else 0
+                    obligations.append({'payer_id':a.user_id,'payee_id':a.paid_by_user_id,'currency':only_currency,'cents':due})
+            completed.append(all(a.payment_status=='confirmed' or a.user_id==a.paid_by_user_id for a in allocated_rows))
+        elif not included:completed.append(False)
         items.append({'kind':'receipt','source_id':case.id,'case_id':case.id,
+            'merchant':labels.get(case.id,'Receipt #'+str(case.id)),
+            'allocations':[{'user_id':a.user_id,'name':users[a.user_id].name if a.user_id in users else 'Member','amount':a.amount_minor/100,'currency':next(iter(currencies),'RON'),'payment_status':a.payment_status} for a in allocated_rows],
+            'allocated':bool(allocated_rows),
             'currency':next(iter(currencies), 'RON') if len(currencies)==1 else 'MULTI',
             'total':sum(currencies.values())/100 if len(currencies)==1 else None,
             'totals_by_currency':{key:value/100 for key,value in currencies.items()},
             'also_linked_as_split':included,'status':case.status,
             'added_by_user_id':link.added_by_user_id,'readable_by_me':caller_id==case.user_id})
+    for expense in db.query(ProjectManualBill).filter_by(project_id=project.id).order_by(ProjectManualBill.created_at,ProjectManualBill.id).all():
+        c=currency_code(expense.currency)
+        shares=db.query(ProjectExpenseShare).filter_by(project_id=project.id,kind='manual',source_id=expense.id).all()
+        if sum(a.amount_minor for a in shares)!=expense.amount_minor:raise ValueError('Incomplete manual project allocation.')
+        totals[c]['bill_total']+=expense.amount_minor
+        totals[c]['allocated']+=expense.amount_minor
+        totals[c]['reported']+=sum(a.amount_minor for a in shares if a.payment_status in ('reported','confirmed'))
+        totals[c]['confirmed']+=sum(a.amount_minor for a in shares if a.payment_status=='confirmed')
+        completed.append(all(a.payment_status=='confirmed' or a.user_id==a.paid_by_user_id for a in shares))
+        for a in shares:
+            if a.user_id!=a.paid_by_user_id and a.payment_status!='confirmed':
+                obligations.append({'payer_id':a.user_id,'payee_id':a.paid_by_user_id,'currency':c,'cents':a.amount_minor})
+        items.append({'kind':'manual','source_id':expense.id,'merchant':expense.merchant,
+            'case_id':None,'currency':c,'total':expense.amount_minor/100,
+            'status':'settled' if completed[-1] else 'open','added_by_user_id':expense.created_by_user_id,
+            'paid_by_user_id':expense.paid_by_user_id,
+            'allocations':[{'user_id':a.user_id,'name':users[a.user_id].name if a.user_id in users else 'Member','amount':a.amount_minor/100,'currency':c,'payment_status':a.payment_status} for a in shares]})
     member_rows=[]
     for m in members:
         # Protect against someone seeing payout info before accepting invitation.
@@ -177,10 +244,26 @@ def _project_summary(db, project, caller_id):
               'pay_to':[{ 'currency':curr,'user_id':payee,'recipient_name':(users[payee].name if payee in users else 'Bill owner'),
                   'outstanding':cents/100} for curr,payees in p['pay_to'].items() for payee,cents in payees.items() if cents>0]})
     buckets={currency:{k:round(val/100,2) for k,val in amount.items()} for currency,amount in totals.items()}
+    due_by_currency=defaultdict(int)
+    for obligation in obligations:due_by_currency[obligation['currency']]+=obligation['cents']
     joined_ids={m.user_id for m in members if m.status in ('owner','joined')}
+    options = db.get(ProjectOptions,project.id)
+    smart_settle = options.smart_settle if options else True
     netting = settlement_plan(obligations, joined_ids,
                 {uid:(u.name or 'Member') for uid,u in users.items()})
-    return {'id':project.id,'name':project.name,'owner_user_id':project.owner_user_id,
+    if not smart_settle:
+        by_pair=defaultdict(int)
+        for d in obligations:
+            if d['payer_id'] in joined_ids and d['payee_id'] in joined_ids and d['cents']>0:
+                by_pair[(d['payer_id'],d['payee_id'],d['currency'])]+=d['cents']
+        netting['suggested_settlements']=[{'from_user_id':payer,'from_name':users[payer].name if payer in users else 'Member',
+            'to_user_id':payee,'to_name':users[payee].name if payee in users else 'Member',
+            'currency':curr,'amount_minor':cents,'amount':cents/100} for (payer,payee,curr),cents in sorted(by_pair.items())]
+    return {'id':project.id,'name':project.name,
+         'smart_settle':smart_settle,'primary_currency':options.primary_currency if options else 'RON',
+         'project_settled':bool(completed) and all(completed),
+         'outstanding_by_currency':{c:round(v/100,2) for c,v in due_by_currency.items()},
+         'settlement_rule':'Group is settled only when every source Split Bill and project allocation is confirmed.','owner_user_id':project.owner_user_id,
          'is_owner':caller_id==project.owner_user_id,'members':member_rows,
          'items':items,'participants':people_rows,'currencies':buckets,
          **netting, 'receipt_only_amounts_are_unassigned':True,
@@ -208,8 +291,7 @@ def candidates(identity=Depends(current),db=Depends(get_db)):
     if case_ids:
         for line in db.query(ReceiptItem).filter(ReceiptItem.case_id.in_(case_ids)).all():
             amounts[line.case_id][currency_code(line.currency)]+=amount_minor(line.total_price)
-    from app.react_app.receipt_labels import receipt_labels
-    labels=receipt_labels(db,case_ids)
+        labels=receipt_labels(db,case_ids)
     return {'items':(
        [{'kind':'receipt','source_id':c.id,'label':labels.get(c.id,f'Receipt #{c.id}')+' · receipt #'+str(c.id),
          'date':c.created_at.isoformat() if c.created_at else '',
@@ -224,6 +306,8 @@ def create_project(body:dict,identity=Depends(current),db=Depends(get_db)):
     if not isinstance(name,str) or not 1<=len(name.strip())<=100:raise ValueError('Project name must contain 1–100 characters.')
     project=BillProject(owner_user_id=identity[0].id,name=name.strip())
     db.add(project);db.flush()
+    currency=currency_code(body.get('primary_currency') or 'RON')
+    db.add(ProjectOptions(project_id=project.id,smart_settle=body.get('smart_settle') is not False,primary_currency=currency))
     db.add(BillProjectMember(project_id=project.id,user_id=identity[0].id,status='owner',joined_at=datetime.utcnow()))
     db.commit()
     return {'id':project.id,'name':project.name}
@@ -317,6 +401,14 @@ def rename_project(project_id:int,body:dict,identity=Depends(current),db=Depends
 @router.delete('/{project_id}')
 def delete_project(project_id:int,identity=Depends(current),db=Depends(get_db)):
     project=owner(db,identity[0].id,project_id)
+    if db.query(ProjectExpenseShare).filter(ProjectExpenseShare.project_id==project_id,
+          ProjectExpenseShare.payment_status=='confirmed',
+          ProjectExpenseShare.user_id!=ProjectExpenseShare.paid_by_user_id).first():
+        raise HTTPException(409,'This project has confirmed payments and must be retained for audit.')
+    db.query(ProjectChatMessage).filter_by(project_id=project_id).delete(synchronize_session=False)
+    db.query(ProjectExpenseShare).filter_by(project_id=project_id).delete(synchronize_session=False)
+    db.query(ProjectManualBill).filter_by(project_id=project_id).delete(synchronize_session=False)
+    db.query(ProjectOptions).filter_by(project_id=project_id).delete(synchronize_session=False)
     db.query(BillProjectInvite).filter_by(project_id=project_id).delete(synchronize_session=False)
     db.query(BillProjectItem).filter_by(project_id=project_id).delete(synchronize_session=False)
     db.query(BillProjectMember).filter_by(project_id=project_id).delete(synchronize_session=False)
@@ -344,6 +436,13 @@ def add_project_items(project_id:int,body:dict,identity=Depends(current),db=Depe
     if len(linked_case_ids)!=len(set(linked_case_ids)):
         raise ValueError('Only one split session per receipt can be linked to a project.')
     for kind,sid in selected-existing:
+        if kind=='split':
+            matching=next((session for session in sessions if session.id==sid),None)
+            if matching:
+                old=db.query(ProjectExpenseShare).filter_by(project_id=project_id,kind='receipt',source_id=matching.case_id).all()
+                if any(a.payment_status=='confirmed' and a.user_id!=a.paid_by_user_id for a in old):
+                    raise HTTPException(409,'Cannot replace a receipt with a Split Bill after Project payments were confirmed.')
+                if old:db.query(ProjectExpenseShare).filter_by(project_id=project_id,kind='receipt',source_id=matching.case_id).delete(synchronize_session=False)
         db.add(BillProjectItem(project_id=project_id,added_by_user_id=uid,kind=kind,source_id=sid))
     # Every registered joined participant is invited, but not silently opted in.
     linked_members={m.user_id for m in db.query(BillProjectMember).filter_by(project_id=project_id).all()}
@@ -360,12 +459,27 @@ def add_project_items(project_id:int,body:dict,identity=Depends(current),db=Depe
 @router.delete('/{project_id}/items/{kind}/{source_id}')
 def remove_project_item(project_id:int,kind:str,source_id:int,identity=Depends(current),db=Depends(get_db)):
     project,_=membership(db,identity[0].id,project_id)
-    if kind not in ('receipt','split'): raise ValueError('Unknown project item type.')
+    if kind not in ('receipt','split','manual'): raise ValueError('Unknown project item type.')
+    if kind=='manual':
+        expense=db.query(ProjectManualBill).filter_by(id=source_id,project_id=project_id).first()
+        if not expense:raise HTTPException(404,'Manual expense not found.')
+        if identity[0].id not in (expense.created_by_user_id,project.owner_user_id):
+            raise HTTPException(403,'Only the contributor or owner may remove the expense.')
+        saved=db.query(ProjectExpenseShare).filter_by(project_id=project_id,kind='manual',source_id=source_id).all()
+        if any(a.payment_status=='confirmed' and a.user_id!=a.paid_by_user_id for a in saved):
+            raise HTTPException(409,'A confirmed expense cannot be removed from the payment history.')
+        db.query(ProjectExpenseShare).filter_by(project_id=project_id,kind='manual',source_id=source_id).delete(synchronize_session=False)
+        db.delete(expense);db.commit();return {'removed':True,'original_record_unchanged':True}
     row=db.query(BillProjectItem).filter_by(project_id=project_id,kind=kind,source_id=source_id).first()
     if row and row.added_by_user_id not in (identity[0].id,) and project.owner_user_id!=identity[0].id:
         raise HTTPException(403,'Only the contributor or project owner can remove this entry.')
     changed=0
-    if row: db.delete(row);changed=1
+    if row:
+        saved=db.query(ProjectExpenseShare).filter_by(project_id=project_id,kind=kind,source_id=source_id).all()
+        if any(a.payment_status=='confirmed' and a.user_id!=a.paid_by_user_id for a in saved):
+            raise HTTPException(409,'A confirmed expense cannot be removed from the payment history.')
+        db.query(ProjectExpenseShare).filter_by(project_id=project_id,kind=kind,source_id=source_id).delete(synchronize_session=False)
+        db.delete(row);changed=1
     db.commit();return {'removed':bool(changed),'original_record_unchanged':True}
 
 @router.post('/{project_id}/invite')
@@ -394,6 +508,8 @@ def remove_project_member(project_id:int,member_user_id:int,identity=Depends(cur
     if not target:raise HTTPException(404,'Project member not found.')
     # Never keep sharing records contributed by a user after access is revoked.
     removed=db.query(BillProjectItem).filter_by(project_id=project.id,added_by_user_id=member_user_id).delete(synchronize_session=False)
+    db.query(ProjectExpenseShare).filter_by(project_id=project.id,user_id=member_user_id).delete(synchronize_session=False)
+    db.query(ProjectChatMessage).filter_by(project_id=project.id,user_id=member_user_id).delete(synchronize_session=False)
     db.delete(target);db.commit();return {'revoked':True,'contributed_links_removed':removed}
 
 @router.post('/{project_id}/leave')
@@ -402,6 +518,7 @@ def leave_project(project_id:int,identity=Depends(current),db=Depends(get_db)):
     if project.owner_user_id==identity[0].id:
         raise HTTPException(403,'Transfer or delete a project you own instead.')
     removed=db.query(BillProjectItem).filter_by(project_id=project.id,added_by_user_id=identity[0].id).delete(synchronize_session=False)
+    db.query(ProjectExpenseShare).filter_by(project_id=project.id,user_id=identity[0].id).delete(synchronize_session=False)
     db.delete(member);db.commit();return {'left':True,'contributed_links_removed':removed}
 
 @router.post('/{project_id}/sync-participants')
@@ -443,3 +560,134 @@ def share_payment_profile(project_id:int,body:dict,identity=Depends(current),db=
             raise HTTPException(404,'Your payment profile was not found.')
     member.payment_profile_id=profile_id;db.commit()
     return {'shared':profile_id is not None}
+
+
+# v7.1.43 project expense/chat extensions. Each method checks accepted membership.
+
+def _accepted_people(db,project_id):
+    return {m.user_id for m in db.query(BillProjectMember).filter(
+        BillProjectMember.project_id==project_id,
+        BillProjectMember.status.in_(('joined','owner'))).all()}
+
+
+def _verify_share_people(db,pid,mode,values,total,payer):
+    if not isinstance(values,list):raise ValueError('Choose the people sharing the expense.')
+    accepted=_accepted_people(db,pid)
+    if payer not in accepted:raise HTTPException(403,'Payer must belong to the project.')
+    result=allocate_minor(total,mode,values)
+    if not set(result).issubset(accepted):raise HTTPException(403,'Invite and accept every selected participant first.')
+    if not result:raise ValueError('At least one participant required.')
+    return result
+
+
+@router.put('/{project_id}/options')
+def update_project_options(project_id:int,body:dict,identity=Depends(current),db=Depends(get_db)):
+    owner(db,identity[0].id,project_id)
+    options=db.get(ProjectOptions,project_id)
+    if not options:
+        options=ProjectOptions(project_id=project_id)
+        db.add(options)
+    if 'smart_settle' in body:
+        if type(body['smart_settle']) is not bool:raise ValueError('Smart settle must be enabled or disabled.')
+        options.smart_settle=body['smart_settle']
+    db.commit();return {'smart_settle':options.smart_settle}
+
+
+@router.post('/{project_id}/manual')
+def add_manual_bill(project_id:int,body:dict,identity=Depends(current),db=Depends(get_db)):
+    membership(db,identity[0].id,project_id)
+    uid=identity[0].id
+    title=body.get('merchant')
+    if not isinstance(title,str) or not 1<=len(title.strip())<=150:raise ValueError('Enter a merchant or description (1–150 characters).')
+    cents=to_minor(body.get('amount'))
+    if cents<=0:raise ValueError('Amount must be positive.')
+    currency=currency_code(body.get('currency'))
+    # The authenticated user asserts having paid. Prevent claiming another member paid.
+    if body.get('paid_by_user_id',uid)!=uid:raise HTTPException(403,'You can only add expenses you paid.')
+    mode=body.get('mode','equal')
+    shares=_verify_share_people(db,project_id,mode,body.get('participants'),cents,uid)
+    if db.query(ProjectManualBill).filter_by(project_id=project_id).count()>=300:
+        raise ValueError('Maximum 300 manual bills per project.')
+    expense=ProjectManualBill(project_id=project_id,created_by_user_id=uid,paid_by_user_id=uid,
+                              merchant=title.strip(),amount_minor=cents,currency=currency)
+    db.add(expense);db.flush()
+    for person,amount in shares.items():
+        db.add(ProjectExpenseShare(project_id=project_id,kind='manual',source_id=expense.id,
+            user_id=person,paid_by_user_id=uid,amount_minor=amount,
+            payment_status='confirmed' if person==uid else 'unpaid'))
+    db.commit();return {'id':expense.id,'amount':cents/100,'currency':currency,'original_splits_unchanged':True}
+
+
+@router.put('/{project_id}/receipts/{case_id}/allocate')
+def allocate_imported_receipt(project_id:int,case_id:int,body:dict,identity=Depends(current),db=Depends(get_db)):
+    membership(db,identity[0].id,project_id)
+    link=db.query(BillProjectItem).filter_by(project_id=project_id,kind='receipt',source_id=case_id).first()
+    if not link:raise HTTPException(404,'Receipt not in this project.')
+    if link.added_by_user_id!=identity[0].id:raise HTTPException(403,'Only the receipt contributor can allocate it.')
+    if db.query(BillProjectItem).filter_by(project_id=project_id,kind='split').join(
+        SplitBillSession,SplitBillSession.id==BillProjectItem.source_id).filter(
+        SplitBillSession.case_id==case_id).first():
+        raise HTTPException(409,'Edit allocations on the existing Split Bill instead.')
+    case=db.get(Case,case_id)
+    if not case or case.user_id!=identity[0].id:raise HTTPException(404,'Receipt ownership not verified.')
+    lines=db.query(ReceiptItem).filter_by(case_id=case_id).all()
+    currencies={currency_code(line.currency) for line in lines}
+    if len(currencies)!=1:raise ValueError('Choose a single receipt currency before allocating.')
+    total=sum(amount_minor(line.total_price) for line in lines)
+    if total<=0:raise ValueError('Receipt has no positive amount.')
+    result=_verify_share_people(db,project_id,body.get('mode','equal'),body.get('participants'),total,identity[0].id)
+    earlier=db.query(ProjectExpenseShare).filter_by(project_id=project_id,kind='receipt',source_id=case_id).with_for_update().all()
+    if any(x.payment_status=='confirmed' and x.user_id!=x.paid_by_user_id for x in earlier):
+        raise HTTPException(409,'Settled receipt allocation cannot be replaced.')
+    db.query(ProjectExpenseShare).filter_by(project_id=project_id,kind='receipt',source_id=case_id).delete(synchronize_session=False)
+    for person,amount in result.items():
+        db.add(ProjectExpenseShare(project_id=project_id,kind='receipt',source_id=case_id,
+            user_id=person,paid_by_user_id=identity[0].id,amount_minor=amount,
+            payment_status='confirmed' if person==identity[0].id else 'unpaid'))
+    db.commit();return {'allocated':True,'total':total/100,'currency':next(iter(currencies))}
+
+
+@router.post('/{project_id}/settlements/{kind}/{source_id}/{share_user_id}/{action}')
+def settle_project_share(project_id:int,kind:str,source_id:int,share_user_id:int,action:str,
+                         identity=Depends(current),db=Depends(get_db)):
+    membership(db,identity[0].id,project_id)
+    if kind not in ('receipt','manual') or action not in ('report','confirm'):
+        raise HTTPException(404,'Unknown project settlement action.')
+    share=db.query(ProjectExpenseShare).filter_by(project_id=project_id,kind=kind,source_id=source_id,
+        user_id=share_user_id).with_for_update().first()
+    if share is None:raise HTTPException(404,'Allocation not found.')
+    if action=='report':
+        if identity[0].id!=share_user_id:raise HTTPException(403,'Only the payer can report payment.')
+        if share.payment_status!='unpaid':raise HTTPException(409,'Payment was already reported or confirmed.')
+        share.payment_status='reported';share.reported_at=datetime.utcnow()
+    else:
+        if identity[0].id!=share.paid_by_user_id:raise HTTPException(403,'Only the recipient can confirm payment.')
+        if share.payment_status!='reported':raise HTTPException(409,'Payer must report payment first.')
+        share.payment_status='confirmed';share.confirmed_at=datetime.utcnow()
+    db.commit();return {'status':share.payment_status,'source_bill_not_modified':True}
+
+
+@router.get('/{project_id}/chat')
+def project_chat(project_id:int,identity=Depends(current),db=Depends(get_db)):
+    membership(db,identity[0].id,project_id)
+    messages=(db.query(ProjectChatMessage).filter_by(project_id=project_id)
+      .order_by(ProjectChatMessage.id.desc()).limit(80).all())
+    user_ids={m.user_id for m in messages}
+    names={u.id:u.name for u in db.query(User).filter(User.id.in_(user_ids)).all()} if user_ids else {}
+    return {'messages':[{'id':m.id,'user_id':m.user_id,'sender':names.get(m.user_id,'Member'),
+             'text':m.body,'created_at':m.created_at.isoformat()} for m in reversed(messages)]}
+
+
+@router.post('/{project_id}/chat')
+def send_project_chat(project_id:int,body:dict,request:Request,identity=Depends(current),db=Depends(get_db)):
+    membership(db,identity[0].id,project_id)
+    limit(db,request,'project-chat',30)
+    content=body.get('text')
+    if not isinstance(content,str) or not 1<=len(content.strip())<=1200:
+        raise ValueError('Message must contain 1–1200 characters.')
+    recent=db.query(ProjectChatMessage).filter_by(project_id=project_id,user_id=identity[0].id).order_by(
+         ProjectChatMessage.id.desc()).first()
+    if recent and (datetime.utcnow()-recent.created_at).total_seconds()<2:
+        raise HTTPException(429,'Please slow down before posting again.')
+    m=ProjectChatMessage(project_id=project_id,user_id=identity[0].id,body=content.strip())
+    db.add(m);db.commit();return {'id':m.id,'sent':True}

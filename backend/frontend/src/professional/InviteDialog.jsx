@@ -12,11 +12,11 @@ export function normalizeInvitePhone(value) {
   return /^[1-9]\d{7,14}$/.test(digits) ? digits : '';
 }
 export function invitationText(billName, shareUrl, kind = 'bill') {
-  const label = kind === 'group' ? 'group' : 'bill';
+  const label = kind === 'group' ? 'project' : 'bill';
   return `Join our Pruvs ${label} (${String(billName || 'Shared bill').trim()}): ${shareUrl}`;
 }
 
-export default function InviteDialog({ open = false, onClose = () => {}, shareUrl = '', billName = 'Shared bill', onCopied = async () => {}, seatsFull = false, kind = 'bill' }) {
+export default function InviteDialog({ open = false, onClose = () => {}, shareUrl = '', billName = 'Shared bill', onCopied = async () => {}, onRevoke, seatsFull = false, kind = 'bill' }) {
   const dialogRef = useRef(null);
   const closeRef = useRef(null);
   const onCloseRef = useRef(onClose);
@@ -97,7 +97,7 @@ export default function InviteDialog({ open = false, onClose = () => {}, shareUr
   return <div className="pruvs-invite-overlay" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
     <section ref={dialogRef} className="pruvs-invite-dialog" role="dialog" aria-modal="true" aria-labelledby="pruvs-invite-title" aria-describedby="pruvs-invite-description">
       <header className="pruvs-invite-header">
-        <div><span className="pruvs-invite-eyebrow">{kind === 'group' ? 'PRUVS · GROUP BILLS' : t("PRUVS · SHARED BILL")}</span><h2 id="pruvs-invite-title">{kind === 'group' ? 'Invite people to your group' : t("Invite people to your bill")}</h2><p id="pruvs-invite-description">{billName}</p></div>
+        <div><span className="pruvs-invite-eyebrow">{kind === 'group' ? 'PRUVS · PROJECTS' : t("PRUVS · SHARED BILL")}</span><h2 id="pruvs-invite-title">{kind === 'group' ? 'Invite people to your project' : t("Invite people to your bill")}</h2><p id="pruvs-invite-description">{billName}</p></div>
         <button ref={closeRef} type="button" className="pruvs-invite-close" aria-label={t("Close invitation" )} onClick={onClose}><X size={20}/></button>
       </header>
       <div className="pruvs-invite-body">
@@ -124,7 +124,7 @@ export default function InviteDialog({ open = false, onClose = () => {}, shareUr
         </div>
 
       </div>
-      <footer className="pruvs-invite-footer"><small>{t("People must sign in to Pruvs before joining. Sharing a link does not send it automatically.")}</small><button type="button" onClick={onClose}>{t("Done")}</button></footer>
+      <footer className="pruvs-invite-footer">{kind === 'group' && typeof onRevoke === 'function' && <button type="button" className="secondary" onClick={onRevoke}>Revoke invitation links</button>}<small>{t("People must sign in to Pruvs before joining. Sharing a link does not send it automatically.")}</small><button type="button" onClick={onClose}>{t("Done")}</button></footer>
     </section>
   </div>;
 }

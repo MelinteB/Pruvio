@@ -125,7 +125,7 @@ function App() {
   useEffect(() => {
     refresh().catch(() => {});
     request('/config').then(setConfig).catch(() => {});
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js?v=7.1.42', {
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js?v=7.1.43', {
       scope: '/'
     }).catch(() => {});
     const focus = () => refresh().catch(() => {});
@@ -196,7 +196,7 @@ function App() {
     };
   }, [session?.user?.id, refreshMembership]);
   setLanguage(user?.preferred_language || "en");
-  const nav = [['/', t("Home"), Home], ['/upload', t("Scan"), ScanLine], ['/bills', t("Bills"), Users], ...(CORE_PROJECTS_ENABLED ? [['/projects','Group Bills',Users]] : []), ['/history', t("History"), ReceiptText], ['/expenses', t("Expenses"), BriefcaseBusiness], ...(PRUVS_REWARDS_UI_ENABLED ? [['/rewards', t("Rewards"), Gift]] : []), ['/inbox', t("Inbox"), Bell], ['/account', t("Account"), UserRound], ...(user?.is_admin ? [['/admin', t("Admin"), ShieldCheck]] : [])];
+  const nav = [['/', t("Home"), Home], ['/upload', t("Scan"), ScanLine], ['/bills', t("Bills"), Users], ...(CORE_PROJECTS_ENABLED ? [['/projects','Projects',Users]] : []), ['/history', t("History"), ReceiptText], ['/expenses', t("Expenses"), BriefcaseBusiness], ...(PRUVS_REWARDS_UI_ENABLED ? [['/rewards', t("Rewards"), Gift]] : []), ['/inbox', t("Inbox"), Bell], ['/account', t("Account"), UserRound], ...(user?.is_admin ? [['/admin', t("Admin"), ShieldCheck]] : [])];
   return <Context.Provider value={{
     user,
     loading,

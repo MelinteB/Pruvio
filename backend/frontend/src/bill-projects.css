@@ -28,3 +28,37 @@
 .pruvs-project-settlement .pruvs-project-payment{display:grid;gap:5px}
 .pruvs-project-warning{border-left:3px solid #c59033;padding:10px 12px;background:#fff8eb;border-radius:5px;color:#6c4b10}
 .pruvs-project-heading>.pruvs-project-actions{margin-top:0}
+/* v7.1.43: clean, accessible project session (no legacy receipt-folder UI). */
+.pruvs-projects-view{max-width:1160px;margin:0 auto;display:grid;gap:18px}
+.pruvs-project-create-grid{display:grid;grid-template-columns:minmax(240px,1.4fr) minmax(180px,.8fr);align-items:end;gap:14px}
+.pruvs-project-create-grid>div{display:grid;gap:7px}.pruvs-project-create-grid input:not([type=checkbox]),.pruvs-project-create-grid select{width:100%}
+.pruvs-project-create-grid>.pruvs-project-smart{grid-column:1/-1}
+.pruvs-project-smart{display:flex;align-items:start;gap:12px;border:1px solid #dbe4f4;background:#f4f8ff;padding:13px;border-radius:13px}
+.pruvs-project-smart input{margin-top:4px;flex-shrink:0}.pruvs-project-smart span{display:grid;gap:5px}.pruvs-project-smart small{color:#5c6c86;font-size:12px}
+.pruvs-project-hero{border-radius:18px;overflow:hidden;background:#fff;border:1px solid #dbe5f5;box-shadow:0 6px 22px rgba(36,60,112,.06)}
+.pruvs-project-hero img{width:100%;height:128px;object-fit:cover;display:block}
+.pruvs-project-hero>div:not(.pruvs-project-hero-actions){padding:14px 18px 0;display:grid;gap:3px}
+.pruvs-project-hero>div:not(.pruvs-project-hero-actions) strong{font-size:20px;color:#122554}.pruvs-project-hero>div:not(.pruvs-project-hero-actions) span{font-size:13px;color:#687894}
+.pruvs-project-hero-actions{padding:10px 18px 18px;display:flex;flex-wrap:wrap;gap:10px}
+.pruvs-project-tabs{display:flex;gap:8px;align-items:center;border-bottom:1px solid #dce5f5;overflow-x:auto}
+.pruvs-project-tabs button{border:0;background:none;padding:12px 16px;border-bottom:3px solid transparent;white-space:nowrap}
+.pruvs-project-tabs button.active{border-color:#3066f6;color:#2054e3;font-weight:700}
+.pruvs-project-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.pruvs-project-heading h2{margin:0}.pruvs-project-amount{display:grid;text-align:right;gap:3px}.pruvs-project-amount strong{font-size:19px;color:#122554}.pruvs-project-amount small{color:#687894;font-size:11px}
+.pruvs-project-currency-group{margin:20px 0;border:1px solid #e0e7f5;border-radius:14px;overflow:hidden}
+.pruvs-project-currency-heading{display:flex;justify-content:space-between;gap:12px;background:#f1f6ff;padding:12px 14px;font-size:15px;color:#183167}
+.pruvs-project-bill{padding:12px 14px;border-top:1px solid #e5eaf5;display:grid;gap:10px}.pruvs-project-bill-top{display:flex;align-items:center;gap:12px}
+.pruvs-project-bill-top>div:nth-child(2){flex:1;display:grid;gap:3px;min-width:0}.pruvs-project-bill-top small{color:#687894}.pruvs-project-bill-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.pruvs-project-bill-actions a{font-size:13px}
+.pruvs-project-allocations{display:grid;gap:3px;background:#fafcff;padding:9px 12px;border-radius:10px}.pruvs-project-allocations>div{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:13px}
+.pruvs-project-allocations>div span{flex:1}.pruvs-project-allocations>div small{color:#687894;min-width:60px}.pruvs-project-allocations>div button{font-size:12px;padding:5px 8px}
+.pruvs-project-mode{display:flex;gap:5px;flex-wrap:wrap}.pruvs-project-mode button.is-active{background:#3168f6;color:#fff}
+.pruvs-project-editor{display:grid;gap:12px;background:#f6f9ff;padding:16px;border-radius:12px;border:1px solid #dce5f4}
+.pruvs-project-sharing{display:grid;gap:9px}.pruvs-project-sharing label{display:flex;align-items:center;gap:10px}.pruvs-project-sharing label span{flex:1}.pruvs-project-sharing input:not([type=checkbox]){width:105px}
+.pruvs-project-editor small{color:#687894}.pruvs-project-manual{display:grid;grid-template-columns:2fr 1fr 110px;gap:12px;margin-bottom:12px}
+.pruvs-project-pay-large{font-size:24px;color:#142454}.pruvs-project-chat{max-height:360px;overflow-y:auto;display:grid;gap:10px;margin:12px 0;padding:10px 0}
+.pruvs-project-chat>div{border-radius:14px 14px 14px 3px;padding:12px;background:#f2f6fc;max-width:86%;justify-self:start;overflow-wrap:anywhere}
+.pruvs-project-chat>div.own{justify-self:end;background:#e7efff;border-radius:14px 14px 3px 14px}
+.pruvs-project-chat p{margin:5px 0;white-space:pre-wrap}.pruvs-project-chat small{color:#72819b;font-size:11px}
+.pruvs-project-chat-compose{display:flex;gap:10px}.pruvs-project-chat-compose input{flex:1;min-width:0}
+.pruvs-project-payment{display:grid;gap:6px;overflow-wrap:anywhere}.pruvs-project-totals small{font-size:12px;color:#647590}
+@media(max-width:720px){.pruvs-project-create-grid{grid-template-columns:1fr}.pruvs-project-create-grid>.pruvs-project-smart{grid-column:auto}.pruvs-project-manual{grid-template-columns:1fr}.pruvs-project-hero img{height:115px}.pruvs-project-bill-top{align-items:flex-start}.pruvs-project-amount strong{font-size:16px}.pruvs-project-tabs button{padding:10px}}
