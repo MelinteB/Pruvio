@@ -97,6 +97,8 @@ export default function BillProjects(){
   const [loading,setLoading]=useState(true);
   const [listLoading,setListLoading]=useState(false);
   const [busy,setBusy]=useState(false);
+  const [reminding,setReminding]=useState(null);
+  const [reminderNotice,setReminderNotice]=useState('');
   const [editName,setEditName]=useState('');
   const [editCover,setEditCover]=useState(null);
 
@@ -154,6 +156,16 @@ export default function BillProjects(){
       const res=await send('/bill-projects',{name:clean,primary_currency:currency,smart_settle:smart,...(coverChoice?{cover_key:coverChoice}:{})});
       nav(projectUrl(res.id));
     },{refreshAfter:false});
+  }
+  async function remindParticipant(person){
+    if(!project?.is_owner||!person?.user_id||busy||reminding!==null)return;
+    setReminding(person.user_id);setError(null);
+    try{
+      await send(`/bill-projects/${id}/reminders/${person.user_id}`,{});
+      window.dispatchEvent(new Event('pruvs:inbox-updated'));
+      setReminderNotice(`Reminder queued for ${person.name}. Delivery depends on notification preferences.`);
+    }catch(e){setError(describeError(e))}
+    finally{setReminding(null)}
   }
   async function openInvitation(){
     await action(async()=>{
@@ -273,7 +285,7 @@ export default function BillProjects(){
   if(view==='settlement')return <section className="pruvs-projects-view pj-page pj-page-form"><Back to={projectUrl(id,'balances')}>Balances</Back><div className="pj-intro"><h1>Review settlement</h1><p>{project.name}</p></div><ErrorNotice value={error}/>
     <div className="pj-settle-groups">{Object.entries((project.suggested_settlements||[]).reduce((acc,s)=>{(acc[s.currency] ||= []).push(s);return acc},{})).map(([c,rows])=><Panel key={c} className="pj-compact-panel"><div className="pj-settle-total"><small>Outstanding · {c}</small><strong>{fmt(rows.reduce((sum,r)=>sum+Number(r.amount||0),0),c)}</strong></div>
       {rows.map((s,index)=>{const recipient=project.members.find(m=>m.user_id===s.to_user_id);return <div className="pj-settle-line" key={index}><div className="pj-settle-top"><span>{s.from_name}<ChevronRight size={14}/>{s.to_name}</span><strong>{fmt(s.amount,c)}</strong></div>
-        {recipient?.payment_profile?<div className="pj-pay-options"><span>{recipient.payment_profile.label} · {recipient.payment_profile.recipient_name}</span>{recipient.payment_profile.iban&&<><small>IBAN: {recipient.payment_profile.iban}</small><button type="button" className="secondary" onClick={()=>navigator.clipboard?.writeText(recipient.payment_profile.iban).catch(()=>setError({text:'Copy failed. Select the IBAN manually.'}))}><Copy size={14}/> Copy IBAN</button></>}{safePaymentLink(recipient.payment_profile.revolut_link)&&<a href={safePaymentLink(recipient.payment_profile.revolut_link)} target="_blank" rel="noopener noreferrer">Open payment link</a>}</div>:<small className="pj-no-profile">{s.to_user_id===user?.id?'Choose a receiving profile below before requesting payment.':`${s.to_name} has not shared payment details. Ask them to choose a profile.`}</small>}
+        {recipient?.payment_profile?<div className="pj-pay-options"><span>{recipient.payment_profile.label} · {recipient.payment_profile.recipient_name}</span><small>Suggested transfer reference: PRUVS-P{id}</small><button type="button" className="secondary" onClick={()=>navigator.clipboard?.writeText(`PRUVS-P${id}`).catch(()=>setError({text:"Copy failed. Select the reference manually."}))}><Copy size={14}/> Copy reference</button>{recipient.payment_profile.iban&&<><small>IBAN: {recipient.payment_profile.iban}</small><button type="button" className="secondary" onClick={()=>navigator.clipboard?.writeText(recipient.payment_profile.iban).catch(()=>setError({text:'Copy failed. Select the IBAN manually.'}))}><Copy size={14}/> Copy IBAN</button></>}{safePaymentLink(recipient.payment_profile.revolut_link)&&<a href={safePaymentLink(recipient.payment_profile.revolut_link)} target="_blank" rel="noopener noreferrer">Open payment link</a>}</div>:<small className="pj-no-profile">{s.to_user_id===user?.id?'Choose a receiving profile below before requesting payment.':`${s.to_name} has not shared payment details. Ask them to choose a profile.`}</small>}
       </div>})}</Panel>)}
       {!(project.suggested_settlements||[]).length&&<Panel><CheckCircle2 size={30}/><h2>No outstanding suggested payments</h2><p>Unallocated expenses still need an allocation before the Project can be considered settled.</p></Panel>}
     </div>
@@ -301,11 +313,19 @@ export default function BillProjects(){
         </div>})}</div>)}
       {grouped.length>0&&<p className="pj-note">Amounts are grouped by the original payable currency. FX quotes, when present, are reference only.</p>}
     </div>}
-    {view==='balances'&&<div className="pj-tab-content"><div className="pj-section-heading"><h2>Balances & settlement</h2><Link className="primary" to={projectUrl(id,'settlement')}><Wallet size={16}/> Review settlement</Link></div>
-      {project.project_settled&&<div className="pj-success"><CheckCircle2 size={22}/> All included obligations are confirmed as settled.</div>}
-      {currenciesPresent.length?<div className="pj-balance-cards">{currenciesPresent.map(([c,record])=><div className="pj-currency-card" key={c}><small>{c} · Outstanding</small><strong>{fmt(project.outstanding_by_currency?.[c]||0,c)}</strong><span>Expenses {fmt(record.bill_total,c)} · Unallocated {fmt(record.unassigned,c)}</span></div>)}</div>:<Panel><p>No bills have been added to this project.</p></Panel>}
-      <Panel className="pj-compact-panel"><h3>Who owes whom</h3>{(project.suggested_settlements||[]).length?<div className="pj-balance-people">{project.suggested_settlements.map((s,i)=><div className="pj-balance-line" key={i}><span>{s.from_name}<ChevronRight size={14}/>{s.to_name}</span><strong>{fmt(s.amount,s.currency)}</strong></div>)}</div>:<p className="pj-note">No confirmed member-to-member debts outstanding.</p>}
-        <p className="pj-note">Smart settle {project.smart_settle?'is enabled':'is off'}. It suggests transfers without changing original bills.</p>
+    {view==='balances'&&<div className="pj-tab-content"><div className="pj-section-heading"><h2>Project balances</h2><Link className="primary" to={projectUrl(id,'settlement')}><Wallet size={16}/> Review settlement</Link></div>
+      {project.project_settled&&<div className="pj-success"><CheckCircle2 size={22}/> All included obligations have been confirmed as settled.</div>}
+      {currenciesPresent.length?<div className="pj-balance-cards">{currenciesPresent.map(([c,record])=><div className="pj-currency-card" key={c}><small>{c} · Outstanding to pay</small><strong>{fmt(project.outstanding_by_currency?.[c]||0,c)}</strong><span>Total receipts {fmt(record.bill_total,c)} · Not yet allocated {fmt(record.unassigned,c)}</span></div>)}</div>:<Panel><p>No bills have been added to this Project.</p></Panel>}
+      {reminderNotice&&<p className="pj-reminder-success" role="status">{reminderNotice}</p>}
+      <div className="pj-people-ledger"><h3>Each participant's allocation and payments</h3><p className="pj-note">Allocated means assigned to a person, not paid. Reported payment needs recipient confirmation. Amounts are kept in their original payable currencies.</p>
+        {(project.participant_balances||[]).map(person=><section className="pj-person-ledger" key={person.user_id} aria-label={`${person.name} balances`}><div className="pj-person-ledger-head"><span className="pj-avatar">{(person.name||'M')[0].toUpperCase()}</span><strong>{person.name}</strong>{project.is_owner&&person.user_id!==user?.id&&person.can_remind&&<button type="button" className="secondary pj-remind-btn" disabled={busy||reminding!==null} onClick={()=>remindParticipant(person)}><Bell size={15}/> {reminding===person.user_id?'Sending…':'Send reminder'}</button>}</div>
+          {Object.entries(person.currencies||{}).map(([curr,figures])=><div className="pj-person-currency" key={curr}><strong>{curr}</strong><div className="pj-ledger-figures"><div><small>Allocated</small><b>{fmt(figures.allocated,curr)}</b></div><div><small>Reported</small><b>{fmt(figures.reported,curr)}</b></div><div><small>Confirmed</small><b>{fmt(figures.confirmed,curr)}</b></div><div className="pj-ledger-due"><small>Still owing</small><b>{fmt(figures.outstanding,curr)}</b></div></div></div>)}
+          <details className="pj-ledger-details"><summary>See bill-by-bill allocation ({person.bills.length})</summary>{person.bills.map((entry,i)=><div className="pj-ledger-bill" key={`${entry.kind}-${entry.source_id}-${i}`}><span><strong>{entry.merchant}</strong><small>{entry.payment_status==='confirmed'?'Payment confirmed':entry.payment_status==='reported'?'Payment reported':'Not yet paid'}{entry.is_self_funded?' · Paid by this participant':''}</small></span><span><b>{fmt(entry.allocated,entry.currency)}</b><small>{entry.outstanding>0?`Due ${fmt(entry.outstanding,entry.currency)}`:'No amount due'}</small></span></div>)}</details>
+        </section>)}
+        {!(project.participant_balances||[]).length&&<p className="pj-note">Invite people and allocate bills to see participant balances.</p>}
+      </div>
+      <Panel className="pj-compact-panel"><h3>Suggested payments</h3>{(project.suggested_settlements||[]).length?<div className="pj-balance-people">{project.suggested_settlements.map((s,i)=><div className="pj-balance-line" key={i}><span>{s.from_name}<ChevronRight size={14}/>{s.to_name}</span><strong>{fmt(s.amount,s.currency)}</strong></div>)}</div>:<p className="pj-note">No outstanding payments between accepted members.</p>}
+        <p className="pj-note">Smart settle {project.smart_settle?'is on':'is off'}. Suggested payments never mark an original bill as paid.</p>
       </Panel>
     </div>}
     {view==='chat'&&<div className="pj-tab-content"><Panel className="pj-chat-panel"><div className="pj-section-heading"><h2>Project chat</h2><small>Accepted members only</small></div><div className="pj-chat-log" role="log" aria-label="Project messages" aria-live="polite">{messages.map(m=><div className={'pj-chat-bubble'+(m.user_id===user?.id?' own':'')} key={m.id}><strong>{m.sender}</strong><p>{m.text}</p><small>{new Date(m.created_at).toLocaleString()}</small></div>)}{!messages.length&&<p className="pj-note">No messages yet. Say hello to your group.</p>}</div><form className="pj-chat-compose" onSubmit={sendChat}><input aria-label="Message to project" maxLength={1200} placeholder="Write a message…" value={chatText} onChange={e=>setChatText(e.target.value)}/><button type="submit" className="primary" disabled={busy||!chatText.trim()} aria-label="Send message"><Send size={19}/><span>Send</span></button></form></Panel></div>}

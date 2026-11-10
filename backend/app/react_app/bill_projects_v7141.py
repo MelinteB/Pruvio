@@ -163,7 +163,7 @@ def _project_summary(db, project, caller_id):
           'payment_confirmed':split_display_state=='confirmed',
           'merchant':labels.get(session.case_id,'Receipt #'+str(session.case_id)),
           'fx_reference':fx,
-          'allocations':[{'name':p['display_name'],'amount':p['total'],'currency':curr,'payment_status':p['payment_status']} for p in summary['participants']],
+          'allocations':[{'user_id':p['user_id'],'name':p['display_name'],'amount':p['total'],'currency':curr,'payment_status':p['payment_status']} for p in summary['participants']],
           'paid_by_user_id':session.owner_user_id,'currency':curr,'total':summary['grand_total'],'status':session.status,
           'participants_count':len(summary['participants']), 'token':session.token,
           'unassigned':summary['remaining_total'],
@@ -289,6 +289,45 @@ def _project_summary(db, project, caller_id):
         netting['suggested_settlements']=[{'from_user_id':payer,'from_name':users[payer].name if payer in users else 'Member',
             'to_user_id':payee,'to_name':users[payee].name if payee in users else 'Member',
             'currency':curr,'amount_minor':cents,'amount':cents/100} for (payer,payee,curr),cents in sorted(by_pair.items())]
+    # v7.1.48: authoritative source-bill ledger for every joined Project member.
+    # Do not derive payment confirmation from Smart settle proposals.
+    ledger = {}
+    for m in member_rows:
+        if m['status'] not in ('owner','joined'): continue
+        ledger[m['user_id']] = {'user_id':m['user_id'], 'name':m['name'],
+                                'currencies':defaultdict(lambda:{'allocated':0,'reported':0,'confirmed':0,'outstanding':0,'unreported':0}),
+                                'bills':[], 'can_remind':False}
+    for item in items:
+        if item.get('also_linked_as_split'): continue  # same source cannot be billed twice
+        currency = item.get('currency')
+        payer_id = item.get('paid_by_user_id')
+        if currency == 'MULTI': continue  # never invent an FX sum
+        for allocation in item.get('allocations', []):
+            uid = allocation.get('user_id')
+            if uid not in ledger: continue
+            minor = amount_minor(allocation.get('amount'))
+            status = (allocation.get('payment_status') or 'unpaid').lower()
+            self_funded = uid == payer_id
+            confirmed = minor if self_funded or status in ('received','confirmed') else 0
+            reported = minor if self_funded or status in ('paid','reported','received','confirmed') else 0
+            remains = max(0, minor - confirmed)
+            unreported = remains if not reported else 0
+            currency_for_share = currency_code(allocation.get('currency') or currency)
+            figures = ledger[uid]['currencies'][currency_for_share]
+            for key,amount in (('allocated',minor),('reported',reported),('confirmed',confirmed),('outstanding',remains),('unreported',unreported)):
+                figures[key] += amount
+            ledger[uid]['bills'].append({'kind':item['kind'],'source_id':item['source_id'],
+                'merchant':item.get('merchant') or 'Receipt','currency':currency_for_share,
+                'allocated':minor/100,'reported':reported/100,'confirmed':confirmed/100,
+                'outstanding':remains/100,'payment_status':'confirmed' if confirmed else ('reported' if reported else 'unpaid'),
+                'paid_by_user_id':payer_id, 'is_self_funded':self_funded})
+            if not self_funded and unreported>0: ledger[uid]['can_remind'] = True
+    participant_balances=[]
+    for row in ledger.values():
+        row['currencies']={c:{k:round(v/100,2) for k,v in amounts.items()}
+                           for c,amounts in sorted(row['currencies'].items())}
+        participant_balances.append(row)
+    participant_balances.sort(key=lambda m:(m['name'].casefold(),m['user_id']))
     return {'id':project.id,'name':project.name,
          'smart_settle':smart_settle,'primary_currency':options.primary_currency if options else 'RON',
          'cover_key':cover_of(db,project.id),
@@ -296,6 +335,7 @@ def _project_summary(db, project, caller_id):
          'outstanding_by_currency':{c:round(v/100,2) for c,v in due_by_currency.items()},
          'settlement_rule':'Group is settled only when every source Split Bill and project allocation is confirmed.','owner_user_id':project.owner_user_id,
          'is_owner':caller_id==project.owner_user_id,'members':member_rows,
+         'participant_balances':participant_balances,
          'items':items,'participants':people_rows,'currencies':buckets,
          **netting, 'receipt_only_amounts_are_unassigned':True,
          'payment_notice':'Reported payments are not confirmed until the recipient confirms them on the individual bill.'}
@@ -713,6 +753,49 @@ def settle_project_share(project_id:int,kind:str,source_id:int,share_user_id:int
         share.payment_status='confirmed';share.confirmed_at=datetime.utcnow()
     db.commit();return {'status':share.payment_status,'source_bill_not_modified':True}
 
+
+
+@router.post('/{project_id}/reminders/{participant_id}')
+def remind_project_participant(project_id:int,participant_id:int,identity=Depends(current),db=Depends(get_db)):
+    """Project-owner reminder. Payer is shown settlement details only after signed-in membership check.
+
+    The original split payment status is authoritative. No payment is marked complete here.
+    """
+    from app.models.push_notification import PushEvent
+    from app.services.push_service import enqueue
+    project = owner(db, identity[0].id, project_id)
+    if participant_id == identity[0].id:
+        raise HTTPException(400,'You cannot remind yourself.')
+    member = db.query(BillProjectMember).filter_by(project_id=project_id,user_id=participant_id,status='joined').first()
+    if not member: raise HTTPException(404,'The participant must accept the Project invitation first.')
+    person = db.get(User,participant_id)
+    if not person or person.status != 'active':
+        raise HTTPException(404,'The participant account is not active.')
+    summary = _project_summary(db, project, identity[0].id)
+    row = next((p for p in summary['participant_balances'] if p['user_id']==participant_id), None)
+    if not row or not row['can_remind']:
+        raise HTTPException(409,'This participant has no outstanding Project payments.')
+    pending = [(c,v['unreported']) for c,v in row['currencies'].items() if v['unreported']>0.004]
+    if not pending: raise HTTPException(409,'There is no balance to remind about.')
+    local_path = f'/projects/{project_id}?view=settlement'
+    now = datetime.utcnow()
+    # Serialized at the project row in PostgreSQL to guard duplicate submissions.
+    db.query(BillProject).filter_by(id=project_id).with_for_update().first()
+    recent = (db.query(PushEvent).filter(PushEvent.user_id==participant_id,
+                   PushEvent.kind=='project_reminder',PushEvent.url==local_path,
+                   PushEvent.created_at>now-timedelta(hours=1))
+              .order_by(PushEvent.created_at.desc()).first())
+    if recent: raise HTTPException(429,'A Project reminder was already sent to this participant recently.')
+    amounts=', '.join(f'{value:.2f} {currency}' for currency,value in pending)
+    is_ro=person.preferred_language=='ro'
+    title=(f'Memento plată · {project.name}' if is_ro else f'Project payment reminder · {project.name}')
+    body=(f'Ai de achitat {amounts}. Deschide proiectul pentru detaliile de plată oferite de destinatar.' if is_ro else
+          f'Your outstanding Project amount: {amounts}. Open the Project to see payment options shared by the recipient.')
+    # Never put an IBAN, external payment URL or invite token into a push/email.
+    event = enqueue(db,participant_id,'project_reminder',title,body,local_path)
+    db.commit()
+    return {'queued':True,'event_id':event.id,'target':local_path,'outstanding':[
+        {'currency':c,'amount':v} for c,v in pending]}
 
 @router.get('/{project_id}/chat')
 def project_chat(project_id:int,identity=Depends(current),db=Depends(get_db)):

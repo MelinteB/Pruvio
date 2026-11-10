@@ -96,3 +96,26 @@
 .pj-bill--confirmed .pj-bill-icon{background:#d7f4e3;color:#176f4e}
 .pj-bill--allocated .pj-bill-icon{background:#e2edff;color:#2257c5}
 @media (max-width:600px){.pj-bill-state{font-size:10px;padding:3px 7px}.pj-bill--confirmed .pj-bill-summary,.pj-bill--allocated .pj-bill-summary{padding-inline:9px!important}}
+
+/* v7.1.48 Project participant ledgers — accessible and mobile-first. */
+.pj-people-ledger{display:grid;gap:12px;min-width:0}
+.pj-people-ledger>h3{margin:5px 0 0;font-size:17px}
+.pj-person-ledger{border:1px solid #dee7f3;border-radius:15px;background:#fff;padding:15px;min-width:0;display:grid;gap:12px}
+.pj-person-ledger-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pj-person-ledger-head>strong{flex:1;min-width:105px;color:#182f51}
+.pj-remind-btn{display:inline-flex;gap:7px;align-items:center;font-size:12px;padding:8px 11px}
+.pj-person-currency{border-top:1px solid #edf2f8;padding-top:10px;display:grid;gap:7px}
+.pj-ledger-figures{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+.pj-ledger-figures>div{display:grid;gap:4px;background:#f6f9fe;border-radius:10px;padding:11px;min-width:0}
+.pj-ledger-figures small{font-size:11px;color:#536781}
+.pj-ledger-figures b{font-size:13px;overflow-wrap:anywhere}
+.pj-ledger-figures .pj-ledger-due{background:#fff1ec}
+.pj-ledger-details{border-top:1px solid #e8eef6;padding-top:9px}
+.pj-ledger-details summary{cursor:pointer;color:#2359cb;font-size:13px;font-weight:650}
+.pj-ledger-bill{display:flex;justify-content:space-between;gap:10px;border-top:1px solid #eef2f8;padding:10px 0}
+.pj-ledger-bill:first-of-type{margin-top:8px}
+.pj-ledger-bill>span{display:grid;gap:4px;min-width:0}
+.pj-ledger-bill>span:last-child{text-align:right;flex-shrink:0}
+.pj-ledger-bill small{color:#63738b;font-size:11px}
+.pj-reminder-success{color:#155f40;background:#eafbf0;padding:12px;border-radius:10px}
+@media (max-width:650px){.pj-ledger-figures{grid-template-columns:repeat(2,minmax(0,1fr))}.pj-person-ledger{padding:11px}.pj-remind-btn{width:100%;justify-content:center}}
