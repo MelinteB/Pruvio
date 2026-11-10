@@ -52,12 +52,14 @@ export default function Account() {
     [deletionPreview, setDeletionPreview] = useState(null),
     [deleteCode, setDeleteCode] = useState(''),
     [error, setError] = useState(''),
+    [errorScope, setErrorScope] = useState(''),
     [notice, setNotice] = useState(''),
     [busy, setBusy] = useState(false);
   const keys = useLoad(() => request('/account/passkeys'), []);
-  async function run(fn, msg = t("Saved.")) {
+  async function run(fn, msg = t("Saved."), scope = '') {
     setBusy(true);
     setError('');
+    setErrorScope(scope);
     setNotice('');
     try {
       await fn();
@@ -75,7 +77,7 @@ export default function Account() {
   return <><Title eyebrow={t("MAKE IT YOURS" )} title={t("Your account")} action={<button onClick={() => run(async () => {
       await logout();
       nav('/login');
-    }, t("Signed out."))}>{t("Sign out")}</button>}>{t("Your profile, security and payment details.")}</Title><ProfileHeader user={user}/>{user.is_admin&&<div className="account-admin-link"><Link className="secondary" to="/admin">{t('Open Admin dashboard')}</Link></div>}{error && <Message error={error} />} {notice && <Message>{notice}</Message>}<div className="v22-account-intro"><p className="muted">{t("Choose a category to manage your settings. Only the selected section is displayed.")}</p></div>
+    }, t("Signed out."))}>{t("Sign out")}</button>}>{t("Your profile, security and payment details.")}</Title><ProfileHeader user={user}/>{user.is_admin&&<div className="account-admin-link"><Link className="secondary" to="/admin">{t('Open Admin dashboard')}</Link></div>}{error && errorScope!=='security' && <Message error={error} />} {notice && <Message>{notice}</Message>}<div className="v22-account-intro"><p className="muted">{t("Choose a category to manage your settings. Only the selected section is displayed.")}</p></div>
 <div className="v22-account-sections">
 <AccountSection id="account-profile" title={t("Profile" )} description={t("Your name and username" )} defaultOpen><Panel title={t("Profile")}><form onSubmit={e => {
             e.preventDefault();
@@ -142,13 +144,13 @@ export default function Account() {
               setPw({});
             }, t("Password changed. Other sessions have been signed out."));
           }}>{field(pw, setPw, 'current_password', t("Current password"), 'password')}{field(pw, setPw, 'new_password', t("New password"), 'password')}<button disabled={busy}>{t("Update password")}</button></form></Panel>
- {config?.passkeys && <Panel title={t("Passkeys")}>{keys.error && <Message error={keys.error} />} {keys.data?.map(k => <div className="list-row" key={k.id}><Fingerprint size={19} /><strong className="grow">{k.name}</strong><button aria-label={'Delete passkey ' + k.name} disabled={busy} onClick={() => {
+ {config?.passkeys && <Panel title={t("Passkeys")}>{error && errorScope==='security' && <Message error={error}/>} {keys.error && <Message error={keys.error} />} {keys.data?.map(k => <div className="list-row" key={k.id}><Fingerprint size={19} /><strong className="grow">{k.name}</strong><button aria-label={'Delete passkey ' + k.name} disabled={busy} onClick={() => {
               if (confirm(t("Remove this passkey?"))) run(async () => {
                 await request('/account/passkeys/' + k.id, {
                   method: 'DELETE'
                 });
                 await keys.reload();
-              });
+              }, t("Passkey removed."), 'security');
             }}><Trash2 size={17} /></button></div>)}<button disabled={busy} onClick={() => run(async () => {
             const start = await send('/account/passkeys/options');
             const c = await credential(start.options, true);
@@ -158,7 +160,7 @@ export default function Account() {
               name: navigator.platform || t("Passkey")
             });
             await keys.reload();
-          }, t("Passkey added."))}><Fingerprint size={17} /> {t("Add passkey")}</button></Panel>}
+          }, t("Passkey added."), 'security')}><Fingerprint size={17} /> {t("Add passkey")}</button></Panel>}
  </AccountSection>
 <AccountSection id="account-privacy" title={t("Privacy & account deletion")} description={t("Control your personal data")}><Panel title={t("Download your account activity")}>
   <p className="muted">{t("Download a JSON snapshot of your profile, saved receipt items, your bill participation and your payment events. It excludes receipt images and other users’ private details. Keep the downloaded file secure.")}</p>

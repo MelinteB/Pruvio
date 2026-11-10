@@ -378,6 +378,8 @@ def receipt(case_id:int,identity=Depends(current),db=Depends(get_db)):
     group=db.get(ReceiptGroupMembership,case_id)
     result['group_id']=group.group_id if group else None
     result['has_split']=db.query(SplitBillSession).filter_by(case_id=case_id).first() is not None
+    active=db.query(SplitBillSession).filter_by(case_id=case_id,status='open').order_by(SplitBillSession.created_at.desc()).first()
+    result['active_split']={'token':active.token,'session_id':active.id,'status':active.status} if active else None
     doc=db.query(Document).filter_by(case_id=case_id).order_by(Document.id.desc()).first()
     from app.services.receipt_storage import is_cloud
     result['original_available']=is_cloud(doc) or resolve_document_path(doc) is not None

@@ -218,20 +218,8 @@ def create_split_bill_session(
     )
     if existing:
         ensure_owner_participant(db, existing, owner)
-        joined_count = get_joined_participants_count(db, existing)
-        if expected_participants_count < joined_count:
-            raise ValueError(
-                f"This session already has {joined_count} joined participants. "
-                "Expected participants count cannot be lower than current joined count."
-            )
-        from app.models.split_bill_v7140 import SplitAllocationState
-        allocation=db.get(SplitAllocationState,existing.id)
-        if allocation and allocation.mode=='equal' and expected_participants_count!=existing.expected_participants_count:
-            raise ValueError('Switch back to item selection before changing the participant count.')
-        existing.owner_user_id = owner_user_id
-        existing.expected_participants_count = expected_participants_count
-        db.commit()
-        db.refresh(existing)
+        # Idempotent open: a retry or competing tab must never silently change
+        # people, allocations or payment state. Use the explicit update endpoint.
         return existing
 
     currency = items[0].currency or "—"

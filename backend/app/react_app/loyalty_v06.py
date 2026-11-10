@@ -11,6 +11,7 @@ import io
 import json
 import os
 import secrets
+from datetime import datetime, timezone
 import time
 from decimal import Decimal, InvalidOperation
 from uuid import UUID
@@ -155,3 +156,70 @@ def claim_v06(case_id:int,payload:ClaimRequest,identity=Depends(current),db=Depe
 def my_claims(identity=Depends(current)):
     pilot_ready(identity[0].id)
     return call_business('/v1/customer/pilot/claims',user_id=identity[0].id)
+
+
+# Optional Core v7.1.49 customer-generated receipt code pilot.
+# Runs exclusively server-side and uses the existing signed evidence transport.
+class CustomerCodeRequest(BaseModel):
+    program_id:str=Field(min_length=36,max_length=36)
+    share_consent:bool
+    photo_base64:str|None=Field(default=None,max_length=MAX_UPLOAD_B64)
+
+@router.post('/receipts/{case_id}/customer-code-v12',status_code=201)
+def customer_code_v12(case_id:int,payload:CustomerCodeRequest,identity=Depends(current),db=Depends(get_db)):
+    pilot_ready(identity[0].id)
+    if os.getenv('PRUVS_LOYALTY_CUSTOMER_CODES_V12_ENABLED','false').lower()!='true':
+        raise HTTPException(503,'Customer receipt codes pilot is not enabled')
+    if payload.share_consent is not True:
+        raise HTTPException(422,'Consent is required to share this receipt with the merchant')
+    try:program_id=str(UUID(payload.program_id))
+    except (ValueError,AttributeError):raise HTTPException(422,'Invalid loyalty program') from None
+    uid=identity[0].id
+    case=db.get(Case,case_id)
+    if not case or case.user_id!=uid:raise HTTPException(404,'Receipt not found')
+    if case.status in ('failed','processing_failed','processing','pending'):
+        raise HTTPException(422,'Receipt processing is not complete')
+    detail=receipts.get_receipt_view(db,case_id,user_id=uid,ensure_translations=False)
+    currency=str(detail.get('currency') or '').upper()
+    if currency!='RON':raise HTTPException(422,'Only RON receipts are supported')
+    try:
+        value=Decimal(str(detail.get('receipt_total')))
+        if not value.is_finite() or value<=0 or value*100!=(value*100).to_integral_value():raise ValueError()
+        amount=int(value*100)
+        if amount>10_000_000:raise ValueError()
+    except (TypeError,ValueError,InvalidOperation):
+        raise HTTPException(422,'Receipt amount is missing or invalid') from None
+    eligible=call_business('/v1/customer/pilot/programs/'+program_id+'/receipt-eligibility-v12',
+                           method='GET',user_id=uid)
+    if eligible.get('currency')!=currency or amount<int(eligible.get('min_purchase_minor') or 0):
+        raise HTTPException(422,'Receipt does not meet the program currency or minimum amount')
+    store_id=eligible.get('store_id')
+    if not isinstance(store_id,str) or not store_id:raise HTTPException(502,'Merchant program validation unavailable')
+    if payload.photo_base64:
+        try:raw=base64.b64decode(payload.photo_base64,validate=True)
+        except (binascii.Error,ValueError):raise HTTPException(422,'Invalid uploaded receipt photo') from None
+        saved=db.query(ReceiptFingerprint).filter_by(case_id=case_id,user_id=uid).first()
+        if not saved:raise HTTPException(422,'Cannot verify this photo against your saved receipt')
+        sha,sig=fingerprint(raw)
+        if saved.sha256!=sha and not same_image(saved.image_signature,sig):
+            raise HTTPException(422,'Uploaded photo does not match the saved receipt')
+    else:raw=original_photo(db,case_id,uid)
+    image=image_to_jpeg(raw)
+    label=str(detail.get('merchant_name') or 'Receipt')[:160].strip() or 'Receipt'
+    date=str(detail.get('receipt_date') or detail.get('scan_date') or detail.get('date') or '')[:32]
+    digest=hashlib.sha256(image).hexdigest()
+    _,secret=config()
+    proof=signed_proof(secret,uid,case_id,store_id,amount,currency,digest,label,date)
+    # The 96-bit random code is returned once to the authenticated customer.
+    # Business sees only its digest, never the plaintext code via Core's bridge.
+    code=secrets.token_hex(12).upper()
+    result=call_business('/v1/customer/pilot/claims/v12/customer-code',method='POST',user_id=uid,
+                body={'program_id':program_id,
+                      'code_hash':hashlib.sha256(('v12:'+code).encode('ascii')).hexdigest(),
+                      'receipt_proof':proof,
+                      'evidence':{'consent':True,'merchant_label':label,'receipt_date':date,
+                                  'image_base64':base64.b64encode(image).decode('ascii')}})
+    return {'display_code':'PRV-'+'-'.join(code[i:i+4] for i in range(0,len(code),4)),
+            'expires_at':result['expires_at'],'status':'pending',
+            'claim_id':result['claim_id'],
+            'message':'Show the code to the merchant for review. No reward until approved.'}

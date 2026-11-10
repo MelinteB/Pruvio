@@ -6,6 +6,7 @@ import {request, send, money} from './api';
 import './rewards.css';
 import './rewards-v05.css';
 import ReceiptSubmission from './ReceiptSubmission';
+import CustomerReceiptCode from './CustomerReceiptCode';
 
 export default function Rewards(){
   const [status,setStatus]=useState(null);
@@ -102,7 +103,7 @@ export default function Rewards(){
     </>}
     {!loading && status?.enabled && tab==='receipts' && <Panel title="Your recent receipts">
       <p className="muted">Choose a receipt, enter your merchant's one-time purchase code and consent to share that receipt for review. No stamp is awarded until approval.</p>
-      {receipts.map(r=><div key={r.case_id} className="rewards-wallet-row"><div><strong>{r.merchant_name}</strong><p>{money(r.receipt_total,r.currency||'RON')}</p></div><Link to={'/receipt/'+r.case_id}>View receipt</Link>{status.receipt_v06_enabled&&<ReceiptSubmission caseId={r.case_id} receiptRef={r.receipt_ref} claims={claims} programs={offers.filter(o=>joined.has(o.program.id))} onSuccess={msg=>{setMessage(msg);refresh()}}/>}</div>)}
+      {receipts.map(r=><div key={r.case_id} className="rewards-wallet-row"><div><strong>{r.merchant_name}</strong><p>{money(r.receipt_total,r.currency||'RON')}</p></div><Link to={'/receipt/'+r.case_id}>View receipt</Link>{status?.customer_codes_v12_enabled&&<CustomerReceiptCode caseId={r.case_id} programs={offers.filter(o=>joined.has(o.program.id))}/>} {status.receipt_v06_enabled&&<ReceiptSubmission caseId={r.case_id} receiptRef={r.receipt_ref} claims={claims} programs={offers.filter(o=>joined.has(o.program.id))} onSuccess={msg=>{setMessage(msg);refresh()}}/>}</div>)}
       {!receipts.length&&!error&&<p>No receipts found. <Link to="/upload">Scan a receipt</Link> to begin.</p>}
       <div className="row"><Ticket size={18}/><small>Receipt earning will require a verified merchant/POS reference and explicit merchant approval.</small></div>
     </Panel>}

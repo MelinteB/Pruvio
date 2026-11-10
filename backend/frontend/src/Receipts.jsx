@@ -396,10 +396,13 @@ export function Receipt() {
         }, 'PUT');
         await reload();
       })}>{t("Save currency")}</button></Panel>}
- <Panel title={t("Share this bill" )}><p>{t("Include yourself in the total number of people.")}</p><div className="people-action"><Field label={t("People")} type="number" min="1" max="20" value={people} onChange={e => setPeople(Number(e.target.value))} /><button className="primary" disabled={busy || !r.items.length || r.status==='needs_review' || Math.abs(r.receipt_total-r.calculated_total)>.05 || !/^[A-Z]{3}$/.test(r.currency)} onClick={() => run(async () => {
+ {r.active_split?.token ? <Panel title={t('Shared bill in progress')}>
+   <p className="muted">This receipt already has an open split. Continue that session to keep all participant selections and balances together.</p>
+   <Link className="primary" to={'/bill/'+encodeURIComponent(r.active_split.token)}>Continue existing split <ArrowUpRight size={17}/></Link>
+ </Panel> : <Panel title={t("Share this bill" )}><p>{t("Include yourself in the total number of people.")}</p><div className="people-action"><Field label={t("People")} type="number" min="1" max="20" value={people} onChange={e => setPeople(Number(e.target.value))} /><button className="primary" disabled={busy || !r.items.length || r.status==='needs_review' || Math.abs(r.receipt_total-r.calculated_total)>.05 || !/^[A-Z]{3}$/.test(r.currency)} onClick={() => run(async () => {
           const s = await send('/receipts/' + id + '/split', {
             people
           });
           nav('/bill/' + s.token);
-        })}>{t("Start split bill")} <ArrowUpRight size={17} /></button></div></Panel></>;
+        })}>{t("Start split bill")} <ArrowUpRight size={17} /></button></div></Panel> }</>;
 }
