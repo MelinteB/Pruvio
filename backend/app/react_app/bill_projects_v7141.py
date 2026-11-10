@@ -1,3 +1,4 @@
+from app.services.project_bill_state_v7145 import split_state, project_share_state
 """Shared projects: owner-controlled bill imports, participant opt-in, server-derived balances.
 
 A receipt folder is not a shared project.  This router deliberately does not change
@@ -156,7 +157,10 @@ def _project_summary(db, project, caller_id):
                         'total':float((Decimal(str(summary['grand_total']))*Decimal(str(quoted['rate']))).quantize(Decimal('0.01'),rounding=ROUND_HALF_UP)),
                         'label':'FX reference only — original split remains payable in '+curr}
             except (ValueError,TypeError,ArithmeticError):pass
+        split_display_state = split_state(summary['remaining_total'], summary['participants'], session.owner_user_id)
         items.append({'kind':'split','source_id':session.id,'case_id':session.case_id,
+          'bill_state':split_display_state,'allocation_complete':split_display_state!='unallocated',
+          'payment_confirmed':split_display_state=='confirmed',
           'merchant':labels.get(session.case_id,'Receipt #'+str(session.case_id)),
           'fx_reference':fx,
           'allocations':[{'name':p['display_name'],'amount':p['total'],'currency':curr,'payment_status':p['payment_status']} for p in summary['participants']],
@@ -221,7 +225,10 @@ def _project_summary(db, project, caller_id):
                     obligations.append({'payer_id':a.user_id,'payee_id':a.paid_by_user_id,'currency':only_currency,'cents':due})
             completed.append(all(a.payment_status=='confirmed' or a.user_id==a.paid_by_user_id for a in allocated_rows))
         elif not included:completed.append(False)
+        receipt_display_state = 'linked' if included else project_share_state(allocated_rows)
         items.append({'kind':'receipt','source_id':case.id,'case_id':case.id,
+            'bill_state':receipt_display_state,'allocation_complete':bool(allocated_rows) or included,
+            'payment_confirmed':receipt_display_state=='confirmed',
             'merchant':labels.get(case.id,'Receipt #'+str(case.id)),
             'allocations':[{'user_id':a.user_id,'name':users[a.user_id].name if a.user_id in users else 'Member','amount':a.amount_minor/100,'currency':next(iter(currencies),'RON'),'payment_status':a.payment_status} for a in allocated_rows],
             'allocated':bool(allocated_rows),'paid_by_user_id':allocated_rows[0].paid_by_user_id if allocated_rows else case.user_id,
@@ -242,7 +249,10 @@ def _project_summary(db, project, caller_id):
         for a in shares:
             if a.user_id!=a.paid_by_user_id and a.payment_status!='confirmed':
                 obligations.append({'payer_id':a.user_id,'payee_id':a.paid_by_user_id,'currency':c,'cents':a.amount_minor})
+        manual_display_state=project_share_state(shares)
         items.append({'kind':'manual','source_id':expense.id,'merchant':expense.merchant,
+            'bill_state':manual_display_state,'allocation_complete':manual_display_state!='unallocated',
+            'payment_confirmed':manual_display_state=='confirmed',
             'case_id':None,'currency':c,'total':expense.amount_minor/100,
             'status':'settled' if completed[-1] else 'open','added_by_user_id':expense.created_by_user_id,
             'paid_by_user_id':expense.paid_by_user_id,
@@ -660,9 +670,11 @@ def add_manual_bill(project_id:int,body:dict,identity=Depends(current),db=Depend
 @router.put('/{project_id}/receipts/{case_id}/allocate')
 def allocate_imported_receipt(project_id:int,case_id:int,body:dict,identity=Depends(current),db=Depends(get_db)):
     membership(db,identity[0].id,project_id)
-    link=db.query(BillProjectItem).filter_by(project_id=project_id,kind='receipt',source_id=case_id).first()
+    link=db.query(BillProjectItem).filter_by(project_id=project_id,kind='receipt',source_id=case_id).with_for_update().first()
     if not link:raise HTTPException(404,'Receipt not in this project.')
     if link.added_by_user_id!=identity[0].id:raise HTTPException(403,'Only the receipt contributor can allocate it.')
+    if db.query(ProjectExpenseShare.id).filter_by(project_id=project_id,kind='receipt',source_id=case_id).first():
+        raise HTTPException(409,'Receipt is already allocated. Review its participant balances or payment status instead.')
     if db.query(BillProjectItem).filter_by(project_id=project_id,kind='split').join(
         SplitBillSession,SplitBillSession.id==BillProjectItem.source_id).filter(
         SplitBillSession.case_id==case_id).first():
@@ -675,10 +687,6 @@ def allocate_imported_receipt(project_id:int,case_id:int,body:dict,identity=Depe
     total=sum(amount_minor(line.total_price) for line in lines)
     if total<=0:raise ValueError('Receipt has no positive amount.')
     result=_verify_share_people(db,project_id,body.get('mode','equal'),body.get('participants'),total,identity[0].id)
-    earlier=db.query(ProjectExpenseShare).filter_by(project_id=project_id,kind='receipt',source_id=case_id).with_for_update().all()
-    if any(x.payment_status=='confirmed' and x.user_id!=x.paid_by_user_id for x in earlier):
-        raise HTTPException(409,'Settled receipt allocation cannot be replaced.')
-    db.query(ProjectExpenseShare).filter_by(project_id=project_id,kind='receipt',source_id=case_id).delete(synchronize_session=False)
     for person,amount in result.items():
         db.add(ProjectExpenseShare(project_id=project_id,kind='receipt',source_id=case_id,
             user_id=person,paid_by_user_id=identity[0].id,amount_minor=amount,

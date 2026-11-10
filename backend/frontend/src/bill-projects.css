@@ -80,3 +80,19 @@
 }
 @media(prefers-reduced-motion:reduce){.pruvs-projects-view *{transition:none!important;scroll-behavior:auto!important}}
 .pj-settings-cover{max-width:100%;width:100%;height:130px;object-fit:cover;border-radius:13px}
+
+/* v7.1.45: bill lifecycle, not just imported session status. Accessible text labels
+ * differentiate allocation from recipient-confirmed settlement. */
+.pj-bill{border-inline-start:4px solid transparent;transition:background-color .15s ease}
+.pj-bill--unallocated{border-inline-start-color:#a7b2c5}
+.pj-bill--allocated{border-inline-start-color:#2664df;background:#f6f9ff}
+.pj-bill--confirmed{border-inline-start-color:#19835c;background:#f1fcf6}
+.pj-bill--linked{border-inline-start-color:#8998b2}
+.pj-bill-state{display:inline-flex;align-items:center;gap:5px;justify-self:start;width:fit-content;padding:3px 8px;border-radius:999px;border:1px solid transparent;font-size:11px;font-weight:700;line-height:1.35}
+.pj-bill-state--unallocated{background:#f1f4f8;color:#49596e;border-color:#dce3ed}
+.pj-bill-state--allocated{background:#e5efff;color:#1f4ca5;border-color:#c8dcff}
+.pj-bill-state--confirmed{background:#def7e9;color:#12623e;border-color:#abe0c4}
+.pj-bill-state--linked{background:#f0f3f8;color:#485e79;border-color:#dce3ed}
+.pj-bill--confirmed .pj-bill-icon{background:#d7f4e3;color:#176f4e}
+.pj-bill--allocated .pj-bill-icon{background:#e2edff;color:#2257c5}
+@media (max-width:600px){.pj-bill-state{font-size:10px;padding:3px 7px}.pj-bill--confirmed .pj-bill-summary,.pj-bill--allocated .pj-bill-summary{padding-inline:9px!important}}
