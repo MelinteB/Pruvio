@@ -6,6 +6,7 @@ import {request, send, money} from './api';
 import {Title, Panel, Spinner, useApp} from './common';
 import {coverImage, coverAlt, coverKey, coverChoices, suggestCover} from './project-covers';
 import './bill-projects.css';
+import {distributeRemainder, percentagesComplete} from './project-percent-v7146.mjs';
 
 const CURRENCIES=['RON','EUR','USD','GBP','CHF'];
 const MODES=[['equal','Equal'],['amount','Amount'],['percent','Percent'],['share','Shares']];
@@ -54,14 +55,15 @@ function ShareEditor({members,amount,currency,onSave,busy,title='Split this expe
   function submit(){
     if(!selected.length){setError('Choose at least one participant.');return;}
     if(mode!=='equal'&&selected.some(id=>!Number.isFinite(Number(inputValue(id)))||Number(inputValue(id))<0)){setError('Enter non-negative numbers for each participant.');return;}
+    if(mode==='percent'&&!percentagesComplete(selected,inputValue)){setError('Participant percentages must total exactly 100%.');return;}
     setError('');onSave({mode,participants:selected.map(user_id=>({user_id,value:mode==='equal'?1:inputValue(user_id)}))});
   }
   return <section className="pj-allocation"><h3>{title}</h3><div className="pj-bill-context"><strong>{fmt(amount,currency)}</strong><small>Original payable currency is preserved</small></div>
     <div className="pj-mode" role="group" aria-label="Split method">{MODES.map(([key,label])=><button type="button" key={key} aria-pressed={mode===key} className={mode===key?'active':''} onClick={()=>{setMode(key);setValues({});setError('')}}>{label}</button>)}</div>
-    <div className="pj-participant-picker">{joined.map(m=><label key={m.user_id} className="pj-person-select"><input type="checkbox" checked={selected.includes(m.user_id)} onChange={e=>{setSelected(prev=>e.target.checked?[...prev,m.user_id]:prev.filter(id=>id!==m.user_id));setValues({})}}/><span className="pj-avatar">{(m.name||'M').slice(0,1).toUpperCase()}</span><span className="pj-grow">{m.name}</span>{selected.includes(m.user_id)&&mode!=='equal'&&<input className="pj-value-input" inputMode="decimal" aria-label={`${m.name} ${mode}`} value={inputValue(m.user_id)} onChange={e=>setValues(prev=>({...prev,[m.user_id]:e.target.value}))}/>}</label>)}</div>
+    <div className="pj-participant-picker">{joined.map(m=><label key={m.user_id} className="pj-person-select"><input type="checkbox" checked={selected.includes(m.user_id)} onChange={e=>{setSelected(prev=>e.target.checked?[...prev,m.user_id]:prev.filter(id=>id!==m.user_id));setValues({})}}/><span className="pj-avatar">{(m.name||'M').slice(0,1).toUpperCase()}</span><span className="pj-grow">{m.name}</span>{selected.includes(m.user_id)&&mode!=='equal'&&<input className="pj-value-input" inputMode="decimal" aria-label={`${m.name} ${mode}`} value={inputValue(m.user_id)} onChange={e=>setValues(prev=>mode==='percent'?(distributeRemainder(selected,m.user_id,e.target.value)||{...prev,[m.user_id]:e.target.value}):({...prev,[m.user_id]:e.target.value}))}/>}</label>)}</div>
     {!joined.length&&<p>No accepted members yet. Invite participants first.</p>}
     {error&&<p className="pj-inline-error" role="alert">{error}</p>}
-    <p className="pj-note">{mode==='equal'?'The amount is divided equally, with exact-cent rounding.':mode==='share'?'Shares are relative weights, not purchased item quantities.':mode==='percent'?'Percentages must total 100%.':'Amounts must add up to the original bill total.'}</p>
+    <p className="pj-note">{mode==='equal'?'The amount is divided equally, with exact-cent rounding.':mode==='share'?'Shares are relative weights, not purchased item quantities.':mode==='percent'?'Changing one percentage automatically distributes the remainder; the total must be 100%.':'Amounts must add up to the original bill total.'}</p>
     <button className="primary pj-primary-block" disabled={busy||!selected.length} onClick={submit}>Save allocation</button>
   </section>;
 }

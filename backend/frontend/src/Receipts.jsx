@@ -143,7 +143,6 @@ export function History({home=false,billsOnly=false}) {
     </Title>
     {home&&<HomeWelcome user={user}/>}
     {billsOnly&&!home&&CORE_PROJECTS_ENABLED&&<div className="pruvs-project-entry"><div><strong>Projects</strong><p className="muted">Combine receipts and split bills, invite participants, and see everyone's balances.</p></div><Link className="primary" to="/projects">Open projects</Link></div>}
-    {CORE_PROJECTS_ENABLED&&!home&&<div className="pruvs-projects-filter"><span>Organize bills by Project</span><Link className="secondary" to="/projects">View your projects</Link></div>}
     {error&&<Message error={error}/>}{actionError&&<Message error={actionError}/>}
     {!home&&<nav className="receipt-status-tabs" aria-label={t("Receipt and bill views" )}>
       {tabs.map(([value,title])=><button key={value} type="button" className={tab===value?'is-active':''}

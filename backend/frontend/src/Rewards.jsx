@@ -21,19 +21,38 @@ export default function Rewards(){
   const [message,setMessage]=useState('');
   const [coordinates,setCoordinates]=useState(null);
 
-  async function refresh(locationOverride=coordinates){
+  async function refresh(locationOverride=coordinates, activeTab=tab){
     setError('');setLoading(true);
     try{
       const s=await request('/loyalty/status');setStatus(s);
       if(!s.enabled){setOffers([]);setPromotions([]);setClaims([]);setWallet({memberships:[],rewards:[]});return;}
       const qp=locationOverride ? '?latitude='+encodeURIComponent(locationOverride.latitude)+'&longitude='+encodeURIComponent(locationOverride.longitude)+'&radius_km=10' : '';
-      const [o,w,r,pr,cl]=await Promise.all([
-        request('/loyalty/offers'+qp),request('/loyalty/wallet'),request('/loyalty/receipts'),request('/loyalty/promotions').catch(()=>[]),s.receipt_v06_enabled?request('/loyalty/claims').catch(()=>[]):Promise.resolve([])
-      ]);
-      setOffers(Array.isArray(o)?o:[]);setWallet(w);setReceipts(r.receipts||[]);setPromotions(Array.isArray(pr)?pr:[]);setClaims(Array.isArray(cl)?cl:[]);
-    }catch(e){setError(e.message);}finally{setLoading(false);}
+      // Load the selected view only; don't fire five parallel requests into a waking or rate-limited Business service.
+      if(activeTab==='offers'){
+        const o=await request('/loyalty/offers'+qp);setOffers(Array.isArray(o)?o:[]);
+        // Optional promotions must never break the ability to browse merchant programs.
+        const pr=await request('/loyalty/promotions').catch(()=>[]);
+        setPromotions(Array.isArray(pr)?pr:[]);
+      }else if(activeTab==='wallet'){
+        const w=await request('/loyalty/wallet');setWallet(w||{memberships:[],rewards:[]});
+      }else if(activeTab==='receipts'){
+        // Receipts are owned by Core and must stay visible even when Business is asleep.
+        const r=await request('/loyalty/receipts');setReceipts(r.receipts||[]);
+        // Loading these sequentially avoids a burst against the separate Business API.
+        const w=await request('/loyalty/wallet');setWallet(w||{memberships:[],rewards:[]});
+        const o=await request('/loyalty/offers');setOffers(Array.isArray(o)?o:[]);
+        if(s.receipt_v06_enabled){
+          const cl=await request('/loyalty/claims').catch(()=>[]);
+          setClaims(Array.isArray(cl)?cl:[]);
+        }
+      }
+    }catch(e){
+      setError(e?.status===429 ? 'Rewards is rate-limited. Wait before retrying; repeated refreshes may extend the limit.' :
+        e?.status===503 ? 'Pruvs Business is temporarily unavailable or waking from sleep. Retry after it becomes ready.' :
+        e?.message||'Could not load Rewards.');
+    }finally{setLoading(false);}
   }
-  useEffect(()=>{refresh(null);},[]);
+  useEffect(()=>{refresh(null,tab);},[tab]);
 
   function nearMe(){
     setError('');setMessage('');
@@ -71,7 +90,7 @@ export default function Rewards(){
         <button type="button" className="primary" disabled={!!busy || joined.has(o.program.id)} onClick={()=>perform(o.program.id,()=>send('/loyalty/programs/'+o.program.id+'/join'),()=> 'Joined '+o.program.title+'.')}>{joined.has(o.program.id)?<><CheckCircle2 size={16}/> Joined</>:busy===o.program.id?'Joining…':'Join loyalty program'}</button>
       </Panel>)}
       </div>
-      {!offers.length&&<Panel><p>No published merchant programs are available yet. Once merchants publish programs, they will appear here.</p></Panel>}
+      {!offers.length&&!error&&<Panel><p>No published merchant programs are available yet. Once merchants publish programs, they will appear here.</p></Panel>}
     </>}
     {!loading && status?.enabled && tab==='wallet' && <>
       <Panel title="Loyalty progress">
@@ -84,7 +103,7 @@ export default function Rewards(){
     {!loading && status?.enabled && tab==='receipts' && <Panel title="Your recent receipts">
       <p className="muted">Choose a receipt, enter your merchant's one-time purchase code and consent to share that receipt for review. No stamp is awarded until approval.</p>
       {receipts.map(r=><div key={r.case_id} className="rewards-wallet-row"><div><strong>{r.merchant_name}</strong><p>{money(r.receipt_total,r.currency||'RON')}</p></div><Link to={'/receipt/'+r.case_id}>View receipt</Link>{status.receipt_v06_enabled&&<ReceiptSubmission caseId={r.case_id} receiptRef={r.receipt_ref} claims={claims} programs={offers.filter(o=>joined.has(o.program.id))} onSuccess={msg=>{setMessage(msg);refresh()}}/>}</div>)}
-      {!receipts.length&&<p>No receipts found. <Link to="/upload">Scan a receipt</Link> to begin.</p>}
+      {!receipts.length&&!error&&<p>No receipts found. <Link to="/upload">Scan a receipt</Link> to begin.</p>}
       <div className="row"><Ticket size={18}/><small>Receipt earning will require a verified merchant/POS reference and explicit merchant approval.</small></div>
     </Panel>}
   </>;
