@@ -41,14 +41,6 @@ export default function Account() {
   const [form, setForm] = useState({
       ...user
     }),
-    [payment, setPayment] = useState({
-      recipient_name: user.payment_recipient_name || '',
-      iban: user.payment_iban || '',
-      bank_name: user.payment_bank_name || '',
-      bic: user.payment_bic || '',
-      revolut_link: user.revolut_payment_link || '',
-      payment_note: user.payment_note || ''
-    }),
     [pw, setPw] = useState({}),
     [contact, setContact] = useState({
       channel: 'email',
@@ -135,13 +127,12 @@ export default function Account() {
             }, 'PATCH');
             await refresh();
           })}>{t("Save preferences")}</button></Panel><Notifications embedded /></AccountSection>
-<AccountSection id="account-payments" title={t("Payment details" )} description={t("Profiles, bank transfer and payment links" )}><PaymentProfiles/><Panel title={t("Default payment details (legacy bills)")}><p className="muted">{t("These details are shared with your participants after you settle a bill. Pruvs does not collect the payment.")}</p><form onSubmit={e => {
-            e.preventDefault();
-            run(async () => {
-              await send('/account/payment', payment, 'PUT');
-              await refresh();
-            });
-          }}>{field(payment, setPayment, 'recipient_name', t("Recipient name"))}{field(payment, setPayment, 'iban', 'IBAN')}{field(payment, setPayment, 'bank_name', t("Bank name"))}{field(payment, setPayment, 'bic', 'BIC / SWIFT')}{field(payment, setPayment, 'revolut_link', t("Revolut.me link"), 'url')}{field(payment, setPayment, 'payment_note', t("Payment reference"))}<button className="primary" disabled={busy}>{t("Save payment details")}</button></form></Panel>
+<AccountSection id="account-payments" title={t("Payment details")} description={t("Payment profiles, bank transfer and payment links")}>
+  <PaymentProfiles legacyPayment={{
+    recipient_name:user.payment_recipient_name||'',iban:user.payment_iban||'',
+    bank_name:user.payment_bank_name||'',bic:user.payment_bic||'',
+    revolut_link:user.revolut_payment_link||''
+  }}/>
  </AccountSection>
 <AccountSection id="account-work" title={t("Expenses & company profiles" )} description={t("Business and trip information" )}><Panel title={t('Company profiles for expenses')}><p className="muted">{t('Manage employer details and trip profiles in a dedicated view.')}</p><Link className="primary" to="/account/companies">{t('Manage company profiles')}</Link></Panel></AccountSection>
 <AccountSection id="account-security" title={t("Account security" )} description={t("Password and passkeys" )}><Panel title={t("Password")}><form onSubmit={e => {

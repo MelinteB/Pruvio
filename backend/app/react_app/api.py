@@ -174,6 +174,16 @@ def payment_details(body:dict,identity=Depends(current),db=Depends(get_db)):
 def payment_profile_data(row):
     return {key:getattr(row,key) for key in ('id','label','recipient_name','iban','bank_name','bic','revolut_link','payment_note')}
 
+
+def default_payment_profile(db, user_id):
+    """Oldest saved payment profile is the default; scoped to its owner.
+
+    No migration or implicit consent to share is needed. Projects still require
+    an explicit profile-sharing choice. Existing split snapshots remain intact.
+    """
+    from app.models.payment_profile import PaymentProfile
+    return db.query(PaymentProfile).filter_by(user_id=user_id).order_by(PaymentProfile.id).first()
+
 @router.get('/account/payment-profiles')
 def payment_profiles(identity=Depends(current),db=Depends(get_db)):
     from app.models.payment_profile import PaymentProfile
@@ -189,6 +199,10 @@ def save_payment_profile(body:dict,profile_id:int|None=None,identity=Depends(cur
     if not profile_id and db.query(PaymentProfile).filter_by(user_id=uid).count()>=20:raise ValueError('Maximum 20 payment profiles.')
     limits={'label':100,'recipient_name':255,'iban':64,'bank_name':255,'bic':32,'revolut_link':500,'payment_note':255}
     for key,limit in limits.items():
+        # The legacy payment reference was removed from the editor. Preserve any
+        # existing value when editing a profile without that optional field.
+        if key == 'payment_note' and key not in body:
+            continue
         value=body.get(key,'')
         if not isinstance(value,str) or len(value)>limit:raise ValueError('Invalid payment profile field: '+key)
         setattr(row,key,value.strip())
@@ -520,13 +534,12 @@ def bill_action(token:str,action:str,body:dict,identity=Depends(current),db=Depe
             if type(selected) is not int:raise ValueError('Choose a payment profile.')
             row=db.query(PaymentProfile).filter_by(id=selected,user_id=uid).first()
             if not row:raise ValueError('Choose one of your saved payment profiles.')
-            details=payment_profile_data(row)
-            details['payment_link']=details.pop('revolut_link')
         else:
-            owner=identity[0]
-            details={'recipient_name':owner.payment_recipient_name,'iban':owner.payment_iban,
-                     'bank_name':owner.payment_bank_name,'bic':owner.payment_bic,
-                     'revolut_payment_link':owner.revolut_payment_link,'payment_note':owner.payment_note}
+            row=default_payment_profile(db,uid)
+        if not row:
+            raise HTTPException(409,'Add a receiving payment profile in Account before closing the bill.')
+        details=payment_profile_data(row)
+        details['payment_link']=details.pop('revolut_link')
         s.payment_details_json=json.dumps(details)
         bills.close_split_bill_session(db,s,uid)
     elif action=='reopen':bills.reopen_split_bill_session(db,s,uid)
