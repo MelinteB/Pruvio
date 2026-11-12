@@ -49,11 +49,14 @@ def mount_business_ui(app: FastAPI, *, dist_dir: Path | None = None, enabled: bo
 
     app.mount("/assets", StaticFiles(directory=str(assets)), name="pruvs-business-ui-assets")
 
+    def public_handler(filename: str):
+        # No exposed query parameter can override the server-chosen filename.
+        async def serve_public_file():
+            return FileResponse(str(dist / filename), headers={"Cache-Control": "no-store"})
+        return serve_public_file
+
     for filename in PUBLIC_FILES:
-        # Capture each value at route registration; do not use a path parameter here.
-        async def serve_public_file(_filename: str = filename):
-            return FileResponse(str(dist / _filename), headers={"Cache-Control": "no-store"})
-        app.add_api_route("/" + filename, serve_public_file, methods=["GET"], include_in_schema=False)
+        app.add_api_route("/" + filename, public_handler(filename), methods=["GET"], include_in_schema=False)
 
     @app.get("/{spa_path:path}", include_in_schema=False)
     async def serve_ui(spa_path: str = ""):
