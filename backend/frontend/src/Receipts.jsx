@@ -106,14 +106,14 @@ export function History({home=false,billsOnly=false}) {
   }
   function controls(kind,id,note){
     if(home)return null;
-    return <div className="row wrap no-print history-actions">
-      <button onClick={()=>{const answer=prompt(t('History note (optional)'),note||'');if(answer!==null)organize(kind,id,historyView,answer)}}>{t('Edit note')}</button>
+    return <div className="row no-print history-actions pruvs-v7150-history-controls">
+      <button onClick={()=>{const answer=prompt(t('History note (optional)'),note||'');if(answer!==null)organize(kind,id,historyView,answer)}}><PencilLine size={14}/> Note</button>
       {historyView!=='active'&&<button onClick={()=>organize(kind,id,'active',note||'')}>{t('Restore')}</button>}
-      {historyView!=='archived'&&<button onClick={()=>organize(kind,id,'archived',note||'')}>{t('Archive')}</button>}
+      {historyView!=='archived'&&<button onClick={()=>organize(kind,id,'archived',note||'')}><Archive size={14}/> Archive</button>}
       {historyView!=='removed'&&<button className="danger" onClick={()=>{
         if(confirm(t('Move this item to Removed? It remains available to other participants and in completed expense reports.')))
           organize(kind,id,'removed',note||'');
-      }}>{t('Remove')}</button>}
+      }}><Trash2 size={14}/> Remove</button>}
     </div>;
   }
   const merchants=groupMerchants(data).map(merchant=>({
@@ -172,31 +172,34 @@ export function History({home=false,billsOnly=false}) {
             {merchant.receipts.map(entry=>{
               const own=!!entry.receipt;
               const owned=own||!!entry.bills[0]?.source_owned;
-              const identifier=entry.receipt?.original_filename||'Receipt';
+              
               return <details key={entry.id} className="merchant-receipt">
                 <summary className="merchant-receipt-header">
-                  <span className="merchant-receipt-icon"><CalendarDays size={17}/></span>
-                  <span className="merchant-main"><strong>{historyDate(entry.date)}</strong><small>{own?identifier:'Shared by the bill owner'} · {entry.bills.length} {t("splits")}</small></span>
+                  <span className="merchant-receipt-icon"><ReceiptText size={17}/></span>
+                  <span className="merchant-main"><strong>Receipt · {historyDate(entry.date)}</strong><small>{entry.bills.length} {entry.bills.length===1?'split':'splits'}{!own?' · Shared with you':''}</small></span>
                   <span className="merchant-right">
                     {own&&<strong>{money(entry.receipt.receipt_total,entry.receipt.currency)}</strong>}
                     <ChevronDown size={16}/>
                   </span>
                 </summary>
                 <div className="merchant-receipt-content">
-                  {owned&&<Link className="secondary" to={'/receipt/'+entry.id}>{t("View receipt")}</Link>}{owned&&import.meta.env.VITE_PRUVS_LOYALTY_UI_ENABLED==='true'&&<Link className="secondary" to={'/rewards?tab=receipts&case='+entry.id}>Earn rewards</Link>}
-                  {CORE_PROJECTS_ENABLED&&owned&&!home&&<Link className="secondary" to="/projects">Add to a project</Link>}
+                  <div className="pruvs-v7150-record-actions" aria-label="Receipt actions">
+                    {owned&&<Link className="secondary" to={'/receipt/'+entry.id}><ExternalLink size={14}/> View</Link>}
+                    {owned&&import.meta.env.VITE_PRUVS_LOYALTY_UI_ENABLED==='true'&&<Link className="secondary" to={'/rewards?tab=receipts&case='+entry.id}><Coins size={14}/> Earn</Link>}
+                    {CORE_PROJECTS_ENABLED&&owned&&!home&&<Link className="secondary" to="/projects"><FolderKanban size={14}/> Project</Link>}
+                    {entry.receipt&&controls('receipt',entry.id,entry.receipt.history_note)}
+                    {entry.receipt&&!home&&<button type="button" className="danger pruvs-v7150-delete" title="Permanently delete receipt" onClick={()=>eraseReceipt(entry.id)}><Trash2 size={14}/> Delete</button>}
+                  </div>
                   {entry.receipt?.history_note&&<p className="muted">{entry.receipt.history_note}</p>}
-                  {entry.receipt&&controls('receipt',entry.id,entry.receipt.history_note)}
-                  {entry.receipt&&!home&&<button className="danger" onClick={()=>eraseReceipt(entry.id)}>{t("Delete permanently")}</button>}
                   {entry.bills.length?entry.bills.map(b=><div key={b.session_id} className="merchant-split">
                     <Link to={'/bill/'+b.token} className="merchant-split-link">
                       <span className="icon-tile"><Users size={17}/></span>
-                      <span className="merchant-main"><strong>{t("Split #")}{b.session_id}</strong><small>{b.role==='owner'?'You own this split':'You are a participant'} {t("· Your share")} {money(b.my_total,b.currency)}</small></span>
+                      <span className="merchant-main"><strong>Split · {historyDate(b.created_at||b.scan_date||entry.date)}</strong><small>{b.role==='owner'?'Created by you':'Shared with you'} · {money(b.my_total,b.currency)}</small></span>
                       <Badge>{b.status}</Badge><ArrowUpRight size={17}/>
                     </Link>
                     {b.status==='open'&&b.token&&<button type="button" className="secondary pruvs-invite-merchant-action" onClick={() => setInviteSplit({ token:b.token, name:merchant.name })}><UserRoundPlus size={16}/> {t("Invite people")}</button>}
                     {b.history_note&&<p className="muted">{b.history_note}</p>}
-                    {controls('bill',b.session_id,b.history_note)}
+                    <div className="pruvs-v7150-record-actions">{controls('bill',b.session_id,b.history_note)}</div>
                   </div>):<p className="muted">{t("No splits for this receipt in this view.")}</p>}
                 </div>
               </details>;
