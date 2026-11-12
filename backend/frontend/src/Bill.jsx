@@ -2,6 +2,7 @@ import { t } from "./i18n";
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Users, Share2, Copy, Minus, Plus, Check, ExternalLink, MessageCircle, UserRoundX } from 'lucide-react';
+import ItemSwipeGesture from './ItemSwipeGesture';
 import { request, send, money, copy } from './api';
 import { useApp, useLoad, Title, Panel, Field, Spinner, Message, Badge } from './common';
 import RoundTable, { ClosedBillNotice } from './professional/RoundTable';
@@ -293,7 +294,7 @@ export default function Bill() {
  <div className="two-column bill-layout v22-bill-layout">{section==='items'&&<div id="core-bill-items"><Panel title={t("Pick what you enjoyed")}><p className="muted">{t("Your choices save automatically and update for everyone.")}</p>{data.items.map(item => {
           const {own, max, unavailable, selectedByMe, fullyAllocated, step} = itemAllocationState(item, data.my_participant_id);
           const colorGradient = itemShareGradient(item, colors);
-          return <div key={item.item_id} className={'item ' + (unavailable ? 'unavailable ' : '') + (fullyAllocated ? 'is-fully-allocated ' : '') + (selectedByMe ? 'is-selected-by-me' : '')} style={colorGradient ? {'--item-share-background': colorGradient} : undefined}><div className="row between"><div className="grow"><strong>{item.name}</strong>{item.translated_name && item.translated_name !== item.name && <small>{item.translated_name}</small>}<small>{item.quantity} × {money(item.unit_price, data.currency)} · {item.remaining_quantity} {t("remaining")}</small>
+          return <ItemSwipeGesture key={item.item_id} item={item} own={own} max={max} step={step} disabled={settled||busy|| (CORE_V7140&&(item.shared_item||data.allocation_mode==='equal'))} onSelect={quantity=>select(item,quantity)} className={'item ' + (unavailable ? 'unavailable ' : '') + (fullyAllocated ? 'is-fully-allocated ' : '') + (selectedByMe ? 'is-selected-by-me' : '')} style={colorGradient ? {'--item-share-background': colorGradient} : undefined}><div className="row between"><div className="grow"><strong>{item.name}</strong>{item.translated_name && item.translated_name !== item.name && <small>{item.translated_name}</small>}<small>{item.quantity} × {money(item.unit_price, data.currency)} · {item.remaining_quantity} {t("remaining")}</small>
  {CORE_V7140&&item.shared_item&&<small className="muted">Shared among {item.assignments.length} people; physical quantity remains {item.quantity}.</small>}{(selectedByMe || fullyAllocated) && <span className="bill-item-status" role="status"><Check size={14} aria-hidden="true"/>{t(fullyAllocated ? 'Fully allocated' : 'Selected by you')}</span>}</div><strong>{money(item.total_price, data.currency)}</strong></div><div className="row between wrap"><div className="assignment-tags">{item.assignments.map(a => <span key={a.assignment_id} className="badge participant-assignment" style={participantStyle(colors, a.participant_id)}>{a.assigned_to}{a.participant_id === mine.participant_id ? ' (' + t('you') + ')' : ''}: {CORE_V7140&&(item.shared_item||data.allocation_mode==='equal')?money(a.amount,data.currency):a.quantity}</span>)}</div><div className="quantity"><button aria-label={'Remove ' + item.name} disabled={settled || busy || (CORE_V7140&&(item.shared_item||data.allocation_mode==='equal')) || own <= 0} onClick={() => select(item, Math.max(0, own - step))}><Minus size={15} /></button><input aria-label={'Your quantity for ' + item.name} type="number" min="0" max={max} step={step} value={own} disabled={settled || busy || unavailable || (CORE_V7140&&(item.shared_item||data.allocation_mode==='equal'))} onChange={e => {
                   const n = Number(e.target.value);
                   if (Number.isFinite(n) && n >= 0 && n <= max) select(item, n);
@@ -307,7 +308,7 @@ export default function Bill() {
    {item.shared_item&&<button type="button" disabled={busy} onClick={()=>{
      if(window.confirm('Clear the shared allocations for this item?'))applyAllocation('unshare',{item_id:item.item_id})
    }}>Undo shared item</button>}
- </div>}</div></div>;
+ </div>}</div></ItemSwipeGesture>;
         })}</Panel>
  <section id="core-bill-summary" className="bill-workspace-summary" aria-label={t("Summary and payment confirmation" )}><h2 className="bill-inline-summary-heading">{t("Summary & payment")}</h2>
    {settled&&<ClosedBillNotice canPay={!owner}/>}

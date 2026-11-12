@@ -98,3 +98,11 @@
 .pruvs-v7150-receipt-loyalty>div:first-child{flex:1 1 180px}
 .pruvs-v7150-receipt-loyalty small{display:block;font-size:11px;color:#6c7e96;line-height:1.45}
 @media(max-width:620px){.pruvs-v7150-city-dialog{padding:16px}.pruvs-v7150-city-form{grid-template-columns:1fr}.pruvs-v7150-map-box iframe{height:260px}}
+
+
+/* v7.1.51: accessible swipe / long press selection on the entire receipt item */
+.core-experience .item.pruvs-v7151-swipe-card{touch-action:pan-y;position:relative;isolation:isolate;user-select:none;cursor:ew-resize}
+.core-experience .item.pruvs-v7151-swipe-card.gesture-disabled{touch-action:auto;cursor:default}
+.pruvs-v7151-gesture-progress{position:absolute;z-index:-1;inset:0;width:var(--swipe-selected,0%);max-width:100%;background:linear-gradient(90deg,#dcebe4,#8dd9b5);border-radius:10px;opacity:.8;pointer-events:none}
+.pruvs-v7151-gesture-hint{display:inline-block;margin-top:7px;padding:5px 10px;border-radius:8px;color:#195c47;background:#eafaf1;font-size:11px;font-weight:650;pointer-events:none}
+@media (prefers-reduced-motion:reduce){.pruvs-v7151-gesture-progress{transition:none}}
