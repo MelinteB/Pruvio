@@ -17,6 +17,7 @@ def test_reference_uses_participant_total_with_tip():
     split = {'participants':[{'participant_id':3,'user_id':2,'total':'12.50','phone_number':'123'},
                              {'participant_id':4,'user_id':7,'total':'15.00','phone_number':'456'}]}
     with patch.object(api.bills,'get_split_bill_session_summary',return_value=split), \
+         patch('app.react_app.split_v7140.annotate_summary',return_value=None), \
          patch('app.react_app.receipt_labels.receipt_label',return_value='Lunch'):
         result=api.summary(None,s,7)
     assert result['participants'][0]['reference_total']=='56.25'

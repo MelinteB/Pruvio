@@ -1,0 +1,146 @@
+/* Pruvs Core v7.1.50 — staging-only ergonomic improvements.
+   No global input or checkbox overrides; preserve accessibility and fallback UX. */
+.pruvs-v7150-scan-head{display:flex;gap:15px;align-items:center;padding:5px 0 16px;min-width:0}
+.pruvs-v7150-scan-icon{flex:0 0 48px;width:48px;height:48px;border-radius:15px;display:grid;place-items:center;background:#eaf1ff;color:#2766d3}
+.pruvs-v7150-scan-copy{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.pruvs-v7150-scan-copy strong{font-size:17px;color:#142853}
+.pruvs-v7150-scan-copy small{font-size:12px;line-height:1.55;color:#526682}
+.core-experience label.pruvs-v7150-camera{position:relative;display:inline-flex;align-items:center;gap:9px;white-space:nowrap;min-height:44px;padding:11px 17px;border-radius:12px;cursor:pointer;font-size:13px;font-weight:700}
+.pruvs-v7150-camera input,.pruvs-v7150-dropzone input{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;opacity:0!important;cursor:pointer!important;z-index:2}
+.pruvs-v7150-camera:focus-within,.pruvs-v7150-dropzone:focus-within{outline:3px solid #6ea4f6;outline-offset:3px}
+.core-experience .dropzone.pruvs-v7150-dropzone{position:relative;min-height:192px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;border-radius:16px;padding:20px;background:#f8fbff;border:1.5px dashed #aec8f3;color:#1b365c;text-align:center}
+.pruvs-v7150-dropzone strong{font-size:15px}
+.pruvs-v7150-dropzone small{font-size:12px;color:#647692}
+.pruvs-v7150-file-button{margin-top:5px;display:inline-flex;align-items:center;justify-content:center;min-height:39px;padding:8px 19px;background:#fff;border:1px solid #bed0ee;border-radius:10px;color:#17428d;font-size:13px;font-weight:750;box-shadow:0 2px 5px #183c7110}
+.pruvs-v7150-selected-file{max-width:95%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#54657b;font-size:11px}
+.pruvs-v7150-scan-meta{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);align-items:stretch;gap:12px;margin:12px 0 16px}
+.pruvs-v7150-project-choice,.pruvs-v7150-ocr-credits{min-width:0;border:1px solid #dfE8f5;border-radius:15px;padding:13px 15px;background:#f9fbff}
+.pruvs-v7150-project-choice{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.pruvs-v7150-project-choice label{display:flex;align-items:center;gap:6px;white-space:nowrap;color:#243e63;font-size:13px;font-weight:700}
+.pruvs-v7150-project-choice select{flex:1 1 130px;min-width:125px;max-width:100%;margin:0;border-radius:10px;font-size:13px}
+.pruvs-v7150-project-choice>a{white-space:nowrap;font-size:12px;text-decoration:none;font-weight:600}
+.pruvs-v7150-ocr-credits{display:flex;gap:6px;flex-direction:column}
+.pruvs-v7150-ocr-label{display:flex;align-items:center;gap:6px;font-size:13px;color:#233c61}
+.pruvs-v7150-ocr-credits small{color:#647591;line-height:1.35}
+.pruvs-v7150-credit-opt{display:flex!important;align-items:center!important;gap:9px!important;font-size:12px!important;color:#30496d;cursor:pointer}
+.pruvs-v7150-credit-opt input{appearance:auto!important;flex:0 0 17px!important;width:17px!important;height:17px!important;margin:0!important;accent-color:#376ddb}
+.pruvs-v7150-record-actions{display:flex;flex-wrap:wrap;align-items:center;gap:7px;min-width:0}
+.pruvs-v7150-record-actions>a,.pruvs-v7150-record-actions>button,.pruvs-v7150-history-controls button{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:34px;border-radius:9px;padding:7px 11px;font-size:12px!important;font-weight:650;text-decoration:none;white-space:nowrap}
+.pruvs-v7150-history-controls{display:flex!important;gap:7px!important;flex-wrap:wrap!important;margin:0!important;align-items:center}
+.pruvs-v7150-record-actions .pruvs-v7150-delete{background:#fff6f7;border:1px solid #f2cbd1;color:#ae3749}
+.core-experience .merchant-receipt-header{min-height:60px;padding:12px 16px}
+.core-experience .merchant-receipt-icon{background:#eaf1ff;color:#285fc6;border-radius:10px;display:grid;place-items:center;width:36px;height:36px}
+.core-experience .merchant-receipt-content{gap:11px;padding:12px 16px 16px}
+.core-experience .merchant-split{border-radius:12px;background:#f9fbff;border:1px solid #e2eaf5;padding:10px}
+.core-experience .merchant-split-link{min-width:0}
+.core-experience .merchant-split .pruvs-v7150-record-actions{padding-top:5px}
+.pruvs-v7150-allocation-panel .row{margin-bottom:10px}
+.pruvs-v7150-assign-all{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px;border:1px solid #e2eaf6;border-radius:12px;background:#f8faff;margin-top:12px}
+.pruvs-v7150-assign-all label{font-size:13px;font-weight:700;color:#233f68}
+.pruvs-v7150-assign-all select{min-width:150px;max-width:250px;flex:1 1 150px;margin:0}
+.pruvs-v7150-assign-all button{white-space:nowrap}
+.pruvs-v7150-mode-note{color:#65748e;font-size:11px}
+.core-experience .item{padding:11px 13px!important;margin-bottom:5px;border-radius:11px!important;position:relative}
+.core-experience .item>.row:first-child{gap:8px}
+.core-experience .item strong{line-height:1.25}
+.core-experience .item small{font-size:11px}
+.core-experience .item .assignment-tags{gap:3px}
+.core-experience .item .quantity{margin-left:auto;flex-shrink:0;display:flex;align-items:center;gap:0}
+.pruvs-v7150-hold-wrap{display:inline-flex;align-items:center;position:relative}
+.pruvs-v7150-hold-wrap>button{touch-action:manipulation;min-width:36px;min-height:36px;user-select:none}
+.pruvs-v7150-hold-hint{position:absolute;z-index:8;right:0;bottom:calc(100% + 7px);background:#173c7a;color:white;padding:7px 9px;border-radius:8px;font-size:11px;white-space:nowrap;box-shadow:0 5px 20px #1630562b}
+.pruvs-v7150-owner-currency{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 14px;border:1px solid #e2eaf5;background:#f8faff;border-radius:12px;margin-bottom:14px}
+.pruvs-v7150-owner-currency>div{display:flex;gap:4px;flex-direction:column}
+.pruvs-v7150-owner-currency strong{color:#193c74}
+.pruvs-v7150-owner-currency small{color:#667992}
+.pruvs-v7150-currency-dialog{max-width:560px;padding:25px!important}
+.pruvs-v7150-currency-dialog h2{margin-bottom:7px}
+.pruvs-v7150-candidate-tree{display:grid;gap:14px;max-height:500px;padding-right:5px}
+.pruvs-v7150-candidate-family{border:1px solid #dfe7f5;border-radius:14px;background:#fff;padding:10px}
+.pruvs-v7150-candidate-family-head{display:flex;align-items:center;gap:10px;margin:2px 3px 9px;color:#27599a}
+.pruvs-v7150-candidate-family-head>div{display:flex;flex-direction:column;gap:3px;min-width:0}
+.pruvs-v7150-candidate-family-head strong{font-size:13px;color:#1a2f54;overflow-wrap:anywhere}
+.pruvs-v7150-candidate-family-head small{font-size:11px;color:#62758f}
+.pruvs-v7150-candidate-parent,.pruvs-v7150-candidate-child{margin:5px 0;padding:10px 12px!important;background:#fff;border-color:#dfe7f4}
+.pruvs-v7150-candidate-parent{background:#f6f9ff}
+.pruvs-v7150-candidate-children{border-left:2px solid #bcd2ef;margin-left:20px;padding-left:13px}
+.pruvs-v7150-candidate-name strong{display:flex;align-items:center;gap:6px}
+.pruvs-v7150-candidate-name small{color:#718198}
+.pruvs-v7150-candidate-family input[type=checkbox]{accent-color:#3874d9}
+@media (max-width:850px){.pruvs-v7150-scan-meta{grid-template-columns:1fr}}
+@media (max-width:620px){.pruvs-v7150-scan-head{flex-wrap:wrap}.pruvs-v7150-scan-copy{flex:1 1 calc(100% - 65px)}.core-experience label.pruvs-v7150-camera{width:100%;justify-content:center}.pruvs-v7150-project-choice{align-items:stretch}.pruvs-v7150-project-choice select{flex-basis:100%}.pruvs-v7150-record-actions{gap:6px}.pruvs-v7150-assign-all{align-items:stretch}.pruvs-v7150-assign-all select{max-width:none;flex:1 1 100%}.core-experience .item{padding:10px!important}.pruvs-v7150-candidate-children{margin-left:10px;padding-left:9px}}
+
+/* City-based loyalty discovery: responsive, opt-in Google map preview. */
+.pruvs-v7150-city-status{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin:0 0 14px;color:#294266;background:#eef5ff;border:1px solid #cde0f7;border-radius:10px;padding:10px 13px;font-size:13px}
+.pruvs-v7150-city-status button{padding:3px 8px;font-size:12px}
+.pruvs-v7150-city-overlay{position:fixed;inset:0;z-index:2500;display:grid;place-items:center;padding:16px;background:rgba(12,29,56,.65)}
+.pruvs-v7150-city-dialog{width:min(680px,100%);max-height:95vh;overflow-y:auto;background:#fff;border-radius:20px;padding:24px;box-shadow:0 24px 90px #1124414a;color:#203955}
+.pruvs-v7150-city-dialog header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px}
+.pruvs-v7150-city-dialog header small{color:#4268ad;letter-spacing:.12em;font-size:10px;font-weight:700}
+.pruvs-v7150-city-dialog h2{margin:4px 0 0;font-size:23px}
+.pruvs-v7150-city-dialog header>button{min-width:35px;min-height:35px;padding:7px;border-radius:10px}
+.pruvs-v7150-city-dialog p{font-size:13px;color:#5b6d83;line-height:1.6}
+.pruvs-v7150-city-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;align-items:end}
+.pruvs-v7150-city-form label{grid-column:1/-1;font-size:13px;font-weight:700}
+.pruvs-v7150-city-form input{height:44px;min-width:0;margin:0;border-radius:10px}
+.pruvs-v7150-city-form button{height:44px;display:inline-flex;align-items:center;gap:7px;border-radius:10px}
+.pruvs-v7150-map-box{margin-top:18px;border:1px solid #d9e4f5;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;background:#f5f8fe}
+.pruvs-v7150-map-box iframe{display:block;border:0;width:100%;height:305px}
+.pruvs-v7150-map-box>a{display:block;padding:12px 14px;font-size:12px;font-weight:700;color:#2d64bd}
+.pruvs-v7150-map-fallback{display:flex;gap:10px;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px 20px;min-height:180px;color:#446da9}
+.pruvs-v7150-map-fallback small{color:#667990;max-width:360px}
+.pruvs-v7150-receipt-loyalty{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid #e0e9f4;border-radius:12px;margin-bottom:8px;padding:12px}
+.pruvs-v7150-receipt-loyalty>div:first-child{flex:1 1 180px}
+.pruvs-v7150-receipt-loyalty small{display:block;font-size:11px;color:#6c7e96;line-height:1.45}
+@media(max-width:620px){.pruvs-v7150-city-dialog{padding:16px}.pruvs-v7150-city-form{grid-template-columns:1fr}.pruvs-v7150-map-box iframe{height:260px}}
+
+
+/* v7.1.51: accessible swipe / long press selection on the entire receipt item */
+.core-experience .item.pruvs-v7151-swipe-card{touch-action:pan-y;position:relative;isolation:isolate;user-select:none;cursor:ew-resize}
+.core-experience .item.pruvs-v7151-swipe-card.gesture-disabled{touch-action:auto;cursor:default}
+.pruvs-v7151-gesture-hint{display:inline-block;margin-top:7px;padding:5px 10px;border-radius:8px;color:#195c47;background:#eafaf1;font-size:11px;font-weight:650;pointer-events:none}
+@media (prefers-reduced-motion:reduce){.pruvs-v7151-gesture-progress{transition:none}}
+
+.pruvs-v7151-membership>div{display:grid;gap:6px;min-width:200px;flex:1}
+.pruvs-v7151-membership progress{width:min(340px,100%);height:10px;accent-color:#2c70d8}
+.pruvs-v7151-voucher-overlay{position:fixed;inset:0;z-index:2600;display:grid;place-items:center;padding:16px;background:#102344b8}
+.pruvs-v7151-voucher{display:flex;align-items:center;gap:11px;flex-direction:column;max-height:94vh;overflow:auto;width:min(430px,100%);border-radius:22px;padding:24px;background:#fff;box-shadow:0 20px 65px #11213f33;text-align:center}
+.pruvs-v7151-voucher svg{background:#fff;border:1px solid #dce7f6;border-radius:15px;padding:12px}
+.pruvs-v7151-voucher>strong{font-size:20px;letter-spacing:2px}
+.pruvs-v7151-voucher>p,.pruvs-v7151-voucher small{color:#62748a}
+
+.pruvs-v7151-promo-creative{width:100%;aspect-ratio:4/5;max-height:330px;object-fit:cover;border-radius:13px;margin:9px 0;border:1px solid #e0e7f3;background:#e4f1eb}
+
+
+/* PRUVS MOBILE NAV FAB PORTRAIT FIX
+   overflow-x:auto on the bottom nav implicitly makes overflow-y:auto and
+   clips its absolutely positioned floating + button on Android portrait.
+   Keep every navigation destination visible; place the scan action outside
+   the bar's visual area without affecting desktop/sidebar navigation.
+*/
+@media (max-width: 760px) {
+  .core-experience nav.mobile-nav.core-mobile-nav {
+    overflow: visible;
+  }
+  .core-experience nav.mobile-nav.core-mobile-nav > a:not(.core-fab) {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: none;
+  }
+  .core-experience nav.mobile-nav.core-mobile-nav > a.core-fab {
+    position: absolute;
+    z-index: 2;
+    right: max(16px, env(safe-area-inset-right, 0px));
+    bottom: calc(100% + 12px);
+    width: 56px;
+    height: 56px;
+    min-width: 56px;
+    flex: 0 0 56px;
+    padding: 0;
+    touch-action: manipulation;
+  }
+  .core-experience .content,
+  .core-experience.with-sidebar .content {
+    padding-bottom: calc(155px + env(safe-area-inset-bottom));
+  }
+}

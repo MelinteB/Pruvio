@@ -1,0 +1,1 @@
+import{m as e}from"./api-BCkrwTPU.js";var t={name:`arrow-left`,size:24,node:[[`path`,{d:`m12 19-7-7 7-7`,key:`1l729n`}],[`path`,{d:`M19 12H5`,key:`x3x0zl`}]]};t.node;var n=e(t),r={name:`search`,size:24,node:[[`path`,{d:`m21 21-4.34-4.34`,key:`14j7rj`}],[`circle`,{cx:`11`,cy:`11`,r:`8`,key:`4ej97u`}]]};r.node;var i=e(r);export{n,i as t};

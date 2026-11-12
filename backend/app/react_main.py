@@ -32,6 +32,8 @@ from app.react_app.commerce import router as commerce_router
 from app.react_app.billing import router as billing_router, webhook_router as stripe_webhook_router
 from app.react_app.expenses import router as expense_router
 from app.react_app.history_manage import router as history_manage_router
+from app.react_app.receipt_groups_v7140 import router as receipt_groups_router
+from app.react_app.bill_projects_v7141 import router as bill_projects_router
 from datetime import datetime
 from sqlalchemy import text as sql_text
 from app.reliability import RELEASE, bounded_seconds, require_postgres_if_enabled, frontend_is_ready, frontend_build_report, require_build_match_if_enabled
@@ -42,7 +44,7 @@ from app.web_domain import canonical_browser_redirect,_PAGES,_PAGE_PATTERNS
 _PAGES.update({"/login","/reset","/password-reset","/notifications","/inbox","/account/notifications","/account/companies","/admin","/admin/manage-users"})
 _PAGES.add("/rewards")
 import app.web_domain as _domain
-_domain._PAGE_PATTERNS += (r"/bill/[^/]+",r"/join/[^/]+",r"/notifications/open/[^/]+")
+_domain._PAGE_PATTERNS += (r"/bill/[^/]+",r"/join/[^/]+",r"/notifications/open/[^/]+",r"/projects/join/[A-Za-z0-9_-]+",r"/projects/[0-9]+")
 
 @asynccontextmanager
 async def lifespan(app):
@@ -66,7 +68,7 @@ async def lifespan(app):
         except asyncio.TimeoutError:worker.cancel()
 
 app=FastAPI(title='Pruvs Core',version=RELEASE,lifespan=lifespan)
-app.include_router(inbox_router);app.include_router(router);app.include_router(loyalty_router);app.include_router(expense_router);app.include_router(history_manage_router);app.include_router(admin_router);app.include_router(legacy_router)
+app.include_router(inbox_router);app.include_router(router);app.include_router(receipt_groups_router);app.include_router(bill_projects_router);app.include_router(loyalty_router);app.include_router(expense_router);app.include_router(history_manage_router);app.include_router(admin_router);app.include_router(legacy_router)
 app.include_router(commerce_router);app.include_router(billing_router);app.include_router(stripe_webhook_router)
 app.include_router(push_router);app.dependency_overrides[push_authenticate]=push_identity
 app.include_router(users_router,prefix='/users',tags=['Admin - Users'])
@@ -92,7 +94,17 @@ async def headers(request,call_next):
     response.headers['X-Frame-Options']='DENY'
     if not path.startswith(('/assets/','/static/')):response.headers['Cache-Control']='no-store'
     if response.headers.get('content-type','').startswith('text/html') and not path.startswith(('/docs','/redoc')):
-        response.headers['Content-Security-Policy']="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        # Permit only explicitly configured public campaign CDN hostnames for image/video creatives.
+        import re
+        hosts=[h.strip().lower() for h in os.getenv('PRUVS_CAMPAIGN_MEDIA_HOSTS','').split(',')]
+        media=' '.join('https://'+h for h in hosts
+                     if re.fullmatch(r'[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?',h) and '..' not in h)
+        response.headers['Content-Security-Policy']=(
+          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+          "img-src 'self' data: blob: "+media+"; "
+          "media-src 'self' "+media+"; connect-src 'self'; worker-src 'self'; "
+          "frame-src 'self' blob: https://www.google.com; object-src 'none'; "
+          "base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
     return response
 
 # v7.1.21: safe support diagnostics. Middleware is outermost and does not
@@ -250,7 +262,9 @@ async def live(websocket: WebSocket, token: str):
 @app.get('/rewards',include_in_schema=False)
 @app.get('/rewards/merchant/{code}',include_in_schema=False)
 def legacy_rewards(code:str|None=None):
-    return RedirectResponse('/account#membership',status_code=302)
+    if code is not None or os.getenv('PRUVS_LOYALTY_ENABLED','false').lower()!='true':
+        return RedirectResponse('/account#membership',status_code=302)
+    return FileResponse(FRONTEND/'index.html',media_type='text/html',headers={'Cache-Control':'no-store'})
 
 @app.get('/{path:path}',include_in_schema=False)
 def frontend(path:str):

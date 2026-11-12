@@ -15,12 +15,12 @@ class PruvsInboxRead(Base):
     read_at=Column(DateTime,nullable=False,default=datetime.utcnow)
 
 router=APIRouter(prefix='/api/v1/inbox')
-KINDS=('split_settled','split_reopened','reminder','bill_settled','bill_reopened','payment_marked','participant_joined','payment_received','payment_receipt_reversed','payment_withdrawn','participant_removed')
+KINDS=('split_settled','split_reopened','reminder','bill_settled','bill_reopened','payment_marked','participant_joined','payment_received','payment_receipt_reversed','payment_withdrawn','participant_removed','project_reminder')
 
 def incoming(db,uid):
     # Includes historical v6.12 kind names. Current membership is checked on opening.
     own=exists().where(and_(SplitBillSession.owner_user_id==uid,or_(PushEvent.url=='/bill/'+SplitBillSession.token,PushEvent.url=='/split-bill/sessions/'+SplitBillSession.token+'/join',PushEvent.url=='/split-bill/sessions/'+SplitBillSession.token+'/widget-ui')))
-    return db.query(PushEvent).filter(PushEvent.user_id==uid,PushEvent.kind.in_(KINDS),or_(PushEvent.kind.in_(('payment_marked','participant_joined','payment_received','payment_receipt_reversed','payment_withdrawn','participant_removed')),~own))
+    return db.query(PushEvent).filter(PushEvent.user_id==uid,PushEvent.kind.in_(KINDS),or_(PushEvent.kind.in_(('payment_marked','participant_joined','payment_received','payment_receipt_reversed','payment_withdrawn','participant_removed','project_reminder')),~own))
 
 def count_unread(db, uid):
     return (incoming(db, uid)
@@ -36,6 +36,15 @@ def mark(db,uid,e):
     e.read_at=datetime.utcnow()
 
 def destination(db,uid,url):
+    project_match = re.fullmatch(r'/projects/([1-9][0-9]{0,11})\?view=settlement',url or '')
+    if project_match:
+        from app.models.group_project_v7141 import BillProjectMember
+        project_id=int(project_match.group(1))
+        member=db.query(BillProjectMember.id).filter(
+            BillProjectMember.project_id==project_id,
+            BillProjectMember.user_id==uid,
+            BillProjectMember.status.in_(('owner','joined'))).first()
+        return f'/projects/{project_id}?view=settlement' if member else None
     match=re.fullmatch(r'/(?:bill/|split-bill/sessions/)([A-Za-z0-9_-]{4,128})(?:/join|/widget-ui)?',url or '')
     if not match:return None
     s=db.query(SplitBillSession).filter_by(token=match.group(1)).first()

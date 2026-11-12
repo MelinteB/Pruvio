@@ -218,16 +218,8 @@ def create_split_bill_session(
     )
     if existing:
         ensure_owner_participant(db, existing, owner)
-        joined_count = get_joined_participants_count(db, existing)
-        if expected_participants_count < joined_count:
-            raise ValueError(
-                f"This session already has {joined_count} joined participants. "
-                "Expected participants count cannot be lower than current joined count."
-            )
-        existing.owner_user_id = owner_user_id
-        existing.expected_participants_count = expected_participants_count
-        db.commit()
-        db.refresh(existing)
+        # Idempotent open: a retry or competing tab must never silently change
+        # people, allocations or payment state. Use the explicit update endpoint.
         return existing
 
     currency = items[0].currency or "—"
@@ -795,6 +787,15 @@ def save_participant_selection(
     if invalid_ids:
         raise ValueError(f"Invalid item IDs for this session: {sorted(invalid_ids)}")
 
+    from app.models.split_bill_v7140 import SplitAllocationState, SplitSharedItem
+    state=db.get(SplitAllocationState,session.id)
+    if state and state.mode=='equal':
+        raise ValueError('Switch back to item selection before editing quantities.')
+    shared_ids={row.receipt_item_id for row in db.query(SplitSharedItem).filter_by(session_id=session.id).all()}
+    # Shared-line allocations are managed only by the owner. Preserve their
+    # exact stored fractional quantities when a participant edits another line.
+    requested={item_id:qty for item_id,qty in requested.items() if item_id not in shared_ids}
+    legacy_ids-=shared_ids
     existing_assignments = get_session_assignments(db, session)
     other_quantity_by_item: dict[int, float] = defaultdict(float)
     for assignment in existing_assignments:
@@ -827,6 +828,7 @@ def save_participant_selection(
     db.query(SplitBillItemAssignment).filter(
         SplitBillItemAssignment.session_id == session.id,
         SplitBillItemAssignment.participant_id == participant_id,
+        ~SplitBillItemAssignment.receipt_item_id.in_(shared_ids),
     ).delete(synchronize_session=False)
 
     for item_id, quantity in requested.items():
@@ -843,6 +845,13 @@ def save_participant_selection(
             )
         )
 
+    # Bump the session revision in the SAME transaction as assignment changes;
+    # the earlier API implementation committed first, permitting a stale write.
+    if state is None:
+        state=SplitAllocationState(session_id=session.id,mode='items',revision=0)
+        db.add(state)
+    state.revision+=1
+    state.modified_at=datetime.utcnow()
     db.commit()
     return get_split_bill_session_summary(db, session)
 

@@ -1,0 +1,4 @@
+/* Staging-only v7.1.40 receipt groups and allocation actions. */
+.pruvs-groups-bar,.pruvs-group-upload-picker{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:14px 0;padding:12px;border:1px solid var(--border,#dce4ee);border-radius:12px}
+.pruvs-groups-bar select,.pruvs-group-upload-picker select,.pruvs-receipt-group-picker select{max-width:320px;min-width:130px}
+.pruvs-receipt-group-picker{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0;font-size:13px}

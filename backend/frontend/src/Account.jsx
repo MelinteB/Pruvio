@@ -41,14 +41,6 @@ export default function Account() {
   const [form, setForm] = useState({
       ...user
     }),
-    [payment, setPayment] = useState({
-      recipient_name: user.payment_recipient_name || '',
-      iban: user.payment_iban || '',
-      bank_name: user.payment_bank_name || '',
-      bic: user.payment_bic || '',
-      revolut_link: user.revolut_payment_link || '',
-      payment_note: user.payment_note || ''
-    }),
     [pw, setPw] = useState({}),
     [contact, setContact] = useState({
       channel: 'email',
@@ -60,12 +52,14 @@ export default function Account() {
     [deletionPreview, setDeletionPreview] = useState(null),
     [deleteCode, setDeleteCode] = useState(''),
     [error, setError] = useState(''),
+    [errorScope, setErrorScope] = useState(''),
     [notice, setNotice] = useState(''),
     [busy, setBusy] = useState(false);
   const keys = useLoad(() => request('/account/passkeys'), []);
-  async function run(fn, msg = t("Saved.")) {
+  async function run(fn, msg = t("Saved."), scope = '') {
     setBusy(true);
     setError('');
+    setErrorScope(scope);
     setNotice('');
     try {
       await fn();
@@ -83,7 +77,7 @@ export default function Account() {
   return <><Title eyebrow={t("MAKE IT YOURS" )} title={t("Your account")} action={<button onClick={() => run(async () => {
       await logout();
       nav('/login');
-    }, t("Signed out."))}>{t("Sign out")}</button>}>{t("Your profile, security and payment details.")}</Title><ProfileHeader user={user}/>{user.is_admin&&<div className="account-admin-link"><Link className="secondary" to="/admin">{t('Open Admin dashboard')}</Link></div>}{error && <Message error={error} />} {notice && <Message>{notice}</Message>}<div className="v22-account-intro"><p className="muted">{t("Choose a category to manage your settings. Only the selected section is displayed.")}</p></div>
+    }, t("Signed out."))}>{t("Sign out")}</button>}>{t("Your profile, security and payment details.")}</Title><ProfileHeader user={user}/>{user.is_admin&&<div className="account-admin-link"><Link className="secondary" to="/admin">{t('Open Admin dashboard')}</Link></div>}{error && errorScope!=='security' && <Message error={error} />} {notice && <Message>{notice}</Message>}<div className="v22-account-intro"><p className="muted">{t("Choose a category to manage your settings. Only the selected section is displayed.")}</p></div>
 <div className="v22-account-sections">
 <AccountSection id="account-profile" title={t("Profile" )} description={t("Your name and username" )} defaultOpen><Panel title={t("Profile")}><form onSubmit={e => {
             e.preventDefault();
@@ -135,13 +129,12 @@ export default function Account() {
             }, 'PATCH');
             await refresh();
           })}>{t("Save preferences")}</button></Panel><Notifications embedded /></AccountSection>
-<AccountSection id="account-payments" title={t("Payment details" )} description={t("Profiles, bank transfer and payment links" )}><PaymentProfiles/><Panel title={t("Default payment details (legacy bills)")}><p className="muted">{t("These details are shared with your participants after you settle a bill. Pruvs does not collect the payment.")}</p><form onSubmit={e => {
-            e.preventDefault();
-            run(async () => {
-              await send('/account/payment', payment, 'PUT');
-              await refresh();
-            });
-          }}>{field(payment, setPayment, 'recipient_name', t("Recipient name"))}{field(payment, setPayment, 'iban', 'IBAN')}{field(payment, setPayment, 'bank_name', t("Bank name"))}{field(payment, setPayment, 'bic', 'BIC / SWIFT')}{field(payment, setPayment, 'revolut_link', t("Revolut.me link"), 'url')}{field(payment, setPayment, 'payment_note', t("Payment reference"))}<button className="primary" disabled={busy}>{t("Save payment details")}</button></form></Panel>
+<AccountSection id="account-payments" title={t("Payment details")} description={t("Payment profiles, bank transfer and payment links")}>
+  <PaymentProfiles legacyPayment={{
+    recipient_name:user.payment_recipient_name||'',iban:user.payment_iban||'',
+    bank_name:user.payment_bank_name||'',bic:user.payment_bic||'',
+    revolut_link:user.revolut_payment_link||''
+  }}/>
  </AccountSection>
 <AccountSection id="account-work" title={t("Expenses & company profiles" )} description={t("Business and trip information" )}><Panel title={t('Company profiles for expenses')}><p className="muted">{t('Manage employer details and trip profiles in a dedicated view.')}</p><Link className="primary" to="/account/companies">{t('Manage company profiles')}</Link></Panel></AccountSection>
 <AccountSection id="account-security" title={t("Account security" )} description={t("Password and passkeys" )}><Panel title={t("Password")}><form onSubmit={e => {
@@ -151,13 +144,13 @@ export default function Account() {
               setPw({});
             }, t("Password changed. Other sessions have been signed out."));
           }}>{field(pw, setPw, 'current_password', t("Current password"), 'password')}{field(pw, setPw, 'new_password', t("New password"), 'password')}<button disabled={busy}>{t("Update password")}</button></form></Panel>
- {config?.passkeys && <Panel title={t("Passkeys")}>{keys.error && <Message error={keys.error} />} {keys.data?.map(k => <div className="list-row" key={k.id}><Fingerprint size={19} /><strong className="grow">{k.name}</strong><button aria-label={'Delete passkey ' + k.name} disabled={busy} onClick={() => {
+ {config?.passkeys && <Panel title={t("Passkeys")}>{error && errorScope==='security' && <Message error={error}/>} {keys.error && <Message error={keys.error} />} {keys.data?.map(k => <div className="list-row" key={k.id}><Fingerprint size={19} /><strong className="grow">{k.name}</strong><button aria-label={'Delete passkey ' + k.name} disabled={busy} onClick={() => {
               if (confirm(t("Remove this passkey?"))) run(async () => {
                 await request('/account/passkeys/' + k.id, {
                   method: 'DELETE'
                 });
                 await keys.reload();
-              });
+              }, t("Passkey removed."), 'security');
             }}><Trash2 size={17} /></button></div>)}<button disabled={busy} onClick={() => run(async () => {
             const start = await send('/account/passkeys/options');
             const c = await credential(start.options, true);
@@ -167,7 +160,7 @@ export default function Account() {
               name: navigator.platform || t("Passkey")
             });
             await keys.reload();
-          }, t("Passkey added."))}><Fingerprint size={17} /> {t("Add passkey")}</button></Panel>}
+          }, t("Passkey added."), 'security')}><Fingerprint size={17} /> {t("Add passkey")}</button></Panel>}
  </AccountSection>
 <AccountSection id="account-privacy" title={t("Privacy & account deletion")} description={t("Control your personal data")}><Panel title={t("Download your account activity")}>
   <p className="muted">{t("Download a JSON snapshot of your profile, saved receipt items, your bill participation and your payment events. It excludes receipt images and other users’ private details. Keep the downloaded file secure.")}</p>
