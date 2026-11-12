@@ -77,6 +77,7 @@ class Reward(Base):
     redemption_code: Mapped[str | None] = mapped_column(String(32), unique=True, nullable=True)
     reserved_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     redeemed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    source_claim_id: Mapped[str | None] = mapped_column(ForeignKey('receipt_claims.id'),nullable=True,index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 class Campaign(Base):

@@ -1,6 +1,8 @@
 from datetime import datetime, timezone, timedelta
 from math import asin, cos, radians, sin, sqrt
 import secrets
+import csv
+from io import StringIO
 from fastapi import Request
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -9,10 +11,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, Field
+from fastapi.responses import Response
 from .db import get_db, engine
 from .config import get_settings
 from .merchant_enrollment import router as merchant_enrollment_router
 from .models import Merchant, Staff, Store, Program, Membership, ReceiptClaim, Reward, Campaign, utcnow
+from .models_v067 import DiscountRedemption
 from .security import merchant_actor, customer_actor, verify_password, encode_merchant_token, decode
 from .schemas import LoginIn, StoreIn, ProgramIn, CampaignGoal, CampaignIn, ReceiptProofIn, ConfirmIn, DemoReceiptIn
 
@@ -183,7 +187,7 @@ def approve_claim(claim_id:str,staff:Staff=Depends(merchant_actor),db:Session=De
     awarded=False
     if membership.stamps>=p.stamps_required:
         membership.stamps-=p.stamps_required
-        db.add(Reward(merchant_id=staff.merchant_id,program_id=p.id,consumer_id=c.consumer_id))
+        db.add(Reward(merchant_id=staff.merchant_id,program_id=p.id,consumer_id=c.consumer_id,source_claim_id=c.id))
         awarded=True
     db.commit()
     return {'status':'approved','reward_awarded':awarded,'stamps':membership.stamps}
@@ -340,15 +344,83 @@ def lookup_redemption(payload:ConfirmIn,staff:Staff=Depends(merchant_actor),db:S
             'currency':p.currency,'expires_at':r.reserved_until.isoformat(),
             'message':'Apply discount in fiscal checkout first, then confirm redemption after completed sale.'}
 
+class RedemptionSaleIn(ConfirmIn):
+    sale_reference:str=Field(min_length=3,max_length=120)
+    sale_amount_minor:int=Field(ge=1,le=10_000_000)
+
 @app.post('/v1/merchant/redemptions/confirm')
-def confirm_redemption_code(payload:ConfirmIn,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+def confirm_redemption_code(payload:RedemptionSaleIn,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    """Mark a reward redeemed only after a completed merchant sale; record the applied discount."""
     merchant_check(staff)
-    r=db.scalar(select(Reward).where(Reward.redemption_code==payload.code.upper(),Reward.merchant_id==staff.merchant_id))
+    code=payload.code.upper()
+    r=db.scalar(select(Reward).where(Reward.redemption_code==code,
+                Reward.merchant_id==staff.merchant_id).with_for_update())
     if not r or r.status!='reserved' or not aware(r.reserved_until) or aware(r.reserved_until)<=utcnow():
         raise HTTPException(409,'Invalid or expired redemption')
+    program=owned(db,Program,r.program_id,staff.merchant_id)
+    if payload.sale_amount_minor<program.reward_minor:
+        raise HTTPException(422,'Sale amount must cover the discount amount.')
+    receipt=payload.sale_reference.strip()
+    if not receipt:raise HTTPException(422,'Completed sale reference is required.')
+    if db.scalar(select(DiscountRedemption.id).where(DiscountRedemption.reward_id==r.id)):
+        raise HTTPException(409,'This reward has already been reconciled.')
+    record=DiscountRedemption(reward_id=r.id,merchant_id=staff.merchant_id,
+        program_id=program.id,source_claim_id=r.source_claim_id,
+        consumer_id=r.consumer_id,staff_id=staff.id,sale_reference=receipt,
+        sale_amount_minor=payload.sale_amount_minor,discount_minor=program.reward_minor,
+        currency=program.currency,verification_source='merchant_attested',created_at=utcnow())
+    db.add(record)
     r.status='redeemed';r.redemption_code=None;r.reserved_until=None;r.redeemed_at=utcnow()
-    db.commit()
-    return {'status':'redeemed','reward_id':r.id}
+    try:db.commit()
+    except IntegrityError:
+        db.rollback();raise HTTPException(409,'Duplicate or already reconciled redemption') from None
+    return {'status':'redeemed','reward_id':r.id,'reconciliation_id':record.id,
+            'discount_minor':record.discount_minor,'currency':record.currency,
+            'verification_source':'merchant_attested'}
+
+def redemption_json(db,row):
+    claim=db.get(ReceiptClaim,row.source_claim_id) if row.source_claim_id else None
+    return {'id':row.id,'reward_id':row.reward_id,'program_id':row.program_id,
+            'source_receipt_ref':claim.external_receipt_id if claim else None,
+            'sale_reference':row.sale_reference,'sale_amount_minor':row.sale_amount_minor,
+            'discount_minor':row.discount_minor,'currency':row.currency,
+            'verification_source':row.verification_source,'created_at':row.created_at.isoformat()}
+
+@app.get('/v1/merchant/redemptions/reconciliation')
+def merchant_reconciliation(limit:int=Query(100,ge=1,le=500),staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    rows=db.scalars(select(DiscountRedemption).where(
+        DiscountRedemption.merchant_id==staff.merchant_id)
+        .order_by(DiscountRedemption.created_at.desc()).limit(limit)).all()
+    return {'rows':[redemption_json(db,r) for r in rows],
+            'total_discount_minor':sum(r.discount_minor for r in rows),
+            'verification_source':'merchant_attested',
+            'notice':'These records document merchant-confirmed discounts, not independently verified POS settlement.'}
+
+@app.get('/v1/merchant/redemptions/reconciliation.csv')
+def merchant_reconciliation_csv(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    rows=db.scalars(select(DiscountRedemption).where(
+        DiscountRedemption.merchant_id==staff.merchant_id)
+        .order_by(DiscountRedemption.created_at.desc()).limit(1000)).all()
+    out=StringIO();writer=csv.writer(out)
+    writer.writerow(['reconciliation_id','reward_id','program_id','source_receipt_ref','merchant_sale_reference',
+                     'sale_amount_minor','discount_minor','currency','verified_by','verified_at','verification_source'])
+    for row in rows:
+        claim=db.get(ReceiptClaim,row.source_claim_id) if row.source_claim_id else None
+        # Prefix untrusted spreadsheet fields to avoid CSV formula injection.
+        safe=lambda v: "'"+v if isinstance(v,str) and v.lstrip().startswith(('=','+','-','@')) else v
+        writer.writerow([row.id,row.reward_id,row.program_id,claim.external_receipt_id if claim else '',
+                         safe(row.sale_reference),row.sale_amount_minor,row.discount_minor,row.currency,
+                         row.staff_id,row.created_at.isoformat(),row.verification_source])
+    return Response(out.getvalue(),media_type='text/csv',headers={
+        'Content-Disposition':'attachment; filename="pruvs-business-reconciliation.csv"',
+        'Cache-Control':'no-store'})
+
+@app.get('/v1/customer/redemptions')
+def customer_redemptions(consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
+    rows=db.scalars(select(DiscountRedemption).where(
+        DiscountRedemption.consumer_id==consumer_id).order_by(
+        DiscountRedemption.created_at.desc()).limit(100)).all()
+    return [redemption_json(db,row) for row in rows]
 
 
 # Demo-only bridge simulator. Do not enable outside local development.
