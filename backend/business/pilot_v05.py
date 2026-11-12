@@ -36,6 +36,13 @@ def aware(dt):
     if dt is None:return None
     return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
 
+def campaign_schema_ready(db):
+    """No 500 when the Business staging database has not been migrated."""
+    from sqlalchemy import inspect
+    columns={c['name'] for c in inspect(db.bind).get_columns('loyalty_promotions')}
+    if not {'media_url','media_type','media_alt'}.issubset(columns):
+        raise HTTPException(503,'Campaign media schema is not migrated. Contact the staging administrator.')
+
 def pilot_enabled():
     if os.getenv('PRUVS_BUSINESS_RECEIPT_PILOT_ENABLED','false').lower() != 'true':
         raise HTTPException(503,'Receipt verification pilot is not enabled.')
@@ -77,12 +84,14 @@ def campaign_media(payload):
 
 @router.get('/v1/merchant/promotions')
 def merchant_promotions(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    campaign_schema_ready(db)
     rows=db.scalars(select(Promotion).where(Promotion.merchant_id==staff.merchant_id)
                     .order_by(Promotion.created_at.desc()).limit(100)).all()
     return [promo_json(p,db) for p in rows]
 
 @router.post('/v1/merchant/promotions',status_code=201)
 def merchant_create_promo(payload:PromotionIn,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    campaign_schema_ready(db)
     can_manage(staff)
     program=owned_program(db,staff,payload.program_id)
     if program.status!='published':raise HTTPException(409,'Publish the loyalty program first.')
@@ -116,6 +125,7 @@ def unpublish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),db:
 
 @router.get('/v1/promotions')
 def public_promotions(limit:int=Query(12,ge=1,le=30),db:Session=Depends(get_db)):
+    campaign_schema_ready(db)
     # No draft, expired, inactive merchant, inactive store or unpublished-program exposure.
     now=utcnow()
     rows=db.scalars(select(Promotion).where(Promotion.status=='published')

@@ -63,12 +63,12 @@ def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Sessio
     }
     instructions=('You write merchant-reviewed advertising copy for the Pruvs loyalty app. '
       'Return only JSON with the specified keys. Use only the provided merchant facts. '
-      'Do not invent prices, discounts, eligibility, dates, payment integration, "
-      "limited stock, independent verification or guaranteed rewards. "
-      "Clearly explain that only merchant-verified purchases count toward the reward. "
-      "Avoid financial promises. Headlines are short. Image brief describes a 4:5 vertical "
-      "mobile display with text-safe margins. Motion storyboard is a simple 3-second "
-      "animated card with no copyrighted imagery. Watermark must be the requested watermark.")
+      'Do not invent prices, discounts, eligibility, dates, payment integration, '
+      'limited stock, independent verification or guaranteed rewards. '
+      'Clearly explain that only merchant-verified purchases count toward the reward. '
+      'Avoid financial promises. Headlines are short. Image brief describes a 4:5 vertical '
+      'mobile display with text-safe margins. Motion storyboard is a simple 3-second '
+      'animated card with no copyrighted imagery. Watermark must be the requested watermark.')
     body={
        'model':os.getenv('PRUVS_CAMPAIGN_AI_MODEL','gpt-5.5'),
        'instructions':instructions,
