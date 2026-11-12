@@ -38,10 +38,21 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     if os.getenv('PRUVS_PLATFORM_COMBINED_STAGING','').lower() == 'true':
         db_url = os.environ.get('BUSINESS_DATABASE_URL','').strip()
+        # Render supplies postgresql:// URLs by default. SQLAlchemy needs the
+        # explicit psycopg v3 driver used by this application's dependencies.
+        # Normalize only PostgreSQL schemes; never substitute the Core URL.
         from sqlalchemy.engine import make_url
-        if not db_url.startswith('postgresql+psycopg://') or make_url(db_url).database != 'pruvs_business_staging':
+        from sqlalchemy.exc import ArgumentError
+        try:
+            parsed = make_url(db_url)
+        except (ArgumentError, ValueError) as exc:
+            raise RuntimeError('Combined staging requires a valid Business PostgreSQL database URL') from exc
+        if (parsed.drivername not in ('postgres', 'postgresql',
+                                      'postgresql+psycopg', 'postgresql+psycopg2')
+                or parsed.database != 'pruvs_business_staging'):
             raise RuntimeError('Combined staging requires isolated pruvs_business_staging database')
-        settings = Settings(database_url=db_url)
+        normalized = parsed.set(drivername='postgresql+psycopg').render_as_string(hide_password=False)
+        settings = Settings(database_url=normalized)
     else:
         settings = Settings()
     settings.validate_runtime()
