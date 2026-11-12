@@ -9,3 +9,17 @@
 .customer-sandbox{display:grid;gap:22px}.customer-sandbox .info-banner{margin:0}.customer-header{display:flex;justify-content:space-between;align-items:center;gap:12px}.customer-header h2{font-size:27px;margin:7px 0}.customer-header p,.demo-offer p{font-size:13px;color:#81929a;line-height:1.6}.demo-offer-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.demo-offer{display:grid;gap:14px}.demo-offer h2{font-size:20px}.demo-progress{padding:13px;border-radius:10px;background:#eaf8f4;color:#097a6d;font-weight:700;font-size:13px}.demo-wallet{display:grid;gap:10px;margin-top:18px}.demo-wallet p{color:#84959c;font-size:13px}.demo-wallet-item{padding:14px;border:1px solid #e2e8e9;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:10px}.demo-wallet-item b{display:block}.demo-wallet-item small{display:block;color:#8d9aa3;margin-top:5px}.demo-voucher-code{font:800 18px monospace;letter-spacing:.08em;margin-top:8px}.demo-actions{display:flex;gap:10px;flex-wrap:wrap}
 @media(max-width:800px){.demo-offer-grid{grid-template-columns:1fr}.customer-header{align-items:flex-start;flex-direction:column}}
 \n.pruvs-business-icon{display:block;object-fit:contain!important;border:0!important;background:transparent!important;padding:0!important;border-radius:11px!important;box-shadow:0 2px 9px #08735d2d}\n
+/* Business v0.6.7: full loyalty-program management */
+.pruvs-program-list{display:grid;gap:13px}
+.pruvs-program-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;border:1px solid #dceae5;background:#fff;border-radius:14px;padding:15px}
+.pruvs-program-icon{width:40px;height:40px;border-radius:12px;background:#e7f8ef;color:#1a8765;display:grid;place-items:center}
+.pruvs-program-meta{display:flex;gap:4px;flex-direction:column;flex:1 1 235px}
+.pruvs-program-meta strong{color:#102f29}
+.pruvs-program-meta small{font-size:12px;color:#677e79}
+.pruvs-program-actions{display:flex;flex-wrap:wrap;gap:8px}
+.pruvs-program-actions button{display:inline-flex;align-items:center;gap:6px;justify-content:center}
+.pruvs-program-editor{flex:1 1 100%;display:grid;gap:12px;border-top:1px solid #dceae5;padding-top:12px}
+.pruvs-program-editor>label,.pruvs-program-editor-grid label{display:grid;gap:6px;color:#265044;font-size:12px;font-weight:700}
+.pruvs-program-editor input,.pruvs-program-editor textarea{width:100%;border:1px solid #d0e2db;border-radius:10px;padding:10px;font:inherit}
+.pruvs-program-editor-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media(max-width:650px){.pruvs-program-editor-grid{grid-template-columns:1fr}}
