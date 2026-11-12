@@ -25,7 +25,7 @@ jobs:
       - name: Isolated Core, Business and AI campaign validation
         working-directory: backend
         run: |
-          python -m pip install 'fastapi>=0.116,<1' 'httpx>=0.27,<1' 'sqlalchemy>=2.0,<3' 'pydantic-settings>=2.5,<3' 'pytest>=8,<10' 'pillow>=10,<13' 'python-multipart>=0.0.9'
+          python -m pip install -r business-requirements.txt 'Pillow>=10,<13' 'python-multipart>=0.0.9'
           python -m compileall -q app/platform_combined.py app/react_app/loyalty_gateway.py app/react_main.py business scripts/check_stage_schema_v066.py business_migrations
           python -m pytest -q tests/test_combined_platform_routes.py tests/test_stage_schema_v066.py tests/test_combined_database_url_v066.py tests/test_stage_v067.py
       - name: Core React tests + production bundle
