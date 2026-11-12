@@ -1,4 +1,5 @@
 import React,{useState} from 'react';
+import {QRCodeSVG} from 'qrcode.react';
 import {send} from './api';
 import {ShieldCheck, Copy, X, UploadCloud} from 'lucide-react';
 import './customer-code-v12.css';
@@ -31,6 +32,7 @@ export default function CustomerReceiptCode({caseId,programs=[]}) {
         <div className="row between"><h2>Earn rewards</h2><button type="button" aria-label="Close" disabled={busy} onClick={()=>setOpen(false)}><X size={19}/></button></div>
         {result ? <div className="pruvs-v12-code" role="status"><p>Enter this code in Pruvs Business before it expires:</p>
           <strong>{result.display_code}</strong>
+           <div className="pruvs-v7151-claim-qr"><QRCodeSVG value={result.display_code} size={196} title="Single-use receipt verification code" level="M"/><small>Show this QR or enter the code in Business → Receipt claims. The merchant must still inspect and approve the purchase.</small></div>
           <button type="button" onClick={()=>navigator.clipboard?.writeText(result.display_code)}> <Copy size={16}/> Copy code</button>
           <p>Expires {new Date(result.expires_at).toLocaleString()}</p>
           <p>A merchant must review the receipt and approve it before any stamp is credited.</p>

@@ -41,3 +41,20 @@ export function itemShareGradient(item, colors) {
   if(start<99.99) stops.push(`#f6f8fd ${start.toFixed(2)}% 100%`);
   return `linear-gradient(100deg, ${stops.join(', ')})`;
 }
+
+/**
+ * Preview one participant's proposed quantity without altering saved shares.
+ * Other participants' colors and quantities remain unchanged.
+ */
+export function itemSharePreviewGradient(item, colors, participantId, proposedQuantity) {
+  if(participantId == null)return itemShareGradient(item, colors);
+  const qty=Number.isFinite(Number(proposedQuantity)) ? Math.max(0,Number(proposedQuantity)) : 0;
+  let found=false;
+  const assignments=(item?.assignments||[]).map(a=>{
+    if(String(a.participant_id)!==String(participantId))return a;
+    found=true;
+    return {...a,quantity:qty};
+  });
+  if(!found&&qty>0)assignments.push({participant_id:participantId,quantity:qty});
+  return itemShareGradient({...item,assignments},colors);
+}

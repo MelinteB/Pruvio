@@ -1,6 +1,8 @@
 from datetime import datetime, timezone, timedelta
 from math import asin, cos, radians, sin, sqrt
 import secrets
+import csv
+from io import StringIO
 from fastapi import Request
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -8,18 +10,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
+from pydantic import BaseModel, Field
+from fastapi.responses import Response
 from .db import get_db, engine
 from .config import get_settings
 from .merchant_enrollment import router as merchant_enrollment_router
 from .models import Merchant, Staff, Store, Program, Membership, ReceiptClaim, Reward, Campaign, utcnow
+from .models_v067 import DiscountRedemption
 from .security import merchant_actor, customer_actor, verify_password, encode_merchant_token, decode
 from .schemas import LoginIn, StoreIn, ProgramIn, CampaignGoal, CampaignIn, ReceiptProofIn, ConfirmIn, DemoReceiptIn
 
 settings=get_settings()
-app=FastAPI(title='Pruvs Business API',version='0.6.6',docs_url='/docs' if settings.app_env!='production' else None)
+app=FastAPI(title='Pruvs Business API',version='0.6.7',docs_url='/docs' if settings.app_env!='production' else None)
 app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=False,
                    allow_methods=['GET','POST'],allow_headers=['Authorization','Content-Type'])
 app.include_router(merchant_enrollment_router)
+from .ai_campaign_v067 import router as ai_campaign_router
+app.include_router(ai_campaign_router)
+from .media_v067 import router as media_router
+app.include_router(media_router)
 
 def owned(db, cls, object_id, merchant_id):
     item=db.get(cls,object_id)
@@ -56,7 +65,7 @@ def aware(dt):
 
 @app.get('/health')
 def health():
-    return {'service':'Pruvs Business','version':'0.6.6','status':'ok'}
+    return {'service':'Pruvs Business','version':'0.6.7','status':'ok'}
 
 @app.get('/ready', include_in_schema=False)
 def readiness():
@@ -65,10 +74,10 @@ def readiness():
     try:
         checks=check_schema(engine())
         if not all(checks.values()):
-            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.6'})
-        return {'status':'ready','version':'0.6.6'}
+            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.7'})
+        return {'status':'ready','version':'0.6.7'}
     except Exception:
-        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.6'})
+        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.7'})
 
 @app.post('/v1/merchant/login')
 def login(payload:LoginIn, db:Session=Depends(get_db)):
@@ -122,6 +131,42 @@ def publish_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Sessio
     p.status='published';db.commit()
     return program_json(p)
 
+
+class ProgramEdit(BaseModel):
+    title: str | None = Field(default=None,min_length=3,max_length=180)
+    description: str | None = Field(default=None,max_length=500)
+    stamps_required: int | None = Field(default=None,ge=2,le=30)
+    min_purchase_minor: int | None = Field(default=None,ge=0,le=10_000_000)
+    reward_minor: int | None = Field(default=None,ge=1,le=10_000_000)
+
+@app.patch('/v1/merchant/programs/{program_id}')
+def edit_program(program_id:str,payload:ProgramEdit,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    merchant_check(staff)
+    program=owned(db,Program,program_id,staff.merchant_id)
+    changes=payload.model_dump(exclude_unset=True)
+    if not changes or any(v is None for v in changes.values()):
+        raise HTTPException(422,'Provide at least one valid program change.')
+    monetary={'stamps_required','min_purchase_minor','reward_minor'}
+    if program.status!='draft' and monetary.intersection(changes):
+        raise HTTPException(409,'Active program criteria cannot change. Pause or create a new program instead.')
+    for key,value in changes.items():setattr(program,key,value.strip() if isinstance(value,str) else value)
+    db.commit()
+    return program_json(program)
+
+@app.post('/v1/merchant/programs/{program_id}/pause')
+def pause_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    merchant_check(staff)
+    program=owned(db,Program,program_id,staff.merchant_id)
+    if program.status!='published':raise HTTPException(409,'Only published programs may be paused.')
+    program.status='paused';db.commit();return program_json(program)
+
+@app.post('/v1/merchant/programs/{program_id}/resume')
+def resume_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    merchant_check(staff)
+    program=owned(db,Program,program_id,staff.merchant_id)
+    if program.status!='paused':raise HTTPException(409,'Only paused programs may be resumed.')
+    program.status='published';db.commit();return program_json(program)
+
 @app.get('/v1/merchant/claims')
 def get_claims(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     claims=db.scalars(select(ReceiptClaim).where(ReceiptClaim.merchant_id==staff.merchant_id).order_by(ReceiptClaim.created_at.desc()).limit(100)).all()
@@ -146,7 +191,7 @@ def approve_claim(claim_id:str,staff:Staff=Depends(merchant_actor),db:Session=De
     awarded=False
     if membership.stamps>=p.stamps_required:
         membership.stamps-=p.stamps_required
-        db.add(Reward(merchant_id=staff.merchant_id,program_id=p.id,consumer_id=c.consumer_id))
+        db.add(Reward(merchant_id=staff.merchant_id,program_id=p.id,consumer_id=c.consumer_id,source_claim_id=c.id))
         awarded=True
     db.commit()
     return {'status':'approved','reward_awarded':awarded,'stamps':membership.stamps}
@@ -229,6 +274,21 @@ def join_program(program_id:str,consumer_id:str=Depends(customer_actor),db:Sessi
         return {'membership_id':membership.id,'stamps':membership.stamps,'already_joined':True}
     return {'membership_id':membership.id,'stamps':0,'already_joined':False}
 
+
+@app.post('/v1/customer/programs/{program_id}/leave')
+def leave_program(program_id:str,consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
+    membership=db.scalar(select(Membership).where(Membership.consumer_id==consumer_id,
+               Membership.program_id==program_id).with_for_update())
+    if not membership:return {'left':True,'already_left':True}
+    pending=db.scalar(select(func.count(ReceiptClaim.id)).where(ReceiptClaim.consumer_id==consumer_id,
+                      ReceiptClaim.program_id==program_id,ReceiptClaim.status=='pending'))
+    pending_rewards=db.scalar(select(func.count(Reward.id)).where(Reward.consumer_id==consumer_id,
+                Reward.program_id==program_id,Reward.status.in_(('available','reserved'))))
+    if membership.stamps or pending or pending_rewards:
+        raise HTTPException(409,'You have stamps, pending receipts or unredeemed rewards. Redeem or resolve them before leaving.')
+    db.delete(membership);db.commit()
+    return {'left':True,'already_left':False}
+
 @app.post('/v1/customer/claims',status_code=201)
 def claim_receipt(payload:ReceiptProofIn,consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
     p=db.get(Program,payload.program_id)
@@ -256,7 +316,11 @@ def claim_receipt(payload:ReceiptProofIn,consumer_id:str=Depends(customer_actor)
 def wallet(consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
     memberships=db.scalars(select(Membership).where(Membership.consumer_id==consumer_id)).all()
     rewards=db.scalars(select(Reward).where(Reward.consumer_id==consumer_id)).all()
-    return {'memberships':[{'program_id':m.program_id,'stamps':m.stamps} for m in memberships],
+    return {'memberships':[{'program_id':m.program_id,'stamps':m.stamps,
+             'title':(db.get(Program,m.program_id).title if db.get(Program,m.program_id) else 'Loyalty program'),
+             'stamps_required':(db.get(Program,m.program_id).stamps_required if db.get(Program,m.program_id) else 0),
+             'status':(db.get(Program,m.program_id).status if db.get(Program,m.program_id) else 'unknown')}
+             for m in memberships],
             'rewards':[{'id':r.id,'program_id':r.program_id,'status':r.status,
                         'code':r.redemption_code if r.status=='reserved' else None,
                         'reserved_until':r.reserved_until.isoformat() if r.reserved_until else None} for r in rewards]}
@@ -284,15 +348,83 @@ def lookup_redemption(payload:ConfirmIn,staff:Staff=Depends(merchant_actor),db:S
             'currency':p.currency,'expires_at':r.reserved_until.isoformat(),
             'message':'Apply discount in fiscal checkout first, then confirm redemption after completed sale.'}
 
+class RedemptionSaleIn(ConfirmIn):
+    sale_reference:str=Field(min_length=3,max_length=120)
+    sale_amount_minor:int=Field(ge=1,le=10_000_000)
+
 @app.post('/v1/merchant/redemptions/confirm')
-def confirm_redemption_code(payload:ConfirmIn,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+def confirm_redemption_code(payload:RedemptionSaleIn,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    """Mark a reward redeemed only after a completed merchant sale; record the applied discount."""
     merchant_check(staff)
-    r=db.scalar(select(Reward).where(Reward.redemption_code==payload.code.upper(),Reward.merchant_id==staff.merchant_id))
+    code=payload.code.upper()
+    r=db.scalar(select(Reward).where(Reward.redemption_code==code,
+                Reward.merchant_id==staff.merchant_id).with_for_update())
     if not r or r.status!='reserved' or not aware(r.reserved_until) or aware(r.reserved_until)<=utcnow():
         raise HTTPException(409,'Invalid or expired redemption')
+    program=owned(db,Program,r.program_id,staff.merchant_id)
+    if payload.sale_amount_minor<program.reward_minor:
+        raise HTTPException(422,'Sale amount must cover the discount amount.')
+    receipt=payload.sale_reference.strip()
+    if not receipt:raise HTTPException(422,'Completed sale reference is required.')
+    if db.scalar(select(DiscountRedemption.id).where(DiscountRedemption.reward_id==r.id)):
+        raise HTTPException(409,'This reward has already been reconciled.')
+    record=DiscountRedemption(reward_id=r.id,merchant_id=staff.merchant_id,
+        program_id=program.id,source_claim_id=r.source_claim_id,
+        consumer_id=r.consumer_id,staff_id=staff.id,sale_reference=receipt,
+        sale_amount_minor=payload.sale_amount_minor,discount_minor=program.reward_minor,
+        currency=program.currency,verification_source='merchant_attested',created_at=utcnow())
+    db.add(record)
     r.status='redeemed';r.redemption_code=None;r.reserved_until=None;r.redeemed_at=utcnow()
-    db.commit()
-    return {'status':'redeemed','reward_id':r.id}
+    try:db.commit()
+    except IntegrityError:
+        db.rollback();raise HTTPException(409,'Duplicate or already reconciled redemption') from None
+    return {'status':'redeemed','reward_id':r.id,'reconciliation_id':record.id,
+            'discount_minor':record.discount_minor,'currency':record.currency,
+            'verification_source':'merchant_attested'}
+
+def redemption_json(db,row):
+    claim=db.get(ReceiptClaim,row.source_claim_id) if row.source_claim_id else None
+    return {'id':row.id,'reward_id':row.reward_id,'program_id':row.program_id,
+            'source_receipt_ref':claim.external_receipt_id if claim else None,
+            'sale_reference':row.sale_reference,'sale_amount_minor':row.sale_amount_minor,
+            'discount_minor':row.discount_minor,'currency':row.currency,
+            'verification_source':row.verification_source,'created_at':row.created_at.isoformat()}
+
+@app.get('/v1/merchant/redemptions/reconciliation')
+def merchant_reconciliation(limit:int=Query(100,ge=1,le=500),staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    rows=db.scalars(select(DiscountRedemption).where(
+        DiscountRedemption.merchant_id==staff.merchant_id)
+        .order_by(DiscountRedemption.created_at.desc()).limit(limit)).all()
+    return {'rows':[redemption_json(db,r) for r in rows],
+            'total_discount_minor':sum(r.discount_minor for r in rows),
+            'verification_source':'merchant_attested',
+            'notice':'These records document merchant-confirmed discounts, not independently verified POS settlement.'}
+
+@app.get('/v1/merchant/redemptions/reconciliation.csv')
+def merchant_reconciliation_csv(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    rows=db.scalars(select(DiscountRedemption).where(
+        DiscountRedemption.merchant_id==staff.merchant_id)
+        .order_by(DiscountRedemption.created_at.desc()).limit(1000)).all()
+    out=StringIO();writer=csv.writer(out)
+    writer.writerow(['reconciliation_id','reward_id','program_id','source_receipt_ref','merchant_sale_reference',
+                     'sale_amount_minor','discount_minor','currency','verified_by','verified_at','verification_source'])
+    for row in rows:
+        claim=db.get(ReceiptClaim,row.source_claim_id) if row.source_claim_id else None
+        # Prefix untrusted spreadsheet fields to avoid CSV formula injection.
+        safe=lambda v: "'"+v if isinstance(v,str) and v.lstrip().startswith(('=','+','-','@')) else v
+        writer.writerow([row.id,row.reward_id,row.program_id,claim.external_receipt_id if claim else '',
+                         safe(row.sale_reference),row.sale_amount_minor,row.discount_minor,row.currency,
+                         row.staff_id,row.created_at.isoformat(),row.verification_source])
+    return Response(out.getvalue(),media_type='text/csv',headers={
+        'Content-Disposition':'attachment; filename="pruvs-business-reconciliation.csv"',
+        'Cache-Control':'no-store'})
+
+@app.get('/v1/customer/redemptions')
+def customer_redemptions(consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
+    rows=db.scalars(select(DiscountRedemption).where(
+        DiscountRedemption.consumer_id==consumer_id).order_by(
+        DiscountRedemption.created_at.desc()).limit(100)).all()
+    return [redemption_json(db,row) for row in rows]
 
 
 # Demo-only bridge simulator. Do not enable outside local development.

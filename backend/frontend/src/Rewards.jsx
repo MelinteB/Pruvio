@@ -1,4 +1,5 @@
 import React, {useEffect, useState} from 'react';
+import {QRCodeSVG} from 'qrcode.react';
 import {Link} from 'react-router-dom';
 import {Compass, Gift, MapPin, RefreshCcw, ReceiptText, Ticket, CheckCircle2, X, Search} from 'lucide-react';
 import {Title, Panel, Message, Spinner} from './common';
@@ -21,6 +22,7 @@ export default function Rewards(){
   const [error,setError]=useState('');
   const [message,setMessage]=useState('');
   const [coordinates,setCoordinates]=useState(null);
+  const [redemptions,setRedemptions]=useState([]),[activeVoucher,setActiveVoucher]=useState(null);
   const [cityOpen,setCityOpen]=useState(false),[cityQuery,setCityQuery]=useState(''),[cityFilter,setCityFilter]=useState('');
   const mapKey=(import.meta.env.VITE_GOOGLE_MAPS_EMBED_KEY||'').trim();
 
@@ -38,6 +40,7 @@ export default function Rewards(){
         setPromotions(Array.isArray(pr)?pr:[]);
       }else if(activeTab==='wallet'){
         const w=await request('/loyalty/wallet');setWallet(w||{memberships:[],rewards:[]});
+        setRedemptions(await request('/loyalty/redemptions').catch(()=>[]));
       }else if(activeTab==='receipts'){
         // Receipts are owned by Core and must stay visible even when Business is asleep.
         const r=await request('/loyalty/receipts');setReceipts(r.receipts||[]);
@@ -105,7 +108,11 @@ export default function Rewards(){
     {!loading && status?.enabled && tab==='offers' && <>
       <div className="row wrap rewards-actions"><button type="button" onClick={nearMe} disabled={!!busy}><MapPin size={17}/> Offers near me</button><button type="button" onClick={()=>{setCityFilter('');setCoordinates(null);refresh(null);}} disabled={!!busy}><Compass size={17}/> All offers</button><button type="button" onClick={()=>refresh()} disabled={!!busy}><RefreshCcw size={17}/> Refresh</button></div>
       {cityFilter&&<p className="pruvs-v7150-city-status">Showing Pruvs merchant programs matching <strong>{cityFilter}</strong>. <button type="button" onClick={()=>setCityOpen(true)}>Change city</button></p>}
-      {promotions.length>0 && !cityFilter && <section className="rewards-featured"><h2>Featured merchant promotions</h2><div className="rewards-cards">{promotions.map(p=><Panel key={p.id} className="rewards-card rewards-promotion"><small className="rewards-promo-tag">LOCAL PROMOTION · {p.merchant_name}</small><h3>{p.headline}</h3><p>{p.message}</p><p><strong>{p.stamps_required} eligible receipts</strong> to earn {money(p.reward_minor/100,p.currency)} · Minimum purchase {money(p.min_purchase_minor/100,p.currency)}</p><small>{p.store_name}{p.expires_at?' · Ends '+new Date(p.expires_at).toLocaleDateString():''}</small><button className="primary" disabled={!!busy||joined.has(p.program_id)} onClick={()=>perform(p.program_id,()=>send('/loyalty/programs/'+p.program_id+'/join'),()=> 'Joined '+p.program_title+'.')}>{joined.has(p.program_id)?'Joined':'Join promoted program'}</button></Panel>)}</div></section>}
+      {promotions.length>0 && !cityFilter && <section className="rewards-featured"><h2>Featured merchant promotions</h2><div className="rewards-cards">{promotions.map(p=><Panel key={p.id} className="rewards-card rewards-promotion"><small className="rewards-promo-tag">LOCAL PROMOTION · {p.merchant_name}</small>
+          {p.media_url&&p.media_url.startsWith('https://')&&(p.media_type?.startsWith('image/')
+            ?<img className="pruvs-v7151-promo-creative" src={p.media_url} alt={p.media_alt||p.headline} loading="lazy"/>
+            :p.media_type?.startsWith('video/')?<video className="pruvs-v7151-promo-creative" src={p.media_url} autoPlay muted loop playsInline preload="metadata" aria-label={p.media_alt||p.headline}/>:null)}
+          <h3>{p.headline}</h3><p>{p.message}</p><p><strong>{p.stamps_required} eligible receipts</strong> to earn {money(p.reward_minor/100,p.currency)} · Minimum purchase {money(p.min_purchase_minor/100,p.currency)}</p><small>{p.store_name}{p.expires_at?' · Ends '+new Date(p.expires_at).toLocaleDateString():''}</small><button className="primary" disabled={!!busy||joined.has(p.program_id)} onClick={()=>perform(p.program_id,()=>send('/loyalty/programs/'+p.program_id+'/join'),()=> 'Joined '+p.program_title+'.')}>{joined.has(p.program_id)?'Joined':'Join promoted program'}</button></Panel>)}</div></section>}
       <div className="rewards-cards">{shownOffers.map(o=><Panel key={o.program.id} className="rewards-card"><div className="rewards-icon"><Gift size={22}/></div><small className="muted">{o.merchant_name} · {o.store.name}</small><h2>{o.program.title}</h2><p>{o.program.description}</p><p><strong>{o.program.stamps_required} qualifying receipts</strong> to earn {money(o.program.reward_minor/100,o.program.currency)}</p>
         {o.distance_km!=null && <small>{o.distance_km} km away</small>}
         <button type="button" className="primary" disabled={!!busy || joined.has(o.program.id)} onClick={()=>perform(o.program.id,()=>send('/loyalty/programs/'+o.program.id+'/join'),()=> 'Joined '+o.program.title+'.')}>{joined.has(o.program.id)?<><CheckCircle2 size={16}/> Joined</>:busy===o.program.id?'Joining…':'Join loyalty program'}</button>
@@ -115,11 +122,35 @@ export default function Rewards(){
     </>}
     {!loading && status?.enabled && tab==='wallet' && <>
       <Panel title="Loyalty progress">
-        {wallet.memberships?.length ? wallet.memberships.map((m,i)=>{const p=byProgram.get(m.program_id)?.program;return <div className="rewards-wallet-row" key={i}><strong>{p?.title||'Loyalty program'}</strong><span>{m.stamps} stamps</span></div>;}):<p>No programs joined yet. Start in Discover.</p>}
+        {wallet.memberships?.length ? wallet.memberships.map((m,i)=>{const p=byProgram.get(m.program_id)?.program;return <div className="rewards-wallet-row pruvs-v7151-membership" key={m.program_id}>
+        <div><strong>{m.title||p?.title||'Loyalty program'}</strong><small>{m.status==='published'?'Active loyalty program':m.status}</small>
+          <p>{m.stamps} / {m.stamps_required||p?.stamps_required||'?'} verified purchases</p>
+          <progress max={m.stamps_required||p?.stamps_required||1} value={m.stamps} aria-label="Loyalty stamp progress"/>
+        </div><button type="button" className="secondary" disabled={!!busy||m.stamps>0} title={m.stamps>0?'Redeem your stamps before leaving':''} onClick={()=>{
+          if(window.confirm('Leave this loyalty program? Only programs without pending rewards or stamps can be left.'))
+            perform(m.program_id,()=>send('/loyalty/programs/'+m.program_id+'/leave'),()=> 'You left '+m.title+'.');
+        }}>Leave program</button></div>;}):<p>No programs joined yet. Start in Discover.</p>}
       </Panel>
       <Panel title="Available rewards">
-        {wallet.rewards?.length?wallet.rewards.map(r=><div className="rewards-wallet-row" key={r.id}><div><strong>{byProgram.get(r.program_id)?.program?.title||'Merchant reward'}</strong><p>Status: {r.status}</p>{r.code && <p>Checkout code: <strong className="rewards-code">{r.code}</strong></p>}</div>{r.status==='available'&&<button type="button" disabled={!!busy} onClick={()=>perform(r.id,()=>send('/loyalty/rewards/'+r.id+'/reserve'),data=>'Redemption code: '+data.code+' (expires in 10 minutes).')}>Reserve voucher</button>}</div>):<p>No rewards yet. Merchant-approved purchases count toward rewards.</p>}
+        {wallet.rewards?.length?wallet.rewards.map(r=><div className="rewards-wallet-row" key={r.id}><div><strong>{byProgram.get(r.program_id)?.program?.title||'Merchant reward'}</strong><p>Status: {r.status}</p>{r.code && <p>Checkout code: <strong className="rewards-code">{r.code}</strong></p>}</div>{r.status==='available'&&<button type="button" disabled={!!busy} onClick={()=>perform(r.id,()=>send('/loyalty/rewards/'+r.id+'/reserve'),data=>{setActiveVoucher({...data,program_id:r.program_id});return 'Voucher ready. Present the QR code to the merchant before checkout.';})}>Generate checkout QR</button>}
+             {r.status==='reserved'&&r.code&&<button type="button" className="secondary" onClick={()=>setActiveVoucher({reward_id:r.id,code:r.code,expires_at:r.reserved_until,program_id:r.program_id})}>Show checkout QR</button>}</div>):<p>No rewards yet. Merchant-approved purchases count toward rewards.</p>}
       </Panel>
+      <Panel title="Discount reconciliation">
+        <p className="muted">Only merchant-confirmed redemptions appear here. These records are not bank or POS settlement confirmation.</p>
+        {redemptions.length?redemptions.map(item=><div className="rewards-wallet-row" key={item.id}>
+         <div><strong>{new Date(item.created_at).toLocaleDateString()} · Discount {money(item.discount_minor/100,item.currency)}</strong>
+          <small>Merchant sale: {item.sale_reference} · Linked receipt: {item.source_receipt_ref?.slice(0,12)||'Not linked'}</small>
+          <small>Evidence: {item.verification_source==='merchant_attested'?'Merchant confirmed':'Pending reconciliation'}</small></div>
+        </div>):<p>No redeemed discounts yet.</p>}
+       </Panel>
+       {activeVoucher&&<div className="pruvs-v7151-voucher-overlay" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setActiveVoucher(null)}}>
+         <section className="pruvs-v7151-voucher" role="dialog" aria-modal="true" aria-label="Merchant checkout voucher">
+          <h2>Your reward is ready</h2><p>Present this QR to the merchant. The discount is recorded only after the completed sale is confirmed in Pruvs Business.</p>
+          <QRCodeSVG size={220} value={activeVoucher.code} title="One-time voucher QR code" />
+          <strong>{activeVoucher.code}</strong><small>Expires {new Date(activeVoucher.expires_at).toLocaleString()}</small>
+          <button type="button" onClick={()=>navigator.clipboard?.writeText(activeVoucher.code)}>Copy code</button>
+          <button type="button" className="secondary" onClick={()=>{setActiveVoucher(null);refresh(null,'wallet')}}>Close and refresh</button>
+         </section></div>}
     </>}
     {!loading && status?.enabled && tab==='receipts' && <Panel title="Your recent receipts">
       <p className="muted">Choose a receipt, enter your merchant's one-time purchase code and consent to share that receipt for review. No stamp is awarded until approval.</p>

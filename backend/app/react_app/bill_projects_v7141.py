@@ -12,10 +12,11 @@ import secrets
 import hashlib
 import re
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func
+from sqlalchemy import func, tuple_
 from sqlalchemy.exc import IntegrityError
 from app.db.database import get_db
 from app.models.case import Case
+from app.models.history_visibility import HistoryVisibility
 from app.models.receipt_item import ReceiptItem
 from app.models.user import User
 from app.models.split_bill_session import SplitBillSession
@@ -78,14 +79,31 @@ def currency_code(value):
     return val
 
 
+def active_for_project(db, uid, kind, source_id, case_id):
+    """Reject archived/removed records and children of an archived/removed receipt."""
+    keys=[('receipt', case_id)]
+    if kind == 'split': keys.append(('bill', source_id))
+    hidden=(db.query(HistoryVisibility.id)
+            .filter(HistoryVisibility.user_id==uid,
+                    HistoryVisibility.state.in_(('archived','removed')),
+                    tuple_(HistoryVisibility.kind,HistoryVisibility.source_id).in_(keys)).first())
+    return hidden is None
+
+
 def owned_source(db, user_id, kind, source_id):
     if type(source_id) is not int or source_id < 1: raise ValueError('Invalid receipt or split identifier.')
     if kind == 'receipt':
         case = db.query(Case).filter_by(id=source_id, user_id=user_id).first()
-        if case: return case
+        if case:
+            if not active_for_project(db,user_id,kind,source_id,case.id):
+                raise HTTPException(409,'Archived or removed receipt cannot be added to a Project.')
+            return case
     elif kind == 'split':
         session = db.query(SplitBillSession).filter_by(id=source_id, owner_user_id=user_id).first()
-        if session: return session
+        if session:
+            if not active_for_project(db,user_id,kind,source_id,session.case_id):
+                raise HTTPException(409,'Archived or removed split cannot be added to a Project.')
+            return session
     else: raise ValueError('Select a receipt or split session.')
     raise HTTPException(404, 'You can only add receipts or split sessions you own.')
 
@@ -355,9 +373,16 @@ def list_projects(identity=Depends(current), db=Depends(get_db)):
 @router.get('/candidates')
 def candidates(identity=Depends(current),db=Depends(get_db)):
     enabled(); uid=identity[0].id
-    cases=(db.query(Case).filter_by(user_id=uid).order_by(Case.created_at.desc()).limit(150).all())
-    sessions=(db.query(SplitBillSession).filter_by(owner_user_id=uid)
-              .order_by(SplitBillSession.created_at.desc()).limit(150).all())
+    hidden={(row.kind,row.source_id) for row in db.query(HistoryVisibility)
+            .filter(HistoryVisibility.user_id==uid,
+                    HistoryVisibility.state.in_(('archived','removed'))).all()}
+    cases=[c for c in db.query(Case).filter_by(user_id=uid)
+           .order_by(Case.created_at.desc()).limit(150).all()
+           if ('receipt',c.id) not in hidden]
+    sessions=[session for session in db.query(SplitBillSession).filter_by(owner_user_id=uid)
+              .order_by(SplitBillSession.created_at.desc()).limit(150).all()
+              if ('bill',session.id) not in hidden
+              and ('receipt',session.case_id) not in hidden]
     case_ids={c.id for c in cases} | {s.case_id for s in sessions}
     amounts=defaultdict(lambda:defaultdict(int))
     labels = {}

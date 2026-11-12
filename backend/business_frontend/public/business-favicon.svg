@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Pruvs Business">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#49c99a"/><stop offset="1" stop-color="#086e51"/></linearGradient></defs>
+<rect x="4" y="4" width="120" height="120" rx="30" fill="url(#g)"/>
+<path d="M38 28h37c27 0 42 16 42 39S101 104 73 104H62V82h11c12 0 20-5 20-15s-8-15-20-15H60v56H38V28z" fill="#fff" opacity=".96"/>
+<path d="M59 83h15c13 0 22-5 27-14-2 21-17 34-43 36V83z" fill="#ceffe3" opacity=".82"/>
+</svg>

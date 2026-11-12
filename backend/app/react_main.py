@@ -94,7 +94,17 @@ async def headers(request,call_next):
     response.headers['X-Frame-Options']='DENY'
     if not path.startswith(('/assets/','/static/')):response.headers['Cache-Control']='no-store'
     if response.headers.get('content-type','').startswith('text/html') and not path.startswith(('/docs','/redoc')):
-        response.headers['Content-Security-Policy']="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; frame-src 'self' blob: https://www.google.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        # Permit only explicitly configured public campaign CDN hostnames for image/video creatives.
+        import re
+        hosts=[h.strip().lower() for h in os.getenv('PRUVS_CAMPAIGN_MEDIA_HOSTS','').split(',')]
+        media=' '.join('https://'+h for h in hosts
+                     if re.fullmatch(r'[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?',h) and '..' not in h)
+        response.headers['Content-Security-Policy']=(
+          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+          "img-src 'self' data: blob: "+media+"; "
+          "media-src 'self' "+media+"; connect-src 'self'; worker-src 'self'; "
+          "frame-src 'self' blob: https://www.google.com; object-src 'none'; "
+          "base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
     return response
 
 # v7.1.21: safe support diagnostics. Middleware is outermost and does not
