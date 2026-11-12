@@ -580,6 +580,10 @@ def allocation_action(token:str,operation:str,body:dict,identity=Depends(current
     expected=body.get('expected_revision')
     if operation=='equal':allocation.set_equal_mode(db,s,identity[0].id,expected)
     elif operation=='items':allocation.restore_item_mode(db,s,identity[0].id,expected)
+    elif operation=='assign-all':
+        target=body.get('participant_id')
+        if type(target) is not int:raise ValueError('Select a participant.')
+        allocation.assign_all_to_participant(db,s,identity[0].id,target,expected)
     elif operation in ('share','unshare'):
         item_id=body.get('item_id')
         if type(item_id) is not int:raise ValueError('Choose an item from this bill.')
