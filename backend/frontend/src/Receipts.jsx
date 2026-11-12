@@ -1,7 +1,7 @@
 import { t } from "./i18n";
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowUpRight, ScanLine, ReceiptText, Users, UploadCloud, RotateCw, ChevronDown, CalendarDays, UserRoundPlus } from 'lucide-react';
+import { ArrowUpRight, ScanLine, ReceiptText, Users, UploadCloud, RotateCw, ChevronDown, CalendarDays, UserRoundPlus, Camera, FolderKanban, Coins, PencilLine, Archive, Trash2, ExternalLink } from 'lucide-react';
 import { request, send, uploadFile, money } from './api';
 import { useApp, useLoad, Title, Panel, Spinner, Message, Field, Badge, Empty } from './common';
 import CropEditor from './CropEditor';
@@ -106,14 +106,14 @@ export function History({home=false,billsOnly=false}) {
   }
   function controls(kind,id,note){
     if(home)return null;
-    return <div className="row wrap no-print history-actions">
-      <button onClick={()=>{const answer=prompt(t('History note (optional)'),note||'');if(answer!==null)organize(kind,id,historyView,answer)}}>{t('Edit note')}</button>
+    return <div className="row no-print history-actions pruvs-v7150-history-controls">
+      <button onClick={()=>{const answer=prompt(t('History note (optional)'),note||'');if(answer!==null)organize(kind,id,historyView,answer)}}><PencilLine size={14}/> Note</button>
       {historyView!=='active'&&<button onClick={()=>organize(kind,id,'active',note||'')}>{t('Restore')}</button>}
-      {historyView!=='archived'&&<button onClick={()=>organize(kind,id,'archived',note||'')}>{t('Archive')}</button>}
+      {historyView!=='archived'&&<button onClick={()=>organize(kind,id,'archived',note||'')}><Archive size={14}/> Archive</button>}
       {historyView!=='removed'&&<button className="danger" onClick={()=>{
         if(confirm(t('Move this item to Removed? It remains available to other participants and in completed expense reports.')))
           organize(kind,id,'removed',note||'');
-      }}>{t('Remove')}</button>}
+      }}><Trash2 size={14}/> Remove</button>}
     </div>;
   }
   const merchants=groupMerchants(data).map(merchant=>({
@@ -172,31 +172,34 @@ export function History({home=false,billsOnly=false}) {
             {merchant.receipts.map(entry=>{
               const own=!!entry.receipt;
               const owned=own||!!entry.bills[0]?.source_owned;
-              const identifier=entry.receipt?.original_filename||'Receipt';
+              
               return <details key={entry.id} className="merchant-receipt">
                 <summary className="merchant-receipt-header">
-                  <span className="merchant-receipt-icon"><CalendarDays size={17}/></span>
-                  <span className="merchant-main"><strong>{historyDate(entry.date)}</strong><small>{own?identifier:'Shared by the bill owner'} · {entry.bills.length} {t("splits")}</small></span>
+                  <span className="merchant-receipt-icon"><ReceiptText size={17}/></span>
+                  <span className="merchant-main"><strong>Receipt · {historyDate(entry.date)}</strong><small>{entry.bills.length} {entry.bills.length===1?'split':'splits'}{!own?' · Shared with you':''}</small></span>
                   <span className="merchant-right">
                     {own&&<strong>{money(entry.receipt.receipt_total,entry.receipt.currency)}</strong>}
                     <ChevronDown size={16}/>
                   </span>
                 </summary>
                 <div className="merchant-receipt-content">
-                  {owned&&<Link className="secondary" to={'/receipt/'+entry.id}>{t("View receipt")}</Link>}{owned&&import.meta.env.VITE_PRUVS_LOYALTY_UI_ENABLED==='true'&&<Link className="secondary" to={'/rewards?tab=receipts&case='+entry.id}>Earn rewards</Link>}
-                  {CORE_PROJECTS_ENABLED&&owned&&!home&&<Link className="secondary" to="/projects">Add to a project</Link>}
+                  <div className="pruvs-v7150-record-actions" aria-label="Receipt actions">
+                    {owned&&<Link className="secondary" to={'/receipt/'+entry.id}><ExternalLink size={14}/> View</Link>}
+                    {owned&&import.meta.env.VITE_PRUVS_LOYALTY_UI_ENABLED==='true'&&<Link className="secondary" to={'/rewards?tab=receipts&case='+entry.id}><Coins size={14}/> Earn</Link>}
+                    {CORE_PROJECTS_ENABLED&&owned&&!home&&<Link className="secondary" to="/projects"><FolderKanban size={14}/> Project</Link>}
+                    {entry.receipt&&controls('receipt',entry.id,entry.receipt.history_note)}
+                    {entry.receipt&&!home&&<button type="button" className="danger pruvs-v7150-delete" title="Permanently delete receipt" onClick={()=>eraseReceipt(entry.id)}><Trash2 size={14}/> Delete</button>}
+                  </div>
                   {entry.receipt?.history_note&&<p className="muted">{entry.receipt.history_note}</p>}
-                  {entry.receipt&&controls('receipt',entry.id,entry.receipt.history_note)}
-                  {entry.receipt&&!home&&<button className="danger" onClick={()=>eraseReceipt(entry.id)}>{t("Delete permanently")}</button>}
                   {entry.bills.length?entry.bills.map(b=><div key={b.session_id} className="merchant-split">
                     <Link to={'/bill/'+b.token} className="merchant-split-link">
                       <span className="icon-tile"><Users size={17}/></span>
-                      <span className="merchant-main"><strong>{t("Split #")}{b.session_id}</strong><small>{b.role==='owner'?'You own this split':'You are a participant'} {t("· Your share")} {money(b.my_total,b.currency)}</small></span>
+                      <span className="merchant-main"><strong>Split · {historyDate(b.created_at||b.scan_date||entry.date)}</strong><small>{b.role==='owner'?'Created by you':'Shared with you'} · {money(b.my_total,b.currency)}</small></span>
                       <Badge>{b.status}</Badge><ArrowUpRight size={17}/>
                     </Link>
                     {b.status==='open'&&b.token&&<button type="button" className="secondary pruvs-invite-merchant-action" onClick={() => setInviteSplit({ token:b.token, name:merchant.name })}><UserRoundPlus size={16}/> {t("Invite people")}</button>}
                     {b.history_note&&<p className="muted">{b.history_note}</p>}
-                    {controls('bill',b.session_id,b.history_note)}
+                    <div className="pruvs-v7150-record-actions">{controls('bill',b.session_id,b.history_note)}</div>
                   </div>):<p className="muted">{t("No splits for this receipt in this view.")}</p>}
                 </div>
               </details>;
@@ -324,18 +327,29 @@ export function Upload() {
       setBusy(false);
     }
   }
-  return <><CaptureGuide/><Title eyebrow={t("START WITH A SCAN" )} title={t("Capture the receipt")}>{t("Upload a photo or PDF. Only validated receipts are saved. Free originals stay on this device; paid originals are backed up privately in the cloud.")}</Title><Panel><label className="dropzone" onDragOver={e => e.preventDefault()} onDrop={e => {e.preventDefault();if(!busy)choose(e.dataTransfer.files[0]);}}><UploadCloud size={42}/><h2>{t("Drop your receipt here")}</h2><p>{t("JPG, PNG, WebP or PDF · up to 10 MB")}</p><input aria-label={t("Choose receipt")} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={busy} onChange={e=>choose(e.target.files[0])}/></label><label className="secondary camera">{t("Take a photo")} <input aria-label={t("Take receipt photo")} type="file" accept="image/*" capture="environment" disabled={busy} onChange={e=>choose(e.target.files[0])}/></label>
-  <div className="capture-preview" aria-label={t("Receipt preview before processing" )}><h3>{file ? `Preview · ${file.name}` : t("Receipt preview")}</h3>{!file?<p className="muted">{t("Choose or photograph a receipt to see it here before processing.")}</p>:file.type==='application/pdf'?<iframe title={t("Receipt PDF preview")} src={preview} className="pdf-preview"/>:<><CropEditor preview={preview} crop={crop} onChange={setCrop}/><div className="row wrap"><button disabled={busy} onClick={()=>transform(false)}>{t("Apply crop")}</button><button disabled={busy} onClick={()=>transform(true)}><RotateCw size={16}/> {t("Rotate")}</button><button disabled={busy||file===original} onClick={()=>{setFile(original);setCrop({x:0,y:0,w:100,h:100})}}>{t('Restore original')}</button><button disabled={busy} onClick={()=>setCrop({x:0,y:0,w:100,h:100})}>{t('Reset selection')}</button></div></>}</div>
-  {CORE_PROJECTS_ENABLED&&<div className="pruvs-group-upload-picker">
-    <label htmlFor="pruvs-upload-project">Add receipt to Project (optional)</label>
-    <select id="pruvs-upload-project" value={projectId} disabled={busy} onChange={e=>setProjectId(e.target.value)}>
-      <option value="">Save without a project</option>
-      {projectOptions.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-    </select>
-    <Link to="/projects">Open projects</Link>
-  </div>}
-  {membership?.usage?.ocr&&<div className="usage-at-capture"><strong>{t("AI OCR:")} {membership.usage.ocr.used}/{membership.usage.ocr.allowance} {t("this month")}</strong><p className="muted">{membership.usage.ocr.remaining>0?`${membership.usage.ocr.remaining} included scans remaining`:`Monthly allowance exhausted. Use 2 PC per extra scan or view Membership.`}</p><label><input type="checkbox" checked={useCredits} onChange={e=>setUseCredits(e.target.checked)} /> {t("Allow spending 2 PC for this scan ONLY if my monthly allowance is exhausted (")}{membership.credits||0} {t("PC available)")}</label></div>}
-  {error&&<Message error={error}/>}<button className="primary full" disabled={!file||busy} onClick={upload}>{busy?progress<100?`Uploading ${progress}%`:t("Reading your receipt…"):t("Process receipt")}</button><ProcessingStatus busy={busy} progress={progress} />{busy&&<><progress max="100" value={progress}/><button onClick={()=>abort.current.abort()}>{t("Cancel upload")}</button><p className="muted">{t("After upload finishes, processing can continue on the server. You can check History.")}</p></>}</Panel></>;
+  return <><Title eyebrow={t("START WITH A SCAN")} title={t("Capture a receipt")}>Photograph or upload a clear receipt, then review it before processing.</Title><Panel>
+   <div className="pruvs-v7150-scan-head">
+     <span className="pruvs-v7150-scan-icon"><Camera size={26} aria-hidden="true"/></span>
+     <div className="pruvs-v7150-scan-copy"><strong>Ready to scan?</strong><small>Keep the entire receipt visible and well lit. Crop or rotate before saving.</small></div>
+     <label className="primary pruvs-v7150-camera"><Camera size={17}/> Take photo<input type="file" accept="image/*" capture="environment" disabled={busy} aria-label="Take a receipt photo" onChange={e=>choose(e.target.files[0])}/></label>
+   </div>
+   <label className="dropzone pruvs-v7150-dropzone" onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();if(!busy)choose(e.dataTransfer.files[0])}}>
+     <UploadCloud size={34} aria-hidden="true"/><strong>Drop a receipt to upload</strong><small>JPG, PNG, WebP or PDF · up to 10 MB</small>
+     <span className="pruvs-v7150-file-button">Choose receipt</span><span className="pruvs-v7150-selected-file">{file?.name||'No file selected'}</span>
+     <input aria-label="Choose receipt file" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={busy} onChange={e=>choose(e.target.files[0])}/>
+   </label>
+   <div className="capture-preview" aria-label={t("Receipt preview before processing" )}><h3>{file ? `Preview · ${file.name}` : t("Receipt preview")}</h3>{!file?<p className="muted">{t("Choose or photograph a receipt to see it here before processing.")}</p>:file.type==='application/pdf'?<iframe title={t("Receipt PDF preview")} src={preview} className="pdf-preview"/>:<><CropEditor preview={preview} crop={crop} onChange={setCrop}/><div className="row wrap"><button disabled={busy} onClick={()=>transform(false)}>{t("Apply crop")}</button><button disabled={busy} onClick={()=>transform(true)}><RotateCw size={16}/> {t("Rotate")}</button><button disabled={busy||file===original} onClick={()=>{setFile(original);setCrop({x:0,y:0,w:100,h:100})}}>{t('Restore original')}</button><button disabled={busy} onClick={()=>setCrop({x:0,y:0,w:100,h:100})}>{t('Reset selection')}</button></div></>}</div>
+  <div className="pruvs-v7150-scan-meta">
+   {CORE_PROJECTS_ENABLED&&<section className="pruvs-v7150-project-choice" aria-label="Project assignment"><label htmlFor="pruvs-upload-project"><FolderKanban size={17}/> Project</label>
+     <select id="pruvs-upload-project" value={projectId} disabled={busy} onChange={e=>setProjectId(e.target.value)}><option value="">No project</option>{projectOptions.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>
+     <Link to="/projects">Manage</Link></section>}
+   {membership?.usage?.ocr&&<section className="pruvs-v7150-ocr-credits" aria-label="AI scanning allowance">
+     <span className="pruvs-v7150-ocr-label"><Coins size={17}/><strong>{membership.usage.ocr.used}/{membership.usage.ocr.allowance} scans</strong><span>· {membership.credits||0} PC</span></span>
+     <small>{membership.usage.ocr.remaining>0?`${membership.usage.ocr.remaining} included scans available`:'Monthly allowance used · extra scan 2 PC'}</small>
+     <label className="pruvs-v7150-credit-opt"><input type="checkbox" checked={useCredits} onChange={e=>setUseCredits(e.target.checked)}/><span>Use 2 PC only if the allowance is exhausted</span></label>
+   </section>}
+   </div>
+   {error&&<Message error={error}/>}<button className="primary full" disabled={!file||busy} onClick={upload}>{busy?progress<100?`Uploading ${progress}%`:t("Reading your receipt…"):t("Process receipt")}</button><ProcessingStatus busy={busy} progress={progress} />{busy&&<><progress max="100" value={progress}/><button onClick={()=>abort.current.abort()}>{t("Cancel upload")}</button><p className="muted">{t("After upload finishes, processing can continue on the server. You can check History.")}</p></>}</Panel></>;
 
 }
 export function Receipt() {

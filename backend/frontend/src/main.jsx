@@ -50,6 +50,7 @@ import './participant-colors.css';
 import './receipt-paper.css';
 import './core-v7140.css';
 import './pruvs-stage-v7149.css';
+import './pruvs-stage-v7150.css';
 const PRUVS_REWARDS_UI_ENABLED = import.meta.env.VITE_PRUVS_LOYALTY_UI_ENABLED === 'true';
 function Guard({
   children,
@@ -213,12 +214,7 @@ function App() {
  <Route path="/login" element={user ? <Navigate to={safeNext(new URLSearchParams(location.search).get("next"))} replace /> : <Auth key="login" />} /><Route path="/register" element={user ? <Navigate to={invitedBillDestination(new URLSearchParams(location.search).get("next")) || safeNext(new URLSearchParams(location.search).get("next"))} replace /> : <Auth key="register" mode="register" />} /><Route path="/reset" element={<Auth key="reset" mode="reset" />} /><Route path="/reset-password" element={<Navigate to="/reset" />} /><Route path="/password-reset" element={<Navigate to="/reset" />} />
  <Route path="/" element={user ? <Guard><>
  {PRUVS_REWARDS_UI_ENABLED && <PromotionsPreview/>}
- <nav className="pruvs-v7149-shortcuts" aria-label="Quick access">
-   <Link to="/upload"><ScanLine size={20}/> {t('Scan')}</Link>
-   <Link to="/bills"><ReceiptText size={20}/> {t('Bills')}</Link>
-   {CORE_PROJECTS_ENABLED && <Link to="/projects"><FolderKanban size={20}/> Projects</Link>}
-   {PRUVS_REWARDS_UI_ENABLED && <Link to="/rewards"><Wallet size={20}/> Wallet</Link>}
- </nav>
+ 
  <History home />
  </></Guard> : <Welcome />} /><Route path="/join" element={<Guard><JoinByLink /></Guard>} /><Route path="/bills" element={<Guard><History billsOnly /></Guard>} />{CORE_PROJECTS_ENABLED && <Route path="/projects" element={<Guard><BillProjects /></Guard>} />}{CORE_PROJECTS_ENABLED && <Route path="/projects/join/:token" element={<Guard><ProjectInviteJoin /></Guard>} />}{CORE_PROJECTS_ENABLED && <Route path="/projects/:id" element={<Guard><BillProjects /></Guard>} />}<Route path="/history" element={<Guard><History /></Guard>} /><Route path="/expenses" element={<Guard><Expenses /></Guard>} /><Route path="/expenses/new" element={<Guard><ExpenseNew /></Guard>} /><Route path="/expenses/:id" element={<Guard><ExpenseView /></Guard>} />{PRUVS_REWARDS_UI_ENABLED && <Route path="/rewards" element={<Guard><Rewards /></Guard>} />}<Route path="/upload" element={<Guard><Upload /></Guard>} /><Route path="/receipt/:id" element={<Guard><Receipt /></Guard>} /><Route path="/bill/:token" element={<Guard><Bill /></Guard>} /><Route path="/join/:token" element={<Guard><Join /></Guard>} /><Route path="/subscription" element={<Guard><><Title eyebrow={t("MEMBERSHIP" )} title={t("Subscriptions & Pruvs Credits" )} action={<Link className="secondary" to="/account">{t("Back to Account")}</Link>}>{t("Compare Free, Plus and Business plans, check included usage and manage your subscription.")}</Title><Membership /></></Guard>} /><Route path="/account" element={<Guard><Account /></Guard>} /><Route path="/account/companies" element={<Guard><CompanySettings /></Guard>} /><Route path="/inbox" element={<Guard><Inbox /></Guard>} /><Route path="/account/notifications" element={<Guard><Navigate to="/account#preferences" replace /></Guard>} /><Route path="/notifications" element={<Guard>{location.search.includes('enrol=1') || location.hash.startsWith('#confirm=') ? <Notifications /> : <Navigate to="/account#preferences" replace />}</Guard>} /><Route path="/notifications/open/:id" element={<Guard><NotificationOpen /></Guard>} /><Route path="/admin/*" element={<Guard admin><Admin /></Guard>} /><Route path="/terms" element={<Legal kind="terms" />} /><Route path="/privacy" element={<Legal kind="privacy" />} /><Route path="/support" element={<Support />} /><Route path="*" element={<Panel><h1>{t("Page not found")}</h1><Link to="/">{t("Back to Pruvs")}</Link></Panel>} />
  </Routes></Suspense></ErrorBoundary><footer><span>{t("© Pruvs")}</span><Link to="/terms">{t("Terms")}</Link><Link to="/privacy">{t("Privacy")}</Link><Link to="/support">{t("Support")}</Link></footer></main>

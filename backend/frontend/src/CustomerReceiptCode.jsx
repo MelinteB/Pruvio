@@ -37,7 +37,7 @@ export default function CustomerReceiptCode({caseId,programs=[]}) {
           <button type="button" onClick={()=>setOpen(false)}>Done</button></div> :
           <form onSubmit={create} className="pruvs-v12-form">
             <p>Generate a single-use receipt code for an already completed purchase. The merchant must compare the receipt with their sale record.</p>
-            <label>Joined loyalty program<select required value={chosen} onChange={e=>setProgram(e.target.value)}>{programs.map(o=><option key={o.program.id} value={o.program.id}>{o.program.title} · {o.store?.name||o.merchant_name}</option>)}</select></label>
+            <label>Joined loyalty program<select required value={chosen} onChange={e=>setProgram(e.target.value)}>{programs.map(o=><option key={o.program.id} value={o.program.id}>{o.program.title}{o.promotionHeadline?' · Campaign: '+o.promotionHeadline:''} · {o.store?.name||o.merchant_name}</option>)}</select></label>
             <label>Receipt photo (optional for cloud-stored photos)<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>setPhoto(e.target.files?.[0]||null)}/></label>
             <label className="pruvs-v12-consent"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/><span>I agree to share an image of only this receipt with the selected merchant, including its merchant name, date, and amount. I have checked for personal details I do not want shared.</span></label>
             {error&&<p role="alert" className="pruvs-v12-error">{error}</p>}

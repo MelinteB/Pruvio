@@ -153,6 +153,39 @@ def unshare_item(db,session:SplitBillSession,owner_id:int,item_id:int,expected_r
     db.commit()
 
 
+
+def assign_all_to_participant(db,session:SplitBillSession,owner_id:int,
+                              participant_id:int,expected_revision:int):
+    """Owner-only atomic transfer of every receipt item to one joined participant.
+
+    This replaces existing unpaid item selections; it never changes payment records.
+    The explicit revision check prevents overwriting concurrent split edits.
+    """
+    validate_open_owner(session,owner_id)
+    state=state_for(db,session.id,True)
+    check_revision(state,expected_revision)
+    if state.mode!='items':
+        raise ValueError('Return to individual items before assigning a whole bill.')
+    participants=get_joined_participants(db,session)
+    if type(participant_id) is not int or participant_id not in {p.id for p in participants}:
+        raise ValueError('Choose a joined participant.')
+    if any(p.payment_status not in ('unpaid',None) for p in participants):
+        raise ValueError('Resolve existing payment reports before reassigning the bill.')
+    if db.query(SplitSharedItem).filter_by(session_id=session.id).first():
+        raise ValueError('Undo shared items before assigning every item to one person.')
+    items=get_session_items(db,session)
+    if not items:raise ValueError('There are no receipt items to assign.')
+    rows=[]
+    for item in items:
+        if _minor(item.total_price)<0:raise ValueError('Review negative discount rows before assigning all items.')
+        rows.append(SplitBillItemAssignment(session_id=session.id,
+            participant_id=participant_id,receipt_item_id=item.id,
+            quantity=round(_item_quantity(item),3),amount=_minor(item.total_price)/100))
+    db.query(SplitBillItemAssignment).filter_by(session_id=session.id).delete(synchronize_session='fetch')
+    db.add_all(rows)
+    bump(state)
+    db.commit()
+
 def annotate_summary(db,session,summary):
     state=state_for(db,session.id)
     summary['allocation_mode']=state.mode if state else 'items'

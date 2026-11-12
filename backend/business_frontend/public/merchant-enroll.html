@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Enroll your business · Pruvs Business</title>
+  <link rel="stylesheet" href="/business/merchant-enroll.css">
+  <script src="/business/merchant-enroll.js" defer></script>
+</head>
+<body>
+<main class="layout">
+  <div class="brand"><span class="brand-mark">P</span><span>pruvs <strong>business</strong></span></div>
+  <header>
+    <p class="eyebrow">Merchant onboarding</p>
+    <h1>Grow your business with Pruvs.</h1>
+    <p class="intro">Set up your merchant profile, verify your work email, and submit your business for review. Your loyalty programs can be configured after approval.</p>
+  </header>
+  <div class="steps" id="steps" aria-label="Enrollment progress">
+    <span class="active" data-step-indicator="1">1. Business</span>
+    <span data-step-indicator="2">2. Location</span>
+    <span data-step-indicator="3">3. Owner</span>
+    <span data-step-indicator="4">4. Verify</span>
+  </div>
+  <div id="notice" class="notice" role="alert" aria-live="polite" hidden></div>
+  <form id="enrollment" novalidate>
+    <section data-step="1" class="panel">
+      <div class="section-head"><h2>Business identity</h2><p>Enter your company's legal registration details.</p></div>
+      <div class="fields">
+        <label>Legal company name <input name="legal_name" autocomplete="organization" maxlength="180" minlength="2" required placeholder="e.g. Example Restaurant SRL"></label>
+        <label>Trading / customer-facing name <input name="trade_name" maxlength="180" minlength="2" required placeholder="e.g. Bistro Central"></label>
+        <label>CUI / CIF <input name="tax_id" maxlength="20" required placeholder="RO12345678"></label>
+        <label>Trade Register number (ONRC) <input name="registry_number" maxlength="50" required placeholder="J40/1234/2020"></label>
+        <label>CAEN code <input name="caen_code" inputmode="numeric" maxlength="4" required placeholder="5610"></label>
+        <label>Business category <select name="category" required><option value="">Select category</option><option value="restaurant">Restaurant</option><option value="cafe">Café or bar</option><option value="retail">Retail</option><option value="hospitality">Hospitality</option><option value="services">Services</option><option value="other">Other</option></select></label>
+        <label class="check full"><input type="checkbox" name="vat_registered"> VAT-registered company</label>
+        <label class="full">Registered office address <input name="registered_address" maxlength="300" minlength="6" required></label>
+        <label>City <input name="city" maxlength="100" minlength="2" required></label>
+        <label>County <input name="county" maxlength="100" minlength="2" required></label>
+        <label>Postal code <input name="postal_code" maxlength="12" minlength="4" required></label>
+        <label>Country <input name="country" value="RO" readonly></label>
+        <label>Business email <input type="email" name="business_email" autocomplete="email" maxlength="255" required></label>
+        <label>Business phone <input type="tel" name="business_phone" maxlength="30" minlength="6" required></label>
+        <label class="full">Website (optional) <input name="website" maxlength="255" placeholder="https://"></label>
+      </div>
+      <div class="actions"><span></span><button type="button" class="primary" data-next>Continue to location</button></div>
+    </section>
+    <section data-step="2" class="panel" hidden>
+      <div class="section-head"><h2>First business location</h2><p>Add one location. More stores can be configured in the merchant dashboard after approval.</p></div>
+      <div class="fields">
+        <label class="full">Location name <input name="first_location_name" maxlength="180" minlength="2" required placeholder="e.g. Bistro Central · Downtown"></label>
+        <label class="full">Location address <input name="first_location_address" maxlength="300" minlength="6" required></label>
+        <label>Location city <input name="first_location_city" maxlength="100" minlength="2" required></label>
+        <label>Current POS provider <select name="pos_provider"><option value="none">No POS / Not sure</option><option value="sibs">SIBS</option><option value="other">Another provider</option></select></label>
+      </div>
+      <p class="hint">POS integration is optional; receipt verification and loyalty rewards can be configured independently.</p>
+      <div class="actions"><button type="button" class="secondary" data-prev>Back</button><button type="button" class="primary" data-next>Continue to owner</button></div>
+    </section>
+    <section data-step="3" class="panel" hidden>
+      <div class="section-head"><h2>Owner and account access</h2><p>The authorized contact will receive a six-digit email verification code.</p></div>
+      <div class="fields">
+        <label class="full">Owner / authorized representative name <input name="owner_full_name" autocomplete="name" minlength="3" maxlength="180" required></label>
+        <label>Position / role <input name="owner_position" minlength="2" maxlength="100" required placeholder="e.g. Administrator"></label>
+        <label>Phone <input type="tel" name="owner_phone" minlength="6" maxlength="30" required></label>
+        <label class="full">Login email <input type="email" name="owner_email" autocomplete="email" maxlength="255" required></label>
+        <label class="full">Create a secure password <input type="password" name="password" minlength="20" maxlength="256" autocomplete="new-password" required placeholder="At least 20 characters"></label><p class="password-help full">Use at least 20 characters. Your password is never saved in your browser draft.</p>
+        <label class="check full"><input type="checkbox" name="accept_terms" required> I accept the Merchant Terms <span class="muted">(legal document must be approved before production)</span></label>
+        <label class="check full"><input type="checkbox" name="acknowledge_privacy" required> I acknowledge how Pruvs Business processes onboarding data under its Privacy Notice</label>
+        <label class="check full"><input type="checkbox" name="marketing_opt_in"> Send me product news and marketing emails (optional)</label>
+      </div>
+      <p class="hint">Email verification does not by itself verify company ownership. All new merchants remain pending business review.</p>
+      <div class="actions"><button type="button" class="secondary" data-prev>Back</button><button type="submit" class="primary" id="submitButton">Send verification code</button></div>
+    </section>
+  </form>
+  <section data-step="4" class="panel" hidden>
+    <div class="section-head"><h2>Verify your email</h2><p>We sent a code to <strong id="maskedEmail">your email</strong>.</p></div>
+    <label class="full">Six-digit verification code <input type="text" id="otpCode" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="one-time-code" placeholder="000000"></label>
+    <p class="hint">The code expires in 10 minutes. Check your spam folder if it doesn't arrive.</p>
+    <div class="actions wrap"><button type="button" class="secondary" id="startOver">Change email / Start over</button><button type="button" class="secondary" id="resend" disabled>Resend code <span id="countdown"></span></button><button type="button" class="primary" id="verify">Verify email</button></div>
+  </section>
+  <section id="completed" class="panel success" hidden>
+    <div class="checkmark">✓</div>
+    <h2>Email verified</h2>
+    <p>Your business profile was submitted for review. Merchant login stays inactive until your business is approved.</p>
+    <p>You will be able to configure programs, locations and offers after approval.</p>
+    <p class="hint">Review reference: <code id="merchantId"></code></p>
+    <button type="button" class="secondary" id="checkStatus">Check approval status</button>
+    <a class="primary link-button" href="/">Return to merchant login</a>
+  </section>
+  <footer><a href="/">Back to merchant login</a> · Merchant registration is for Romanian businesses. Test accounts must use synthetic business details in staging.</footer>
+</main>
+</body>
+</html>
