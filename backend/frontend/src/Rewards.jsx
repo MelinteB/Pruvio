@@ -1,4 +1,5 @@
 import React, {useEffect, useState} from 'react';
+import {QRCodeSVG} from 'qrcode.react';
 import {Link} from 'react-router-dom';
 import {Compass, Gift, MapPin, RefreshCcw, ReceiptText, Ticket, CheckCircle2, X, Search} from 'lucide-react';
 import {Title, Panel, Message, Spinner} from './common';
@@ -21,6 +22,7 @@ export default function Rewards(){
   const [error,setError]=useState('');
   const [message,setMessage]=useState('');
   const [coordinates,setCoordinates]=useState(null);
+  const [redemptions,setRedemptions]=useState([]),[activeVoucher,setActiveVoucher]=useState(null);
   const [cityOpen,setCityOpen]=useState(false),[cityQuery,setCityQuery]=useState(''),[cityFilter,setCityFilter]=useState('');
   const mapKey=(import.meta.env.VITE_GOOGLE_MAPS_EMBED_KEY||'').trim();
 
@@ -38,6 +40,7 @@ export default function Rewards(){
         setPromotions(Array.isArray(pr)?pr:[]);
       }else if(activeTab==='wallet'){
         const w=await request('/loyalty/wallet');setWallet(w||{memberships:[],rewards:[]});
+        setRedemptions(await request('/loyalty/redemptions').catch(()=>[]));
       }else if(activeTab==='receipts'){
         // Receipts are owned by Core and must stay visible even when Business is asleep.
         const r=await request('/loyalty/receipts');setReceipts(r.receipts||[]);
@@ -125,8 +128,25 @@ export default function Rewards(){
         }}>Leave program</button></div>;}):<p>No programs joined yet. Start in Discover.</p>}
       </Panel>
       <Panel title="Available rewards">
-        {wallet.rewards?.length?wallet.rewards.map(r=><div className="rewards-wallet-row" key={r.id}><div><strong>{byProgram.get(r.program_id)?.program?.title||'Merchant reward'}</strong><p>Status: {r.status}</p>{r.code && <p>Checkout code: <strong className="rewards-code">{r.code}</strong></p>}</div>{r.status==='available'&&<button type="button" disabled={!!busy} onClick={()=>perform(r.id,()=>send('/loyalty/rewards/'+r.id+'/reserve'),data=>'Redemption code: '+data.code+' (expires in 10 minutes).')}>Reserve voucher</button>}</div>):<p>No rewards yet. Merchant-approved purchases count toward rewards.</p>}
+        {wallet.rewards?.length?wallet.rewards.map(r=><div className="rewards-wallet-row" key={r.id}><div><strong>{byProgram.get(r.program_id)?.program?.title||'Merchant reward'}</strong><p>Status: {r.status}</p>{r.code && <p>Checkout code: <strong className="rewards-code">{r.code}</strong></p>}</div>{r.status==='available'&&<button type="button" disabled={!!busy} onClick={()=>perform(r.id,()=>send('/loyalty/rewards/'+r.id+'/reserve'),data=>{setActiveVoucher({...data,program_id:r.program_id});return 'Voucher ready. Present the QR code to the merchant before checkout.';})}>Generate checkout QR</button>}
+             {r.status==='reserved'&&r.code&&<button type="button" className="secondary" onClick={()=>setActiveVoucher({reward_id:r.id,code:r.code,expires_at:r.reserved_until,program_id:r.program_id})}>Show checkout QR</button>}</div>):<p>No rewards yet. Merchant-approved purchases count toward rewards.</p>}
       </Panel>
+      <Panel title="Discount reconciliation">
+        <p className="muted">Only merchant-confirmed redemptions appear here. These records are not bank or POS settlement confirmation.</p>
+        {redemptions.length?redemptions.map(item=><div className="rewards-wallet-row" key={item.id}>
+         <div><strong>{new Date(item.created_at).toLocaleDateString()} · Discount {money(item.discount_minor/100,item.currency)}</strong>
+          <small>Merchant sale: {item.sale_reference} · Linked receipt: {item.source_receipt_ref?.slice(0,12)||'Not linked'}</small>
+          <small>Evidence: {item.verification_source==='merchant_attested'?'Merchant confirmed':'Pending reconciliation'}</small></div>
+        </div>):<p>No redeemed discounts yet.</p>}
+       </Panel>
+       {activeVoucher&&<div className="pruvs-v7151-voucher-overlay" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setActiveVoucher(null)}}>
+         <section className="pruvs-v7151-voucher" role="dialog" aria-modal="true" aria-label="Merchant checkout voucher">
+          <h2>Your reward is ready</h2><p>Present this QR to the merchant. The discount is recorded only after the completed sale is confirmed in Pruvs Business.</p>
+          <QRCodeSVG size={220} value={activeVoucher.code} title="One-time voucher QR code" />
+          <strong>{activeVoucher.code}</strong><small>Expires {new Date(activeVoucher.expires_at).toLocaleString()}</small>
+          <button type="button" onClick={()=>navigator.clipboard?.writeText(activeVoucher.code)}>Copy code</button>
+          <button type="button" className="secondary" onClick={()=>{setActiveVoucher(null);refresh(null,'wallet')}}>Close and refresh</button>
+         </section></div>}
     </>}
     {!loading && status?.enabled && tab==='receipts' && <Panel title="Your recent receipts">
       <p className="muted">Choose a receipt, enter your merchant's one-time purchase code and consent to share that receipt for review. No stamp is awarded until approval.</p>

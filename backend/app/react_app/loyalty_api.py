@@ -48,6 +48,10 @@ def leave(program_id:str,identity=Depends(current)):
 def wallet(identity=Depends(current)):
     return call_business('/v1/customer/wallet', user_id=identity[0].id)
 
+@router.get('/redemptions')
+def redemptions(identity=Depends(current)):
+    return call_business('/v1/customer/redemptions',user_id=identity[0].id)
+
 @router.post('/rewards/{reward_id}/reserve')
 def reserve(reward_id:str,identity=Depends(current)):
     from uuid import UUID
