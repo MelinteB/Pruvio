@@ -45,14 +45,61 @@ function App(){
  {page==='campaigns'&&<section className="panel"><div className="panel-heading"><h2>Campaign drafts</h2><span>{campaigns.length} TOTAL</span></div><p className="helper">A deterministic campaign template is included in v0.1. Connecting a genuine AI provider is a later, reviewed integration.</p>{campaigns.length?<div className="card-grid">{campaigns.map(c=><div className="campaign-card" key={c.id}><div className="row-between"><div className="campaign-icon"><Sparkles size={20}/></div><span className="pill">{c.status}</span></div><h3>{c.title}</h3><p>{c.message}</p><div className="campaign-foot">GOAL · {c.goal}</div></div>)}</div>:<Empty title="Campaign ideas start here" detail="Describe your goal and generate a campaign draft you can edit and save."/>}</section>}
  {page==='promotions'&&<PromotionConsole token={token} programs={programs} mode="promotions"/>}
  {page==='pilot'&&<PromotionConsole token={token} programs={programs} mode="pilot"/>}
- {page==='integrations'&&<><div className="integration-grid"><section className="panel"><div className="row-between"><div className="row-icon"><ScanLine size={20}/></div><span className="pill good">Demo enabled</span></div><h2>QR voucher verification</h2><p>Check a Pruvs reward code and confirm its redemption after the discount is applied in the merchant checkout.</p><RedemptionForm token={token} onSuccess={()=>{reload();inform('Voucher redeemed successfully')}} onError={x=>inform(x,true)}/></section><section className="panel"><div className="row-between"><div className="row-icon"><Plug size={20}/></div><span className="pill">Not connected</span></div><h2>POS / SIBS connector</h2><p>Future merchant ECR and approved payment integrations. No live merchant or SIBS system access is configured in this starter.</p></section></div><div className="info-banner"><ShieldCheck size={21}/><span>Production integrations will require per-merchant credentials, scoped permissions, idempotent checkout events, reconciliation and approval.</span></div></>}
+ {page==='integrations'&&<><div className="integration-grid"><section className="panel"><div className="row-between"><div className="row-icon"><ScanLine size={20}/></div><span className="pill good">Demo enabled</span></div><h2>QR voucher verification</h2><p>Check a Pruvs reward code and confirm its redemption after the discount is applied in the merchant checkout.</p><RedemptionForm token={token} onSuccess={()=>{reload();inform('Voucher redeemed successfully')}} onError={x=>inform(x,true)}/></section><section className="panel"><div className="row-between"><div className="row-icon"><Plug size={20}/></div><span className="pill">Not connected</span></div><h2>POS / SIBS connector</h2><p>Future merchant ECR and approved payment integrations. No live merchant or SIBS system access is configured in this starter.</p></section></div><ReconciliationPanel token={token}/><div className="info-banner"><ShieldCheck size={21}/><span>Production integrations will require per-merchant credentials, scoped permissions, idempotent checkout events, reconciliation and approval.</span></div></>}
  </main></div>{modal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setModal('')}}><div className="modal"><div className="modal-head"><div><span className="eyebrow">MERCHANT SETUP</span><h2>{modal==='store'?'Add store location':modal==='program'?'Create loyalty program':'Campaign studio'}</h2></div><button className="icon-btn" onClick={()=>setModal('')}><X size={20}/></button></div>{modal==='store'&&<StoreForm busy={busy} onSave={x=>perform('/v1/merchant/stores',x)}/ >}{modal==='program'&&<ProgramForm stores={stores} busy={busy} onSave={x=>perform('/v1/merchant/programs',x)}/ >}{modal==='campaign'&&<CampaignForm token={token} busy={busy} onSave={x=>perform('/v1/merchant/campaigns',x)} onError={x=>inform(x,true)}/>}</div></div>}</div>
 }
 function RedemptionForm({token,onSuccess,onError}){
  const [code,setCode]=useState(''),[quote,setQuote]=useState(null),[loading,setLoading]=useState(false);
- async function lookup(){setLoading(true);setQuote(null);try{setQuote(await request('/v1/merchant/redemptions/lookup',token,'POST',{code:code.trim().toUpperCase()}))}catch(e){onError(e.message)}finally{setLoading(false)}}
- async function confirm(){setLoading(true);try{await request('/v1/merchant/redemptions/confirm',token,'POST',{code:code.trim().toUpperCase()});setQuote(null);setCode('');onSuccess()}catch(e){onError(e.message)}finally{setLoading(false)}}
- return <div className="redeem-box"><Field label="Customer redemption code"><input placeholder="12-character voucher code" value={code} maxLength={32} onChange={e=>{setCode(e.target.value.toUpperCase());setQuote(null)}}/></Field><button className="btn outline full" disabled={loading||code.length<8} onClick={lookup}>Verify reward code</button>{quote&&<div className="redeem-quote"><b>{quote.program_title}</b><strong>{money(quote.reward_minor)}</strong><p>Apply this discount in the fiscal checkout and collect payment before confirming the redemption.</p><button className="btn primary full" disabled={loading} onClick={confirm}>Confirm completed sale & redeem</button></div>}</div>
+ const [saleRef,setSaleRef]=useState(''),[saleAmount,setSaleAmount]=useState('');
+ async function lookup(){setLoading(true);setQuote(null);try{
+   const result=await request('/v1/merchant/redemptions/lookup',token,'POST',{code:code.trim().toUpperCase()});
+   setQuote(result);setSaleAmount((result.reward_minor/100).toFixed(2));
+ }catch(e){onError(e.message)}finally{setLoading(false)}}
+ async function confirm(){setLoading(true);try{
+   if(!saleRef.trim()||Number(saleAmount)*100<quote.reward_minor)throw Error('Enter a completed sale reference and sale amount that covers the discount.');
+   const result=await request('/v1/merchant/redemptions/confirm',token,'POST',{
+     code:code.trim().toUpperCase(),sale_reference:saleRef.trim(),
+     sale_amount_minor:Math.round(Number(saleAmount)*100)
+   });
+   setQuote(null);setCode('');setSaleRef('');setSaleAmount('');
+   onSuccess?.(result);
+ }catch(e){onError(e.message)}finally{setLoading(false)}}
+ return <div className="redeem-box">
+  <Field label="Customer reward QR / one-time code"><input placeholder="Scan or enter the 12-character voucher code" value={code} maxLength={32} onChange={e=>{setCode(e.target.value.toUpperCase());setQuote(null)}}/></Field>
+  <button type="button" className="btn outline full" disabled={loading||code.length<8} onClick={lookup}>Verify reward code</button>
+  {quote&&<form className="pruvs-redemption-confirm" onSubmit={e=>{e.preventDefault();confirm()}}>
+    <div className="redeem-quote"><b>{quote.program_title}</b><strong>{money(quote.reward_minor)}</strong>
+    <p>Apply this discount at the merchant checkout before confirming. The sale reference is recorded for reconciliation.</p></div>
+    <Field label="Completed sale / fiscal receipt reference"><input required minLength={3} maxLength={120} placeholder="Receipt or POS transaction reference" value={saleRef} onChange={e=>setSaleRef(e.target.value)}/></Field>
+    <Field label="Sale total before discount (RON)"><input type="number" min={(quote.reward_minor/100).toFixed(2)} step="0.01" required value={saleAmount} onChange={e=>setSaleAmount(e.target.value)}/></Field>
+    <small>Merchant-attested confirmation only. Pruvs does not alter the POS payment or verify bank settlement.</small>
+    <button type="submit" className="btn primary full" disabled={loading||!saleRef.trim()}>Confirm completed sale and record discount</button>
+   </form>}
+ </div>;
+}
+
+function ReconciliationPanel({token}){
+ const [data,setData]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+ async function load(){setBusy(true);setError('');try{setData(await request('/v1/merchant/redemptions/reconciliation',token))}catch(e){setError(e.message)}finally{setBusy(false)}}
+ async function download(){setBusy(true);setError('');try{
+   const resp=await fetch((import.meta.env.VITE_API_BASE||'')+'/v1/merchant/redemptions/reconciliation.csv',{headers:{Authorization:'Bearer '+token}});
+   if(!resp.ok)throw Error('Could not export the reconciliation report');
+   const blob=await resp.blob();const url=URL.createObjectURL(blob);
+   const a=document.createElement('a');a.href=url;a.download='pruvs-business-discount-reconciliation.csv';a.click();
+   setTimeout(()=>URL.revokeObjectURL(url),1000);
+ }catch(e){setError(e.message)}finally{setBusy(false)}}
+ return <section className="panel pruvs-reconciliation">
+  <div className="panel-heading"><h2>Discount reconciliation</h2><span>MERCHANT-ATTESTED</span></div>
+  <p className="helper">Trace the original qualifying receipt, the generated voucher, and the completed merchant sale reference. This is not a POS or bank settlement report.</p>
+  <div className="pruvs-program-actions"><button className="btn outline" type="button" disabled={busy} onClick={load}>Load transactions</button>
+  <button className="btn primary" type="button" disabled={busy} onClick={download}>Export CSV</button></div>
+  {error&&<p className="error-text" role="alert">{error}</p>}
+  {data&&<><strong>Total discounts: {(data.total_discount_minor/100).toFixed(2)} RON (displayed rows)</strong>
+    <div className="pruvs-reconciliation-list">{data.rows.length?data.rows.map(r=><div className="pruvs-reconciliation-row" key={r.id}>
+      <div><strong>{r.sale_reference}</strong><small>{new Date(r.created_at).toLocaleString()} · Receipt {r.source_receipt_ref?.slice(0,12)||'Not linked'}</small></div>
+      <strong>{(r.discount_minor/100).toFixed(2)} {r.currency}</strong></div>):<p>No confirmed discounts yet.</p>}</div>
+  </>}
+ </section>;
 }
 function StoreForm({onSave,busy}){const [name,setName]=useState(''),[address,setAddress]=useState(''),[latitude,setLatitude]=useState('44.4268'),[longitude,setLongitude]=useState('26.1025');return <form className="modal-body" onSubmit={e=>{e.preventDefault();onSave({name,address,latitude:Number(latitude),longitude:Number(longitude)})}}><Field label="Store name"><input required minLength={2} value={name} onChange={e=>setName(e.target.value)} placeholder="Example: My Café – Central"/></Field><Field label="Address"><input value={address} onChange={e=>setAddress(e.target.value)} placeholder="Street, city"/></Field><div className="form-row"><Field label="Latitude"><input type="number" step="any" required value={latitude} onChange={e=>setLatitude(e.target.value)}/></Field><Field label="Longitude"><input type="number" step="any" required value={longitude} onChange={e=>setLongitude(e.target.value)}/></Field></div><p className="helper">Coordinates default to Bucharest for demonstration. Enter the actual store coordinates.</p><button disabled={busy} className="btn primary full">{busy?'Saving…':'Save location'}</button></form>}
 function ProgramForm({stores,onSave,busy}){const [store,setStore]=useState(stores[0]?.id||''),[title,setTitle]=useState(''),[desc,setDesc]=useState(''),[stamps,setStamps]=useState(5),[minimum,setMinimum]=useState(30),[reward,setReward]=useState(20);return <form className="modal-body" onSubmit={e=>{e.preventDefault();onSave({store_id:store,title,description:desc,stamps_required:Number(stamps),min_purchase_minor:Math.round(Number(minimum)*100),reward_minor:Math.round(Number(reward)*100),currency:'RON'})}}>{!stores.length?<p className="error-text">Create a store first to add a loyalty program.</p>:<><Field label="Store location"><select required value={store} onChange={e=>setStore(e.target.value)}>{stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></Field><Field label="Program name"><input value={title} required minLength={3} onChange={e=>setTitle(e.target.value)} placeholder="Lunch Rewards"/></Field><Field label="Customer description"><textarea rows="2" value={desc} onChange={e=>setDesc(e.target.value)} placeholder="How the program works"/></Field><div className="form-row"><Field label="Qualifying receipts"><input min="2" max="30" type="number" value={stamps} onChange={e=>setStamps(e.target.value)}/></Field><Field label="Reward (RON)"><input min="1" step="0.01" type="number" value={reward} onChange={e=>setReward(e.target.value)}/></Field></div><Field label="Minimum receipt spend (RON)"><input min="0" step="0.01" type="number" value={minimum} onChange={e=>setMinimum(e.target.value)}/></Field><button disabled={busy} className="btn primary full">{busy?'Saving…':'Save as draft'}</button></>}</form>}
