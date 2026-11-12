@@ -1,0 +1,68 @@
+name: Verify Pruvs Core v7.1.50 staging release
+on:
+  push:
+    branches:
+      - release/pruvs-core-v7.1.50-stage-20261112
+  pull_request:
+    branches:
+      - staging/pruvs-core-ux-20261110
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate backend release and patched Python syntax
+        working-directory: backend
+        run: |
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+          paths = [
+              'app/react_main.py',
+              'app/reliability.py',
+              'app/react_app/split_v7140.py',
+              'app/react_app/api.py',
+              'app/react_app/bill_projects_v7141.py',
+          ]
+          for path in paths:
+              ast.parse(Path(path).read_text(encoding='utf-8'), filename=path)
+              print('PASS:', path)
+          assert 'RELEASE = "7.1.50"' in Path('app/reliability.py').read_text()
+          PY
+      - name: Install and test React app
+        working-directory: backend/frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+      - name: Build React and stamp frontend version
+        working-directory: backend/frontend
+        env:
+          VITE_PRUVS_CORE_V7140_ENABLED: 'true'
+          VITE_PRUVS_CORE_V7141_PROJECTS_ENABLED: 'true'
+          VITE_PRUVS_LOYALTY_UI_ENABLED: 'true'
+        run: npm run build
+      - name: Verify manifest and assets
+        working-directory: backend
+        run: |
+          python scripts/check_react_build.py
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          manifest=json.loads(Path('frontend/dist/build-manifest.json').read_text())
+          assert manifest['version']=='7.1.50', manifest['version']
+          assert Path('frontend/dist/index.html').is_file()
+          print('PASS: Core v7.1.50 frontend source and assets match')
+          PY
