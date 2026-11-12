@@ -25,6 +25,8 @@ app=FastAPI(title='Pruvs Business API',version='0.6.6',docs_url='/docs' if setti
 app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=False,
                    allow_methods=['GET','POST'],allow_headers=['Authorization','Content-Type'])
 app.include_router(merchant_enrollment_router)
+from .ai_campaign_v067 import router as ai_campaign_router
+app.include_router(ai_campaign_router)
 
 def owned(db, cls, object_id, merchant_id):
     item=db.get(cls,object_id)
