@@ -1,4 +1,5 @@
 import React, {useRef, useState} from 'react';
+import {itemSharePreviewGradient} from './participant-colors';
 
 /**
  * Optional pointer gesture surface, always preserving the visible keyboard controls.
@@ -8,7 +9,7 @@ import React, {useRef, useState} from 'react';
  * No network write occurs until the pointer is released.
  */
 export default function ItemSwipeGesture({
-  item, own, max, step, disabled, onSelect, className, style, children
+  item, own, max, step, disabled, onSelect, participantId, colors, className, style, children
 }){
   const active=useRef(null);
   const tap=useRef(null);
@@ -79,13 +80,19 @@ export default function ItemSwipeGesture({
     }
     tap.current={at:now,x:e.clientX,y:e.clientY};
   }
-  return <div className={className+' pruvs-v7151-swipe-card'+(disabled?' gesture-disabled':'')} style={{...style,
-      ...(preview!==null?{'--swipe-selected':max>0?String(preview/max*100)+'%':'0%'}:{})}}
+  // Apply the same participant shares and colors as the saved item.
+  // Swiping never covers other participants' allocations with an unrelated overlay.
+  const shareStyle={...style};
+  if(preview!==null){
+    const gradient=itemSharePreviewGradient(item,colors,participantId,preview);
+    if(gradient)shareStyle['--item-share-background']=gradient;
+    else delete shareStyle['--item-share-background'];
+  }
+  return <div className={className+' pruvs-v7151-swipe-card'+(disabled?' gesture-disabled':'')} style={shareStyle}
     onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp}
     onPointerCancel={clear} onLostPointerCapture={clear}
     onContextMenu={e=>{if(active.current?.held)e.preventDefault()}}
     aria-label={item.name+' · Swipe right for more items, left for fewer. Hold for half then all. Double tap to reduce.'}>
-      {preview!==null&&<div className="pruvs-v7151-gesture-progress" aria-hidden="true"/>}
       {children}
       {preview!==null&&<span className="pruvs-v7151-gesture-hint" role="status">{hint} · {preview} of {max}</span>}
     </div>;
