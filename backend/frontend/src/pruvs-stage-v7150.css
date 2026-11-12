@@ -74,3 +74,27 @@
 @media (max-width:850px){.pruvs-v7150-scan-meta{grid-template-columns:1fr}.pruvs-v7150-quantity-quick{opacity:1;max-height:55px;overflow:visible}}
 @media (max-width:620px){.pruvs-v7150-scan-head{flex-wrap:wrap}.pruvs-v7150-scan-copy{flex:1 1 calc(100% - 65px)}.core-experience label.pruvs-v7150-camera{width:100%;justify-content:center}.pruvs-v7150-project-choice{align-items:stretch}.pruvs-v7150-project-choice select{flex-basis:100%}.pruvs-v7150-record-actions{gap:6px}.pruvs-v7150-assign-all{align-items:stretch}.pruvs-v7150-assign-all select{max-width:none;flex:1 1 100%}.core-experience .item{padding:10px!important}.pruvs-v7150-candidate-children{margin-left:10px;padding-left:9px}}
 @media (prefers-reduced-motion:reduce){.pruvs-v7150-quantity-quick{transition:none}}
+
+/* City-based loyalty discovery: responsive, opt-in Google map preview. */
+.pruvs-v7150-city-status{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin:0 0 14px;color:#294266;background:#eef5ff;border:1px solid #cde0f7;border-radius:10px;padding:10px 13px;font-size:13px}
+.pruvs-v7150-city-status button{padding:3px 8px;font-size:12px}
+.pruvs-v7150-city-overlay{position:fixed;inset:0;z-index:2500;display:grid;place-items:center;padding:16px;background:rgba(12,29,56,.65)}
+.pruvs-v7150-city-dialog{width:min(680px,100%);max-height:95vh;overflow-y:auto;background:#fff;border-radius:20px;padding:24px;box-shadow:0 24px 90px #1124414a;color:#203955}
+.pruvs-v7150-city-dialog header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px}
+.pruvs-v7150-city-dialog header small{color:#4268ad;letter-spacing:.12em;font-size:10px;font-weight:700}
+.pruvs-v7150-city-dialog h2{margin:4px 0 0;font-size:23px}
+.pruvs-v7150-city-dialog header>button{min-width:35px;min-height:35px;padding:7px;border-radius:10px}
+.pruvs-v7150-city-dialog p{font-size:13px;color:#5b6d83;line-height:1.6}
+.pruvs-v7150-city-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;align-items:end}
+.pruvs-v7150-city-form label{grid-column:1/-1;font-size:13px;font-weight:700}
+.pruvs-v7150-city-form input{height:44px;min-width:0;margin:0;border-radius:10px}
+.pruvs-v7150-city-form button{height:44px;display:inline-flex;align-items:center;gap:7px;border-radius:10px}
+.pruvs-v7150-map-box{margin-top:18px;border:1px solid #d9e4f5;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;background:#f5f8fe}
+.pruvs-v7150-map-box iframe{display:block;border:0;width:100%;height:305px}
+.pruvs-v7150-map-box>a{display:block;padding:12px 14px;font-size:12px;font-weight:700;color:#2d64bd}
+.pruvs-v7150-map-fallback{display:flex;gap:10px;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px 20px;min-height:180px;color:#446da9}
+.pruvs-v7150-map-fallback small{color:#667990;max-width:360px}
+.pruvs-v7150-receipt-loyalty{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid #e0e9f4;border-radius:12px;margin-bottom:8px;padding:12px}
+.pruvs-v7150-receipt-loyalty>div:first-child{flex:1 1 180px}
+.pruvs-v7150-receipt-loyalty small{display:block;font-size:11px;color:#6c7e96;line-height:1.45}
+@media(max-width:620px){.pruvs-v7150-city-dialog{padding:16px}.pruvs-v7150-city-form{grid-template-columns:1fr}.pruvs-v7150-map-box iframe{height:260px}}

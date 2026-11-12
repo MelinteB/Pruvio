@@ -94,7 +94,7 @@ async def headers(request,call_next):
     response.headers['X-Frame-Options']='DENY'
     if not path.startswith(('/assets/','/static/')):response.headers['Cache-Control']='no-store'
     if response.headers.get('content-type','').startswith('text/html') and not path.startswith(('/docs','/redoc')):
-        response.headers['Content-Security-Policy']="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        response.headers['Content-Security-Policy']="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; frame-src 'self' blob: https://www.google.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
     return response
 
 # v7.1.21: safe support diagnostics. Middleware is outermost and does not
