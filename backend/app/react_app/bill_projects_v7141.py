@@ -507,6 +507,22 @@ def add_project_items(project_id:int,body:dict,identity=Depends(current),db=Depe
         if kind=='split':sessions.append(obj)
     existing={(row.kind,row.source_id) for row in linked_rows(db,project_id)}
     if len(existing|selected)>300:raise ValueError('Project limit: 300 items.')
+    # The original receipt and any derived Split Bill represent the same expense.
+    # Enforce one source per receipt across both the submitted batch and prior links.
+    seen_receipts={}
+    for source_kind,source_id in existing|selected:
+        if source_kind=='receipt':
+            parent_case_id=source_id
+        elif source_kind=='split':
+            source_split=db.get(SplitBillSession,source_id)
+            if not source_split:raise HTTPException(404,'Split Bill not found.')
+            parent_case_id=source_split.case_id
+        else:
+            continue
+        previous=seen_receipts.get(parent_case_id)
+        if previous is not None and previous!=(source_kind,source_id):
+            raise ValueError('Choose the original receipt or one of its splits, never both in the same Project.')
+        seen_receipts[parent_case_id]=(source_kind,source_id)
     # One receipt may have multiple historical split sessions. Reject double-counting.
     linked_splits=[db.get(SplitBillSession,sid) for kind,sid in existing|selected if kind=='split']
     linked_case_ids=[split.case_id for split in linked_splits if split is not None]

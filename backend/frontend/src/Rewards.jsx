@@ -1,6 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import {Link} from 'react-router-dom';
-import {Compass, Gift, MapPin, RefreshCcw, ReceiptText, Ticket, CheckCircle2} from 'lucide-react';
+import {Compass, Gift, MapPin, RefreshCcw, ReceiptText, Ticket, CheckCircle2, X, Search} from 'lucide-react';
 import {Title, Panel, Message, Spinner} from './common';
 import {request, send, money} from './api';
 import './rewards.css';
@@ -21,6 +21,8 @@ export default function Rewards(){
   const [error,setError]=useState('');
   const [message,setMessage]=useState('');
   const [coordinates,setCoordinates]=useState(null);
+  const [cityOpen,setCityOpen]=useState(false),[cityQuery,setCityQuery]=useState(''),[cityFilter,setCityFilter]=useState('');
+  const mapKey=(import.meta.env.VITE_GOOGLE_MAPS_EMBED_KEY||'').trim();
 
   async function refresh(locationOverride=coordinates, activeTab=tab){
     setError('');setLoading(true);
@@ -41,7 +43,8 @@ export default function Rewards(){
         const r=await request('/loyalty/receipts');setReceipts(r.receipts||[]);
         // Loading these sequentially avoids a burst against the separate Business API.
         const w=await request('/loyalty/wallet');setWallet(w||{memberships:[],rewards:[]});
-        const o=await request('/loyalty/offers');setOffers(Array.isArray(o)?o:[]);
+        const o=await request('/loyalty/offers').catch(()=>[]);setOffers(Array.isArray(o)?o:[]);
+        const available=await request('/loyalty/promotions').catch(()=>[]);setPromotions(Array.isArray(available)?available:[]);
         if(s.receipt_v06_enabled){
           const cl=await request('/loyalty/claims').catch(()=>[]);
           setClaims(Array.isArray(cl)?cl:[]);
@@ -57,12 +60,19 @@ export default function Rewards(){
 
   function nearMe(){
     setError('');setMessage('');
-    if(!navigator.geolocation){setError('Location is unavailable in this browser.');return;}
+    if(!navigator.geolocation){setCityOpen(true);return;}
     navigator.geolocation.getCurrentPosition(pos=>{
       const where={latitude:pos.coords.latitude,longitude:pos.coords.longitude};
-      setCoordinates(where);refresh(where);
-    },()=>setError('Location permission was not granted. You can browse all published offers instead.'),
+      setCityFilter('');setCoordinates(where);refresh(where);
+    },()=>setCityOpen(true),
     {enableHighAccuracy:false,timeout:9000,maximumAge:60000});
+  }
+  function browseCity(event){
+    event.preventDefault();
+    const city=cityQuery.trim();
+    if(city.length<2)return;
+    setCityFilter(city);setCoordinates(null);setTab('offers');setCityOpen(false);
+    refresh(null,'offers');
   }
   async function perform(key,fn,success){
     setBusy(key);setError('');setMessage('');
@@ -70,7 +80,16 @@ export default function Rewards(){
     catch(e){setError(e.message);}finally{setBusy('');}
   }
   const joined=new Set((wallet.memberships||[]).map(m=>m.program_id));
+  // City search filters published Pruvs merchants by their registered store address.
+  // It does not claim that Google Maps businesses are registered with Pruvs.
+  const cityMatches=(text,city)=>String(text||'').toLocaleLowerCase().includes(city.toLocaleLowerCase());
+  const shownOffers=cityFilter?offers.filter(o=>cityMatches(o.store?.address,cityFilter)||cityMatches(o.store?.name,cityFilter)||cityMatches(o.merchant_name,cityFilter)):offers;
   const byProgram=new Map(offers.map(o=>[o.program.id,o]));
+  const earnedPrograms=offers.filter(o=>joined.has(o.program.id)).map(o=>{
+    const active=promotions.find(p=>p.program_id===o.program.id && p.status==='published' &&
+      (!p.expires_at || Date.parse(p.expires_at)>Date.now()));
+    return active?{...o, promotionHeadline:active.headline}:o;
+  });
   return <>
     <Title eyebrow="PRUVS REWARDS" title="Discover local loyalty programs">
       One Pruvs account for merchant rewards. Purchases require merchant verification before earning stamps.
@@ -84,14 +103,15 @@ export default function Rewards(){
       <p>Rewards will appear when the Pruvs-to-Business connection is enabled by the operator. Your existing receipts are unchanged.</p>
     </Panel>}
     {!loading && status?.enabled && tab==='offers' && <>
-      <div className="row wrap rewards-actions"><button type="button" onClick={nearMe} disabled={!!busy}><MapPin size={17}/> Offers near me</button><button type="button" onClick={()=>{setCoordinates(null);refresh(null);}} disabled={!!busy}><Compass size={17}/> All offers</button><button type="button" onClick={()=>refresh()} disabled={!!busy}><RefreshCcw size={17}/> Refresh</button></div>
-      {promotions.length>0 && <section className="rewards-featured"><h2>Featured merchant promotions</h2><div className="rewards-cards">{promotions.map(p=><Panel key={p.id} className="rewards-card rewards-promotion"><small className="rewards-promo-tag">LOCAL PROMOTION · {p.merchant_name}</small><h3>{p.headline}</h3><p>{p.message}</p><p><strong>{p.stamps_required} eligible receipts</strong> to earn {money(p.reward_minor/100,p.currency)} · Minimum purchase {money(p.min_purchase_minor/100,p.currency)}</p><small>{p.store_name}{p.expires_at?' · Ends '+new Date(p.expires_at).toLocaleDateString():''}</small><button className="primary" disabled={!!busy||joined.has(p.program_id)} onClick={()=>perform(p.program_id,()=>send('/loyalty/programs/'+p.program_id+'/join'),()=> 'Joined '+p.program_title+'.')}>{joined.has(p.program_id)?'Joined':'Join promoted program'}</button></Panel>)}</div></section>}
-      <div className="rewards-cards">{offers.map(o=><Panel key={o.program.id} className="rewards-card"><div className="rewards-icon"><Gift size={22}/></div><small className="muted">{o.merchant_name} · {o.store.name}</small><h2>{o.program.title}</h2><p>{o.program.description}</p><p><strong>{o.program.stamps_required} qualifying receipts</strong> to earn {money(o.program.reward_minor/100,o.program.currency)}</p>
+      <div className="row wrap rewards-actions"><button type="button" onClick={nearMe} disabled={!!busy}><MapPin size={17}/> Offers near me</button><button type="button" onClick={()=>{setCityFilter('');setCoordinates(null);refresh(null);}} disabled={!!busy}><Compass size={17}/> All offers</button><button type="button" onClick={()=>refresh()} disabled={!!busy}><RefreshCcw size={17}/> Refresh</button></div>
+      {cityFilter&&<p className="pruvs-v7150-city-status">Showing Pruvs merchant programs matching <strong>{cityFilter}</strong>. <button type="button" onClick={()=>setCityOpen(true)}>Change city</button></p>}
+      {promotions.length>0 && !cityFilter && <section className="rewards-featured"><h2>Featured merchant promotions</h2><div className="rewards-cards">{promotions.map(p=><Panel key={p.id} className="rewards-card rewards-promotion"><small className="rewards-promo-tag">LOCAL PROMOTION · {p.merchant_name}</small><h3>{p.headline}</h3><p>{p.message}</p><p><strong>{p.stamps_required} eligible receipts</strong> to earn {money(p.reward_minor/100,p.currency)} · Minimum purchase {money(p.min_purchase_minor/100,p.currency)}</p><small>{p.store_name}{p.expires_at?' · Ends '+new Date(p.expires_at).toLocaleDateString():''}</small><button className="primary" disabled={!!busy||joined.has(p.program_id)} onClick={()=>perform(p.program_id,()=>send('/loyalty/programs/'+p.program_id+'/join'),()=> 'Joined '+p.program_title+'.')}>{joined.has(p.program_id)?'Joined':'Join promoted program'}</button></Panel>)}</div></section>}
+      <div className="rewards-cards">{shownOffers.map(o=><Panel key={o.program.id} className="rewards-card"><div className="rewards-icon"><Gift size={22}/></div><small className="muted">{o.merchant_name} · {o.store.name}</small><h2>{o.program.title}</h2><p>{o.program.description}</p><p><strong>{o.program.stamps_required} qualifying receipts</strong> to earn {money(o.program.reward_minor/100,o.program.currency)}</p>
         {o.distance_km!=null && <small>{o.distance_km} km away</small>}
         <button type="button" className="primary" disabled={!!busy || joined.has(o.program.id)} onClick={()=>perform(o.program.id,()=>send('/loyalty/programs/'+o.program.id+'/join'),()=> 'Joined '+o.program.title+'.')}>{joined.has(o.program.id)?<><CheckCircle2 size={16}/> Joined</>:busy===o.program.id?'Joining…':'Join loyalty program'}</button>
       </Panel>)}
       </div>
-      {!offers.length&&!error&&<Panel><p>No published merchant programs are available yet. Once merchants publish programs, they will appear here.</p></Panel>}
+      {!shownOffers.length&&!error&&<Panel><p>{cityFilter?'No published Pruvs loyalty programs match this city. Try another city or choose All offers.':'No published merchant programs are available yet. Once merchants publish programs, they will appear here.'}</p></Panel>}
     </>}
     {!loading && status?.enabled && tab==='wallet' && <>
       <Panel title="Loyalty progress">
@@ -103,10 +123,21 @@ export default function Rewards(){
     </>}
     {!loading && status?.enabled && tab==='receipts' && <Panel title="Your recent receipts">
       <p className="muted">Choose a receipt, enter your merchant's one-time purchase code and consent to share that receipt for review. No stamp is awarded until approval.</p>
-      {receipts.map(r=><div key={r.case_id} className="rewards-wallet-row"><div><strong>{r.merchant_name}</strong><p>{money(r.receipt_total,r.currency||'RON')}</p></div><Link to={'/receipt/'+r.case_id}>View receipt</Link>{status?.customer_codes_v12_enabled&&<CustomerReceiptCode caseId={r.case_id} programs={offers.filter(o=>joined.has(o.program.id))}/>} {status.receipt_v06_enabled&&<ReceiptSubmission caseId={r.case_id} receiptRef={r.receipt_ref} claims={claims} programs={offers.filter(o=>joined.has(o.program.id))} onSuccess={msg=>{setMessage(msg);refresh()}}/>}</div>)}
+      {receipts.map(r=><div key={r.case_id} className="rewards-wallet-row pruvs-v7150-receipt-loyalty"><div><strong>{r.merchant_name||'Saved receipt'}</strong><p>{money(r.receipt_total,r.currency||'RON')}</p><small>Choose a joined program or campaign. The merchant must approve your receipt before a stamp is added.</small></div><Link to={'/receipt/'+r.case_id}>View receipt</Link>{status?.customer_codes_v12_enabled?<CustomerReceiptCode caseId={r.case_id} programs={earnedPrograms}/>:status?.receipt_v06_enabled?<ReceiptSubmission caseId={r.case_id} receiptRef={r.receipt_ref} claims={claims} programs={earnedPrograms} onSuccess={msg=>{setMessage(msg);refresh()}}/>:null}</div>)}
       {!receipts.length&&!error&&<p>No receipts found. <Link to="/upload">Scan a receipt</Link> to begin.</p>}
       <div className="row"><Ticket size={18}/><small>Receipt earning will require a verified merchant/POS reference and explicit merchant approval.</small></div>
     </Panel>}
+    {cityOpen&&<div className="pruvs-v7150-city-overlay" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setCityOpen(false)}}>
+      <section role="dialog" aria-modal="true" aria-label="Find Pruvs merchants by city" className="pruvs-v7150-city-dialog">
+        <header><div><small>PRUVS · LOCAL REWARDS</small><h2>Explore another city</h2></div><button type="button" aria-label="Close city search" onClick={()=>setCityOpen(false)}><X size={20}/></button></header>
+        <p>Location unavailable? Search for a city instead. Results include registered Pruvs merchants with published loyalty programs.</p>
+        <form onSubmit={browseCity} className="pruvs-v7150-city-form"><label htmlFor="pruvs-city-query">City name</label><input id="pruvs-city-query" autoFocus value={cityQuery} maxLength={80} placeholder="e.g. Bucharest, Cluj-Napoca" onChange={e=>setCityQuery(e.target.value)}/><button className="primary" type="submit" disabled={cityQuery.trim().length<2}><Search size={16}/> Find offers</button></form>
+        {cityQuery.trim().length>=2&&<div className="pruvs-v7150-map-box">
+          {mapKey?<iframe title={'Google Maps — '+cityQuery} loading="lazy" referrerPolicy="strict-origin-when-cross-origin" src={'https://www.google.com/maps/embed/v1/place?key='+encodeURIComponent(mapKey)+'&q='+encodeURIComponent(cityQuery)} />:<div className="pruvs-v7150-map-fallback"><MapPin size={26}/><strong>Map preview requires a Google Maps Embed API key</strong><small>City search still works for Pruvs merchants using their registered store address.</small></div>}
+          <a href={'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(cityQuery)} target="_blank" rel="noopener noreferrer">Open {cityQuery} in Google Maps</a>
+        </div>}
+      </section>
+    </div>}
   </>;
 }
 

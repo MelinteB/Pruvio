@@ -68,6 +68,19 @@ function ShareEditor({members,amount,currency,onSave,busy,title='Split this expe
   </section>;
 }
 
+function projectCandidateGroups(rows){
+  const groups=new Map();
+  for(const item of rows){
+    const key=String(item.case_id??(item.kind+':'+item.source_id));
+    if(!groups.has(key))groups.set(key,{key,merchant:String(item.label||'Receipt').replace(/\s*·\s*(?:receipt|split)\s*#\d+\s*$/i,''),receipt:null,splits:[],date:item.date});
+    const group=groups.get(key);
+    if(item.kind==='receipt')group.receipt=item;
+    else group.splits.push(item);
+  }
+  return [...groups.values()];
+}
+const projectDate=value=>{if(!value)return 'Date unavailable';const d=new Date(value);return Number.isNaN(d.getTime())?'Date unavailable':new Intl.DateTimeFormat(undefined,{day:'numeric',month:'short',year:'numeric'}).format(d)};
+
 export default function BillProjects(){
   const {id}=useParams(),nav=useNavigate(),loc=useLocation();
   const {user}=useApp();
@@ -210,6 +223,12 @@ export default function BillProjects(){
   const existingKeys=new Set((project?.items||[]).map(x=>`${x.kind}:${x.source_id}`));
   const existingCaseIds=new Set((project?.items||[]).map(x=>x.case_id).filter(Boolean));
   const candidatesAvailable=candidates.filter(c=>!existingKeys.has(`${c.kind}:${c.source_id}`)&&!(c.case_id&&existingCaseIds.has(c.case_id)));
+  const candidateGroups=projectCandidateGroups(candidatesAvailable.filter(c=>String(c.label||'').toLowerCase().includes(search.trim().toLowerCase())));
+  function chooseCandidate(candidate,checked){
+    const key=`${candidate.kind}:${candidate.source_id}`;
+    const family=candidates.filter(c=>String(c.case_id??(c.kind+':'+c.source_id))===String(candidate.case_id??(candidate.kind+':'+candidate.source_id))).map(c=>`${c.kind}:${c.source_id}`);
+    setSelected(old=>checked?[...old.filter(k=>!family.includes(k)),key]:old.filter(k=>k!==key));
+  }
   const filteredProjects=projects.filter(p=>{
     if(!p.name.toLowerCase().includes(search.trim().toLowerCase()))return false;
     if(libraryFilter==='mine')return p.owner_user_id===user?.id;
@@ -252,8 +271,12 @@ export default function BillProjects(){
       <Link to={projectUrl(id,'add','&type=manual')} className="pj-choice"><FileText size={26}/><span><strong>Manual expense</strong><small>Enter a bill that doesn't have a receipt.</small></span><ChevronRight size={19}/></Link>
     </div>:<><Back to={projectUrl(id,'add')}>Add bill options</Back>
       {addType==='existing'&&<Panel className="pj-compact-panel"><h2>Choose saved bills</h2><p className="pj-note">Select bills you own. Previously included bills are hidden.</p><label className="pj-search"><Search size={16}/><input value={search} onChange={e=>setSearch(e.target.value)} aria-label="Search saved bills" placeholder="Merchant or receipt"/></label>
-        {listLoading?<Spinner/>:<div className="pj-candidates">{candidatesAvailable.filter(c=>c.label.toLowerCase().includes(search.toLowerCase())).map(c=>{const key=`${c.kind}:${c.source_id}`;return <label className="pj-candidate" key={key}><input type="checkbox" checked={selected.includes(key)} onChange={e=>setSelected(old=>e.target.checked?[...old,key]:old.filter(x=>x!==key))}/><span><strong>{c.label}</strong><small>{c.kind==='split'?'Split Bill':'Receipt'} · {c.date?new Date(c.date).toLocaleDateString():''}</small></span><b>{c.currency?fmt(c.total||0,c.currency):Object.entries(c.totals||{}).map(([c,v])=>fmt(v,c)).join(' / ')}</b></label>})}</div>}
-        {!listLoading&&!candidatesAvailable.length&&<p className="pj-note">No unused saved bills found. Scan or enter an expense instead.</p>}
+        {listLoading?<Spinner/>:<div className="pj-candidates pruvs-v7150-candidate-tree">{candidateGroups.map(group=><section className="pruvs-v7150-candidate-family" key={group.key} aria-label={'Receipt and splits from '+group.merchant}>
+           <div className="pruvs-v7150-candidate-family-head"><ReceiptText size={18}/><div><strong>{group.merchant}</strong><small>{projectDate(group.date)} · Choose one per receipt</small></div></div>
+           {group.receipt&&<label className="pj-candidate pruvs-v7150-candidate-parent"><input type="checkbox" checked={selected.includes('receipt:'+group.receipt.source_id)} onChange={e=>chooseCandidate(group.receipt,e.target.checked)}/><span className="pruvs-v7150-candidate-name"><strong><ReceiptText size={15}/> Original receipt</strong><small>{projectDate(group.receipt.date)}</small></span><b>{fmt(group.receipt.total||0,group.receipt.currency||'RON')}</b></label>}
+           {!!group.splits.length&&<div className="pruvs-v7150-candidate-children">{group.splits.map(c=><label key={c.source_id} className="pj-candidate pruvs-v7150-candidate-child"><input type="checkbox" checked={selected.includes('split:'+c.source_id)} onChange={e=>chooseCandidate(c,e.target.checked)}/><span className="pruvs-v7150-candidate-name"><strong><Users size={15}/> Split · {projectDate(c.date)}</strong><small>Split session #{c.source_id}</small></span><b>{c.currency?fmt(c.total||0,c.currency):Object.entries(c.totals||{}).map(([cc,v])=>fmt(v,cc)).join(' / ')}</b></label>)}</div>}
+         </section>)}</div>}
+         {!listLoading&&!candidatesAvailable.length&&<p className="pj-note">No unused saved bills found. Scan or enter an expense instead.</p>}
         <button className="primary pj-primary-block" disabled={busy||!selected.length} onClick={addSelected}>Add {selected.length} selected</button>
       </Panel>}
       {addType==='manual'&&<Panel className="pj-compact-panel"><h2>Manual expense</h2><div className="pj-form-stack"><label htmlFor="pj-merchant">Merchant or description</label><input id="pj-merchant" maxLength={150} value={manual.merchant} onChange={e=>setManual({...manual,merchant:e.target.value})} placeholder="Parking, groceries, accommodation…"/>
