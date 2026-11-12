@@ -70,7 +70,7 @@ def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Sessio
       'mobile display with text-safe margins. Motion storyboard is a simple 3-second '
       'animated card with no copyrighted imagery. Watermark must be the requested watermark.')
     body={
-       'model':os.getenv('PRUVS_CAMPAIGN_AI_MODEL','gpt-5.5'),
+       'model':os.getenv('PRUVS_CAMPAIGN_AI_MODEL','gpt-6-luna'),
        'instructions':instructions,
        'input':json.dumps(facts,ensure_ascii=False),
        'max_output_tokens':700,
