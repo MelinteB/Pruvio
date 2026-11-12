@@ -27,6 +27,8 @@ app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credent
 app.include_router(merchant_enrollment_router)
 from .ai_campaign_v067 import router as ai_campaign_router
 app.include_router(ai_campaign_router)
+from .media_v067 import router as media_router
+app.include_router(media_router)
 
 def owned(db, cls, object_id, merchant_id):
     item=db.get(cls,object_id)
