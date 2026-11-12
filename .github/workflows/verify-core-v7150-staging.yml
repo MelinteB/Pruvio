@@ -3,6 +3,9 @@ on:
   push:
     branches:
       - release/pruvs-core-v7.1.50-stage-20261112
+  pull_request:
+    branches:
+      - staging/pruvs-core-ux-20261110
   workflow_dispatch:
 
 permissions:
