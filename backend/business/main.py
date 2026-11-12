@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
+from pydantic import BaseModel, Field
 from .db import get_db, engine
 from .config import get_settings
 from .merchant_enrollment import router as merchant_enrollment_router
@@ -122,6 +123,42 @@ def publish_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Sessio
     p.status='published';db.commit()
     return program_json(p)
 
+
+class ProgramEdit(BaseModel):
+    title: str | None = Field(default=None,min_length=3,max_length=180)
+    description: str | None = Field(default=None,max_length=500)
+    stamps_required: int | None = Field(default=None,ge=2,le=30)
+    min_purchase_minor: int | None = Field(default=None,ge=0,le=10_000_000)
+    reward_minor: int | None = Field(default=None,ge=1,le=10_000_000)
+
+@app.patch('/v1/merchant/programs/{program_id}')
+def edit_program(program_id:str,payload:ProgramEdit,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    merchant_check(staff)
+    program=owned(db,Program,program_id,staff.merchant_id)
+    changes=payload.model_dump(exclude_unset=True)
+    if not changes or any(v is None for v in changes.values()):
+        raise HTTPException(422,'Provide at least one valid program change.')
+    monetary={'stamps_required','min_purchase_minor','reward_minor'}
+    if program.status!='draft' and monetary.intersection(changes):
+        raise HTTPException(409,'Active program criteria cannot change. Pause or create a new program instead.')
+    for key,value in changes.items():setattr(program,key,value.strip() if isinstance(value,str) else value)
+    db.commit()
+    return program_json(program)
+
+@app.post('/v1/merchant/programs/{program_id}/pause')
+def pause_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    merchant_check(staff)
+    program=owned(db,Program,program_id,staff.merchant_id)
+    if program.status!='published':raise HTTPException(409,'Only published programs may be paused.')
+    program.status='paused';db.commit();return program_json(program)
+
+@app.post('/v1/merchant/programs/{program_id}/resume')
+def resume_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    merchant_check(staff)
+    program=owned(db,Program,program_id,staff.merchant_id)
+    if program.status!='paused':raise HTTPException(409,'Only paused programs may be resumed.')
+    program.status='published';db.commit();return program_json(program)
+
 @app.get('/v1/merchant/claims')
 def get_claims(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     claims=db.scalars(select(ReceiptClaim).where(ReceiptClaim.merchant_id==staff.merchant_id).order_by(ReceiptClaim.created_at.desc()).limit(100)).all()
@@ -229,6 +266,21 @@ def join_program(program_id:str,consumer_id:str=Depends(customer_actor),db:Sessi
         return {'membership_id':membership.id,'stamps':membership.stamps,'already_joined':True}
     return {'membership_id':membership.id,'stamps':0,'already_joined':False}
 
+
+@app.post('/v1/customer/programs/{program_id}/leave')
+def leave_program(program_id:str,consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
+    membership=db.scalar(select(Membership).where(Membership.consumer_id==consumer_id,
+               Membership.program_id==program_id).with_for_update())
+    if not membership:return {'left':True,'already_left':True}
+    pending=db.scalar(select(func.count(ReceiptClaim.id)).where(ReceiptClaim.consumer_id==consumer_id,
+                      ReceiptClaim.program_id==program_id,ReceiptClaim.status=='pending'))
+    pending_rewards=db.scalar(select(func.count(Reward.id)).where(Reward.consumer_id==consumer_id,
+                Reward.program_id==program_id,Reward.status.in_(('available','reserved'))))
+    if membership.stamps or pending or pending_rewards:
+        raise HTTPException(409,'You have stamps, pending receipts or unredeemed rewards. Redeem or resolve them before leaving.')
+    db.delete(membership);db.commit()
+    return {'left':True,'already_left':False}
+
 @app.post('/v1/customer/claims',status_code=201)
 def claim_receipt(payload:ReceiptProofIn,consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
     p=db.get(Program,payload.program_id)
@@ -256,7 +308,11 @@ def claim_receipt(payload:ReceiptProofIn,consumer_id:str=Depends(customer_actor)
 def wallet(consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
     memberships=db.scalars(select(Membership).where(Membership.consumer_id==consumer_id)).all()
     rewards=db.scalars(select(Reward).where(Reward.consumer_id==consumer_id)).all()
-    return {'memberships':[{'program_id':m.program_id,'stamps':m.stamps} for m in memberships],
+    return {'memberships':[{'program_id':m.program_id,'stamps':m.stamps,
+             'title':(db.get(Program,m.program_id).title if db.get(Program,m.program_id) else 'Loyalty program'),
+             'stamps_required':(db.get(Program,m.program_id).stamps_required if db.get(Program,m.program_id) else 0),
+             'status':(db.get(Program,m.program_id).status if db.get(Program,m.program_id) else 'unknown')}
+             for m in memberships],
             'rewards':[{'id':r.id,'program_id':r.program_id,'status':r.status,
                         'code':r.redemption_code if r.status=='reserved' else None,
                         'reserved_until':r.reserved_until.isoformat() if r.reserved_until else None} for r in rewards]}

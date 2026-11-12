@@ -115,7 +115,14 @@ export default function Rewards(){
     </>}
     {!loading && status?.enabled && tab==='wallet' && <>
       <Panel title="Loyalty progress">
-        {wallet.memberships?.length ? wallet.memberships.map((m,i)=>{const p=byProgram.get(m.program_id)?.program;return <div className="rewards-wallet-row" key={i}><strong>{p?.title||'Loyalty program'}</strong><span>{m.stamps} stamps</span></div>;}):<p>No programs joined yet. Start in Discover.</p>}
+        {wallet.memberships?.length ? wallet.memberships.map((m,i)=>{const p=byProgram.get(m.program_id)?.program;return <div className="rewards-wallet-row pruvs-v7151-membership" key={m.program_id}>
+        <div><strong>{m.title||p?.title||'Loyalty program'}</strong><small>{m.status==='published'?'Active loyalty program':m.status}</small>
+          <p>{m.stamps} / {m.stamps_required||p?.stamps_required||'?'} verified purchases</p>
+          <progress max={m.stamps_required||p?.stamps_required||1} value={m.stamps} aria-label="Loyalty stamp progress"/>
+        </div><button type="button" className="secondary" disabled={!!busy||m.stamps>0} title={m.stamps>0?'Redeem your stamps before leaving':''} onClick={()=>{
+          if(window.confirm('Leave this loyalty program? Only programs without pending rewards or stamps can be left.'))
+            perform(m.program_id,()=>send('/loyalty/programs/'+m.program_id+'/leave'),()=> 'You left '+m.title+'.');
+        }}>Leave program</button></div>;}):<p>No programs joined yet. Start in Discover.</p>}
       </Panel>
       <Panel title="Available rewards">
         {wallet.rewards?.length?wallet.rewards.map(r=><div className="rewards-wallet-row" key={r.id}><div><strong>{byProgram.get(r.program_id)?.program?.title||'Merchant reward'}</strong><p>Status: {r.status}</p>{r.code && <p>Checkout code: <strong className="rewards-code">{r.code}</strong></p>}</div>{r.status==='available'&&<button type="button" disabled={!!busy} onClick={()=>perform(r.id,()=>send('/loyalty/rewards/'+r.id+'/reserve'),data=>'Redemption code: '+data.code+' (expires in 10 minutes).')}>Reserve voucher</button>}</div>):<p>No rewards yet. Merchant-approved purchases count toward rewards.</p>}

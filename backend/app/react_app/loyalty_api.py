@@ -37,6 +37,13 @@ def join(program_id:str,identity=Depends(current)):
     except (ValueError,AttributeError): raise HTTPException(422, 'Invalid program ID.') from None
     return call_business('/v1/customer/programs/'+program_id+'/join', method='POST', user_id=identity[0].id)
 
+@router.post('/programs/{program_id}/leave')
+def leave(program_id:str,identity=Depends(current)):
+    from uuid import UUID
+    try:program_id=str(UUID(program_id))
+    except (ValueError,AttributeError):raise HTTPException(422,'Invalid program ID.') from None
+    return call_business('/v1/customer/programs/'+program_id+'/leave',method='POST',user_id=identity[0].id)
+
 @router.get('/wallet')
 def wallet(identity=Depends(current)):
     return call_business('/v1/customer/wallet', user_id=identity[0].id)
