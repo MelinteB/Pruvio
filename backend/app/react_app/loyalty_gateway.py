@@ -37,7 +37,7 @@ def config():
             raise HTTPException(503, 'Local Business route is not configured.')
         raw = 'http://127.0.0.1:' + port + '/business'
     else:
-    raw = os.getenv('PRUVS_BUSINESS_API_URL', '').strip().rstrip('/')
+        raw = os.getenv('PRUVS_BUSINESS_API_URL', '').strip().rstrip('/')
     p = parse.urlsplit(raw)
     is_https = p.scheme == 'https'
     combined_local = (combined and p.scheme == 'http' and p.hostname == '127.0.0.1' and p.path == '/business' and p.port == int(port))
