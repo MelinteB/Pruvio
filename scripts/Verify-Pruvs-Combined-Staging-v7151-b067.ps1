@@ -21,12 +21,12 @@ $business=(Check '/business/health').Content | ConvertFrom-Json
 if ($business.version -ne '0.6.7') {throw "Business mismatch: $($business.version)"}
 $ready=(Check '/business/ready').Content | ConvertFrom-Json
 if ($ready.status -ne 'ready') {throw 'Business staging schema is not ready'}
-Check '/api/v1/release'
-Check '/'
-Check '/business/'
-Check '/business/business-favicon.svg'
-Check '/business/merchant-enroll.html'
-Check '/business/v1/discover'
-Check '/business/v1/promotions?limit=5'
+Check '/api/v1/release' | Out-Null
+Check '/' | Out-Null
+Check '/business/' | Out-Null
+Check '/business/business-favicon.svg' | Out-Null
+Check '/business/merchant-enroll.html' | Out-Null
+Check '/business/v1/discover' | Out-Null
+Check '/business/v1/promotions?limit=5' | Out-Null
 Write-Host 'PASS: Stage health, database readiness, release versions and public business routes' -ForegroundColor Cyan
 Write-Host 'MANUAL ACCEPTANCE: receipt claim code QR, merchant image review, approval, voucher QR, completed sale reference and reconciliation.' -ForegroundColor Yellow
