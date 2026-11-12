@@ -21,7 +21,7 @@ from .security import merchant_actor, customer_actor, verify_password, encode_me
 from .schemas import LoginIn, StoreIn, ProgramIn, CampaignGoal, CampaignIn, ReceiptProofIn, ConfirmIn, DemoReceiptIn
 
 settings=get_settings()
-app=FastAPI(title='Pruvs Business API',version='0.6.6',docs_url='/docs' if settings.app_env!='production' else None)
+app=FastAPI(title='Pruvs Business API',version='0.6.7',docs_url='/docs' if settings.app_env!='production' else None)
 app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=False,
                    allow_methods=['GET','POST'],allow_headers=['Authorization','Content-Type'])
 app.include_router(merchant_enrollment_router)
@@ -65,7 +65,7 @@ def aware(dt):
 
 @app.get('/health')
 def health():
-    return {'service':'Pruvs Business','version':'0.6.6','status':'ok'}
+    return {'service':'Pruvs Business','version':'0.6.7','status':'ok'}
 
 @app.get('/ready', include_in_schema=False)
 def readiness():
@@ -74,10 +74,10 @@ def readiness():
     try:
         checks=check_schema(engine())
         if not all(checks.values()):
-            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.6'})
-        return {'status':'ready','version':'0.6.6'}
+            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.7'})
+        return {'status':'ready','version':'0.6.7'}
     except Exception:
-        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.6'})
+        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.7'})
 
 @app.post('/v1/merchant/login')
 def login(payload:LoginIn, db:Session=Depends(get_db)):
