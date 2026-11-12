@@ -44,6 +44,7 @@ export default function Rewards(){
         // Loading these sequentially avoids a burst against the separate Business API.
         const w=await request('/loyalty/wallet');setWallet(w||{memberships:[],rewards:[]});
         const o=await request('/loyalty/offers').catch(()=>[]);setOffers(Array.isArray(o)?o:[]);
+        const available=await request('/loyalty/promotions').catch(()=>[]);setPromotions(Array.isArray(available)?available:[]);
         if(s.receipt_v06_enabled){
           const cl=await request('/loyalty/claims').catch(()=>[]);
           setClaims(Array.isArray(cl)?cl:[]);
@@ -84,6 +85,11 @@ export default function Rewards(){
   const cityMatches=(text,city)=>String(text||'').toLocaleLowerCase().includes(city.toLocaleLowerCase());
   const shownOffers=cityFilter?offers.filter(o=>cityMatches(o.store?.address,cityFilter)||cityMatches(o.store?.name,cityFilter)||cityMatches(o.merchant_name,cityFilter)):offers;
   const byProgram=new Map(offers.map(o=>[o.program.id,o]));
+  const earnedPrograms=offers.filter(o=>joined.has(o.program.id)).map(o=>{
+    const active=promotions.find(p=>p.program_id===o.program.id && p.status==='published' &&
+      (!p.expires_at || Date.parse(p.expires_at)>Date.now()));
+    return active?{...o, promotionHeadline:active.headline}:o;
+  });
   return <>
     <Title eyebrow="PRUVS REWARDS" title="Discover local loyalty programs">
       One Pruvs account for merchant rewards. Purchases require merchant verification before earning stamps.
@@ -117,7 +123,7 @@ export default function Rewards(){
     </>}
     {!loading && status?.enabled && tab==='receipts' && <Panel title="Your recent receipts">
       <p className="muted">Choose a receipt, enter your merchant's one-time purchase code and consent to share that receipt for review. No stamp is awarded until approval.</p>
-      {receipts.map(r=><div key={r.case_id} className="rewards-wallet-row pruvs-v7150-receipt-loyalty"><div><strong>{r.merchant_name||'Saved receipt'}</strong><p>{money(r.receipt_total,r.currency||'RON')}</p><small>Choose a joined program or campaign. The merchant must approve your receipt before a stamp is added.</small></div><Link to={'/receipt/'+r.case_id}>View receipt</Link>{status?.customer_codes_v12_enabled?<CustomerReceiptCode caseId={r.case_id} programs={offers.filter(o=>joined.has(o.program.id))}/>:status?.receipt_v06_enabled?<ReceiptSubmission caseId={r.case_id} receiptRef={r.receipt_ref} claims={claims} programs={offers.filter(o=>joined.has(o.program.id))} onSuccess={msg=>{setMessage(msg);refresh()}}/>:null}</div>)}
+      {receipts.map(r=><div key={r.case_id} className="rewards-wallet-row pruvs-v7150-receipt-loyalty"><div><strong>{r.merchant_name||'Saved receipt'}</strong><p>{money(r.receipt_total,r.currency||'RON')}</p><small>Choose a joined program or campaign. The merchant must approve your receipt before a stamp is added.</small></div><Link to={'/receipt/'+r.case_id}>View receipt</Link>{status?.customer_codes_v12_enabled?<CustomerReceiptCode caseId={r.case_id} programs={earnedPrograms}/>:status?.receipt_v06_enabled?<ReceiptSubmission caseId={r.case_id} receiptRef={r.receipt_ref} claims={claims} programs={earnedPrograms} onSuccess={msg=>{setMessage(msg);refresh()}}/>:null}</div>)}
       {!receipts.length&&!error&&<p>No receipts found. <Link to="/upload">Scan a receipt</Link> to begin.</p>}
       <div className="row"><Ticket size={18}/><small>Receipt earning will require a verified merchant/POS reference and explicit merchant approval.</small></div>
     </Panel>}
