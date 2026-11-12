@@ -1,0 +1,76 @@
+/* Pruvs Core v7.1.50 — staging-only ergonomic improvements.
+   No global input or checkbox overrides; preserve accessibility and fallback UX. */
+.pruvs-v7150-scan-head{display:flex;gap:15px;align-items:center;padding:5px 0 16px;min-width:0}
+.pruvs-v7150-scan-icon{flex:0 0 48px;width:48px;height:48px;border-radius:15px;display:grid;place-items:center;background:#eaf1ff;color:#2766d3}
+.pruvs-v7150-scan-copy{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.pruvs-v7150-scan-copy strong{font-size:17px;color:#142853}
+.pruvs-v7150-scan-copy small{font-size:12px;line-height:1.55;color:#526682}
+.core-experience label.pruvs-v7150-camera{position:relative;display:inline-flex;align-items:center;gap:9px;white-space:nowrap;min-height:44px;padding:11px 17px;border-radius:12px;cursor:pointer;font-size:13px;font-weight:700}
+.pruvs-v7150-camera input,.pruvs-v7150-dropzone input{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;opacity:0!important;cursor:pointer!important;z-index:2}
+.pruvs-v7150-camera:focus-within,.pruvs-v7150-dropzone:focus-within{outline:3px solid #6ea4f6;outline-offset:3px}
+.core-experience .dropzone.pruvs-v7150-dropzone{position:relative;min-height:192px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;border-radius:16px;padding:20px;background:#f8fbff;border:1.5px dashed #aec8f3;color:#1b365c;text-align:center}
+.pruvs-v7150-dropzone strong{font-size:15px}
+.pruvs-v7150-dropzone small{font-size:12px;color:#647692}
+.pruvs-v7150-file-button{margin-top:5px;display:inline-flex;align-items:center;justify-content:center;min-height:39px;padding:8px 19px;background:#fff;border:1px solid #bed0ee;border-radius:10px;color:#17428d;font-size:13px;font-weight:750;box-shadow:0 2px 5px #183c7110}
+.pruvs-v7150-selected-file{max-width:95%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#54657b;font-size:11px}
+.pruvs-v7150-scan-meta{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);align-items:stretch;gap:12px;margin:12px 0 16px}
+.pruvs-v7150-project-choice,.pruvs-v7150-ocr-credits{min-width:0;border:1px solid #dfE8f5;border-radius:15px;padding:13px 15px;background:#f9fbff}
+.pruvs-v7150-project-choice{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.pruvs-v7150-project-choice label{display:flex;align-items:center;gap:6px;white-space:nowrap;color:#243e63;font-size:13px;font-weight:700}
+.pruvs-v7150-project-choice select{flex:1 1 130px;min-width:125px;max-width:100%;margin:0;border-radius:10px;font-size:13px}
+.pruvs-v7150-project-choice>a{white-space:nowrap;font-size:12px;text-decoration:none;font-weight:600}
+.pruvs-v7150-ocr-credits{display:flex;gap:6px;flex-direction:column}
+.pruvs-v7150-ocr-label{display:flex;align-items:center;gap:6px;font-size:13px;color:#233c61}
+.pruvs-v7150-ocr-credits small{color:#647591;line-height:1.35}
+.pruvs-v7150-credit-opt{display:flex!important;align-items:center!important;gap:9px!important;font-size:12px!important;color:#30496d;cursor:pointer}
+.pruvs-v7150-credit-opt input{appearance:auto!important;flex:0 0 17px!important;width:17px!important;height:17px!important;margin:0!important;accent-color:#376ddb}
+.pruvs-v7150-record-actions{display:flex;flex-wrap:wrap;align-items:center;gap:7px;min-width:0}
+.pruvs-v7150-record-actions>a,.pruvs-v7150-record-actions>button,.pruvs-v7150-history-controls button{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:34px;border-radius:9px;padding:7px 11px;font-size:12px!important;font-weight:650;text-decoration:none;white-space:nowrap}
+.pruvs-v7150-history-controls{display:flex!important;gap:7px!important;flex-wrap:wrap!important;margin:0!important;align-items:center}
+.pruvs-v7150-record-actions .pruvs-v7150-delete{background:#fff6f7;border:1px solid #f2cbd1;color:#ae3749}
+.core-experience .merchant-receipt-header{min-height:60px;padding:12px 16px}
+.core-experience .merchant-receipt-icon{background:#eaf1ff;color:#285fc6;border-radius:10px;display:grid;place-items:center;width:36px;height:36px}
+.core-experience .merchant-receipt-content{gap:11px;padding:12px 16px 16px}
+.core-experience .merchant-split{border-radius:12px;background:#f9fbff;border:1px solid #e2eaf5;padding:10px}
+.core-experience .merchant-split-link{min-width:0}
+.core-experience .merchant-split .pruvs-v7150-record-actions{padding-top:5px}
+.pruvs-v7150-allocation-panel .row{margin-bottom:10px}
+.pruvs-v7150-assign-all{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px;border:1px solid #e2eaf6;border-radius:12px;background:#f8faff;margin-top:12px}
+.pruvs-v7150-assign-all label{font-size:13px;font-weight:700;color:#233f68}
+.pruvs-v7150-assign-all select{min-width:150px;max-width:250px;flex:1 1 150px;margin:0}
+.pruvs-v7150-assign-all button{white-space:nowrap}
+.pruvs-v7150-mode-note{color:#65748e;font-size:11px}
+.core-experience .item{padding:11px 13px!important;margin-bottom:5px;border-radius:11px!important;position:relative}
+.core-experience .item>.row:first-child{gap:8px}
+.core-experience .item strong{line-height:1.25}
+.core-experience .item small{font-size:11px}
+.core-experience .item .assignment-tags{gap:3px}
+.core-experience .item .quantity{margin-left:auto;flex-shrink:0;display:flex;align-items:center;gap:0}
+.pruvs-v7150-hold-wrap{display:inline-flex;align-items:center;position:relative}
+.pruvs-v7150-hold-wrap>button{touch-action:manipulation;min-width:36px;min-height:36px;user-select:none}
+.pruvs-v7150-hold-hint{position:absolute;z-index:8;right:0;bottom:calc(100% + 7px);background:#173c7a;color:white;padding:7px 9px;border-radius:8px;font-size:11px;white-space:nowrap;box-shadow:0 5px 20px #1630562b}
+.pruvs-v7150-quantity-quick{display:flex;align-items:center;justify-content:flex-end;gap:5px;margin-top:5px;opacity:0;max-height:0;overflow:hidden;transition:opacity .15s}
+.item:hover .pruvs-v7150-quantity-quick,.item:focus-within .pruvs-v7150-quantity-quick{opacity:1;max-height:55px;overflow:visible}
+.pruvs-v7150-quantity-quick button{font-size:11px!important;min-height:28px!important;padding:3px 11px!important;border:1px solid #cad9ef!important;border-radius:8px!important;background:#fff!important;color:#21487f!important}
+.pruvs-v7150-owner-currency{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 14px;border:1px solid #e2eaf5;background:#f8faff;border-radius:12px;margin-bottom:14px}
+.pruvs-v7150-owner-currency>div{display:flex;gap:4px;flex-direction:column}
+.pruvs-v7150-owner-currency strong{color:#193c74}
+.pruvs-v7150-owner-currency small{color:#667992}
+.pruvs-v7150-currency-dialog{max-width:560px;padding:25px!important}
+.pruvs-v7150-currency-dialog h2{margin-bottom:7px}
+.pruvs-v7150-candidate-tree{display:grid;gap:14px;max-height:500px;padding-right:5px}
+.pruvs-v7150-candidate-family{border:1px solid #dfe7f5;border-radius:14px;background:#fff;padding:10px}
+.pruvs-v7150-candidate-family-head{display:flex;align-items:center;gap:10px;margin:2px 3px 9px;color:#27599a}
+.pruvs-v7150-candidate-family-head>div{display:flex;flex-direction:column;gap:3px;min-width:0}
+.pruvs-v7150-candidate-family-head strong{font-size:13px;color:#1a2f54;overflow-wrap:anywhere}
+.pruvs-v7150-candidate-family-head small{font-size:11px;color:#62758f}
+.pruvs-v7150-candidate-parent,.pruvs-v7150-candidate-child{margin:5px 0;padding:10px 12px!important;background:#fff;border-color:#dfe7f4}
+.pruvs-v7150-candidate-parent{background:#f6f9ff}
+.pruvs-v7150-candidate-children{border-left:2px solid #bcd2ef;margin-left:20px;padding-left:13px}
+.pruvs-v7150-candidate-name strong{display:flex;align-items:center;gap:6px}
+.pruvs-v7150-candidate-name small{color:#718198}
+.pruvs-v7150-candidate-family input[type=checkbox]{accent-color:#3874d9}
+@media (hover:none){.pruvs-v7150-quantity-quick{opacity:1;max-height:55px;overflow:visible}}
+@media (max-width:850px){.pruvs-v7150-scan-meta{grid-template-columns:1fr}.pruvs-v7150-quantity-quick{opacity:1;max-height:55px;overflow:visible}}
+@media (max-width:620px){.pruvs-v7150-scan-head{flex-wrap:wrap}.pruvs-v7150-scan-copy{flex:1 1 calc(100% - 65px)}.core-experience label.pruvs-v7150-camera{width:100%;justify-content:center}.pruvs-v7150-project-choice{align-items:stretch}.pruvs-v7150-project-choice select{flex-basis:100%}.pruvs-v7150-record-actions{gap:6px}.pruvs-v7150-assign-all{align-items:stretch}.pruvs-v7150-assign-all select{max-width:none;flex:1 1 100%}.core-experience .item{padding:10px!important}.pruvs-v7150-candidate-children{margin-left:10px;padding-left:9px}}
+@media (prefers-reduced-motion:reduce){.pruvs-v7150-quantity-quick{transition:none}}
