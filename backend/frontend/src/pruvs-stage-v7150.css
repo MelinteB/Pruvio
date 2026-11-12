@@ -110,3 +110,37 @@
 .pruvs-v7151-voucher>p,.pruvs-v7151-voucher small{color:#62748a}
 
 .pruvs-v7151-promo-creative{width:100%;aspect-ratio:4/5;max-height:330px;object-fit:cover;border-radius:13px;margin:9px 0;border:1px solid #e0e7f3;background:#e4f1eb}
+
+
+/* PRUVS MOBILE NAV FAB PORTRAIT FIX
+   overflow-x:auto on the bottom nav implicitly makes overflow-y:auto and
+   clips its absolutely positioned floating + button on Android portrait.
+   Keep every navigation destination visible; place the scan action outside
+   the bar's visual area without affecting desktop/sidebar navigation.
+*/
+@media (max-width: 760px) {
+  .core-experience nav.mobile-nav.core-mobile-nav {
+    overflow: visible;
+  }
+  .core-experience nav.mobile-nav.core-mobile-nav > a:not(.core-fab) {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: none;
+  }
+  .core-experience nav.mobile-nav.core-mobile-nav > a.core-fab {
+    position: absolute;
+    z-index: 2;
+    right: max(16px, env(safe-area-inset-right, 0px));
+    bottom: calc(100% + 12px);
+    width: 56px;
+    height: 56px;
+    min-width: 56px;
+    flex: 0 0 56px;
+    padding: 0;
+    touch-action: manipulation;
+  }
+  .core-experience .content,
+  .core-experience.with-sidebar .content {
+    padding-bottom: calc(155px + env(safe-area-inset-bottom));
+  }
+}

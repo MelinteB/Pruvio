@@ -50,3 +50,16 @@ def test_redemption_is_merchant_attested_and_audited_atomically():
     assert "verification_source='merchant_attested'" in p
     assert "db.add(record)" in p
     assert "db.commit()" in p
+
+def test_mobile_scan_fab_is_not_clipped():
+    """The Android portrait bottom bar must not scroll or clip its floating scan action."""
+    base=BASE/'frontend/src'
+    compact=(base/'pruvs-stage-v7149.css').read_text(encoding='utf-8')
+    final=(base/'pruvs-stage-v7150.css').read_text(encoding='utf-8')
+    nav=(base/'main.jsx').read_text(encoding='utf-8')
+    assert '.core-mobile-nav{overflow-x:auto' not in compact
+    assert '.core-experience nav.mobile-nav.core-mobile-nav {' in final
+    assert 'overflow: visible;' in final
+    assert 'bottom: calc(100% + 12px)' in final
+    assert 'safe-area-inset-right' in final and 'safe-area-inset-bottom' in final
+    assert 'to="/upload" className="core-fab"' in nav
