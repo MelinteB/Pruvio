@@ -22,7 +22,7 @@ export default function PilotAccess({token,merchant}){
   const [access,setAccess]=useState(null),[rows,setRows]=useState([]),
         [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),
         [message,setMessage]=useState(''),[error,setError]=useState(''),
-        [notes,setNotes]=useState({});
+        [notes,setNotes]=useState({}),[historyId,setHistoryId]=useState(''),[history,setHistory]=useState([]);
   async function refresh(){
     setLoading(true);
     try{
@@ -34,6 +34,14 @@ export default function PilotAccess({token,merchant}){
     finally{setLoading(false);}
   }
   useEffect(()=>{if(token&&merchant)refresh()},[token,merchant?.role,merchant?.merchant_id]);
+  async function showHistory(item){
+    setError('');
+    if(historyId===item.merchant_id){setHistoryId('');setHistory([]);return;}
+    try{
+      const events=await call('/v1/platform/pilot-enrollments/'+encodeURIComponent(item.merchant_id)+'/history',token);
+      setHistory(Array.isArray(events)?events:[]);setHistoryId(item.merchant_id);
+    }catch(ex){setError(ex.message);}
+  }
   async function requestAccess(){
     setBusy(true);setError('');setMessage('');
     try{
@@ -80,7 +88,11 @@ export default function PilotAccess({token,merchant}){
             <button className="btn subtle" disabled={busy||!(notes[item.merchant_id]||'').trim()} onClick={()=>decide(item,'deny')}>Deny</button>
           </>}
           {item.status==='approved'&&<button className="btn subtle" disabled={busy} onClick={()=>decide(item,'revoke')}>Revoke access</button>}
+          <button className="btn outline" disabled={busy} type="button" onClick={()=>showHistory(item)}>{historyId===item.merchant_id?'Hide audit':'View audit'}</button>
         </div>
+        {historyId===item.merchant_id&&<div className="helper" role="region" aria-label={'Decision audit for '+item.merchant_name}>
+          {history.length?history.map(e=><p key={e.id}>{new Date(e.created_at).toLocaleString()} · {e.action}: {e.old_status} → {e.new_status} · Staff {e.actor_staff_id.slice(0,8)}{e.note?' · '+e.note:''}</p>):<p>No recorded decisions.</p>}
+        </div>}
       </article>):<p className="helper">No pilot enrollment requests in this environment.</p>}
     </>:access?<>
       <h3>Merchant enrollment</h3>
