@@ -24,6 +24,7 @@ export default function ReceiptInbox({token,onChange}){
  async function findCode(e){e.preventDefault();setError('');setBusy(true);try{
    const result=await call('/v1/merchant/claims/customer-code-v12/lookup',token,'POST',{code});
    setCode('');await show({id:result.claim_id});
+   await refresh();
  }catch(ex){setError(ex.message||'Could not find receipt.')}finally{setBusy(false)}}
  async function decide(action){if(!review||busy)return;const verb=action==='approve'?'approve and credit one stamp':'reject';if(!window.confirm('Confirm you want to '+verb+' for this receipt?'))return;
    setBusy(true);setError('');try{await (action==='reject'?fetch(API+'/v1/merchant/claims/'+encodeURIComponent(review.claim_id)+'/reject',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({reason:reason.trim()})}).then(async r=>{if(!r.ok){const x=await r.json().catch(()=>({}));throw new Error(x.detail||'Rejection failed')}}):call('/v1/merchant/claims/'+encodeURIComponent(review.claim_id)+'/approve',token,'POST'));setReview(null);setMessage(action==='approve'?'Approved: stamp credited to customer.':'Receipt rejected: no stamp credited.');await refresh();onChange?.()}catch(ex){setError(ex.message)}finally{setBusy(false)}}
@@ -44,7 +45,13 @@ export default function ReceiptInbox({token,onChange}){
    {loading?<p className="helper">Loading merchant claims…</p>:claims.length?<div className="receipt-inbox-list">{claims.map(c=><div className="receipt-inbox-row" key={c.id}>
      <div><strong>Receipt verification</strong><small>{cash(c.amount_minor)} · {c.status==='pending'?'Needs your decision':c.status}</small><small>Claim {c.id.slice(0,8)} · Program {c.program_id.slice(0,8)}</small></div>
      <span className={'pill '+(c.status==='approved'?'good':'')}>{c.status}</span>
-     {c.status==='pending'&&<button type="button" className="btn primary" disabled={busy} onClick={()=>show(c)}><Eye size={16}/> Review receipt</button>}
+     {c.status==='pending' && c.review_unlocked
+       ? <button type="button" className="btn primary" disabled={busy} onClick={()=>show(c)}><Eye size={16}/> Review receipt</button>
+       : c.status==='pending' && c.requires_customer_code
+         ? <small role="status">Customer code needed. Ask the customer for their receipt code and enter it above to unlock this review.</small>
+         : c.status==='pending'
+           ? <small role="status">Receipt access unavailable. Refresh or check pilot readiness.</small>
+           : null}
    </div>)}</div>:<p className="helper">No receipts submitted yet. Customers can submit from Rewards → Saved receipts.</p>}
    {review&&<div className="receipt-inbox-overlay" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)setReview(null)}}>
       <div className="receipt-inbox-dialog" role="dialog" aria-modal="true" aria-label="Customer receipt review">
