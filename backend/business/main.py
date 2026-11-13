@@ -21,7 +21,7 @@ from .security import merchant_actor, customer_actor, verify_password, encode_me
 from .schemas import LoginIn, StoreIn, ProgramIn, CampaignGoal, CampaignIn, ReceiptProofIn, ConfirmIn, DemoReceiptIn
 
 settings=get_settings()
-app=FastAPI(title='Pruvs Business API',version='0.6.11',docs_url='/docs' if settings.app_env!='production' else None)
+app=FastAPI(title='Pruvs Business API',version='0.6.12',docs_url='/docs' if settings.app_env!='production' else None)
 app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=False,
                    allow_methods=['GET','POST'],allow_headers=['Authorization','Content-Type'])
 app.include_router(merchant_enrollment_router)
@@ -33,6 +33,8 @@ from .media_v067 import router as media_router
 app.include_router(media_router)
 from .pilot_readiness_v069 import router as receipt_readiness_router
 app.include_router(receipt_readiness_router)
+from .pilot_enrollment_v0612 import router as pilot_enrollment_router
+app.include_router(pilot_enrollment_router)
 
 def owned(db, cls, object_id, merchant_id):
     item=db.get(cls,object_id)
@@ -69,7 +71,7 @@ def aware(dt):
 
 @app.get('/health')
 def health():
-    return {'service':'Pruvs Business','version':'0.6.11','status':'ok'}
+    return {'service':'Pruvs Business','version':'0.6.12','status':'ok'}
 
 @app.get('/ready', include_in_schema=False)
 def readiness():
@@ -78,10 +80,10 @@ def readiness():
     try:
         checks=check_schema(engine())
         if not all(checks.values()):
-            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.11'})
-        return {'status':'ready','version':'0.6.11'}
+            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.12'})
+        return {'status':'ready','version':'0.6.12'}
     except Exception:
-        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.11'})
+        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.12'})
 
 @app.post('/v1/merchant/login')
 def login(payload:LoginIn, db:Session=Depends(get_db)):
@@ -268,7 +270,9 @@ def discover(latitude:float|None=Query(default=None,ge=-90,le=90),longitude:floa
              radius_km:float=Query(default=10,gt=0,le=50),db:Session=Depends(get_db)):
     if (latitude is None)!=(longitude is None):raise HTTPException(422,'Both coordinates required')
     published=db.scalars(select(Program).where(Program.status=='published')).all()
+    from .pilot_enrollment_v0612 import merchant_pilot_allowed
     results=[]
+    eligibility={}
     for p in published:
         s=db.get(Store,p.store_id)
         if not s or not s.active:continue
@@ -276,7 +280,11 @@ def discover(latitude:float|None=Query(default=None,ge=-90,le=90),longitude:floa
         if not m or m.status!='active':continue
         distance=dist_km(latitude,longitude,s.latitude,s.longitude) if latitude is not None else None
         if distance is not None and distance>radius_km:continue
-        results.append({'merchant_name':m.name,'store':store_json(s),'program':program_json(p),'distance_km':round(distance,2) if distance is not None else None})
+        if p.merchant_id not in eligibility:
+            eligibility[p.merchant_id]=merchant_pilot_allowed(db,p.merchant_id)
+        results.append({'merchant_id':m.id,'merchant_name':m.name,'store':store_json(s),
+                        'program':program_json(p),'receipt_pilot_allowed':eligibility[p.merchant_id],
+                        'distance_km':round(distance,2) if distance is not None else None})
     return sorted(results,key=lambda r:(r['distance_km'] is None,r['distance_km'] or 0))[:100]
 
 @app.post('/v1/customer/programs/{program_id}/join')
