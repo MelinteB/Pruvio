@@ -147,7 +147,10 @@ export default function Rewards(){
   const shownOffers=(cityFilter?offers.filter(o=>cityMatches(o.store?.address,cityFilter)||cityMatches(o.store?.name,cityFilter)||cityMatches(o.merchant_name,cityFilter)):offers)
     .slice().sort((a,b)=>Number(b.program.id===promotedProgram)-Number(a.program.id===promotedProgram));
   const byProgram=new Map(offers.map(o=>[o.program.id,o]));
-  const earnedPrograms=offers.filter(o=>joined.has(o.program.id)).map(o=>{
+  // Business is the authority for merchant eligibility. Old Business versions
+  // without this flag fail closed for receipt claims, not for program discovery.
+  const eligibleReceiptOffers=offers.filter(o=>o.receipt_pilot_allowed===true);
+  const earnedPrograms=eligibleReceiptOffers.filter(o=>joined.has(o.program.id)).map(o=>{
     const active=promotions.find(p=>p.program_id===o.program.id && p.status==='published' &&
       (!p.expires_at || Date.parse(p.expires_at)>Date.now()));
     return active?{...o, promotionHeadline:active.headline}:o;
@@ -230,7 +233,7 @@ export default function Rewards(){
         Your saved receipts are available, but loyalty enrollment could not be verified. Receipt claiming is temporarily unavailable; retry when the merchant service is ready.
       </p>}
       {claimsState==='unavailable'&&<p role="status" className="pruvs-v7152-partial-warning">Receipt verification status is temporarily unavailable. Existing claims have not been confirmed as missing. New submissions are paused to prevent duplicates.</p>}
-      {membershipsState==='ready'&&earnedPrograms.length===0&&<p role="status" className="pruvs-v7152-partial-warning">No joined merchant program is currently available for receipt earning. Open Discover to join a published program, or retry when merchant discovery is back online.</p>}
+      {membershipsState==='ready'&&earnedPrograms.length===0&&<p role="status" className="pruvs-v7152-partial-warning">No joined merchant program is approved for receipt-pilot earning yet. You can discover and join loyalty programs, but receipt claiming starts only after Pruvs Business approves the merchant's pilot access.</p>}
       <p className="muted">Select a joined merchant program and consent to sharing a receipt preview. In the customer-code pilot, show the generated code to the merchant. No stamp is credited until merchant approval.</p>
       {receipts.map(r=><div key={r.case_id} className="rewards-wallet-row pruvs-v7150-receipt-loyalty"><div><strong>{r.merchant_name||'Saved receipt'}</strong><p>{money(r.receipt_total,r.currency||'RON')}</p><small>Choose a joined program or campaign. The merchant must approve your receipt before a stamp is added.</small></div><Link to={'/receipt/'+r.case_id}>View receipt</Link>{membershipsState==='ready'&&claimsState==='ready'&&status?.customer_codes_v12_enabled
             ?<CustomerReceiptCode caseId={r.case_id} programs={earnedPrograms} existingClaim={claims.find(c=>c.receipt_ref===r.receipt_ref)} onFinished={()=>refresh(null,'receipts')}/>
