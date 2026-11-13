@@ -36,8 +36,14 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    if os.getenv('PRUVS_PLATFORM_COMBINED_STAGING','').lower() == 'true':
-        db_url = os.environ.get('BUSINESS_DATABASE_URL','').strip()
+    staging = os.getenv('PRUVS_PLATFORM_COMBINED_STAGING', '').strip().lower() == 'true'
+    production = os.getenv('PRUVS_PLATFORM_COMBINED_PRODUCTION', '').strip().lower() == 'true'
+    if staging and production:
+        raise RuntimeError('Combined staging and production modes are mutually exclusive')
+    if staging or production:
+        if production and os.getenv('APP_ENV', '').strip().lower() != 'production':
+            raise RuntimeError('Combined production requires APP_ENV=production')
+        db_url = os.environ.get('BUSINESS_DATABASE_URL', '').strip()
         # Render supplies postgresql:// URLs by default. SQLAlchemy needs the
         # explicit psycopg v3 driver used by this application's dependencies.
         # Normalize only PostgreSQL schemes; never substitute the Core URL.
@@ -47,10 +53,14 @@ def get_settings() -> Settings:
             parsed = make_url(db_url)
         except (ArgumentError, ValueError) as exc:
             raise RuntimeError('Combined staging requires a valid Business PostgreSQL database URL') from exc
+        expected_db = ('pruvs_business_staging' if staging else
+                       os.getenv('PRUVS_PRODUCTION_BUSINESS_DB_NAME', '').strip())
+        if production and (not expected_db or 'stag' in expected_db.lower()):
+            raise RuntimeError('Combined production requires an explicit non-staging Business database name')
         if (parsed.drivername not in ('postgres', 'postgresql',
                                       'postgresql+psycopg', 'postgresql+psycopg2')
-                or parsed.database != 'pruvs_business_staging'):
-            raise RuntimeError('Combined staging requires isolated pruvs_business_staging database')
+                or parsed.database != expected_db):
+            raise RuntimeError('Combined Business must use its explicitly approved logical database')
         normalized = parsed.set(drivername='postgresql+psycopg').render_as_string(hide_password=False)
         settings = Settings(database_url=normalized)
     else:
