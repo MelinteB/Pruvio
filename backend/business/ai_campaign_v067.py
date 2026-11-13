@@ -73,7 +73,7 @@ def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Sessio
        'model':os.getenv('PRUVS_CAMPAIGN_AI_MODEL','gpt-6-luna'),
        'instructions':instructions,
        'input':json.dumps(facts,ensure_ascii=False),
-       'max_output_tokens':700,
+       'max_output_tokens':1600,
        'text':{'format':{'type':'json_schema','name':'pruvs_campaign_draft',
                          'strict':True,'schema':SCHEMA}}
     }
@@ -85,6 +85,8 @@ def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Sessio
             payload_json=json.loads(response.read(100_000))
     except (HTTPError,URLError,TimeoutError,ValueError):
         raise HTTPException(502,'AI campaign draft could not be generated; check API configuration.') from None
+    if payload_json.get('status')=='incomplete':
+        raise HTTPException(502,'AI campaign draft was interrupted. Please retry or shorten the goal.')
     segments=[c.get('text','') for item in payload_json.get('output',[])
                 for c in item.get('content',[]) if c.get('type')=='output_text']
     if not segments:raise HTTPException(502,'AI provider did not return a campaign draft')
