@@ -8,7 +8,7 @@ import os
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from .db import engine
+from .db import engine, get_db
 from .models import Staff
 from .schema_readiness import check_schema
 from .security import merchant_actor
@@ -58,17 +58,31 @@ def require_reward_schema(db: Session):
 
 
 @router.get('/v1/merchant/receipt-pilot/readiness')
-def merchant_receipt_readiness(staff: Staff = Depends(merchant_actor)):
+def merchant_receipt_readiness(staff: Staff = Depends(merchant_actor),
+                                db: Session = Depends(get_db)):
+    from .pilot_enrollment_v0612 import (
+        db_mode_enabled, tables_ready, merchant_pilot_allowed
+    )
     try:
         flags = check_schema(engine())
     except Exception:
         flags = {}
-    merchants = {part.strip() for part in os.getenv(
-        'PRUVS_BUSINESS_V06_PILOT_MERCHANT_IDS', '').split(',') if part.strip()}
-    return summarize_readiness(
+    database_mode=db_mode_enabled()
+    permission_schema_ready=tables_ready(db) if database_mode else True
+    merchant_allowed=(merchant_pilot_allowed(db,staff.merchant_id)
+                      if permission_schema_ready else False)
+    report=summarize_readiness(
         flags,
         receipts_enabled=_on('PRUVS_BUSINESS_RECEIPT_PILOT_ENABLED'),
         codes_enabled=_on('PRUVS_BUSINESS_CUSTOMER_CODES_V12_ENABLED'),
-        merchant_allowed=staff.merchant_id in merchants,
+        merchant_allowed=merchant_allowed,
         evidence_required=_on('PRUVS_BUSINESS_V06_REQUIRE_EVIDENCE'),
     )
+    report['enrollment_mode']='database' if database_mode else 'legacy'
+    report['merchant_pilot_schema_ready']=permission_schema_ready
+    if not permission_schema_ready:
+        report['requirements']['merchant_pilot_migrated']=False
+        report['blocked_by'].append('merchant_pilot_migrated')
+        report['status']='not_ready'
+        report['receipt_review_ready']=False
+    return report
