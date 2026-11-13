@@ -19,7 +19,7 @@ def main():
     if not all(flags.values()):
         print('Migration incomplete. Back up staging database before running Alembic upgrades.')
         return 2
-    print('PASS: Business v0.6.7 staging schema is ready')
+    print('PASS: Business v0.6.8 staging schema is ready')
     return 0
 
 if __name__=='__main__':
