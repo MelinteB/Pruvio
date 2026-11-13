@@ -37,9 +37,17 @@ def aware(dt):
     return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
 
 def campaign_schema_ready(db):
-    """No 500 when the Business staging database has not been migrated."""
+    """Fail closed with a controlled 503 if the staging media migration is missing."""
     from sqlalchemy import inspect
-    columns={c['name'] for c in inspect(db.bind).get_columns('loyalty_promotions')}
+    try:
+        inspector = inspect(db.get_bind())
+        if not inspector.has_table('loyalty_promotions'):
+            raise HTTPException(503,'Campaign media schema is not ready. Apply the reviewed staging migration.')
+        columns={c['name'] for c in inspector.get_columns('loyalty_promotions')}
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(503,'Campaign storage database is temporarily unavailable.') from None
     if not {'media_url','media_type','media_alt'}.issubset(columns):
         raise HTTPException(503,'Campaign media schema is not migrated. Contact the staging administrator.')
 
@@ -105,6 +113,7 @@ def merchant_create_promo(payload:PromotionIn,staff:Staff=Depends(merchant_actor
 
 @router.post('/v1/merchant/promotions/{promotion_id}/publish')
 def publish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    campaign_schema_ready(db)
     can_manage(staff)
     p=db.get(Promotion,promotion_id)
     if not p or p.merchant_id!=staff.merchant_id:raise HTTPException(404,'Promotion not found')
@@ -117,6 +126,7 @@ def publish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),db:Se
 
 @router.post('/v1/merchant/promotions/{promotion_id}/unpublish')
 def unpublish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    campaign_schema_ready(db)
     can_manage(staff)
     p=db.get(Promotion,promotion_id)
     if not p or p.merchant_id!=staff.merchant_id:raise HTTPException(404,'Promotion not found')
