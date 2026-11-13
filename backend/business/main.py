@@ -320,6 +320,9 @@ def leave_program(program_id:str,consumer_id:str=Depends(customer_actor),db:Sess
 
 @app.post('/v1/customer/claims',status_code=201)
 def claim_receipt(payload:ReceiptProofIn,consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
+    from .pilot_enrollment_v0612 import db_mode_enabled
+    if db_mode_enabled():
+        raise HTTPException(409,'Use the consented receipt verification pilot. Legacy direct claims are disabled.')
     p=db.get(Program,payload.program_id)
     if not p or p.status!='published':raise HTTPException(404,'Program not available')
     proof=decode(payload.receipt_proof,settings.pruvs_bridge_secret,'pruvs-core','pruvs-business','receipt_proof')
