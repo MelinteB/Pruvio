@@ -117,6 +117,7 @@ def test_ai_artwork_requires_explicit_flag_and_never_publishes(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         artwork.generate_artwork(payload,staff=staff,db=DB())
     assert exc.value.status_code==503
+    monkeypatch.setenv('PRUVS_BUSINESS_AI_CAMPAIGNS_ENABLED','true')
     monkeypatch.setenv('PRUVS_BUSINESS_AI_IMAGES_ENABLED','true')
     monkeypatch.setattr(artwork,'request_image',lambda prompt,secret: b'jpeg-bytes')
     monkeypatch.setattr(artwork,'storage',lambda:(object(),{'PRUVS_CAMPAIGN_R2_BUCKET':'safe'}))
