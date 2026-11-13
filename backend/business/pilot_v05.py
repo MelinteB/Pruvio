@@ -176,6 +176,9 @@ def issue_purchase(payload:IssuePurchaseIn,staff:Staff=Depends(merchant_actor),d
     pilot_enabled();can_manage(staff)
     p=owned_program(db,staff,payload.program_id)
     if p.status!='published':raise HTTPException(409,'Program must be published')
+    from .pilot_enrollment_v0612 import merchant_pilot_allowed
+    if not merchant_pilot_allowed(db,p.merchant_id):
+        raise HTTPException(403,'Merchant receipt pilot is not approved')
     if payload.amount_minor<p.min_purchase_minor:raise HTTPException(422,'Purchase below loyalty minimum')
     store=db.get(Store,p.store_id)
     if not store or not store.active:raise HTTPException(409,'Store inactive')
@@ -194,6 +197,9 @@ def preview_purchase(payload:CodeIn,consumer_id:str=Depends(customer_actor),db:S
     pilot_enabled()
     p=db.get(Program,payload.program_id)
     if not p or p.status!='published':raise HTTPException(404,'Program unavailable')
+    from .pilot_enrollment_v0612 import merchant_pilot_allowed
+    if not merchant_pilot_allowed(db,p.merchant_id):
+        raise HTTPException(403,'Merchant receipt pilot is not approved')
     member=db.scalar(select(Membership).where(Membership.program_id==p.id,Membership.consumer_id==consumer_id))
     if not member:raise HTTPException(403,'Join the program before claiming')
     row=purchase_for_code(db,payload);validate_purchase(row,p.id)
@@ -208,6 +214,9 @@ def claim_purchase(payload:ClaimIn,consumer_id:str=Depends(customer_actor),db:Se
         raise HTTPException(409,'Use the updated v0.6 receipt submission flow.')
     p=db.get(Program,payload.program_id)
     if not p or p.status!='published':raise HTTPException(404,'Program unavailable')
+    from .pilot_enrollment_v0612 import merchant_pilot_allowed
+    if not merchant_pilot_allowed(db,p.merchant_id):
+        raise HTTPException(403,'Merchant receipt pilot is not approved')
     member=db.scalar(select(Membership).where(Membership.program_id==p.id,Membership.consumer_id==consumer_id))
     if not member:raise HTTPException(403,'Join the program first')
     row=purchase_for_code(db,payload);validate_purchase(row,p.id)
