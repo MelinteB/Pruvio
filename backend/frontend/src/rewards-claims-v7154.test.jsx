@@ -25,7 +25,7 @@ afterEach(()=>{cleanup();vi.resetAllMocks();});
 const program='12345678-1234-4234-9234-1234567890ab';
 const receipt='a'.repeat(64);
 const offer={
-  merchant_name:'Bistro Central',store:{name:'Bistro Central',address:'Bucharest'},
+  merchant_name:'Bistro Central',receipt_pilot_allowed:true,store:{name:'Bistro Central',address:'Bucharest'},
   program:{id:program,title:'Coffee Club',status:'published',stamps_required:5,currency:'RON'},
 };
 const unavailable=()=>Object.assign(new Error('Pilot status unavailable'),{status:503});
