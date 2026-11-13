@@ -4,6 +4,12 @@ Runs with an isolated in-memory SQLite database; no Render, paid AI,
 production users, or real customer receipts are used.
 """
 from types import SimpleNamespace
+import os
+
+# Isolated test defaults only, before Business Settings is imported.
+os.environ.setdefault('BUSINESS_JWT_SECRET','test-jwt-secret-'*4)
+os.environ.setdefault('PRUVS_BRIDGE_SECRET','test-bridge-secret-'*4)
+os.environ.setdefault('APP_ENV','testing')
 
 import pytest
 from fastapi import HTTPException
@@ -54,7 +60,7 @@ def test_new_merchant_not_automatically_allowed(data):
     assert current['status']=='not_requested'
     assert current['request_supported'] is True
     assert current['has_published_program'] is True
-    offers=business_main.discover(db=db)
+    offers=business_main.discover(latitude=None,longitude=None,radius_km=10,db=db)
     row=next(row for row in offers if row['program']['id']==program.id)
     assert row['receipt_pilot_allowed'] is False
     assert row['merchant_id']==m1.id
@@ -78,7 +84,7 @@ def test_owner_request_admin_approval_revoke_and_audit(data):
     assert allowed['status']=='approved'
     assert pilot.merchant_pilot_allowed(db,m1.id)
     assert not pilot.merchant_pilot_allowed(db,m2.id)
-    offers=business_main.discover(db=db)
+    offers=business_main.discover(latitude=None,longitude=None,radius_km=10,db=db)
     assert next(row for row in offers if row['program']['id']==program.id)['receipt_pilot_allowed'] is True
     admin_rows=pilot.platform_pilot_enrollments(staff=admin,db=db)
     assert len(admin_rows)==1
