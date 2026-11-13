@@ -55,8 +55,8 @@ def claim_v06(payload:ClaimV06In,consumer_id:str=Depends(customer_actor),db:Sess
         raise HTTPException(422,'Explicit consent to share this receipt with the selected merchant is required')
     p=db.get(Program,payload.program_id)
     if not p or p.status!='published':raise HTTPException(404,'Program unavailable')
-    allowed_merchants={part.strip() for part in os.getenv('PRUVS_BUSINESS_V06_PILOT_MERCHANT_IDS','').split(',') if part.strip()}
-    if p.merchant_id not in allowed_merchants:
+    from .pilot_enrollment_v0612 import merchant_pilot_allowed
+    if not merchant_pilot_allowed(db,p.merchant_id):
         raise HTTPException(403,'This receipt pilot is not enabled for this merchant')
     member=db.scalar(select(Membership).where(Membership.program_id==p.id,Membership.consumer_id==consumer_id))
     if not member:raise HTTPException(403,'Join the program before claiming')
