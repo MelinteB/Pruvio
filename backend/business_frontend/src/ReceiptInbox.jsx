@@ -10,8 +10,14 @@ async function call(path,token,method='GET',body=null){
 }
 function cash(n){return (Number(n||0)/100).toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})+' RON'}
 export default function ReceiptInbox({token,onChange}){
- const [claims,setClaims]=useState([]),[review,setReview]=useState(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[reason,setReason]=useState(''),[code,setCode]=useState('');
- async function refresh(){setLoading(true);try{setClaims(await call('/v1/merchant/claims',token));setError('')}catch(ex){setError(ex.message)}finally{setLoading(false)}}
+ const [readiness,setReadiness]=useState(null);\n const [claims,setClaims]=useState([]),[review,setReview]=useState(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[reason,setReason]=useState(''),[code,setCode]=useState('');
+ async function refresh(){setLoading(true);try{
+   const [rows, pilot] = await Promise.all([
+     call('/v1/merchant/claims',token),
+     call('/v1/merchant/receipt-pilot/readiness',token).catch(()=>null)
+   ]);
+   setClaims(rows);setReadiness(pilot);setError('');
+ }catch(ex){setError(ex.message)}finally{setLoading(false)}}
  useEffect(()=>{refresh()},[token]);
  async function show(claim){setError('');setBusy(true);try{const evidence=await call('/v1/merchant/claims/'+encodeURIComponent(claim.id)+'/evidence',token);setReview(evidence);setReason('')}catch(ex){setError(ex.message)}finally{setBusy(false)}}
  async function findCode(e){e.preventDefault();setError('');setBusy(true);try{
@@ -26,6 +32,9 @@ export default function ReceiptInbox({token,onChange}){
    <div className="receipt-inbox-intro"><ReceiptText size={20}/><p>Every submitted receipt belongs to a customer who explicitly agreed to share it with your business. Open the preview and compare the sale to your own records before approving.</p></div>
    {error&&<p role="alert" className="receipt-inbox-error"><AlertCircle size={16}/>{error}</p>}
    {message&&<p role="status" className="receipt-inbox-success"><CheckCircle2 size={16}/>{message}</p>}
+   {readiness&&!readiness.receipt_review_ready&&<p className="receipt-inbox-error" role="status"><AlertCircle size={16}/>
+     Receipt review is not ready in this environment. Pending claims remain listed, but reward confirmation is blocked until staging setup is complete. Checks: {(readiness.blocked_by||[]).join(', ')}.
+   </p>}
    <form className="receipt-inbox-code-lookup" onSubmit={findCode}>
      <label>Customer receipt claim code<input value={code} autoComplete="off" placeholder="PRV-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX" onChange={e=>setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g,''))}/></label>
      <button type="submit" className="btn primary" disabled={busy||code.replace(/-/g,'').length<24}>Find receipt by code</button>
