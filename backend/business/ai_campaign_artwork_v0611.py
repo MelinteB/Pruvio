@@ -119,7 +119,9 @@ def generate_artwork(payload: ArtworkBrief, staff: Staff = Depends(merchant_acto
     if not merchant or merchant.status != 'active' or not store or not store.active:
         raise HTTPException(409, 'Active merchant and store are required.')
 
-    # Check media credentials and allowlisted CDN before incurring provider costs.
+    # Confirm the promotion schema and media credentials before a billable call.
+    from .pilot_v05 import campaign_schema_ready
+    campaign_schema_ready(db)
     client, cfg = storage()
     raw = request_image(image_prompt(merchant, store, program, payload), secret)
     key = f'campaigns/{staff.merchant_id}/{uuid4().hex}.jpg'
