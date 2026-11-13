@@ -11,7 +11,6 @@ import binascii
 import io
 import json
 import os
-from datetime import datetime, timezone
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from uuid import uuid4
@@ -31,7 +30,8 @@ MAX_GENERATED_BYTES = 12_000_000
 
 
 def ai_images_enabled():
-    return os.getenv('PRUVS_BUSINESS_AI_IMAGES_ENABLED', 'false').lower() == 'true'
+    return (os.getenv('PRUVS_BUSINESS_AI_CAMPAIGNS_ENABLED', 'false').lower() == 'true'
+            and os.getenv('PRUVS_BUSINESS_AI_IMAGES_ENABLED', 'false').lower() == 'true')
 
 
 class ArtworkBrief(BaseModel):
