@@ -21,12 +21,14 @@ from .security import merchant_actor, customer_actor, verify_password, encode_me
 from .schemas import LoginIn, StoreIn, ProgramIn, CampaignGoal, CampaignIn, ReceiptProofIn, ConfirmIn, DemoReceiptIn
 
 settings=get_settings()
-app=FastAPI(title='Pruvs Business API',version='0.6.10',docs_url='/docs' if settings.app_env!='production' else None)
+app=FastAPI(title='Pruvs Business API',version='0.6.11',docs_url='/docs' if settings.app_env!='production' else None)
 app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=False,
                    allow_methods=['GET','POST'],allow_headers=['Authorization','Content-Type'])
 app.include_router(merchant_enrollment_router)
 from .ai_campaign_v067 import router as ai_campaign_router
 app.include_router(ai_campaign_router)
+from .ai_campaign_artwork_v0611 import router as ai_artwork_router
+app.include_router(ai_artwork_router)
 from .media_v067 import router as media_router
 app.include_router(media_router)
 from .pilot_readiness_v069 import router as receipt_readiness_router
@@ -67,7 +69,7 @@ def aware(dt):
 
 @app.get('/health')
 def health():
-    return {'service':'Pruvs Business','version':'0.6.10','status':'ok'}
+    return {'service':'Pruvs Business','version':'0.6.11','status':'ok'}
 
 @app.get('/ready', include_in_schema=False)
 def readiness():
@@ -76,10 +78,10 @@ def readiness():
     try:
         checks=check_schema(engine())
         if not all(checks.values()):
-            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.10'})
-        return {'status':'ready','version':'0.6.10'}
+            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.11'})
+        return {'status':'ready','version':'0.6.11'}
     except Exception:
-        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.10'})
+        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.11'})
 
 @app.post('/v1/merchant/login')
 def login(payload:LoginIn, db:Session=Depends(get_db)):
