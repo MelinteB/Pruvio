@@ -57,3 +57,78 @@ Also open `/business/`, confirm Business UI asset requests under `/business/asse
 ## Rollback
 
 Preserve the prior successful Core production commit/branch and exact Build/Start configuration. If the combined deployment fails, restore the prior Core Start/Build command, unset `PRUVS_PLATFORM_COMBINED_PRODUCTION`, and redeploy the previous Core revision. Restore the Core loyalty API URL to the original standalone production Business endpoint if it was changed. Continue operating the original standalone Business service. No automatic database downgrade or destructive migration is part of rollback. Test both apps and both DB connections after rollback.
+
+## Copy/paste Windows PowerShell 7 pre-merge verification
+
+This workflow verifies the exact remote promotion branch in an **isolated Git worktree**,
+leaving your normal local Core repository and working tree untouched. It does not
+change production, push any code, stage local backups or require any database secrets.
+The `main` merge and Render configuration are explicitly separate actions.
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$repo = 'C:\Users\bogdan.melinte\Personal\Project\Pruvs'
+$verifyDir = 'C:\Users\bogdan.melinte\Personal\Project\Pruvs-Combined-Prod-Verify'
+$release = 'release/pruvs-platform-v7150-b066-combined-prod-20261113'
+if (-not (Test-Path $repo)) { throw 'Core repository not found' }
+if (Test-Path $verifyDir) { throw 'Verification worktree already exists: inspect it before rerunning' }
+Set-Location $repo
+if (@(git status --porcelain).Count -gt 0) { throw 'Your normal Core working tree has changes; do not overwrite them' }
+git fetch origin --prune
+if ($LASTEXITCODE -ne 0) { throw 'Git fetch failed' }
+git worktree add --detach $verifyDir "origin/$release"
+if ($LASTEXITCODE -ne 0) { throw 'Verification worktree creation failed' }
+Set-Location $verifyDir
+$sha = (git rev-parse HEAD).Trim()
+Write-Host "Promotion commit $sha"
+git log -1 --oneline
+git diff --stat origin/main...HEAD
+git diff --name-status origin/main...HEAD
+if ($LASTEXITCODE -ne 0) { throw 'Git diff failed' }
+if (@(git status --porcelain).Count -gt 0) { throw 'New verification worktree is not clean' }
+
+py -3.12 -m venv .verifyenv
+if ($LASTEXITCODE -ne 0) { throw 'Python 3.12 virtual environment unavailable' }
+$python = Join-Path $verifyDir '.verifyenv\Scripts\python.exe'
+& $python -m pip install --upgrade pip
+if ($LASTEXITCODE -ne 0) { throw 'pip upgrade failed' }
+& $python -m pip install 'fastapi>=0.116,<1' 'httpx>=0.27,<1' 'sqlalchemy>=2.0,<3' 'pydantic-settings>=2.5,<3' 'pytest>=8,<10'
+if ($LASTEXITCODE -ne 0) { throw 'Test dependencies failed to install' }
+Push-Location backend
+& $python -m compileall -q app/platform_production.py app/platform_combined.py app/react_app/loyalty_gateway.py business
+if ($LASTEXITCODE -ne 0) { throw 'Python compilation failed' }
+& $python -m pytest -q tests/test_combined_platform_routes.py tests/test_combined_database_url_v066.py tests/test_combined_production_config.py tests/test_stage_schema_v066.py
+if ($LASTEXITCODE -ne 0) { throw 'Python regression tests failed' }
+
+Push-Location frontend
+$env:VITE_PRUVS_CORE_V7140_ENABLED = 'true'
+$env:VITE_PRUVS_CORE_V7141_PROJECTS_ENABLED = 'true'
+$env:VITE_PRUVS_LOYALTY_UI_ENABLED = 'true'
+npm ci --no-audit --no-fund
+if ($LASTEXITCODE -ne 0) { throw 'Core npm installation failed' }
+npm test
+if ($LASTEXITCODE -ne 0) { throw 'Core frontend tests failed' }
+npm run build
+if ($LASTEXITCODE -ne 0) { throw 'Core frontend build failed' }
+Pop-Location
+& $python scripts/check_react_build.py
+if ($LASTEXITCODE -ne 0) { throw 'Core release build verification failed' }
+
+Push-Location business_frontend
+$env:VITE_API_BASE = '/business'
+$env:VITE_PRUVS_CUSTOMER_URL = ''
+npm ci --no-audit --no-fund
+if ($LASTEXITCODE -ne 0) { throw 'Business npm installation failed' }
+npm run build -- --base=/business/
+if ($LASTEXITCODE -ne 0) { throw 'Business frontend build failed' }
+if (-not ((Get-Content dist/index.html -Raw).Contains('/business/assets/'))) { throw 'Incorrect Business asset base path' }
+Pop-Location
+Pop-Location
+Write-Host 'Verification completed; see GitHub PR #6 for review. No deployment has occurred.'
+```
+
+Do not `git add .` or commit generated `dist` files, `.verifyenv` files, backups, secrets, or unrelated local changes from this verification worktree. If a subsequent code fix is necessary, create a separate fix branch, use explicit path staging (`git add -- path1 path2`), run `git diff --cached --check`, inspect `git diff --cached` and `git status`, and push only that fix branch to the PR.
+
+### Controlled main promotion and deployment
+
+After the production DB snapshots and Render service configuration are verified, temporarily disable Core production auto-deploy. On the verified PR, approve and merge via the GitHub UI (or, **only after explicitly accepting the cutover**, run `gh pr ready 6; gh pr checks 6; gh pr merge 6 --squash`). This updates `main`, but with auto-deploy OFF it does not intentionally initiate the production cutover. In Render, retain the previous production revision and commands; set the production environment variables and the combined Build/Start commands shown above. Deploy the reviewed main revision manually and run the smoke tests. Keep the standalone Business production service available throughout. Do not remove or alter either database during release. If the health checks fail, restore the previously recorded Core revision, original Build/Start commands and external Business endpoint, then recheck Core and standalone Business separately.
