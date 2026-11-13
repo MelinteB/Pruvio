@@ -206,3 +206,21 @@ def platform_decide_pilot(merchant_id: str, body: PilotDecisionIn,
     add_audit(db, merchant_id, staff.id, body.action, previous, new_status, body.note.strip())
     db.commit()
     return {**enrollment_json(row, mode='database'), 'merchant_id': merchant_id}
+
+
+@router.get('/v1/platform/pilot-enrollments/{merchant_id}/history')
+def platform_pilot_history(merchant_id: str,
+                           staff: Staff = Depends(require_platform_admin),
+                           db: Session = Depends(get_db)):
+    require_platform_admin(staff)
+    require_db_mode(db)
+    events = db.scalars(select(MerchantPilotAudit).where(
+        MerchantPilotAudit.merchant_id == merchant_id
+    ).order_by(MerchantPilotAudit.created_at.desc()).limit(100)).all()
+    return [
+        {'id':event.id, 'action':event.action,
+         'old_status':event.old_status, 'new_status':event.new_status,
+         'actor_staff_id':event.actor_staff_id, 'note':event.note,
+         'created_at':event.created_at.isoformat()}
+        for event in events
+    ]
