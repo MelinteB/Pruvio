@@ -255,3 +255,21 @@ An automated test suite cannot prove provider billing, Render configurations, CD
 ## Rollback
 
 Switch the **staging** Render service to the prior combined `release/pruvs-platform-v7154-b0610-combined-stage-20261113` branch and matching known-good build/start settings. Standalone Business reverts to `release/pruvs-business-v0.6.10-stage-20261113`. Leave additive schema changes and financial audit records intact; disable the new AI-image flag if provider/media faults occur. Production remains untouched.
+
+
+### Additional read-only AI campaign validation
+
+After the authenticated merchant has published a test campaign in staging, set a short-lived **staging-only** Business access token in the current PowerShell session securely. Do not commit, paste or log this token. Then run:
+
+```powershell
+$smoke = Join-Path $coreVerify 'scripts\Verify-Pruvs-AI-Campaign-Staging-v7155-b0611.ps1'
+# $env:PRUVS_BUSINESS_STAGING_TOKEN must already contain a valid short-lived staging merchant token.
+& $smoke -BaseUrl 'https://pruvs-core-staging.onrender.com' -RequireAIReady -PromotionId '<STAGING_PROMOTION_UUID>' -ExpectedState published
+if (-not $?) { throw 'Published AI campaign smoke failed' }
+# After explicitly unpublishing the same test campaign in Business:
+& $smoke -BaseUrl 'https://pruvs-core-staging.onrender.com' -RequireAIReady -PromotionId '<STAGING_PROMOTION_UUID>' -ExpectedState unpublished
+if (-not $?) { throw 'Unpublished campaign is still visible' }
+Remove-Item Env:PRUVS_BUSINESS_STAGING_TOKEN -ErrorAction SilentlyContinue
+```
+
+Replace the promotion ID with the **actual staging-only** campaign ID and obtain the access token through the normal staging merchant login. This script is read-only and does **not** generate AI content, create campaigns, apply rewards or contact a POS.
