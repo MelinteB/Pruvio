@@ -148,3 +148,67 @@ def test_ai_copy_rejects_nonmerchant_and_requires_published_program(monkeypatch)
         ai_copy.ai_draft(payload,staff=SimpleNamespace(role='owner',merchant_id='m1'),
                          db=SimpleNamespace(get=lambda *args:None))
     assert exc.value.status_code==404
+
+
+def test_ai_copy_generates_structured_draft_without_publishing(monkeypatch):
+    merchant_id='d'*36
+    program_id='e'*36
+    store_id='f'*36
+    monkeypatch.setenv('PRUVS_BUSINESS_AI_CAMPAIGNS_ENABLED','true')
+    monkeypatch.setenv('OPENAI_API_KEY','unit-test-key')
+    saved={
+      'headline':'Enjoy more of your favourite coffee',
+      'message':'Verified coffee purchases earn stamps towards your next reward.',
+      'cta':'Join Coffee Rewards',
+      'alt_text':'Warm coffee on a sunny cafe counter',
+      'visual_brief':'Original cafe portrait with warm light and coffee on a clean table.',
+      'motion_storyboard':'Slow pan across a warm cafe counter.',
+      'watermark_text':'Pruvs Business',
+    }
+    fake_reply=json.dumps({'output':[{'content':[
+        {'type':'output_text','text':json.dumps(saved)}
+    ]}]}).encode('utf-8')
+    calls=[]
+    class Reply:
+        def __enter__(self):return self
+        def __exit__(self,*args):return False
+        def read(self,_):return fake_reply
+    def open_mock(request,timeout):
+        calls.append(json.loads(request.data.decode('utf-8')))
+        return Reply()
+    monkeypatch.setattr(ai_copy,'urlopen',open_mock)
+    class FakeDB:
+        def get(self,kind,key):
+            if kind is Program:
+                return SimpleNamespace(id=program_id,merchant_id=merchant_id,
+                    store_id=store_id,status='published',title='Coffee Rewards',
+                    description='Five purchases for a reward',currency='RON',
+                    min_purchase_minor=2000,stamps_required=5,reward_minor=1000)
+            if kind is Merchant:return SimpleNamespace(id=merchant_id,name='Coffee Shop')
+            if kind is Store:return SimpleNamespace(id=store_id,name='Central',active=True)
+            raise AssertionError('Unexpected model')
+    brief=ai_copy.CampaignBrief(program_id=program_id,
+        goal='Encourage lunchtime coffee visits')
+    response=ai_copy.ai_draft(
+        brief,staff=SimpleNamespace(role='owner',merchant_id=merchant_id),
+        db=FakeDB())
+    assert response['published'] is False
+    assert response['review_required'] is True
+    assert response['draft']['headline']==saved['headline']
+    assert calls[0]['text']['format']['strict'] is True
+    assert calls[0]['input']
+    assert calls[0]['max_output_tokens']>=700
+
+
+def test_pre_migration_campaign_status_is_a_controlled_503():
+    from sqlalchemy import MetaData,Table,Column,String
+    metadata=MetaData()
+    Table('loyalty_promotions',metadata,
+          Column('id',String,primary_key=True),
+          Column('headline',String))
+    engine=create_engine('sqlite://')
+    metadata.create_all(engine)
+    with Session(engine) as db:
+        with pytest.raises(HTTPException) as exc:
+            pilot_v05.campaign_schema_ready(db)
+        assert exc.value.status_code==503
