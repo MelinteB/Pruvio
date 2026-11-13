@@ -80,7 +80,7 @@ def test_provider_image_is_parsed_and_reencoded_to_jpeg(monkeypatch):
     assert calls[0][2]['n']==1
     assert calls[0][2]['output_format']=='png'
     assert calls[0][2]['quality']=='low'
-    assert data.startswith(b'\\xff\\xd8\\xff')
+    assert data.startswith(bytes([0xFF,0xD8,0xFF]))
     with Image.open(io.BytesIO(data)) as image:
         assert image.format=='JPEG'
 
