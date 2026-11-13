@@ -144,3 +144,6 @@
     padding-bottom: calc(155px + env(safe-area-inset-bottom));
   }
 }
+
+/* v7.1.52: nonblocking Rewards partial-outage guidance */
+.pruvs-v7152-partial-warning{padding:11px 14px;border:1px solid #d9c58f;border-radius:11px;background:#fff9e8;color:#6d5217;font-size:13px;line-height:1.5;margin:10px 0 14px}

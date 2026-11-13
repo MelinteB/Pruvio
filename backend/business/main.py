@@ -21,7 +21,7 @@ from .security import merchant_actor, customer_actor, verify_password, encode_me
 from .schemas import LoginIn, StoreIn, ProgramIn, CampaignGoal, CampaignIn, ReceiptProofIn, ConfirmIn, DemoReceiptIn
 
 settings=get_settings()
-app=FastAPI(title='Pruvs Business API',version='0.6.7',docs_url='/docs' if settings.app_env!='production' else None)
+app=FastAPI(title='Pruvs Business API',version='0.6.8',docs_url='/docs' if settings.app_env!='production' else None)
 app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=False,
                    allow_methods=['GET','POST'],allow_headers=['Authorization','Content-Type'])
 app.include_router(merchant_enrollment_router)
@@ -65,7 +65,7 @@ def aware(dt):
 
 @app.get('/health')
 def health():
-    return {'service':'Pruvs Business','version':'0.6.7','status':'ok'}
+    return {'service':'Pruvs Business','version':'0.6.8','status':'ok'}
 
 @app.get('/ready', include_in_schema=False)
 def readiness():
@@ -74,10 +74,10 @@ def readiness():
     try:
         checks=check_schema(engine())
         if not all(checks.values()):
-            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.7'})
-        return {'status':'ready','version':'0.6.7'}
+            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.8'})
+        return {'status':'ready','version':'0.6.8'}
     except Exception:
-        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.7'})
+        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.8'})
 
 @app.post('/v1/merchant/login')
 def login(payload:LoginIn, db:Session=Depends(get_db)):
@@ -312,18 +312,16 @@ def claim_receipt(payload:ReceiptProofIn,consumer_id:str=Depends(customer_actor)
     db.refresh(c)
     return {'claim_id':c.id,'status':'pending','message':'Merchant verification required before earning stamps'}
 
+@app.get('/v1/customer/memberships')
+def customer_memberships(consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
+    from .wallet_reads_v068 import membership_rows
+    return {'memberships':membership_rows(db,consumer_id)}
+
 @app.get('/v1/customer/wallet')
 def wallet(consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
-    memberships=db.scalars(select(Membership).where(Membership.consumer_id==consumer_id)).all()
-    rewards=db.scalars(select(Reward).where(Reward.consumer_id==consumer_id)).all()
-    return {'memberships':[{'program_id':m.program_id,'stamps':m.stamps,
-             'title':(db.get(Program,m.program_id).title if db.get(Program,m.program_id) else 'Loyalty program'),
-             'stamps_required':(db.get(Program,m.program_id).stamps_required if db.get(Program,m.program_id) else 0),
-             'status':(db.get(Program,m.program_id).status if db.get(Program,m.program_id) else 'unknown')}
-             for m in memberships],
-            'rewards':[{'id':r.id,'program_id':r.program_id,'status':r.status,
-                        'code':r.redemption_code if r.status=='reserved' else None,
-                        'reserved_until':r.reserved_until.isoformat() if r.reserved_until else None} for r in rewards]}
+    from .wallet_reads_v068 import membership_rows, reward_rows
+    return {'memberships':membership_rows(db,consumer_id),
+            'rewards':reward_rows(db,consumer_id)}
 
 @app.post('/v1/customer/rewards/{reward_id}/reserve')
 def reserve_reward(reward_id:str,consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
