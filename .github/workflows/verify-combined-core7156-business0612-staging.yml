@@ -1,0 +1,79 @@
+name: Verify combined Core 7.1.56 and Business 0.6.12 STAGING
+
+on:
+  push:
+    branches:
+      - release/pruvs-platform-v7156-b0612-combined-stage-20261113
+  pull_request:
+    branches:
+      - release/pruvs-platform-v7151-b067-combined-stage-20261112
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            backend/frontend/package-lock.json
+            backend/business_frontend/package-lock.json
+      - name: Isolated Core, Business and AI campaign validation
+        working-directory: backend
+        run: |
+          python -m pip install -r business-requirements.txt 'Pillow>=10,<13' 'python-multipart>=0.0.9'
+          python -m compileall -q app/platform_combined.py app/react_app/loyalty_gateway.py app/react_main.py app/services/receipt_currency_service.py business scripts/check_stage_schema_v066.py business_migrations
+          python -m pytest -q tests/test_combined_platform_routes.py tests/test_stage_schema_v066.py tests/test_combined_database_url_v066.py tests/test_stage_v067.py tests/test_wallet_legacy_v068.py tests/test_receipt_currency_v7153.py tests/test_pilot_readiness_v069.py tests/test_receipt_code_access_v0610.py tests/test_campaign_journey_v0611.py tests/test_pilot_enrollment_v0612.py
+      - name: Core React tests + production bundle
+        working-directory: backend/frontend
+        env:
+          VITE_PRUVS_CORE_V7140_ENABLED: 'true'
+          VITE_PRUVS_CORE_V7141_PROJECTS_ENABLED: 'true'
+          VITE_PRUVS_LOYALTY_UI_ENABLED: 'true'
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+          npm run build
+      - name: Verify Core build signature
+        working-directory: backend
+        run: |
+          python scripts/check_react_build.py
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          x=json.loads(Path('frontend/dist/build-manifest.json').read_text())
+          assert x['version']=='7.1.56',x
+          assert '0.6.12' in Path('business/main.py').read_text()
+          assert Path('business_migrations/versions/b11a0612_pilot_enrollment.py').is_file()
+          PY
+      - name: Build Business merchant React under /business
+        working-directory: backend/business_frontend
+        env:
+          VITE_API_BASE: /business
+          VITE_PRUVS_CUSTOMER_URL: ''
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build -- --base=/business/
+      - name: Validate Business public assets and production isolation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          dist=Path('backend/business_frontend/dist')
+          assert (dist/'index.html').is_file()
+          assert (dist/'business-favicon.svg').is_file()
+          assert (dist/'merchant-enroll.html').is_file()
+          assert (dist/'merchant-login-entry.js').is_file()
+          assert '/business/assets/' in (dist/'index.html').read_text()
+          for js in (dist/'assets').glob('*.js'):
+              t=js.read_text()
+              assert 'http://127.0.0.1:8001' not in t
+              assert 'pruvs-business-api-staging.onrender.com/v1' not in t
+          print('PASS: Business v0.6.12 isolated staging UI')
+          PY
