@@ -10,7 +10,8 @@ async function call(path,token,method='GET',body=null){
 }
 function cash(n){return (Number(n||0)/100).toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})+' RON'}
 export default function ReceiptInbox({token,onChange}){
- const [readiness,setReadiness]=useState(null);\n const [claims,setClaims]=useState([]),[review,setReview]=useState(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[reason,setReason]=useState(''),[code,setCode]=useState('');
+ const [readiness,setReadiness]=useState(null);
+ const [claims,setClaims]=useState([]),[review,setReview]=useState(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[reason,setReason]=useState(''),[code,setCode]=useState('');
  async function refresh(){setLoading(true);try{
    const [rows, pilot] = await Promise.all([
      call('/v1/merchant/claims',token),
