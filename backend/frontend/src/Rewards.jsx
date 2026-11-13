@@ -1,6 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import {QRCodeSVG} from 'qrcode.react';
-import {Link} from 'react-router-dom';
+import {Link,useLocation} from 'react-router-dom';
 import {Compass, Gift, MapPin, RefreshCcw, ReceiptText, Ticket, CheckCircle2, X, Search} from 'lucide-react';
 import {Title, Panel, Message, Spinner} from './common';
 import {request, send, money} from './api';
@@ -10,6 +10,8 @@ import ReceiptSubmission from './ReceiptSubmission';
 import CustomerReceiptCode from './CustomerReceiptCode';
 
 export default function Rewards(){
+  const location=useLocation();
+  const promotedProgram=new URLSearchParams(location.search).get('program');
   const [status,setStatus]=useState(null);
   const [offers,setOffers]=useState([]);
   const [promotions,setPromotions]=useState([]);
@@ -142,7 +144,8 @@ export default function Rewards(){
   // City search filters published Pruvs merchants by their registered store address.
   // It does not claim that Google Maps businesses are registered with Pruvs.
   const cityMatches=(text,city)=>String(text||'').toLocaleLowerCase().includes(city.toLocaleLowerCase());
-  const shownOffers=cityFilter?offers.filter(o=>cityMatches(o.store?.address,cityFilter)||cityMatches(o.store?.name,cityFilter)||cityMatches(o.merchant_name,cityFilter)):offers;
+  const shownOffers=(cityFilter?offers.filter(o=>cityMatches(o.store?.address,cityFilter)||cityMatches(o.store?.name,cityFilter)||cityMatches(o.merchant_name,cityFilter)):offers)
+    .slice().sort((a,b)=>Number(b.program.id===promotedProgram)-Number(a.program.id===promotedProgram));
   const byProgram=new Map(offers.map(o=>[o.program.id,o]));
   const earnedPrograms=offers.filter(o=>joined.has(o.program.id)).map(o=>{
     const active=promotions.find(p=>p.program_id===o.program.id && p.status==='published' &&
@@ -171,6 +174,7 @@ export default function Rewards(){
       </p>}
       <div className="row wrap rewards-actions"><button type="button" onClick={nearMe} disabled={!!busy}><MapPin size={17}/> Offers near me</button><button type="button" onClick={()=>{setCityFilter('');setCoordinates(null);refresh(null);}} disabled={!!busy}><Compass size={17}/> All offers</button><button type="button" onClick={()=>refresh()} disabled={!!busy}><RefreshCcw size={17}/> Refresh</button></div>
       {cityFilter&&<p className="pruvs-v7150-city-status">Showing Pruvs merchant programs matching <strong>{cityFilter}</strong>. <button type="button" onClick={()=>setCityOpen(true)}>Change city</button></p>}
+      {promotedProgram&&offers.some(o=>o.program.id===promotedProgram)&&<p role="status" className="pruvs-v7152-partial-warning">Your selected loyalty program is listed first below. Join it to start earning merchant-approved rewards.</p>}
       {promotions.length>0 && !cityFilter && <section className="rewards-featured"><h2>Featured merchant promotions</h2><div className="rewards-cards">{promotions.map(p=><Panel key={p.id} className="rewards-card rewards-promotion"><small className="rewards-promo-tag">LOCAL PROMOTION · {p.merchant_name}</small>
           {p.media_url&&p.media_url.startsWith('https://')&&(p.media_type?.startsWith('image/')
             ?<img className="pruvs-v7151-promo-creative" src={p.media_url} alt={p.media_alt||p.headline} loading="lazy"/>
