@@ -140,6 +140,11 @@ def approval_guard(db,claim,staff):
     # supported during the independent deployment sequence.
     require_all=os.getenv('PRUVS_BUSINESS_V06_REQUIRE_EVIDENCE','false').lower()=='true'
     if ev is None and not require_all:
+        # Preserve historic v0.5 claims without evidence, but never interpret
+        # a missing preview as permission to bypass a v1.2 customer code.
+        from .models_v12 import CustomerClaimCode
+        if db.get(CustomerClaimCode,claim.id):
+            raise HTTPException(409,'Consented receipt evidence is missing; merchant review cannot proceed')
         return
     if not ev or ev.merchant_id!=staff.merchant_id:
         raise HTTPException(409,'Receipt evidence missing; ask customer to resubmit in v0.6')
