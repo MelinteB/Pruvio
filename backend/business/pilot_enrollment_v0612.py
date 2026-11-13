@@ -164,6 +164,7 @@ class PilotDecisionIn(BaseModel):
 @router.get('/v1/platform/pilot-enrollments')
 def platform_pilot_enrollments(staff: Staff = Depends(require_platform_admin),
                                db: Session = Depends(get_db)):
+    require_platform_admin(staff)
     require_db_mode(db)
     rows = db.scalars(select(MerchantPilotEnrollment).order_by(
         MerchantPilotEnrollment.updated_at.desc()
@@ -181,6 +182,7 @@ def platform_pilot_enrollments(staff: Staff = Depends(require_platform_admin),
 def platform_decide_pilot(merchant_id: str, body: PilotDecisionIn,
                           staff: Staff = Depends(require_platform_admin),
                           db: Session = Depends(get_db)):
+    require_platform_admin(staff)
     require_db_mode(db)
     row = db.scalar(select(MerchantPilotEnrollment).where(
         MerchantPilotEnrollment.merchant_id == merchant_id
