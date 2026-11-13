@@ -25,8 +25,7 @@ def ready():
     if os.getenv('PRUVS_BUSINESS_CUSTOMER_CODES_V12_ENABLED','false').lower()!='true':
         raise HTTPException(503,'Customer receipt codes pilot is not enabled')
 
-def merchant_pilot_allowed(merchant_id):
-    return merchant_id in {v.strip() for v in os.getenv('PRUVS_BUSINESS_V06_PILOT_MERCHANT_IDS','').split(',') if v.strip()}
+from .pilot_enrollment_v0612 import merchant_pilot_allowed
 
 class CustomerClaimIn(BaseModel):
     program_id:str=Field(min_length=36,max_length=36)
@@ -41,7 +40,7 @@ class CodeLookup(BaseModel):
 def eligible(program_id:str,consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
     ready()
     p=db.get(Program,program_id)
-    if not p or p.status!='published' or not merchant_pilot_allowed(p.merchant_id):
+    if not p or p.status!='published' or not merchant_pilot_allowed(db,p.merchant_id):
         raise HTTPException(404,'Program not available for receipt-code pilot')
     member=db.scalar(select(Membership).where(Membership.program_id==p.id,Membership.consumer_id==consumer_id))
     if not member:raise HTTPException(403,'Join the loyalty program before claiming')
@@ -53,7 +52,7 @@ def eligible(program_id:str,consumer_id:str=Depends(customer_actor),db:Session=D
 def create_customer_code(payload:CustomerClaimIn,consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
     ready()
     p=db.get(Program,payload.program_id)
-    if not p or p.status!='published' or not merchant_pilot_allowed(p.merchant_id):
+    if not p or p.status!='published' or not merchant_pilot_allowed(db,p.merchant_id):
         raise HTTPException(404,'Program unavailable')
     member=db.scalar(select(Membership).where(Membership.program_id==p.id,Membership.consumer_id==consumer_id))
     if not member:raise HTTPException(403,'Join the loyalty program first')
