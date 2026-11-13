@@ -29,7 +29,13 @@ def config():
     secret = os.getenv('PRUVS_BRIDGE_SECRET', '')
     if len(secret) < 32:
         raise HTTPException(503, 'Pruvs Rewards bridge is not configured.')
-    combined = os.getenv('PRUVS_PLATFORM_COMBINED_STAGING', '').lower() == 'true'
+    staging = os.getenv('PRUVS_PLATFORM_COMBINED_STAGING', '').strip().lower() == 'true'
+    production = os.getenv('PRUVS_PLATFORM_COMBINED_PRODUCTION', '').strip().lower() == 'true'
+    if staging and production:
+        raise HTTPException(503, 'Invalid combined platform configuration.')
+    if production and os.getenv('APP_ENV', '').strip().lower() != 'production':
+        raise HTTPException(503, 'Production loyalty bridge is not configured.')
+    combined = staging or production
     if combined:
         # Fixed loopback address + Render-provided port. No user-supplied URLs.
         port = os.getenv('PORT', '').strip()
