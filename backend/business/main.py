@@ -178,6 +178,8 @@ def get_claims(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
 @app.post('/v1/merchant/claims/{claim_id}/approve')
 def approve_claim(claim_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     merchant_check(staff)
+    from .pilot_readiness_v069 import require_reward_schema
+    require_reward_schema(db)
     c=db.scalar(select(ReceiptClaim).where(ReceiptClaim.id==claim_id,ReceiptClaim.merchant_id==staff.merchant_id).with_for_update())
     if not c:raise HTTPException(404,'Claim not found')
     if c.status!='pending':raise HTTPException(409,'Claim already processed')
@@ -324,6 +326,8 @@ def wallet(consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
 
 @app.post('/v1/customer/rewards/{reward_id}/reserve')
 def reserve_reward(reward_id:str,consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
+    from .pilot_readiness_v069 import require_reward_schema
+    require_reward_schema(db)
     r=db.get(Reward,reward_id)
     if not r or r.consumer_id!=consumer_id:raise HTTPException(404,'Reward not found')
     if r.status=='reserved' and aware(r.reserved_until) and aware(r.reserved_until)<utcnow():
@@ -353,6 +357,8 @@ class RedemptionSaleIn(ConfirmIn):
 def confirm_redemption_code(payload:RedemptionSaleIn,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     """Mark a reward redeemed only after a completed merchant sale; record the applied discount."""
     merchant_check(staff)
+    from .pilot_readiness_v069 import require_reward_schema
+    require_reward_schema(db)
     code=payload.code.upper()
     r=db.scalar(select(Reward).where(Reward.redemption_code==code,
                 Reward.merchant_id==staff.merchant_id).with_for_update())
