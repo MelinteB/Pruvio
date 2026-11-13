@@ -119,6 +119,7 @@ def test_ai_artwork_requires_explicit_flag_and_never_publishes(monkeypatch):
     assert exc.value.status_code==503
     monkeypatch.setenv('PRUVS_BUSINESS_AI_CAMPAIGNS_ENABLED','true')
     monkeypatch.setenv('PRUVS_BUSINESS_AI_IMAGES_ENABLED','true')
+    monkeypatch.setattr(pilot_v05,'campaign_schema_ready',lambda db: None)
     monkeypatch.setattr(artwork,'request_image',lambda prompt,secret: b'jpeg-bytes')
     monkeypatch.setattr(artwork,'storage',lambda:(object(),{'PRUVS_CAMPAIGN_R2_BUCKET':'safe'}))
     recorded=[]
@@ -156,6 +157,7 @@ def test_ai_copy_generates_structured_draft_without_publishing(monkeypatch):
     store_id='f'*36
     monkeypatch.setenv('PRUVS_BUSINESS_AI_CAMPAIGNS_ENABLED','true')
     monkeypatch.setenv('OPENAI_API_KEY','unit-test-key')
+    monkeypatch.setattr(pilot_v05,'campaign_schema_ready',lambda db: None)
     saved={
       'headline':'Enjoy more of your favourite coffee',
       'message':'Verified coffee purchases earn stamps towards your next reward.',
