@@ -21,7 +21,7 @@ from .security import merchant_actor, customer_actor, verify_password, encode_me
 from .schemas import LoginIn, StoreIn, ProgramIn, CampaignGoal, CampaignIn, ReceiptProofIn, ConfirmIn, DemoReceiptIn
 
 settings=get_settings()
-app=FastAPI(title='Pruvs Business API',version='0.6.8',docs_url='/docs' if settings.app_env!='production' else None)
+app=FastAPI(title='Pruvs Business API',version='0.6.9',docs_url='/docs' if settings.app_env!='production' else None)
 app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=False,
                    allow_methods=['GET','POST'],allow_headers=['Authorization','Content-Type'])
 app.include_router(merchant_enrollment_router)
@@ -29,6 +29,8 @@ from .ai_campaign_v067 import router as ai_campaign_router
 app.include_router(ai_campaign_router)
 from .media_v067 import router as media_router
 app.include_router(media_router)
+from .pilot_readiness_v069 import router as receipt_readiness_router
+app.include_router(receipt_readiness_router)
 
 def owned(db, cls, object_id, merchant_id):
     item=db.get(cls,object_id)
@@ -65,7 +67,7 @@ def aware(dt):
 
 @app.get('/health')
 def health():
-    return {'service':'Pruvs Business','version':'0.6.8','status':'ok'}
+    return {'service':'Pruvs Business','version':'0.6.9','status':'ok'}
 
 @app.get('/ready', include_in_schema=False)
 def readiness():
@@ -74,10 +76,10 @@ def readiness():
     try:
         checks=check_schema(engine())
         if not all(checks.values()):
-            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.8'})
-        return {'status':'ready','version':'0.6.8'}
+            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.9'})
+        return {'status':'ready','version':'0.6.9'}
     except Exception:
-        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.8'})
+        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.9'})
 
 @app.post('/v1/merchant/login')
 def login(payload:LoginIn, db:Session=Depends(get_db)):
@@ -214,13 +216,10 @@ def reject_claim(claim_id:str,body:dict|None=None,staff:Staff=Depends(merchant_a
 
 @app.post('/v1/merchant/rewards/{reward_id}/confirm')
 def confirm_reward(reward_id:str,payload:ConfirmIn,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    # This legacy endpoint had no completed sale reference and no audit ledger.
+    # Fail closed rather than redeem rewards outside the reconciliation workflow.
     merchant_check(staff)
-    reward=owned(db,Reward,reward_id,staff.merchant_id)
-    if reward.status!='reserved' or not reward.redemption_code or not secrets.compare_digest(reward.redemption_code,payload.code.upper()) or aware(reward.reserved_until)<utcnow():
-        raise HTTPException(409,'Invalid or expired redemption reservation')
-    reward.status='redeemed';reward.redemption_code=None;reward.reserved_until=None;reward.redeemed_at=utcnow()
-    db.commit()
-    return {'status':'redeemed','reward_id':reward.id}
+    raise HTTPException(409,'Legacy confirmation is disabled. Use /v1/merchant/redemptions/confirm with a completed sale reference.')
 
 @app.post('/v1/merchant/campaign-suggestions')
 def suggest_campaign(payload:CampaignGoal,staff:Staff=Depends(merchant_actor)):
