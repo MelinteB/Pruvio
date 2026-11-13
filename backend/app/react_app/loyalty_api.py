@@ -7,7 +7,7 @@ from app.react_app.auth import current
 from app.db.database import get_db
 from app.models.case import Case
 from app.services import standalone_app_service as receipts
-from app.react_app.loyalty_gateway import call_business, config, enabled, receipt_proof
+from app.react_app.loyalty_gateway import call_business, config, enabled, receipt_proof, pseudonym
 
 router = APIRouter(prefix='/api/v1/loyalty', tags=['Rewards'])
 
@@ -15,6 +15,8 @@ router = APIRouter(prefix='/api/v1/loyalty', tags=['Rewards'])
 def status(identity=Depends(current)):
     # No Business secrets, tokens, or user IDs are exposed.
     return {'enabled':enabled(), 'receipt_claims_enabled':enabled() and os.getenv('PRUVS_LOYALTY_RECEIPT_CLAIMS_ENABLED','false').lower()=='true',
+            'receipt_v06_enabled':enabled() and os.getenv('PRUVS_LOYALTY_RECEIPT_CLAIMS_ENABLED','false').lower()=='true' and os.getenv('PRUVS_LOYALTY_RECEIPT_V06_ENABLED','false').lower()=='true' and __import__('app.react_app.loyalty_v06',fromlist=['pilot_allowed']).pilot_allowed(identity[0].id),
+            'customer_codes_v12_enabled':enabled() and os.getenv('PRUVS_LOYALTY_RECEIPT_CLAIMS_ENABLED','false').lower()=='true' and os.getenv('PRUVS_LOYALTY_CUSTOMER_CODES_V12_ENABLED','false').lower()=='true' and os.getenv('PRUVS_LOYALTY_RECEIPT_V06_ENABLED','false').lower()=='true' and __import__('app.react_app.loyalty_v06',fromlist=['pilot_allowed']).pilot_allowed(identity[0].id),
             'message':'Receipt earning requires verified merchant integration and merchant approval.'}
 
 @router.get('/offers')
@@ -35,9 +37,25 @@ def join(program_id:str,identity=Depends(current)):
     except (ValueError,AttributeError): raise HTTPException(422, 'Invalid program ID.') from None
     return call_business('/v1/customer/programs/'+program_id+'/join', method='POST', user_id=identity[0].id)
 
+@router.post('/programs/{program_id}/leave')
+def leave(program_id:str,identity=Depends(current)):
+    from uuid import UUID
+    try:program_id=str(UUID(program_id))
+    except (ValueError,AttributeError):raise HTTPException(422,'Invalid program ID.') from None
+    return call_business('/v1/customer/programs/'+program_id+'/leave',method='POST',user_id=identity[0].id)
+
+@router.get('/memberships')
+def memberships(identity=Depends(current)):
+    # Memberships are safe to read even when the newer reconciliation schema is pending.
+    return call_business('/v1/customer/memberships', user_id=identity[0].id)
+
 @router.get('/wallet')
 def wallet(identity=Depends(current)):
     return call_business('/v1/customer/wallet', user_id=identity[0].id)
+
+@router.get('/redemptions')
+def redemptions(identity=Depends(current)):
+    return call_business('/v1/customer/redemptions',user_id=identity[0].id)
 
 @router.post('/rewards/{reward_id}/reserve')
 def reserve(reward_id:str,identity=Depends(current)):
@@ -49,7 +67,7 @@ def reserve(reward_id:str,identity=Depends(current)):
 @router.get('/receipts')
 def receipt_candidates(identity=Depends(current),db=Depends(get_db)):
     # View-only listing: no proof issuance from OCR merchant names.
-    config()  # do not expose a pilot page accidentally when disabled
+    _url,bridge_secret=config()  # fail closed when Rewards are unavailable
     uid = identity[0].id
     cases = db.query(Case).filter_by(user_id=uid).order_by(Case.created_at.desc()).limit(20).all()
     result = []
@@ -59,7 +77,8 @@ def receipt_candidates(identity=Depends(current),db=Depends(get_db)):
                        'merchant_name':str(data.get('merchant_name') or 'Unknown merchant')[:160],
                        'receipt_total':data.get('receipt_total'),
                        'currency':data.get('currency'),
-                       'matched_to_store':False})
+                       'matched_to_store':False,
+                       'receipt_ref':pseudonym(bridge_secret,'receipt-v1',f'{uid}:{case.id}')})
     return {'receipts':result,'claiming_available':False,
             'message':'A merchant/POS receipt reference must be verified before earning loyalty rewards.'}
 
@@ -76,6 +95,8 @@ class ReceiptClaimIn(BaseModel):
 def claim_receipt(case_id:int, payload:ReceiptClaimIn, identity=Depends(current), db=Depends(get_db)):
     if not enabled() or os.getenv('PRUVS_LOYALTY_RECEIPT_CLAIMS_ENABLED','false').lower()!='true':
         raise HTTPException(503,'Receipt pilot is not enabled.')
+    if os.getenv('PRUVS_LOYALTY_RECEIPT_V06_ENABLED','false').lower()=='true':
+        raise HTTPException(409,'Use the updated secure receipt submission flow')
     from uuid import UUID
     try: program_id=str(UUID(payload.program_id))
     except (ValueError,AttributeError):raise HTTPException(422,'Invalid program') from None
@@ -105,3 +126,6 @@ def claim_receipt(case_id:int, payload:ReceiptClaimIn, identity=Depends(current)
     proof=receipt_proof(secret,uid,case_id,store_id,minor,currency)
     return call_business('/v1/customer/pilot/claims',user_id=uid,method='POST',
                          body={'program_id':program_id,'code':payload.code.upper(),'receipt_proof':proof})
+
+from app.react_app.loyalty_v06 import router as v06_router
+router.include_router(v06_router)

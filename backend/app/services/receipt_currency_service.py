@@ -62,9 +62,15 @@ PEN|PEN — Peruvian sol""".splitlines())
 
 
 def normalize_currency(value):
-    """Accept detected three-letter codes; placeholders are never currencies."""
+    """Normalize known receipt codes without guessing an unknown currency.
+
+    Romanian receipt OCR often prints LEI instead of ISO 4217 RON.
+    Unknown values remain unconfirmed so the owner can choose a currency.
+    """
     code = str(value or "").strip().upper()
-    if re.fullmatch(r"[A-Z]{3}", code) and code not in {"XXX", "UNK", "NAN"}:
+    if code == "LEI":
+        code = "RON"
+    if re.fullmatch(r"[A-Z]{3}", code) and code in CURRENCY_OPTIONS:
         return code
     return None
 
@@ -84,9 +90,12 @@ def set_receipt_currency(db, case_id: int, user_id: int, currency: str) -> str:
         raise ValueError("Currency cannot be changed after a split has been created.")
     current = {normalize_currency(item.currency) for item in items}
     if current != {None}:
-        if current == {code}:
-            return code  # A repeated save after reconnect is harmless.
-        raise ValueError("This receipt already has a currency. Refresh the page.")
+        if current != {code}:
+            raise ValueError("This receipt already has a currency. Refresh the page.")
+        if all(str(item.currency or "").strip().upper() == code for item in items):
+            return code  # An exact repeated save after reconnect is harmless.
+        # A known OCR alias such as LEI must still be persisted as ISO RON.
+        # No receipt prices, quantities, or totals are changed.
     request = (db.query(ExternalOCRRequest)
                .filter(ExternalOCRRequest.case_id == case_id)
                .order_by(ExternalOCRRequest.created_at.desc(), ExternalOCRRequest.id.desc()).first())

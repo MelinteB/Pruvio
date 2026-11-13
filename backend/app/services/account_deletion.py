@@ -143,6 +143,16 @@ def clean_dependent_records(db, user_id: int, case_ids: list[int]):
     from app.models.expense import ExpenseCompany, ExpenseTripProfile, ExpenseReport
     from app.react_app.inbox import PruvsInboxRead
 
+    from app.models.receipt_group import ReceiptGroup,ReceiptGroupMembership
+    from app.models.split_bill_v7140 import SplitAllocationState,SplitSharedItem
+    # Delete dependent group and allocation rows before bulk-removing source cases.
+    owned_groups=db.query(ReceiptGroup.id).filter_by(owner_user_id=user_id)
+    db.query(ReceiptGroupMembership).filter(ReceiptGroupMembership.case_id.in_(case_ids)).delete(synchronize_session=False)
+    db.query(ReceiptGroupMembership).filter(ReceiptGroupMembership.group_id.in_(owned_groups)).delete(synchronize_session=False)
+    db.query(ReceiptGroup).filter_by(owner_user_id=user_id).delete(synchronize_session=False)
+    owned_sessions=db.query(SplitBillSession.id).filter(SplitBillSession.case_id.in_(case_ids))
+    db.query(SplitSharedItem).filter(SplitSharedItem.session_id.in_(owned_sessions)).delete(synchronize_session=False)
+    db.query(SplitAllocationState).filter(SplitAllocationState.session_id.in_(owned_sessions)).delete(synchronize_session=False)
     for model in (ReceiptIdentity, ReceiptFingerprint):
         db.query(model).filter(or_(model.user_id == user_id, model.case_id.in_(case_ids))).delete(synchronize_session=False)
     db.query(ReceiptMark).filter(ReceiptMark.case_id.in_(case_ids)).delete(synchronize_session=False)

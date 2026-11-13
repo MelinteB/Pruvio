@@ -39,6 +39,8 @@ def delete_case(db,case_id,strict=True):
     db.query(ExternalOCRUsage).filter_by(case_id=case_id).delete(synchronize_session=False)
     db.query(ExternalOCRRequest).filter_by(case_id=case_id).delete(synchronize_session=False)
     db.query(ReceiptCorrection).filter_by(case_id=case_id).delete(synchronize_session=False)
+    from app.models.receipt_group import ReceiptGroupMembership
+    db.query(ReceiptGroupMembership).filter_by(case_id=case_id).delete(synchronize_session=False)
     db.query(ReceiptItem).filter_by(case_id=case_id).delete(synchronize_session=False)
     db.query(ReceiptFingerprint).filter_by(case_id=case_id).delete(synchronize_session=False)
     db.query(ReceiptIdentity).filter_by(case_id=case_id).delete(synchronize_session=False)

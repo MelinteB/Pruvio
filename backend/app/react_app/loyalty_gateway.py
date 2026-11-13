@@ -29,13 +29,28 @@ def config():
     secret = os.getenv('PRUVS_BRIDGE_SECRET', '')
     if len(secret) < 32:
         raise HTTPException(503, 'Pruvs Rewards bridge is not configured.')
-    raw = os.getenv('PRUVS_BUSINESS_API_URL', '').strip().rstrip('/')
+    staging = os.getenv('PRUVS_PLATFORM_COMBINED_STAGING', '').strip().lower() == 'true'
+    production = os.getenv('PRUVS_PLATFORM_COMBINED_PRODUCTION', '').strip().lower() == 'true'
+    if staging and production:
+        raise HTTPException(503, 'Invalid combined platform configuration.')
+    if production and os.getenv('APP_ENV', '').strip().lower() != 'production':
+        raise HTTPException(503, 'Production loyalty bridge is not configured.')
+    combined = staging or production
+    if combined:
+        # Fixed loopback address + Render-provided port. No user-supplied URLs.
+        port = os.getenv('PORT', '').strip()
+        if not port.isdigit() or not (1 <= int(port) <= 65535):
+            raise HTTPException(503, 'Local Business route is not configured.')
+        raw = 'http://127.0.0.1:' + port + '/business'
+    else:
+        raw = os.getenv('PRUVS_BUSINESS_API_URL', '').strip().rstrip('/')
     p = parse.urlsplit(raw)
     is_https = p.scheme == 'https'
+    combined_local = (combined and p.scheme == 'http' and p.hostname == '127.0.0.1' and p.path == '/business' and p.port == int(port))
     local_dev = (p.scheme == 'http' and p.hostname in ('127.0.0.1', 'localhost')
                  and os.getenv('PRUVS_LOYALTY_LOCAL_HTTP', '').lower() == 'true'
                  and os.getenv('APP_ENV', 'production').lower() != 'production')
-    if not (is_https or local_dev) or not p.hostname or p.username or p.password or p.path not in ('', '/') or p.query or p.fragment:
+    if not (is_https or local_dev or combined_local) or not p.hostname or p.username or p.password or (p.path not in ('', '/') and not combined_local) or p.query or p.fragment:
         raise HTTPException(503, 'Pruvs Business API is not configured securely.')
     return raw, secret
 

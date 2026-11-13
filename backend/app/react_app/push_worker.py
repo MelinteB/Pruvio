@@ -112,7 +112,7 @@ def deliver(db, event):
     # Split notifications created before a revocation may still be queued.
     # Recheck current membership immediately before provider delivery; never
     # push or email old bill details to a user who has lost bill access.
-    if event.url.startswith(('/bill/', '/split-bill/sessions/')):
+    if event.url.startswith(('/bill/', '/split-bill/sessions/', '/projects/')):
         from app.react_app.inbox import destination
         if destination(db, user.id, event.url) is None:
             event.title = 'Previous bill activity'
@@ -123,7 +123,7 @@ def deliver(db, event):
             db.commit()
             return
     pref = preferences(db, user.id)
-    category = 'receipts' if event.kind.startswith('receipt') else ('reminders' if event.kind == 'reminder' else 'bills')
+    category = 'receipts' if event.kind.startswith('receipt') else ('reminders' if event.kind in ('reminder','project_reminder') else 'bills')
     if event.kind != 'test' and (not user.notifications_opt_in or not getattr(pref, category)):
         event.status = 'muted'; db.commit(); return
     # Old jobs must not emit obsolete payment reminders after a long outage.
@@ -187,7 +187,7 @@ def deliver(db, event):
     accepted = db.query(PushDelivery).filter_by(event_id=event.id, status='accepted').count() > 0
     # Provider acceptance does not prove display. An opted-in verified email
     # receives split activity independently, even if a push was accepted.
-    split_activity = event.kind in ('reminder', 'split_settled', 'split_reopened',
+    split_activity = event.kind in ('reminder', 'project_reminder', 'split_settled', 'split_reopened',
                                     'bill_settled', 'bill_reopened', 'payment_marked', 'participant_joined',
                                     'payment_received', 'payment_receipt_reversed', 'payment_withdrawn', 'participant_removed')
     send_email_for_event = (event.kind != 'test' and pref.email_enabled and user.email
