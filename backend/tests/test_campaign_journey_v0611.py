@@ -212,3 +212,38 @@ def test_pre_migration_campaign_status_is_a_controlled_503():
         with pytest.raises(HTTPException) as exc:
             pilot_v05.campaign_schema_ready(db)
         assert exc.value.status_code==503
+
+
+def test_generated_image_can_be_branded_and_exported_as_png(monkeypatch):
+    from business import media_v067
+    mid='a'*36
+    jpg=io.BytesIO()
+    Image.new('RGB',(90,120),'#e4dccf').save(jpg,'JPEG')
+    class SourceBody:
+        def read(self,maximum):
+            assert maximum>0
+            return jpg.getvalue()
+    class FakeStorage:
+        def get_object(self,**kwargs):
+            assert kwargs['Bucket']=='pilot-media'
+            return {'Body':SourceBody()}
+    monkeypatch.setattr(media_v067,'storage',lambda:(
+        FakeStorage(),{'PRUVS_CAMPAIGN_R2_BUCKET':'pilot-media'}))
+    saved=[]
+    def put_mock(client,cfg,key,raw,media_type):
+        saved.append((key,raw,media_type))
+        return {'media_key':key,'media_type':media_type,
+                'media_url':'https://media.example/'+key}
+    monkeypatch.setattr(media_v067,'put',put_mock)
+    result=media_v067.render_campaign_artwork(
+        media_v067.RenderArtworkIn(
+            media_key='campaigns/'+mid+'/'+'f'*32+'.jpg',
+            format='png',headline='Original local rewards',
+            watermark_text='Pruvs Business'
+        ),
+        staff=SimpleNamespace(id='s1',merchant_id=mid,role='owner'))
+    assert result['media_type']=='image/png'
+    assert saved[0][0].startswith('campaigns/'+mid+'/')
+    with Image.open(io.BytesIO(saved[0][1])) as image:
+        assert image.format=='PNG'
+        assert image.size==(720,900)
