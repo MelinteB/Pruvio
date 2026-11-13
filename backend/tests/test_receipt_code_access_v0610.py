@@ -73,7 +73,7 @@ def test_changed_receipt_evidence_cannot_be_reissued(monkeypatch):
     digest = hashlib.sha256(raw).hexdigest()
     current = SimpleNamespace(
         id='claim1',merchant_id='m1', consumer_id='user1',
-        program_id='p1',status='pending',amount_minor=1000,
+        program_id='p'*36,status='pending',amount_minor=1000,
     )
     old_evidence = SimpleNamespace(
         image_sha256='f'*64, merchant_label='Cafe', receipt_date='2026-11-13',
@@ -81,7 +81,7 @@ def test_changed_receipt_evidence_cannot_be_reissued(monkeypatch):
     code_row = SimpleNamespace(code_hash='oldhash',expires_at=NOW,
                                unlocked_by_staff='s1',unlocked_at=NOW)
     merchant = SimpleNamespace(id='m1', status='active')
-    program = SimpleNamespace(id='p1', merchant_id='m1',status='published',
+    program = SimpleNamespace(id='p'*36, merchant_id='m1',status='published',
                               store_id='store1',currency='RON',min_purchase_minor=0)
     class FakeDB:
         def __init__(self):
@@ -106,7 +106,7 @@ def test_changed_receipt_evidence_cannot_be_reissued(monkeypatch):
         'evidence_sha256':digest,'merchant_label':'Cafe','receipt_date':'2026-11-13',
     })
     payload=pilot_v12.CustomerClaimIn(
-        program_id='p1',
+        program_id='p'*36,
         code_hash='b'*64,receipt_proof='x'*100,
         evidence=pilot_v12.EvidenceIn(
             consent=True, merchant_label='Cafe',
