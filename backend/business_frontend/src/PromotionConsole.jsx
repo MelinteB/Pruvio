@@ -13,9 +13,9 @@ async function call(path,token,body){
 export default function PromotionConsole({token,programs,mode='promotions'}){
   const [list,setList]=useState([]),[programId,setProgramId]=useState(''),[headline,setHeadline]=useState(''),[message,setMessage]=useState(''),[mediaUrl,setMediaUrl]=useState(''),[mediaType,setMediaType]=useState('image/jpeg'),[days,setDays]=useState(14),[amount,setAmount]=useState(''),[code,setCode]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
   const [goal,setGoal]=useState('Encourage loyal customers to return'),[audience,setAudience]=useState('Local regular customers'),
-    [tone,setTone]=useState('friendly'),[creativeFormat,setCreativeFormat]=useState('image'),
+    [tone,setTone]=useState('friendly'),[creativeFormat,setCreativeFormat]=useState('png'),
     [watermark,setWatermark]=useState('Pruvs Business'),[artworkKey,setArtworkKey]=useState(''),
-    [draftPreview,setDraftPreview]=useState(null),[aiBusy,setAiBusy]=useState(false),[assetBusy,setAssetBusy]=useState(false);
+    [draftPreview,setDraftPreview]=useState(null),[aiBusy,setAiBusy]=useState(false),[assetBusy,setAssetBusy]=useState(false),[aiReadiness,setAiReadiness]=useState(null);
   const published=programs.filter(p=>p.status==='published');
   const currentProgram=programs.find(p=>p.id===programId);
   async function generateDraft(){
@@ -30,6 +30,32 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
       setDraftPreview(result.draft);
       setNotice('AI draft generated. Review and edit it before saving; publishing remains manual.');
     }catch(e){setError(e.message)}finally{setAiBusy(false)}
+  }
+  async function generateAIArtwork(){
+    if(!draftPreview || !programId || !headline.trim()){
+      setError('Generate and review AI campaign copy first, then create artwork.');
+      return;
+    }
+    setAssetBusy(true);setError('');setNotice('');
+    try{
+      const generated=await call('/v1/merchant/promotions/ai-artwork',token,{
+        program_id:programId,headline:headline.trim(),
+        visual_brief:draftPreview.visual_brief
+      });
+      // Keep the original so rendering failures do not discard paid AI output.
+      setArtworkKey(generated.media_key);setMediaUrl(generated.media_url);setMediaType(generated.media_type);
+      try{
+        const branded=await call('/v1/merchant/promotions/media/render',token,{
+          media_key:generated.media_key,format:creativeFormat,
+          headline:headline.trim(),watermark_text:watermark.trim()||'Pruvs Business'
+        });
+        setMediaUrl(branded.media_url);setMediaType(branded.media_type);
+        setNotice('AI artwork generated and branded. Review the preview, save as draft and publish when approved.');
+      }catch(renderError){
+        setError('AI image was saved, but branding failed: '+renderError.message+'. Use Generate branded artwork to retry.');
+      }
+    }catch(e){setError(e.message||'AI image generation failed.')}
+    finally{setAssetBusy(false)}
   }
   async function uploadArtwork(file){
     if(!file)return;
@@ -58,6 +84,19 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
     }catch(e){setError(e.message)}finally{setAssetBusy(false)}
   }
   useEffect(()=>{if(!published.some(p=>p.id===programId))setProgramId(published[0]?.id||'');},[programs,programId]);
+  useEffect(()=>{
+    if(mode!=='promotions')return;
+    let mounted=true;
+    call('/v1/merchant/promotions/ai-readiness',token)
+      .then(data=>{if(mounted)setAiReadiness(data)})
+      .catch(()=>{if(mounted)setAiReadiness({copy_ready:false,artwork_ready:false})});
+    return()=>{mounted=false};
+  },[token,mode]);
+  function changeProgram(next){
+    setProgramId(next);setHeadline('');setMessage('');setDraftPreview(null);
+    setArtworkKey('');setMediaUrl('');setMediaType('image/jpeg');
+    setNotice('');setError('');
+  }
   async function refresh(){if(mode!=='promotions')return;try{setList(await call('/v1/merchant/promotions',token));}catch(e){setError(e.message)}}
   useEffect(()=>{refresh();},[token,mode]);
   async function submit(fn){setBusy(true);setError('');setNotice('');try{await fn()}catch(e){setError(e.message)}finally{setBusy(false)}}
@@ -78,15 +117,17 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
           <label>Watermark text<input value={watermark} maxLength={70} onChange={e=>setWatermark(e.target.value)}/></label>
         </div>
         {currentProgram&&<div className="pruvs-ai-criteria"><strong>Program conditions (locked)</strong><small>{currentProgram.title} · Minimum {(currentProgram.min_purchase_minor/100).toFixed(2)} RON · {currentProgram.stamps_required} verified purchases → {(currentProgram.reward_minor/100).toFixed(2)} RON reward</small></div>}
-        <div className="pruvs-ai-actions"><button type="button" className="btn primary" disabled={!programId||aiBusy||busy} onClick={generateDraft}><WandSparkles size={17}/>{aiBusy?'Creating AI draft…':'Generate AI copy'}</button>
+        {aiReadiness&&<p className="helper" role="status">AI copy: {aiReadiness.copy_ready?'Configured':'Unavailable'} · AI artwork: {aiReadiness.artwork_ready?'Configured':'Unavailable'}. Generation may incur provider charges. Nothing publishes automatically.</p>}
+        <div className="pruvs-ai-actions"><button type="button" className="btn primary" disabled={!programId||aiBusy||assetBusy||busy||aiReadiness?.copy_ready===false} onClick={generateDraft}><WandSparkles size={17}/>{aiBusy?'Creating AI draft…':'Generate AI copy'}</button>
+          <button type="button" className="btn primary" disabled={!programId||!draftPreview||!headline.trim()||assetBusy||aiBusy||busy||aiReadiness?.artwork_ready===false} onClick={generateAIArtwork}><Sparkles size={17}/>{assetBusy?'Creating artwork…':'Generate AI artwork'}</button>
           <label className="btn outline pruvs-ai-file"><ImagePlus size={17}/> Upload campaign picture<input type="file" accept="image/jpeg,image/png,image/webp" disabled={assetBusy} onChange={e=>uploadArtwork(e.target.files?.[0])}/></label>
           <button type="button" className="btn outline" disabled={!artworkKey||assetBusy||!headline} onClick={renderArtwork}><Film size={17}/>{assetBusy?'Processing artwork…':'Generate branded artwork'}</button>
         </div>
         {draftPreview&&<div className="pruvs-ai-preview"><strong>AI copy preview</strong><p><b>{draftPreview.cta}</b> · {draftPreview.visual_brief}</p><small>Suggested motion: {draftPreview.motion_storyboard}</small></div>}
         {mediaUrl&&<div className="pruvs-ai-preview"><strong>Creative preview · 4:5 mobile layout</strong>{mediaType?.startsWith('video/')?<video src={mediaUrl} controls muted playsInline preload="metadata"/>:<img src={mediaUrl} alt={draftPreview?.alt_text||headline||'Merchant campaign image'} loading="lazy"/>}<small>{watermark} · {mediaType}</small></div>}
       </section>
-      <form className="promo-form" onSubmit={e=>{e.preventDefault();submit(async()=>{await call('/v1/merchant/promotions',token,{program_id:programId,headline,message,duration_days:Number(days),media_url:mediaUrl||null,media_type:mediaUrl?mediaType:null,media_alt:headline});setHeadline('');setMessage('');setNotice('Promotion saved as draft. Publish it below to display in Pruvs.');await refresh()})}}>
-        <label>Published loyalty program<select required value={programId} onChange={e=>setProgramId(e.target.value)}>{published.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></label>
+      <form className="promo-form" onSubmit={e=>{e.preventDefault();submit(async()=>{await call('/v1/merchant/promotions',token,{program_id:programId,headline,message,duration_days:Number(days),media_url:mediaUrl||null,media_type:mediaUrl?mediaType:null,media_alt:headline});setHeadline('');setMessage('');setDraftPreview(null);setArtworkKey('');setMediaUrl('');setMediaType('image/jpeg');setNotice('Promotion saved as draft. Publish it below to display in Pruvs.');await refresh()})}}>
+        <label>Published loyalty program<select required value={programId} onChange={e=>changeProgram(e.target.value)}>{published.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></label>
         <label>Promotion headline<input value={headline} minLength={5} maxLength={100} required placeholder="A little extra for your next visit" onChange={e=>setHeadline(e.target.value)}/></label>
         <label>Promotional message<textarea value={message} minLength={10} maxLength={500} required rows={3} placeholder="Join our loyalty program and earn a reward after qualifying visits." onChange={e=>setMessage(e.target.value)}/></label>
         <label>Campaign asset HTTPS URL (optional; approved host only)<input type="url" placeholder="https://your-approved-cdn.example/promo.webp" value={mediaUrl} onChange={e=>setMediaUrl(e.target.value)}/></label>
@@ -99,7 +140,7 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
     </>:<>
       <p className="helper">After a completed sale, issue a one-time purchase code. Give it to the customer, who must select an owned receipt in Pruvs. The claim still requires your approval before any stamps are credited. This pilot does not verify the fiscal transaction with a POS.</p>
       <form className="promo-form" onSubmit={e=>{e.preventDefault();submit(async()=>{const value=Math.round(Number(amount)*100);if(!Number.isSafeInteger(value)||value<=0)throw new Error('Enter a valid amount.');const result=await call('/v1/merchant/pilot/purchases/issue',token,{program_id:programId,amount_minor:value});setCode({...result,program_id:programId});setNotice('Code created for completed checkout. It expires after 30 minutes.')})}}>
-        <label>Published loyalty program<select required value={programId} onChange={e=>setProgramId(e.target.value)}>{published.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></label>
+        <label>Published loyalty program<select required value={programId} onChange={e=>changeProgram(e.target.value)}>{published.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></label>
         <label>Actual completed receipt amount (RON)<input type="number" min="0.01" step="0.01" required value={amount} onChange={e=>setAmount(e.target.value)}/></label>
         <button className="btn primary" disabled={!programId||busy}><Ticket size={17}/> Issue one-time purchase code</button>
       </form>
