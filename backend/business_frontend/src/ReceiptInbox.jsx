@@ -20,11 +20,11 @@ export default function ReceiptInbox({token,onChange}){
    setClaims(rows);setReadiness(pilot);setError('');
  }catch(ex){setError(ex.message)}finally{setLoading(false)}}
  useEffect(()=>{refresh()},[token]);
- async function show(claim){setError('');setBusy(true);try{const evidence=await call('/v1/merchant/claims/'+encodeURIComponent(claim.id)+'/evidence',token);setReview(evidence);setReason('')}catch(ex){setError(ex.message)}finally{setBusy(false)}}
+ async function show(claim){setError('');setBusy(true);try{const evidence=await call('/v1/merchant/claims/'+encodeURIComponent(claim.id)+'/evidence',token);setReview(evidence);setReason('');return true}catch(ex){setError(ex.message);return false}finally{setBusy(false)}}
  async function findCode(e){e.preventDefault();setError('');setBusy(true);try{
    const result=await call('/v1/merchant/claims/customer-code-v12/lookup',token,'POST',{code});
-   setCode('');await show({id:result.claim_id});
-   await refresh();
+   setCode('');
+   if(await show({id:result.claim_id}))await refresh();
  }catch(ex){setError(ex.message||'Could not find receipt.')}finally{setBusy(false)}}
  async function decide(action){if(!review||busy)return;const verb=action==='approve'?'approve and credit one stamp':'reject';if(!window.confirm('Confirm you want to '+verb+' for this receipt?'))return;
    setBusy(true);setError('');try{await (action==='reject'?fetch(API+'/v1/merchant/claims/'+encodeURIComponent(review.claim_id)+'/reject',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({reason:reason.trim()})}).then(async r=>{if(!r.ok){const x=await r.json().catch(()=>({}));throw new Error(x.detail||'Rejection failed')}}):call('/v1/merchant/claims/'+encodeURIComponent(review.claim_id)+'/approve',token,'POST'));setReview(null);setMessage(action==='approve'?'Approved: stamp credited to customer.':'Receipt rejected: no stamp credited.');await refresh();onChange?.()}catch(ex){setError(ex.message)}finally{setBusy(false)}}
