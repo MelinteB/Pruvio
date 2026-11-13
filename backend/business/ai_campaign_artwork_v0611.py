@@ -132,17 +132,25 @@ def generate_artwork(payload: ArtworkBrief, staff: Staff = Depends(merchant_acto
 
 
 @router.get('/v1/merchant/promotions/ai-readiness')
-def ai_readiness(staff: Staff = Depends(merchant_actor)):
+def ai_readiness(staff: Staff = Depends(merchant_actor),
+                 db: Session = Depends(get_db)):
     if staff.role not in ('owner', 'manager'):
         raise HTTPException(403, 'Merchant manager role required')
     ai = os.getenv('PRUVS_BUSINESS_AI_CAMPAIGNS_ENABLED', 'false').lower() == 'true'
     has_key = bool(os.getenv('OPENAI_API_KEY', '').strip())
     image = ai_images_enabled()
+    try:
+        from .schema_readiness import check_schema
+        schema_ready = bool(check_schema(db.get_bind()).get('campaign_media'))
+    except Exception:
+        schema_ready = False
+    media_configured = all(os.getenv(key, '').strip() for key in (
+        'PRUVS_CAMPAIGN_R2_ENDPOINT_URL', 'PRUVS_CAMPAIGN_R2_ACCESS_KEY_ID',
+        'PRUVS_CAMPAIGN_R2_SECRET_ACCESS_KEY', 'PRUVS_CAMPAIGN_R2_BUCKET',
+        'PRUVS_CAMPAIGN_MEDIA_PUBLIC_BASE_URL', 'PRUVS_CAMPAIGN_MEDIA_HOSTS'))
     return {
-        'copy_ready': ai and has_key,
-        'artwork_ready': image and has_key and all(os.getenv(key, '').strip() for key in (
-            'PRUVS_CAMPAIGN_R2_ENDPOINT_URL', 'PRUVS_CAMPAIGN_R2_ACCESS_KEY_ID',
-            'PRUVS_CAMPAIGN_R2_SECRET_ACCESS_KEY', 'PRUVS_CAMPAIGN_R2_BUCKET',
-            'PRUVS_CAMPAIGN_MEDIA_PUBLIC_BASE_URL', 'PRUVS_CAMPAIGN_MEDIA_HOSTS')),
+        'copy_ready': bool(ai and has_key and schema_ready),
+        'artwork_ready': bool(image and has_key and schema_ready and media_configured),
+        'campaign_schema_ready': schema_ready,
         'message': 'AI generation is billed by the configured provider; publishing always requires merchant review.',
     }
