@@ -51,6 +51,8 @@ def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Sessio
     store=db.get(Store,program.store_id)
     if not merchant or not store or not store.active:
         raise HTTPException(409,'Merchant store is unavailable')
+    from .pilot_v05 import campaign_schema_ready
+    campaign_schema_ready(db)  # Do not bill AI if the campaign cannot be saved.
     facts={
       'merchant':merchant.name,'location':store.name,
       'program_title':program.title,'program_description':program.description,
