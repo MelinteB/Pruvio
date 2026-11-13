@@ -21,7 +21,7 @@ from .security import merchant_actor, customer_actor, verify_password, encode_me
 from .schemas import LoginIn, StoreIn, ProgramIn, CampaignGoal, CampaignIn, ReceiptProofIn, ConfirmIn, DemoReceiptIn
 
 settings=get_settings()
-app=FastAPI(title='Pruvs Business API',version='0.6.9',docs_url='/docs' if settings.app_env!='production' else None)
+app=FastAPI(title='Pruvs Business API',version='0.6.10',docs_url='/docs' if settings.app_env!='production' else None)
 app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=False,
                    allow_methods=['GET','POST'],allow_headers=['Authorization','Content-Type'])
 app.include_router(merchant_enrollment_router)
@@ -67,7 +67,7 @@ def aware(dt):
 
 @app.get('/health')
 def health():
-    return {'service':'Pruvs Business','version':'0.6.9','status':'ok'}
+    return {'service':'Pruvs Business','version':'0.6.10','status':'ok'}
 
 @app.get('/ready', include_in_schema=False)
 def readiness():
@@ -76,10 +76,10 @@ def readiness():
     try:
         checks=check_schema(engine())
         if not all(checks.values()):
-            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.9'})
-        return {'status':'ready','version':'0.6.9'}
+            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.10'})
+        return {'status':'ready','version':'0.6.10'}
     except Exception:
-        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.9'})
+        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.10'})
 
 @app.post('/v1/merchant/login')
 def login(payload:LoginIn, db:Session=Depends(get_db)):
@@ -171,9 +171,27 @@ def resume_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Session
 
 @app.get('/v1/merchant/claims')
 def get_claims(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
-    claims=db.scalars(select(ReceiptClaim).where(ReceiptClaim.merchant_id==staff.merchant_id).order_by(ReceiptClaim.created_at.desc()).limit(100)).all()
-    return [{'id':c.id,'program_id':c.program_id,'consumer_id':c.consumer_id,
-             'receipt_id':c.external_receipt_id,'amount_minor':c.amount_minor,'status':c.status} for c in claims]
+    from sqlalchemy import inspect
+    from .models_v12 import CustomerClaimCode
+    from .receipt_claim_access_v0610 import claim_access_flags
+    claims=db.scalars(select(ReceiptClaim).where(
+        ReceiptClaim.merchant_id==staff.merchant_id
+    ).order_by(ReceiptClaim.created_at.desc()).limit(100)).all()
+    pending_ids=[c.id for c in claims if c.status=='pending']
+    codes={}
+    if pending_ids and inspect(db.get_bind()).has_table(CustomerClaimCode.__tablename__):
+        rows=db.scalars(select(CustomerClaimCode).where(
+            CustomerClaimCode.merchant_id==staff.merchant_id,
+            CustomerClaimCode.claim_id.in_(pending_ids)
+        )).all()
+        codes={row.claim_id:row for row in rows}
+    return [
+        {'id':c.id,'program_id':c.program_id,'consumer_id':c.consumer_id,
+         'receipt_id':c.external_receipt_id,'amount_minor':c.amount_minor,
+         'status':c.status,
+         **claim_access_flags(codes.get(c.id),staff.id,pending=c.status=='pending')}
+        for c in claims
+    ]
 
 @app.post('/v1/merchant/claims/{claim_id}/approve')
 def approve_claim(claim_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
