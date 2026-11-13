@@ -138,7 +138,9 @@ def approval_guard(db,claim,staff):
     ev=db.get(ReceiptEvidence,claim.id)
     # Every v0.6 claim requires review even while legacy v0.5 claims remain
     # supported during the independent deployment sequence.
-    require_all=os.getenv('PRUVS_BUSINESS_V06_REQUIRE_EVIDENCE','false').lower()=='true'
+    from .pilot_enrollment_v0612 import db_mode_enabled
+    require_all=(db_mode_enabled() or
+                 os.getenv('PRUVS_BUSINESS_V06_REQUIRE_EVIDENCE','false').lower()=='true')
     if ev is None and not require_all:
         # Preserve historic v0.5 claims without evidence, but never interpret
         # a missing preview as permission to bypass a v1.2 customer code.
