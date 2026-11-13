@@ -14,6 +14,7 @@ export default function Rewards(){
   const [offers,setOffers]=useState([]);
   const [promotions,setPromotions]=useState([]);
   const [claims,setClaims]=useState([]);
+  const [claimsState,setClaimsState]=useState('loading');
   const [wallet,setWallet]=useState({memberships:[], rewards:[]});
   const [memberships,setMemberships]=useState([]);
   const [membershipsState,setMembershipsState]=useState('loading');
@@ -35,6 +36,7 @@ export default function Rewards(){
     setError('');setLoading(true);
     if(activeTab==='wallet'){setWalletState('loading');setRedemptionsState('loading');}
     if(activeTab==='offers'||activeTab==='receipts')setMembershipsState('loading');
+    if(activeTab==='receipts')setClaimsState('loading');
     try{
       const s=await request('/loyalty/status');setStatus(s);
       if(!s.enabled){
@@ -93,10 +95,16 @@ export default function Rewards(){
           setPromotions(Array.isArray(pr)?pr:[]);
           setCampaignState('ready');
         }catch{setPromotions([]);setCampaignState('unavailable');}
-        if(s.receipt_v06_enabled){
-          const cl=await request('/loyalty/claims').catch(()=>[]);
-          setClaims(Array.isArray(cl)?cl:[]);
-        }
+        if(s.receipt_v06_enabled||s.customer_codes_v12_enabled){
+          try{
+            const cl=await request('/loyalty/claims');
+            if(!Array.isArray(cl))throw Error('Invalid receipt status response');
+            setClaims(cl);setClaimsState('ready');
+          }catch{
+            // Missing claim data is not evidence of an unclaimed receipt.
+            setClaimsState('unavailable');
+          }
+        }else{setClaims([]);setClaimsState('disabled');}
       }
     }catch(e){
       setError(e?.status===429
@@ -217,8 +225,14 @@ export default function Rewards(){
       {membershipsState!=='ready'&&<p role="status" className="pruvs-v7152-partial-warning">
         Your saved receipts are available, but loyalty enrollment could not be verified. Receipt claiming is temporarily unavailable; retry when the merchant service is ready.
       </p>}
-      <p className="muted">Choose a receipt, enter your merchant's one-time purchase code and consent to share that receipt for review. No stamp is awarded until approval.</p>
-      {receipts.map(r=><div key={r.case_id} className="rewards-wallet-row pruvs-v7150-receipt-loyalty"><div><strong>{r.merchant_name||'Saved receipt'}</strong><p>{money(r.receipt_total,r.currency||'RON')}</p><small>Choose a joined program or campaign. The merchant must approve your receipt before a stamp is added.</small></div><Link to={'/receipt/'+r.case_id}>View receipt</Link>{status?.customer_codes_v12_enabled?<CustomerReceiptCode caseId={r.case_id} programs={earnedPrograms}/>:status?.receipt_v06_enabled?<ReceiptSubmission caseId={r.case_id} receiptRef={r.receipt_ref} claims={claims} programs={earnedPrograms} onSuccess={msg=>{setMessage(msg);refresh()}}/>:null}</div>)}
+      {claimsState==='unavailable'&&<p role="status" className="pruvs-v7152-partial-warning">Receipt verification status is temporarily unavailable. Existing claims have not been confirmed as missing. New submissions are paused to prevent duplicates.</p>}
+      {membershipsState==='ready'&&earnedPrograms.length===0&&<p role="status" className="pruvs-v7152-partial-warning">No joined merchant program is currently available for receipt earning. Open Discover to join a published program, or retry when merchant discovery is back online.</p>}
+      <p className="muted">Select a joined merchant program and consent to sharing a receipt preview. In the customer-code pilot, show the generated code to the merchant. No stamp is credited until merchant approval.</p>
+      {receipts.map(r=><div key={r.case_id} className="rewards-wallet-row pruvs-v7150-receipt-loyalty"><div><strong>{r.merchant_name||'Saved receipt'}</strong><p>{money(r.receipt_total,r.currency||'RON')}</p><small>Choose a joined program or campaign. The merchant must approve your receipt before a stamp is added.</small></div><Link to={'/receipt/'+r.case_id}>View receipt</Link>{membershipsState==='ready'&&claimsState==='ready'&&status?.customer_codes_v12_enabled
+            ?<CustomerReceiptCode caseId={r.case_id} programs={earnedPrograms} existingClaim={claims.find(c=>c.receipt_ref===r.receipt_ref)} onFinished={()=>refresh(null,'receipts')}/>
+            :membershipsState==='ready'&&claimsState==='ready'&&status?.receipt_v06_enabled
+              ?<ReceiptSubmission caseId={r.case_id} receiptRef={r.receipt_ref} claims={claims} programs={earnedPrograms} onSuccess={msg=>{setMessage(msg);refresh(null,'receipts')}}/>
+              :null}</div>)}
       {!receipts.length&&!error&&<p>No receipts found. <Link to="/upload">Scan a receipt</Link> to begin.</p>}
       <div className="row"><Ticket size={18}/><small>Receipt earning will require a verified merchant/POS reference and explicit merchant approval.</small></div>
     </Panel>}
