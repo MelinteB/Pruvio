@@ -16,7 +16,7 @@ def status(identity=Depends(current)):
     # No Business secrets, tokens, or user IDs are exposed.
     return {'enabled':enabled(), 'receipt_claims_enabled':enabled() and os.getenv('PRUVS_LOYALTY_RECEIPT_CLAIMS_ENABLED','false').lower()=='true',
             'receipt_v06_enabled':enabled() and os.getenv('PRUVS_LOYALTY_RECEIPT_CLAIMS_ENABLED','false').lower()=='true' and os.getenv('PRUVS_LOYALTY_RECEIPT_V06_ENABLED','false').lower()=='true' and __import__('app.react_app.loyalty_v06',fromlist=['pilot_allowed']).pilot_allowed(identity[0].id),
-            'customer_codes_v12_enabled':enabled() and os.getenv('PRUVS_LOYALTY_CUSTOMER_CODES_V12_ENABLED','false').lower()=='true' and os.getenv('PRUVS_LOYALTY_RECEIPT_V06_ENABLED','false').lower()=='true' and __import__('app.react_app.loyalty_v06',fromlist=['pilot_allowed']).pilot_allowed(identity[0].id),
+            'customer_codes_v12_enabled':enabled() and os.getenv('PRUVS_LOYALTY_RECEIPT_CLAIMS_ENABLED','false').lower()=='true' and os.getenv('PRUVS_LOYALTY_CUSTOMER_CODES_V12_ENABLED','false').lower()=='true' and os.getenv('PRUVS_LOYALTY_RECEIPT_V06_ENABLED','false').lower()=='true' and __import__('app.react_app.loyalty_v06',fromlist=['pilot_allowed']).pilot_allowed(identity[0].id),
             'message':'Receipt earning requires verified merchant integration and merchant approval.'}
 
 @router.get('/offers')
