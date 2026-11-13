@@ -81,6 +81,11 @@ def create_customer_code(payload:CustomerClaimIn,consumer_id:str=Depends(custome
     if existing:
         if (existing.consumer_id!=consumer_id or existing.program_id!=p.id or existing.status!='pending'):
             raise HTTPException(409,'Receipt already claimed')
+        evidence=db.get(ReceiptEvidence,existing.id)
+        if (existing.merchant_id!=p.merchant_id or existing.amount_minor!=amount or not evidence
+            or evidence.image_sha256!=sha or evidence.merchant_label!=label
+            or evidence.receipt_date!=payload.evidence.receipt_date):
+            raise HTTPException(409,'Pending receipt evidence has changed; contact the merchant instead of reissuing a code')
         code=db.get(CustomerClaimCode,existing.id)
         if not code:raise HTTPException(409,'Use the existing merchant receipt verification flow')
         code.code_hash=payload.code_hash;code.expires_at=expiry
@@ -119,7 +124,8 @@ def lookup_customer_code(body:CodeLookup,staff:Staff=Depends(merchant_actor),db:
     return {'claim_id':row.claim_id,'status':'pending'}
 
 def require_code_unlock(db,claim,staff):
+    from .receipt_claim_access_v0610 import code_is_unlocked
     row=db.get(CustomerClaimCode,claim.id)
-    if row and (row.unlocked_by_staff!=staff.id or not row.unlocked_at or
-                aware(row.unlocked_at)<utcnow()-timedelta(minutes=15)):
+    if row and (row.merchant_id!=staff.merchant_id
+                or not code_is_unlocked(row,staff.id)):
         raise HTTPException(403,'Enter the customer receipt claim code before viewing the image')
