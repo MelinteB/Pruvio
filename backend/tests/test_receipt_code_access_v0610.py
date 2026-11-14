@@ -97,7 +97,7 @@ def test_changed_receipt_evidence_cannot_be_reissued(monkeypatch):
             return SimpleNamespace(id='membership') if self.scanned == 1 else current
         def commit(self): self.commits+=1
     monkeypatch.setattr(pilot_v12,'ready',lambda:None)
-    monkeypatch.setattr(pilot_v12,'merchant_pilot_allowed',lambda mid:True)
+    monkeypatch.setattr(pilot_v12,'merchant_pilot_allowed',lambda db, merchant_id: True)
     monkeypatch.setattr(pilot_v12,'safe_image',lambda _:raw)
     monkeypatch.setattr(pilot_v12,'get_settings',lambda:SimpleNamespace(pruvs_bridge_secret='unused'))
     monkeypatch.setattr(pilot_v12,'decode',lambda *args:{
