@@ -9,12 +9,12 @@ const DISMISSED_KEY = 'pruvs:release-update:dismissed-v1';
 const RELOADED_KEY = 'pruvs:release-update:reload-attempted-v1';
 const POLL_MS = 15 * 60 * 1000;
 
-function getStored(key, storage) {
-  try { return storage?.getItem(key) || null; }
+function getStored(key, storageName) {
+  try { return window[storageName]?.getItem(key) || null; }
   catch { return null; } // Storage can be disabled by privacy settings.
 }
-function setStored(key, value, storage) {
-  try { storage?.setItem(key, value); }
+function setStored(key, value, storageName) {
+  try { window[storageName]?.setItem(key, value); }
   catch { /* Continue without persistence if storage is unavailable. */ }
 }
 
@@ -59,8 +59,8 @@ export function ReleaseUpdateBanner() {
         if (!response.ok) return;
         const info = await response.json();
         if (!active) return;
-        const dismissed = getStored(DISMISSED_KEY, window.localStorage);
-        const reloaded = getStored(RELOADED_KEY, window.sessionStorage);
+        const dismissed = getStored(DISMISSED_KEY, 'localStorage');
+        const reloaded = getStored(RELOADED_KEY, 'sessionStorage');
         // Clear the banner when the running browser has caught up, too.
         setOfferedVersion(shouldOfferUpdate(info, CLIENT_RELEASE, dismissed, reloaded)
           ? info.version : null);
@@ -81,13 +81,13 @@ export function ReleaseUpdateBanner() {
 
   if (!offeredVersion) return null;
   const dismiss = () => {
-    setStored(DISMISSED_KEY, offeredVersion, window.localStorage);
+    setStored(DISMISSED_KEY, offeredVersion, 'localStorage');
     setOfferedVersion(null);
   };
   const reload = () => {
     // Avoid an endless "Reload" loop when an old tab stays open or a
     // service-worker/browser cache temporarily serves an older bundle.
-    setStored(RELOADED_KEY, offeredVersion, window.sessionStorage);
+    setStored(RELOADED_KEY, offeredVersion, 'sessionStorage');
     setOfferedVersion(null);
     window.location.reload();
   };
