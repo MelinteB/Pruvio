@@ -228,20 +228,20 @@ export default function Rewards(){
           <button type="button" className="secondary" onClick={()=>{setActiveVoucher(null);refresh(null,'wallet')}}>Close and refresh</button>
          </section></div>}
     </>}
-    {!loading && status?.enabled && tab==='receipts' && <Panel title="Your recent receipts">
+    {!loading && status?.enabled && tab==='receipts' && <Panel title="Earn stamps from saved receipts">
       {membershipsState!=='ready'&&<p role="status" className="pruvs-v7152-partial-warning">
         Your saved receipts are available, but loyalty enrollment could not be verified. Receipt claiming is temporarily unavailable; retry when the merchant service is ready.
       </p>}
       {claimsState==='unavailable'&&<p role="status" className="pruvs-v7152-partial-warning">Receipt verification status is temporarily unavailable. Existing claims have not been confirmed as missing. New submissions are paused to prevent duplicates.</p>}
-      {membershipsState==='ready'&&earnedPrograms.length===0&&<p role="status" className="pruvs-v7152-partial-warning">No joined merchant program is approved for receipt-pilot earning yet. You can discover and join loyalty programs, but receipt claiming starts only after Pruvs Business approves the merchant's pilot access.</p>}
-      <p className="muted">Select a joined merchant program and consent to sharing a receipt preview. In the customer-code pilot, show the generated code to the merchant. No stamp is credited until merchant approval.</p>
-      {receipts.map(r=><div key={r.case_id} className="rewards-wallet-row pruvs-v7150-receipt-loyalty"><div><strong>{r.merchant_name||'Saved receipt'}</strong><p>{money(r.receipt_total,r.currency||'RON')}</p><small>Choose a joined program or campaign. The merchant must approve your receipt before a stamp is added.</small></div><Link to={'/receipt/'+r.case_id}>View receipt</Link>{membershipsState==='ready'&&claimsState==='ready'&&status?.customer_codes_v12_enabled
+      {membershipsState==='ready'&&earnedPrograms.length===0&&<p role="status" className="pruvs-v7152-partial-warning">Your joined merchants are not yet accepting loyalty receipts. You can still save receipts and discover rewards. Once a merchant activates loyalty, you can earn stamps here.</p>}
+      <p className="muted">To earn a stamp: choose an active merchant program, agree to share your receipt preview, and show the verification QR/code to the merchant. The merchant must confirm the purchase.</p>
+      {receipts.map(r=><div key={r.case_id} className="rewards-wallet-row pruvs-v7150-receipt-loyalty"><div><strong>{r.merchant_name||'Saved receipt'}</strong><p>{money(r.receipt_total,r.currency||'RON')}</p><small>Choose a loyalty program and verify the purchase with the merchant to earn a stamp.</small></div><Link to={'/receipt/'+r.case_id}>View receipt</Link>{membershipsState==='ready'&&claimsState==='ready'&&status?.customer_codes_v12_enabled
             ?<CustomerReceiptCode caseId={r.case_id} programs={earnedPrograms} existingClaim={claims.find(c=>c.receipt_ref===r.receipt_ref)} onFinished={()=>refresh(null,'receipts')}/>
             :membershipsState==='ready'&&claimsState==='ready'&&status?.receipt_v06_enabled
               ?<ReceiptSubmission caseId={r.case_id} receiptRef={r.receipt_ref} claims={claims} programs={earnedPrograms} onSuccess={msg=>{setMessage(msg);refresh(null,'receipts')}}/>
               :null}</div>)}
       {!receipts.length&&!error&&<p>No receipts found. <Link to="/upload">Scan a receipt</Link> to begin.</p>}
-      <div className="row"><Ticket size={18}/><small>Receipt earning will require a verified merchant/POS reference and explicit merchant approval.</small></div>
+      <div className="row"><Ticket size={18}/><small>A merchant must confirm the purchase before any stamp is credited. Receipt verification is not POS settlement confirmation.</small></div>
     </Panel>}
     {cityOpen&&<div className="pruvs-v7150-city-overlay" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setCityOpen(false)}}>
       <section role="dialog" aria-modal="true" aria-label="Find Pruvs merchants by city" className="pruvs-v7150-city-dialog">
