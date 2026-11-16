@@ -50,6 +50,18 @@ jobs:
           from pathlib import Path
           x=json.loads(Path('frontend/dist/build-manifest.json').read_text())
           assert x['version']=='7.1.57',x
+          import re
+          from app.reliability import RELEASE
+          client=(Path('frontend/src/professional/ReleaseUpdateBanner.jsx').read_text())
+          stamp=(Path('frontend/scripts/stamp-build.mjs').read_text())
+          entry=(Path('frontend/src/main.jsx').read_text())
+          worker=(Path('app/static/react-service-worker.js').read_text())
+          assert x['version']==RELEASE
+          assert re.search(r"CLIENT_RELEASE\s*=\s*['\"]"+re.escape(RELEASE)+r"['\"]",client), 'Browser release mismatch'
+          assert "version:'"+RELEASE+"'" in stamp, 'Build stamp version mismatch'
+          assert "serviceWorker.register('/service-worker.js?v='+CLIENT_RELEASE" in entry, 'Worker registration must follow browser release'
+          assert "pruvs-shell-v"+RELEASE in worker, 'Service worker cache release mismatch'
+          print('PASS: Server, client, build and service-worker versions match')
           assert '0.6.13' in Path('business/main.py').read_text()
           assert Path('business_migrations/versions/b11a0612_pilot_enrollment.py').is_file()
           PY
