@@ -48,7 +48,7 @@ function mount(){
 describe('Core 7.1.56 Business-authoritative merchant pilot eligibility',()=>{
   it('does not offer receipt code if merchant is not Business-approved',async()=>{
     setup(false);mount();
-    expect(await screen.findByText(/No joined merchant program is approved for receipt-pilot earning/)).toBeTruthy();
+    expect(await screen.findByText(/Your joined merchants are not yet accepting loyalty receipts/)).toBeTruthy();
     expect(screen.queryByRole('button',{name:'Generate merchant claim code'})).toBeNull();
     expect(screen.getByText('Bistro Central')).toBeTruthy();
   });
