@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React,{useEffect,useRef,useState} from 'react';
 import { t } from './i18n';
+import './crop-editor.css';
 
 export const clamp=(value,min,max)=>Math.min(max,Math.max(min,value));
 
@@ -25,15 +26,47 @@ export function pinchCrop(c,start,now){
           y:clamp(c.y+c.h/2+b.y-a.y-height/2,0,100-height),w:width,h:height};
 }
 
+// The crop surface must have the aspect ratio of the actual image.
+// The previous full-width stage plus object-fit:contain left unselectable
+// letterboxing on tall receipts and exported the wrong source pixels.
+export const CROP_PREVIEW_MAX_HEIGHT=500;
+
+export function imageCropFrame(naturalWidth,naturalHeight,maxHeight=CROP_PREVIEW_MAX_HEIGHT){
+  const w=Number(naturalWidth),h=Number(naturalHeight);
+  if(!Number.isFinite(w)||!Number.isFinite(h)||w<=0||h<=0)return null;
+  return {aspectRatio:w+' / '+h,maxWidth:w*maxHeight/h};
+}
+
+// Consistent pixel crop conversion for a preview matching the image aspect.
+export function cropToImagePixels(c,imageWidth,imageHeight){
+  const width=Math.max(1,Math.floor(imageWidth)),height=Math.max(1,Math.floor(imageHeight));
+  const x=clamp(Number(c.x)||0,0,100),y=clamp(Number(c.y)||0,0,100);
+  const right=clamp(x+Math.max(0,Number(c.w)||0),x,100);
+  const bottom=clamp(y+Math.max(0,Number(c.h)||0),y,100);
+  const sx=clamp(Math.round(width*x/100),0,width-1);
+  const sy=clamp(Math.round(height*y/100),0,height-1);
+  const ex=clamp(Math.round(width*right/100),sx+1,width);
+  const ey=clamp(Math.round(height*bottom/100),sy+1,height);
+  return {sx,sy,sw:ex-sx,sh:ey-sy};
+}
+
 const handles=['nw','n','ne','e','se','s','sw','w'];
 
 export default function CropEditor({preview,crop,onChange}){
   const points=useRef(new Map()),gesture=useRef(null),current=useRef(crop);
+  const [loadedImage,setLoadedImage]=useState(null);
+  // A new file must not reuse the dimensions of the previous preview.
+  const frame=loadedImage?.src===preview?imageCropFrame(loadedImage.width,loadedImage.height):null;
   useEffect(()=>{current.current=crop},[crop]);
   function set(next){current.current=next;onChange(next)}
-  function point(e){const rect=e.currentTarget.getBoundingClientRect();return {x:clamp((e.clientX-rect.left)/rect.width*100,0,100),y:clamp((e.clientY-rect.top)/rect.height*100,0,100)}}
+  function point(e){const rect=e.currentTarget.getBoundingClientRect();
+    if(!rect.width||!rect.height)return {x:0,y:0};
+    return {x:clamp((e.clientX-rect.left)/rect.width*100,0,100),
+            y:clamp((e.clientY-rect.top)/rect.height*100,0,100)};
+  }
   function down(e){
-    e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);
+    if(!frame)return;
+    e.preventDefault();e.currentTarget.setPointerCapture?.(e.pointerId);
     const p=point(e);points.current.set(e.pointerId,p);
     if(points.current.size===2){const pair=[...points.current.values()];gesture.current={type:'pinch',start:pair,crop:{...current.current}};return}
     const handle=e.target.closest('.crop-handle')?.dataset.handle;
@@ -58,7 +91,7 @@ export default function CropEditor({preview,crop,onChange}){
   }
   function up(e){
     points.current.delete(e.pointerId);
-    if(points.current.size===1){gesture.current={type:'move',start:[...points.current.values()][0],crop:{...current.current}}}
+    if(points.current.size===1)gesture.current={type:'move',start:[...points.current.values()][0],crop:{...current.current}};
     else gesture.current=null;
   }
   function key(e){
@@ -67,11 +100,17 @@ export default function CropEditor({preview,crop,onChange}){
     set(e.shiftKey?resizeCrop(current.current,dx?'e':'s',dx,dy):moveCrop(current.current,dx,dy));
   }
   return <><p className="muted">{t('Drag the crop box to move it. Drag a corner or edge to resize; use two fingers to pinch. The highlighted area will be scanned.')}</p>
-    <div className="crop-preview crop-stage" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
-      <img src={preview} alt={t('Receipt preview')} draggable="false" />
-      <div className="crop-overlay" role="button" tabIndex="0" aria-label={t('Crop selection. Arrow keys move it; Shift plus arrows resize it.')} onKeyDown={key}
-           style={{left:crop.x+'%',top:crop.y+'%',width:crop.w+'%',height:crop.h+'%'}}>
-        {handles.map(handle=><span key={handle} data-handle={handle} className={'crop-handle crop-'+handle} />)}
+    <div className="crop-image-viewport">
+      <div className="crop-preview crop-stage"
+           style={frame?{width:'100%',maxWidth:frame.maxWidth+'px',aspectRatio:frame.aspectRatio}:{width:'100%',height:'160px'}}
+           onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
+        <img key={preview} src={preview} alt={t('Receipt preview')} draggable="false"
+             onLoad={e=>setLoadedImage({src:preview,width:e.currentTarget.naturalWidth,height:e.currentTarget.naturalHeight})}
+             onError={()=>setLoadedImage(null)}/>
+        {frame&&<div className="crop-overlay" role="button" tabIndex="0" aria-label={t('Crop selection. Arrow keys move it; Shift plus arrows resize it.')} onKeyDown={key}
+             style={{left:crop.x+'%',top:crop.y+'%',width:crop.w+'%',height:crop.h+'%'}}>
+          {handles.map(handle=><span key={handle} data-handle={handle} className={'crop-handle crop-'+handle} />)}
+        </div>}
       </div>
     </div></>;
 }
