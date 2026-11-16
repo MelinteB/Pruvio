@@ -18,7 +18,7 @@ const friendly=e=>{
   if(message.includes('published loyalty program'))return 'Add an active location and publish a loyalty program first.';
   return message;
 };
-export default function ActivationPanel({token,stores=[],programs=[],onAddStore,onCreateProgram,onVerifyPurchases}){
+export default function ActivationPanel({token,stores=[],programs=[],onAddStore,onCreateProgram,onViewPrograms,onVerifyPurchases}){
   const [access,setAccess]=useState(null);
   const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
   const [error,setError]=useState(''),[message,setMessage]=useState('');
@@ -62,7 +62,7 @@ export default function ActivationPanel({token,stores=[],programs=[],onAddStore,
       </li>
       <li><span className="pruvs-activation-symbol">{programReady?<CheckCircle2 size={20}/>:<Gift size={20}/>}</span>
         <div><strong>2. Publish a loyalty program</strong><small>{programReady?'Ready':'Set the stamps and reward'}</small></div>
-        {!programReady&&onCreateProgram&&<button className="btn outline" type="button" disabled={!storeReady} onClick={onCreateProgram}>Create program</button>}
+        {!programReady&&onCreateProgram&&<button className="btn outline" type="button" disabled={!storeReady} onClick={programs.some(p=>p.status==='draft')&&onViewPrograms?onViewPrograms:onCreateProgram}>{programs.some(p=>p.status==='draft')?'View draft':'Create program'}</button>}
       </li>
       <li><span className="pruvs-activation-symbol">{approved?<CheckCircle2 size={20}/>:<Clock3 size={20}/>}</span>
         <div><strong>3. Activate receipt rewards</strong><small>{approved?'Approved by Pruvs':waiting?'Pruvs is reviewing your request':'One-time business approval'}</small></div>
