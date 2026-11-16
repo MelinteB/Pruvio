@@ -21,7 +21,7 @@ export default function ProgramManager({programs=[],stores=[],token,onRefresh,no
   }
   function open(p){setEditing(p.id);setDraft({title:p.title,description:p.description||'',
     stamps_required:p.stamps_required,min_purchase_minor:p.min_purchase_minor,reward_minor:p.reward_minor});setError('')}
-  return <><ActivationPanel token={token} stores={stores} programs={programs} onAddStore={onAddStore} onCreateProgram={onCreateProgram} onVerifyPurchases={onVerifyPurchases}/><section className="panel">
+  return <><ActivationPanel token={token} stores={stores} programs={programs} onAddStore={onAddStore} onCreateProgram={onCreateProgram} onViewPrograms={()=>document.getElementById('pruvs-programs-list')?.scrollIntoView({behavior:'smooth',block:'start'})} onVerifyPurchases={onVerifyPurchases}/><section className="panel" id="pruvs-programs-list">
     <div className="panel-heading"><h2>Manage loyalty programs</h2><span>{programs.length} TOTAL</span></div>
     <p className="helper">Publish, pause, resume and edit your programs. Reward criteria are locked after publication to protect existing customers.</p>
     {error&&<div className="error-text" role="alert">{error}</div>}
