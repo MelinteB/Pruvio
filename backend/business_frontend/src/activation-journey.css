@@ -1,0 +1,30 @@
+/* v0.6.13 merchant activation and dedicated platform operator journey */
+.pruvs-activation{margin-bottom:16px;display:grid;gap:12px}
+.pruvs-activation .panel-heading{margin-bottom:2px}
+.pruvs-activation .panel-heading h2{display:flex;align-items:center;gap:10px}
+.pruvs-activation-lead{font-size:13px;color:#607980;line-height:1.6}
+.pruvs-activation-steps{list-style:none;padding:0;margin:4px 0;display:grid;gap:9px}
+.pruvs-activation-steps li{border:1px solid #e1ebed;border-radius:12px;padding:13px 14px;display:flex;align-items:center;gap:13px;flex-wrap:wrap}
+.pruvs-activation-symbol{background:#e6f6f2;color:#087e70;display:grid;place-items:center;border-radius:10px;width:38px;height:38px;flex-shrink:0}
+.pruvs-activation-steps li>div{flex:1;min-width:160px;display:grid;gap:4px}
+.pruvs-activation-steps strong{font-size:13px}
+.pruvs-activation-steps small{font-size:12px;color:#72888d}
+.pruvs-activation-waiting,.pruvs-activation-done,.pruvs-activation-good,.pruvs-activation-error{display:flex;align-items:center;gap:10px;border-radius:10px;padding:13px 14px;font-size:13px;line-height:1.5}
+.pruvs-activation-waiting{background:#f3f7fb;color:#375675}
+.pruvs-activation-done,.pruvs-activation-good{background:#e7f7ef;color:#166c52}
+.pruvs-activation-error{background:#fff0ed;color:#ad3f36}
+.pruvs-activation-done .btn{margin-left:auto}
+.pruvs-activation-refresh{justify-self:start}
+.pruvs-admin-layout{display:flex;min-height:100vh;background:#f6f8fa;color:#1c2c37}
+.pruvs-admin-aside{width:250px;flex-shrink:0;background:#132c39;color:white;padding:28px 20px;display:flex;flex-direction:column;gap:28px}
+.pruvs-admin-brand{display:flex;align-items:center;gap:9px;font-family:Manrope,system-ui,sans-serif;font-weight:800;font-size:22px}
+.pruvs-admin-brand span{font-size:14px;color:#9bded2;font-weight:500}
+.pruvs-admin-account{display:grid;gap:5px;background:#20404b;border-radius:12px;padding:14px;font-size:13px}
+.pruvs-admin-account small{color:#acc7cb}
+.pruvs-admin-nav{background:#2d5860;color:white;border-radius:10px;padding:14px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:700}
+.pruvs-admin-logout{display:flex;align-items:center;gap:9px;margin-top:auto;border:0;background:transparent;color:#d3e2e7;text-align:left;padding:12px;cursor:pointer}
+.pruvs-admin-main{flex:1;min-width:0;max-width:1250px;padding:52px clamp(18px,5vw,70px)}
+.pruvs-admin-main h1{font-size:32px;margin:10px 0}
+.pruvs-admin-eyebrow{color:#128c7a;font-weight:800;letter-spacing:.13em;font-size:11px}
+.pruvs-admin-subtitle{font-size:14px;color:#72888d;margin-bottom:26px}
+@media(max-width:760px){.pruvs-admin-layout{display:block}.pruvs-admin-aside{width:100%;gap:12px;padding:16px}.pruvs-admin-logout{margin-top:0}.pruvs-admin-main{padding:26px 14px}.pruvs-activation-done{flex-wrap:wrap}}
