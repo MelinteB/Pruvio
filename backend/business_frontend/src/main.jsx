@@ -6,7 +6,6 @@ import PromotionConsole from './PromotionConsole';
 import ReceiptInbox from './ReceiptInbox';
 import CustomerDemo from './CustomerDemo.jsx';
 import ProgramManager from './ProgramManager.jsx';
-import PilotAccess from './PilotAccess.jsx';
 import AdminWorkspace from './AdminWorkspace.jsx';
 
 const API = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
