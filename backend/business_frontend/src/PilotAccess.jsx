@@ -65,14 +65,14 @@ export default function PilotAccess({token,merchant}){
     finally{setBusy(false);}
   }
   return <section className="panel">
-    <div className="panel-heading"><h2><ShieldCheck size={20}/> Loyalty pilot access</h2><span>BUSINESS CONTROLLED</span></div>
-    <p className="helper">Pruvs Business is the source of truth for merchant access. Customer Core receives only eligibility through an API. Pilot access cannot be granted by generating a customer code or publishing a campaign.</p>
+    <div className="panel-heading"><h2><ShieldCheck size={20}/> Merchant activation</h2><span>BUSINESS CONTROLLED</span></div>
+    <p className="helper">Review activation requests and control access to receipt rewards. Only Pruvs platform administrators can approve merchants. All decisions are recorded.</p>
     {error&&<p role="alert" className="promo-error"><AlertTriangle size={16}/>{error}</p>}
     {message&&<p role="status" className="promo-notice"><CheckCircle2 size={16}/>{message}</p>}
     <button type="button" className="btn subtle" disabled={loading||busy} onClick={refresh}><RefreshCw size={16}/> Refresh</button>
     {loading?<p className="helper">Checking pilot status…</p>:admin?<>
-      <h3>Platform approval queue</h3>
-      <p className="helper">Only a separately provisioned platform administrator can approve or revoke requests. Every decision is audited.</p>
+      <h3>Merchant requests</h3>
+      <p className="helper">Approve eligible businesses, reject with a reason, or pause access at any time.</p>
       {rows.length?rows.map(item=><article key={item.merchant_id} className="list-row">
         <div className="row-main"><strong>{item.merchant_name}</strong>
           <small>{item.merchant_id}</small>
@@ -85,15 +85,15 @@ export default function PilotAccess({token,merchant}){
         <div className="row wrap">
           {item.status==='requested'&&<>
             <button className="btn primary" disabled={busy||!item.merchant_active} onClick={()=>decide(item,'approve')}>Approve</button>
-            <button className="btn subtle" disabled={busy||!(notes[item.merchant_id]||'').trim()} onClick={()=>decide(item,'deny')}>Deny</button>
+            <button className="btn subtle" disabled={busy||!(notes[item.merchant_id]||'').trim()} onClick={()=>decide(item,'deny')}>Reject</button>
           </>}
-          {item.status==='approved'&&<button className="btn subtle" disabled={busy} onClick={()=>decide(item,'revoke')}>Revoke access</button>}
-          <button className="btn outline" disabled={busy} type="button" onClick={()=>showHistory(item)}>{historyId===item.merchant_id?'Hide audit':'View audit'}</button>
+          {item.status==='approved'&&<button className="btn subtle" disabled={busy} onClick={()=>decide(item,'revoke')}>Pause receipt rewards</button>}
+          <button className="btn outline" disabled={busy} type="button" onClick={()=>showHistory(item)}>{historyId===item.merchant_id?'Hide history':'View history'}</button>
         </div>
         {historyId===item.merchant_id&&<div className="helper" role="region" aria-label={'Decision audit for '+item.merchant_name}>
           {history.length?history.map(e=><p key={e.id}>{new Date(e.created_at).toLocaleString()} · {e.action}: {e.old_status} → {e.new_status} · Staff {e.actor_staff_id.slice(0,8)}{e.note?' · '+e.note:''}</p>):<p>No recorded decisions.</p>}
         </div>}
-      </article>):<p className="helper">No pilot enrollment requests in this environment.</p>}
+      </article>):<p className="helper">No activation requests yet. Merchants can request activation from their Loyalty programs page.</p>}
     </>:access?<>
       <h3>Merchant enrollment</h3>
       <p>Status: <strong>{access.status}</strong> · Mode: {access.mode==='legacy'?'Legacy allowlist':'Database approval'}</p>
