@@ -7,10 +7,11 @@ import ReceiptInbox from './ReceiptInbox';
 import CustomerDemo from './CustomerDemo.jsx';
 import ProgramManager from './ProgramManager.jsx';
 import PilotAccess from './PilotAccess.jsx';
+import AdminWorkspace from './AdminWorkspace.jsx';
 
 const API = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
 const money = (v) => `${(v/100).toFixed(2)} RON`;
-const nav=[['overview','Overview',LayoutDashboard],['stores','Locations',Store],['loyalty','Loyalty programs',Gift],['claims','Receipt claims',ScanLine],['pilot-access','Pilot access',ShieldCheck],['campaigns','AI campaign studio',Sparkles],['integrations','Checkout & integrations',Plug],['promotions','Promotions',Sparkles],['pilot','Purchase codes',ScanLine],['customer-demo','Customer demo',Gift]];
+const nav=[['overview','Overview',LayoutDashboard],['stores','Locations',Store],['loyalty','Loyalty programs',Gift],['claims','Verify purchases',ScanLine],['campaigns','AI campaign studio',Sparkles],['integrations','Checkout & integrations',Plug],['promotions','Promotions',Sparkles],['pilot','Purchase codes',ScanLine],['customer-demo','Customer demo',Gift]];
 
 async function request(path, token, method='GET', body) {
  let res;
@@ -32,18 +33,39 @@ function Login({onLogin}){
 function App(){
  const [token,setToken]=useState(''),[page,setPage]=useState('overview'),[menu,setMenu]=useState(false),[me,setMe]=useState(null),[stores,setStores]=useState([]),[programs,setPrograms]=useState([]),[claims,setClaims]=useState([]),[campaigns,setCampaigns]=useState([]),[stats,setStats]=useState(null),[notice,setNotice]=useState(null),[modal,setModal]=useState(''),[busy,setBusy]=useState(false);
  const inform=(text,error=false)=>setNotice({text,error});
- async function reload(t=token){if(!t)return;try{const [a,b,c,d,e,f]=await Promise.all(['/v1/merchant/me','/v1/merchant/stores','/v1/merchant/programs','/v1/merchant/claims','/v1/merchant/campaigns','/v1/merchant/overview'].map(p=>request(p,t)));setMe(a);setStores(b);setPrograms(c);setClaims(d);setCampaigns(e);setStats(f)}catch(ex){inform(ex.message,true);if(ex.message.includes('Authentication')||ex.message.includes('Inactive'))setToken('')}}
+ async function reload(t=token){
+  if(!t)return;
+  try{
+    const profile=await request('/v1/merchant/me',t);
+    setMe(profile);
+    if(profile.role==='platform_admin'){
+      setPage('pilot-access');
+      setNotice(null);
+      return;
+    }
+    const [b,c,d,e,f]=await Promise.all([
+      '/v1/merchant/stores','/v1/merchant/programs','/v1/merchant/claims',
+      '/v1/merchant/campaigns','/v1/merchant/overview'
+    ].map(p=>request(p,t)));
+    setStores(b);setPrograms(c);setClaims(d);setCampaigns(e);setStats(f);
+  }catch(ex){
+    inform(ex.message,true);
+    if(ex.message.includes('Authentication')||ex.message.includes('Inactive'))setToken('');
+  }
+}
  useEffect(()=>{if(token)reload(token)},[token]);
  async function perform(path,body){setBusy(true);try{const r=await request(path,token,'POST',body);await reload();setModal('');inform('Saved successfully');return r}catch(ex){inform(ex.message,true)}finally{setBusy(false)}}
  if(!token)return <Login onLogin={setToken}/>;
+ if(!me)return <div role="status" className="login-side">Loading your workspace…</div>;
+ if(me.role==='platform_admin')return <AdminWorkspace token={token} operator={me} onLogout={()=>{setToken('');setMe(null);setPage('overview')}}/>;
  const title=nav.find(n=>n[0]===page)?.[1]||'Overview';
- return <div className="shell"><aside className={`sidebar ${menu?'show':''}`}><div className="brand"><img className="brand-symbol pruvs-business-icon" src="/business/business-favicon.svg" alt="" aria-hidden="true"/><div>pruvs <span>business</span></div></div><div className="tenant"><span className="tenant-avatar">{(me?.merchant_name||'P').slice(0,1)}</span><div><b>{me?.merchant_name||'Merchant account'}</b><small>Merchant workspace</small></div></div><div className="side-label">WORKSPACE</div><nav>{nav.map(([id,label,Icon])=><button key={id} onClick={()=>{setPage(id);setMenu(false);setNotice(null)}} className={`nav-link ${page===id?'active':''}`}><Icon size={19}/><span>{label}</span>{page===id&&<ChevronRight size={14}/>}</button>)}</nav><div className="sidebar-foot"><div className="pilot-chip"><span className="dot"/> Pilot environment</div><button className="nav-link logout" onClick={()=>{setToken('');setMe(null)}}><LogOut size={18}/> Sign out</button><div className="foot-caption">Pruvs Business · v0.6.12</div></div></aside><div className="main"><header className="topbar"><button className="hamburger" onClick={()=>setMenu(!menu)}><Menu size={23}/></button><div className="breadcrumb">Workspace <ChevronRight size={15}/> <b>{title}</b></div><div className="top-right"><span className="env-label"><span className="dot"/> DEVELOPMENT</span><span className="user-circle">{(me?.email||'M')[0].toUpperCase()}</span></div></header><main className="content"><div className="page-head"><div><span className="eyebrow">PRUVS BUSINESS / {title.toUpperCase()}</span><h1>{title}</h1><p>{page==='overview'?'Your loyalty business at a glance.':page==='integrations'?'Connect loyalty activity to your merchant checkout infrastructure.':page==='customer-demo'?'Simulate what a customer will see in Pruvs. Local development only.':'Manage your merchant loyalty experience.'}</p></div>{page==='stores'&&<button className="btn primary" onClick={()=>setModal('store')}><Plus size={16}/> Add location</button>}{page==='loyalty'&&<button className="btn primary" onClick={()=>setModal('program')}><Plus size={16}/> New program</button>}</div><Notice msg={notice} onDismiss={()=>setNotice(null)}/>
+ return <div className="shell"><aside className={`sidebar ${menu?'show':''}`}><div className="brand"><img className="brand-symbol pruvs-business-icon" src="/business/business-favicon.svg" alt="" aria-hidden="true"/><div>pruvs <span>business</span></div></div><div className="tenant"><span className="tenant-avatar">{(me?.merchant_name||'P').slice(0,1)}</span><div><b>{me?.merchant_name||'Merchant account'}</b><small>Merchant workspace</small></div></div><div className="side-label">WORKSPACE</div><nav>{nav.map(([id,label,Icon])=><button key={id} onClick={()=>{setPage(id);setMenu(false);setNotice(null)}} className={`nav-link ${page===id?'active':''}`}><Icon size={19}/><span>{label}</span>{page===id&&<ChevronRight size={14}/>}</button>)}</nav><div className="sidebar-foot"><div className="pilot-chip"><span className="dot"/> Pilot environment</div><button className="nav-link logout" onClick={()=>{setToken('');setMe(null)}}><LogOut size={18}/> Sign out</button><div className="foot-caption">Pruvs Business · v0.6.13</div></div></aside><div className="main"><header className="topbar"><button className="hamburger" onClick={()=>setMenu(!menu)}><Menu size={23}/></button><div className="breadcrumb">Workspace <ChevronRight size={15}/> <b>{title}</b></div><div className="top-right"><span className="env-label"><span className="dot"/> PILOT</span><span className="user-circle">{(me?.email||'M')[0].toUpperCase()}</span></div></header><main className="content"><div className="page-head"><div><span className="eyebrow">PRUVS BUSINESS / {title.toUpperCase()}</span><h1>{title}</h1><p>{page==='overview'?'Your loyalty business at a glance.':page==='integrations'?'Connect loyalty activity to your merchant checkout infrastructure.':page==='customer-demo'?'Simulate what a customer will see in Pruvs. Local development only.':'Manage your merchant loyalty experience.'}</p></div>{page==='stores'&&<button className="btn primary" onClick={()=>setModal('store')}><Plus size={16}/> Add location</button>}{page==='loyalty'&&<button className="btn primary" onClick={()=>setModal('program')}><Plus size={16}/> New program</button>}</div><Notice msg={notice} onDismiss={()=>setNotice(null)}/>
  {page==='customer-demo'&&<CustomerDemo merchantToken={token} request={request} onClaims={()=>{setPage('claims');reload()}} onCheckout={()=>setPage('integrations')}/> }
  {page==='overview'&&<><div className="stat-grid">{[['Locations',stats?.stores??0,Store],['Loyalty programs',stats?.programs??0,Gift],['Pending receipts',stats?.pending_claims??0,ScanLine],['Rewards redeemed',stats?.redeemed_rewards??0,CircleCheck]].map(([label,val,Icon])=><div className="stat" key={label}><div className="stat-top"><span>{label}</span><Icon size={19}/></div><strong>{val}</strong><small>Live platform count</small></div>)}</div><div className="two-col"><section className="panel"><div className="panel-heading"><h2>Get ready to grow</h2><span>SETUP CHECKLIST</span></div><div className="check-list">{[['Register a store',stores.length>0],['Publish a loyalty program',programs.some(p=>p.status==='published')],['Verify your first customer receipt',claims.some(c=>c.status==='approved')],['Open the AI Campaign Studio',programs.some(p=>p.status==='published')]].map(([label,ok])=><div className="check-row" key={label}><span className={`check-icon ${ok?'done':''}`}>{ok?<Check size={14}/>:<Clock size={14}/>}</span>{label}<span className="status-small">{ok?'Done':'To do'}</span></div>)}</div></section><section className="panel highlight-panel"><div className="hint-icon"><Sparkles size={21}/></div><span className="eyebrow light">YOUR CAMPAIGN STUDIO</span><h2>More repeat customers.<br/>Less marketing work.</h2><p>Create offers from a business goal, review the proposal and turn them into loyalty campaigns.</p><button className="btn white" onClick={()=>setPage('campaigns')}>Explore campaigns <ArrowUpRight size={16}/></button><div className="highlight-note">AI generation requires a configured provider and is always reviewed and published by the merchant.</div></section></div></>}
  {page==='stores'&&<section className="panel"><div className="panel-heading"><h2>Store locations</h2><span>{stores.length} TOTAL</span></div>{stores.length?<div className="list">{stores.map(s=><div className="list-row" key={s.id}><div className="row-icon"><Store size={19}/></div><div className="row-main"><b>{s.name}</b><small><MapPin size={13}/>{s.address||'Address not specified'}</small></div><span className="pill good">Active</span></div>)}</div>:<Empty title="No locations yet" detail="Add a business location to make offers discoverable to nearby Pruvs customers."/>}</section>}
- {page==='loyalty'&&<ProgramManager programs={programs} token={token} onRefresh={()=>reload(token)} notify={inform}/>}
-  {page==='claims'&&<ReceiptInbox token={token} onChange={reload}/>}
- {page==='pilot-access'&&<PilotAccess token={token} merchant={me}/>} 
+ {page==='loyalty'&&<ProgramManager programs={programs} stores={stores} token={token} onRefresh={()=>reload(token)} notify={inform} onAddStore={()=>setModal('store')} onCreateProgram={()=>setModal('program')} onVerifyPurchases={()=>setPage('claims')}/>}
+  {page==='claims'&&<ReceiptInbox token={token} onChange={reload} onOpenLoyalty={()=>setPage('loyalty')}/>}
+
  {page==='campaigns'&&<PromotionConsole token={token} programs={programs} mode="promotions"/>}
  {page==='promotions'&&<PromotionConsole token={token} programs={programs} mode="promotions"/>}
  {page==='pilot'&&<PromotionConsole token={token} programs={programs} mode="pilot"/>}
