@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowUpRight, ScanLine, ReceiptText, Users, UploadCloud, RotateCw, ChevronDown, CalendarDays, UserRoundPlus, Camera, FolderKanban, Coins, PencilLine, Archive, Trash2, ExternalLink } from 'lucide-react';
 import { request, send, uploadFile, money } from './api';
 import { useApp, useLoad, Title, Panel, Spinner, Message, Field, Badge, Empty } from './common';
-import CropEditor from './CropEditor';
+import CropEditor, {cropToImagePixels} from './CropEditor';
 import { ReceiptPaper } from './ReceiptPaper';
 import { HomeWelcome, ProcessingStatus } from './professional/BrandExperience';
 import { CaptureGuide, ReceiptReviewGuide } from './professional/CorePages';
@@ -278,13 +278,12 @@ export function Upload() {
         x.rotate(Math.PI / 2);
         x.drawImage(img, 0, 0);
       } else {
-        const sx = img.width * crop.x / 100,
-          sy = img.height * crop.y / 100,
-          sw = Math.max(1, img.width * Math.min(crop.w, 100 - crop.x) / 100),
-          sh = Math.max(1, img.height * Math.min(crop.h, 100 - crop.y) / 100);
-        c.width = Math.round(sw);
-        c.height = Math.round(sh);
-        c.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+        // Exact same percentage system as the displayed crop frame.
+        // Round pixel endpoints once so output dimensions and source bounds agree.
+        const {sx,sy,sw,sh}=cropToImagePixels(crop,img.width,img.height);
+        c.width=sw;
+        c.height=sh;
+        c.getContext('2d').drawImage(img,sx,sy,sw,sh,0,0,sw,sh);
       }
       img.close();
       const blob=await new Promise((resolve,reject)=>c.toBlob(b=>b?resolve(b):reject(new Error('Could not prepare the image.')),'image/jpeg',.92));
