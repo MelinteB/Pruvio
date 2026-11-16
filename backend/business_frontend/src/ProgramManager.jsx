@@ -1,5 +1,6 @@
 import React,{useState} from 'react';
 import {Gift, PencilLine, PauseCircle, PlayCircle, Check, X, ShieldCheck} from 'lucide-react';
+import ActivationPanel from './ActivationPanel.jsx';
 
 const API=(import.meta.env.VITE_API_BASE||'').replace(/\/$/,'');
 async function changeProgram(path,token,method='POST',body){
@@ -9,7 +10,7 @@ async function changeProgram(path,token,method='POST',body){
   if(!res.ok)throw Error(data.detail||'Could not update loyalty program');
   return data;
 }
-export default function ProgramManager({programs=[],token,onRefresh,notify}){
+export default function ProgramManager({programs=[],stores=[],token,onRefresh,notify,onAddStore,onCreateProgram,onVerifyPurchases}){
   const [editing,setEditing]=useState(null),[busy,setBusy]=useState(''),[error,setError]=useState('');
   const [draft,setDraft]=useState({});
   async function act(id,method,path,body){
@@ -20,7 +21,7 @@ export default function ProgramManager({programs=[],token,onRefresh,notify}){
   }
   function open(p){setEditing(p.id);setDraft({title:p.title,description:p.description||'',
     stamps_required:p.stamps_required,min_purchase_minor:p.min_purchase_minor,reward_minor:p.reward_minor});setError('')}
-  return <section className="panel">
+  return <><ActivationPanel token={token} stores={stores} programs={programs} onAddStore={onAddStore} onCreateProgram={onCreateProgram} onVerifyPurchases={onVerifyPurchases}/><section className="panel">
     <div className="panel-heading"><h2>Manage loyalty programs</h2><span>{programs.length} TOTAL</span></div>
     <p className="helper">Publish, pause, resume and edit your programs. Reward criteria are locked after publication to protect existing customers.</p>
     {error&&<div className="error-text" role="alert">{error}</div>}
@@ -44,5 +45,5 @@ export default function ProgramManager({programs=[],token,onRefresh,notify}){
         <div className="pruvs-program-actions"><button type="button" className="btn outline" onClick={()=>setEditing(null)}><X size={15}/> Cancel</button><button className="btn primary" disabled={!!busy}><Check size={15}/> Save changes</button></div>
       </form>}
     </div>)}</div>:<p className="helper">No programs yet. Create your first program with the New program button.</p>}
-  </section>;
+  </section></>;
 }
