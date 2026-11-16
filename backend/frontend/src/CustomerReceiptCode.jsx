@@ -34,25 +34,25 @@ export default function CustomerReceiptCode({caseId,programs=[],existingClaim=nu
     }catch(e){setError(e.message||'Could not create the receipt code.');}finally{setBusy(false);}
   }
   return <>
-    {pending&&<small role="status">Submitted · awaiting merchant verification. You can reissue the time-limited code if the customer copy was lost.</small>}
-    <button className="secondary" type="button" onClick={()=>{setResult(null);setOpen(true)}}>{pending?'Reissue verification code':'Generate receipt code for merchant'}</button>
+    {pending&&<small role="status">Receipt sent — awaiting merchant verification. Need another QR? Creating a new one cancels the previous code.</small>}
+    <button className="secondary" type="button" onClick={()=>{setResult(null);setOpen(true)}}>{pending?'Show new verification QR':'Earn a stamp'}</button>
     {open&&<div className="pruvs-v12-overlay" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)close()}}>
       <div className="pruvs-v12-dialog" role="dialog" aria-modal="true" aria-label="Earn rewards with receipt code">
-        <div className="row between"><h2>Earn rewards</h2><button type="button" aria-label="Close" disabled={busy} onClick={close}><X size={19}/></button></div>
-        {result ? <div className="pruvs-v12-code" role="status"><p>Enter this code in Pruvs Business before it expires:</p>
+        <div className="row between"><h2>Verify your purchase</h2><button type="button" aria-label="Close" disabled={busy} onClick={close}><X size={19}/></button></div>
+        {result ? <div className="pruvs-v12-code" role="status"><p>Show this QR to the merchant to verify your purchase:</p>
           <strong>{result.display_code}</strong>
-           <div className="pruvs-v7151-claim-qr"><QRCodeSVG value={result.display_code} size={196} title="Single-use receipt verification code" level="M"/><small>Show this QR or enter the code in Business → Receipt claims. The merchant must still inspect and approve the purchase.</small></div>
+           <div className="pruvs-v7151-claim-qr"><QRCodeSVG value={result.display_code} size={196} title="Single-use receipt verification code" level="M"/><small>The merchant opens Verify purchases, enters your code, and checks the shared receipt before confirming.</small></div>
           <button type="button" onClick={()=>navigator.clipboard?.writeText(result.display_code)}> <Copy size={16}/> Copy code</button>
           <p>Expires {new Date(result.expires_at).toLocaleString()}</p>
-          <p>A merchant must review the receipt and approve it before any stamp is credited.</p>
-          <button type="button" onClick={close}>Done</button></div> :
+          <p>Your loyalty stamp is credited only after the merchant approves this purchase.</p>
+          <button type="button" onClick={close}>Close</button></div> :
           <form onSubmit={create} className="pruvs-v12-form">
-            <p>{pending?'Reissuing the code invalidates the earlier code and any existing merchant review access. The saved receipt and its pending review stay unchanged.':'Generate a single-use receipt code for an already completed purchase. The merchant must compare the receipt with their sale record.'}</p>
+            <p>{pending?'Reissuing the code invalidates the earlier code and any existing merchant review access. The saved receipt and its pending review stay unchanged.':'Select the loyalty program and agree to share a preview of this receipt. You will receive a one-time QR/code for the merchant.'}</p>
             <label>Joined loyalty program<select required value={chosen} onChange={e=>setProgram(e.target.value)}>{programs.map(o=><option key={o.program.id} value={o.program.id}>{o.program.title}{o.promotionHeadline?' · Campaign: '+o.promotionHeadline:''} · {o.store?.name||o.merchant_name}</option>)}</select></label>
             <label>Receipt photo (optional for cloud-stored photos)<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>setPhoto(e.target.files?.[0]||null)}/></label>
             <label className="pruvs-v12-consent"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/><span>I agree to share an image of only this receipt with the selected merchant, including its merchant name, date, and amount. I have checked for personal details I do not want shared.</span></label>
             {error&&<p role="alert" className="pruvs-v12-error">{error}</p>}
-            <button className="primary" disabled={busy||!consent||!chosen}><ShieldCheck size={16}/>{busy?'Generating…':'Generate merchant claim code'}</button>
+            <button className="primary" disabled={busy||!consent||!chosen}><ShieldCheck size={16}/>{busy?'Preparing…':'Create verification QR'}</button>
           </form>}
       </div>
     </div>}
