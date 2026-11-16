@@ -19,21 +19,29 @@ async function call(path,token,method='GET',body){
 }
 export default function PilotAccess({token,merchant}){
   const admin=merchant?.role==='platform_admin';
-  const [access,setAccess]=useState(null),[rows,setRows]=useState([]),
+  const [access,setAccess]=useState(null),[rows,setRows]=useState([]),[view,setView]=useState('requested'),
         [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),
         [message,setMessage]=useState(''),[error,setError]=useState(''),
         [notes,setNotes]=useState({}),[historyId,setHistoryId]=useState(''),[history,setHistory]=useState([]);
-  async function refresh(){
-    setLoading(true);
+  async function refresh(quiet=false){
+    if(!quiet)setLoading(true);
     try{
       const data=await call(admin?'/v1/platform/pilot-enrollments':'/v1/merchant/pilot-access',token);
       if(admin)setRows(Array.isArray(data)?data:[]);
       else setAccess(data);
       setError('');
     }catch(ex){setError(ex.message);}
-    finally{setLoading(false);}
+    finally{if(!quiet)setLoading(false);}
   }
-  useEffect(()=>{if(token&&merchant)refresh()},[token,merchant?.role,merchant?.merchant_id]);
+  useEffect(()=>{
+    if(!token||!merchant)return;
+    refresh();
+    if(!admin)return;
+    const onFocus=()=>refresh(true);
+    window.addEventListener('focus',onFocus);
+    const timer=window.setInterval(()=>{if(document.visibilityState==='visible')refresh(true);},30000);
+    return()=>{window.removeEventListener('focus',onFocus);window.clearInterval(timer);};
+  },[token,merchant?.role,merchant?.merchant_id]);
   async function showHistory(item){
     setError('');
     if(historyId===item.merchant_id){setHistoryId('');setHistory([]);return;}
@@ -64,6 +72,7 @@ export default function PilotAccess({token,merchant}){
     }catch(ex){setError(ex.message)}
     finally{setBusy(false);}
   }
+  const visibleRows=admin?rows.filter(row=>view==='all'||row.status===view):[];
   return <section className="panel">
     <div className="panel-heading"><h2><ShieldCheck size={20}/> Merchant activation</h2><span>BUSINESS CONTROLLED</span></div>
     <p className="helper">Review activation requests and control access to receipt rewards. Only Pruvs platform administrators can approve merchants. All decisions are recorded.</p>
@@ -73,7 +82,11 @@ export default function PilotAccess({token,merchant}){
     {loading?<p className="helper">Checking pilot status…</p>:admin?<>
       <h3>Merchant requests</h3>
       <p className="helper">Approve eligible businesses, reject with a reason, or pause access at any time.</p>
-      {rows.length?rows.map(item=><article key={item.merchant_id} className="list-row">
+
+      <div className="pruvs-admin-filters" role="group" aria-label="Filter activation requests">
+        {['requested','approved','all'].map(key=><button key={key} className={'btn '+(view===key?'primary':'outline')} type="button" aria-pressed={view===key} onClick={()=>setView(key)}>{key==='requested'?'Pending':key==='approved'?'Active':'All'} ({key==='all'?rows.length:rows.filter(x=>x.status===key).length})</button>)}
+      </div>
+      {visibleRows.length?visibleRows.map(item=><article key={item.merchant_id} className="list-row">
         <div className="row-main"><strong>{item.merchant_name}</strong>
           <small>{item.merchant_id}</small>
           <small>Status: {item.status} · {item.merchant_active?'Active merchant':'Inactive merchant'}</small>
@@ -93,7 +106,7 @@ export default function PilotAccess({token,merchant}){
         {historyId===item.merchant_id&&<div className="helper" role="region" aria-label={'Decision audit for '+item.merchant_name}>
           {history.length?history.map(e=><p key={e.id}>{new Date(e.created_at).toLocaleString()} · {e.action}: {e.old_status} → {e.new_status} · Staff {e.actor_staff_id.slice(0,8)}{e.note?' · '+e.note:''}</p>):<p>No recorded decisions.</p>}
         </div>}
-      </article>):<p className="helper">No activation requests yet. Merchants can request activation from their Loyalty programs page.</p>}
+      </article>):<p className="helper">No activation requests in this view. Merchants can request activation from Loyalty programs.</p>}
     </>:access?<>
       <h3>Merchant enrollment</h3>
       <p>Status: <strong>{access.status}</strong> · Mode: {access.mode==='legacy'?'Legacy allowlist':'Database approval'}</p>
