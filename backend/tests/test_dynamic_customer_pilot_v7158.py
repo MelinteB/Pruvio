@@ -52,8 +52,8 @@ def test_business_downtime_or_malformed_response_fails_closed(enabled,monkeypatc
     def down(*args,**kwargs):
         raise HTTPException(status_code=503,detail='Business unavailable')
     monkeypatch.setattr(access, 'call_business', down)
-    access=access.pilot_access(6)
-    assert access == {'eligible':False,'reason':'eligibility_unavailable'}
+    result=access.pilot_access(6)
+    assert result == {'eligible':False,'reason':'eligibility_unavailable'}
     with pytest.raises(HTTPException) as exc:
         access.pilot_ready(6)
     assert exc.value.status_code == 503
