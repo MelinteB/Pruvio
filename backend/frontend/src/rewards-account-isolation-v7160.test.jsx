@@ -63,7 +63,10 @@ describe('Pruvs Rewards account boundary',()=>{
 
     current.userId=202;
     view.rerender(<MemoryRouter><Rewards/></MemoryRouter>);
+    // Account switch resets to Discover; no previous user's voucher remains visible.
     expect(screen.queryByRole('button',{name:'Generate checkout QR'})).toBeNull();
+    fireEvent.click(screen.getByRole('button',{name:'My wallet'}));
     expect(await screen.findByText('No rewards yet. Merchant-approved purchases count toward rewards.')).toBeTruthy();
+    expect(screen.queryByRole('button',{name:'Generate checkout QR'})).toBeNull();
   });
 });
