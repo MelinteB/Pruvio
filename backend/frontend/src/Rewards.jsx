@@ -100,7 +100,7 @@ export default function Rewards(){
           setPromotions(Array.isArray(pr)?pr:[]);
           setCampaignState('ready');
         }catch{setPromotions([]);setCampaignState('unavailable');}
-        if(s.receipt_v06_enabled||s.customer_codes_v12_enabled){
+        if(s.receipt_v06_enabled||s.customer_codes_v12_enabled||s.claims_read_enabled){
           try{
             const cl=await request('/loyalty/claims');
             if(!Array.isArray(cl))throw Error('Invalid receipt status response');
@@ -166,7 +166,11 @@ export default function Rewards(){
     : !status?.receipt_claims_enabled
       ? 'Receipt rewards are not enabled for your account in this environment.'
       : !status?.receipt_v06_enabled
-        ? 'Receipt verification is not active for your account yet. Ask the Pruvs team to enable the customer pilot.'
+        ? (status?.receipt_access_reason==='no_joined_approved_merchant'
+          ? 'Join a loyalty program from an approved merchant in Discover to earn stamps.'
+          : status?.receipt_access_reason==='eligibility_unavailable'
+            ? 'Merchant eligibility cannot be checked right now. Try again shortly.'
+            : 'Receipt verification is not active for your account yet.')
         : claimsState!=='ready'
           ? 'Receipt claim verification is unavailable. Try again.'
           : null;
@@ -262,7 +266,8 @@ export default function Rewards(){
           {String(r.case_id)===selectedReceiptCase&&<span className="pruvs-loyalty-selected-label">Selected receipt</span>}
           <p>{money(r.receipt_total,r.currency||'RON')}</p>
           <small>{receiptActionReason||(!earnedPrograms.length?'No joined, approved merchant program is available for this receipt. Join a loyalty program in Discover or ask the merchant to activate it.':'Choose the matching merchant loyalty program, share the receipt and ask the merchant to confirm the purchase.')}</small>
-          {!receiptActionReason&&!earnedPrograms.length&&<button className="secondary pruvs-loyalty-discover-link" type="button" onClick={()=>setTab('offers')}>Find loyalty programs</button>}
+          {(status?.receipt_access_reason==='no_joined_approved_merchant'||(!receiptActionReason&&!earnedPrograms.length))&&
+            <button className="secondary pruvs-loyalty-discover-link" type="button" onClick={()=>setTab('offers')}>Discover approved loyalty programs</button>}
         </div>
         <Link to={'/receipt/'+r.case_id}>View receipt</Link>
         {!receiptActionReason&&earnedPrograms.length>0&&status?.customer_codes_v12_enabled
