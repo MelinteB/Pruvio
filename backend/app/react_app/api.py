@@ -526,6 +526,17 @@ def selection(token:str,body:dict,identity=Depends(current),db=Depends(get_db)):
     qualify_referral(db,s,identity[0],quantities)
     return summary(db,s,identity[0].id)
 
+
+@router.post('/bills/{token}/selection/complete')
+def complete_bill_selection(token:str,identity=Depends(current),db=Depends(get_db)):
+    # Actor identity comes from the authenticated session; never accept a
+    # client-supplied participant id or owner assertion.
+    uid=identity[0].id
+    s,p=member(db,token,uid,lock=True)
+    bills.confirm_participant_selection(db,s,p.id,uid)
+    return summary(db,s,uid)
+
+
 @router.post('/bills/{token}/action/{action}')
 def bill_action(token:str,action:str,body:dict,identity=Depends(current),db=Depends(get_db)):
     uid=identity[0].id;s,p=member(db,token,uid,owner=action not in ('payment', 'withdraw_payment'),lock=True)
