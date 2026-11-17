@@ -112,3 +112,13 @@
 .pruvs-selection-badge.is-complete{background:#d3f3e2;color:#096743}
 @media(max-width:600px){.pruvs-next-summary button{width:100%}
  .pruvs-selection-person{align-items:flex-start;flex-direction:column;gap:6px}}
+
+/* Summary & payment is a distinct browser-history step after item selection. */
+.pruvs-bill-summary-nav{display:flex;align-items:center;justify-content:space-between;gap:12px;
+ margin:5px 0 18px;padding:12px 14px;border-radius:13px;background:#edf8f5;
+ border:1px solid #b3d8cd;color:#1b5946;font-size:13px;font-weight:700}
+.pruvs-bill-summary-nav button{min-height:42px;display:inline-flex;align-items:center}
+.pruvs-bill-summary-screen{width:100%;min-width:0;max-width:1050px;margin:0 auto;}
+.pruvs-bill-summary-screen .bill-workspace-summary{margin-top:0}
+@media(max-width:620px){.pruvs-bill-summary-nav{flex-direction:column;align-items:stretch}
+ .pruvs-bill-summary-nav button{justify-content:center}}

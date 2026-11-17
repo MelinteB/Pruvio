@@ -18,13 +18,14 @@ class FloatingBillWorkspaceTests(unittest.TestCase):
         self.assertIn('top: 80px',css)
         self.assertIn('top: 65px',css)
         self.assertIn("'./floating-bill-workspace.css'",(ROOT/'frontend/src/main.jsx').read_text())
-    def test_summary_follows_item_selection_without_third_view(self):
+    def test_summary_is_separate_route_driven_step_not_inline(self):
         bill=(ROOT/'frontend/src/Bill.jsx').read_text()
         core=(ROOT/'frontend/src/professional/CorePages.jsx').read_text()
-        self.assertGreater(bill.index('id="core-bill-summary"'),bill.index('id="core-bill-items"'))
-        self.assertNotIn("section==='summary'",bill)
-        self.assertIn("requested === 'people' ? 'people' : 'items'",bill)
-        self.assertIn("requested !== 'summary'",bill)  # old deep links still scroll to summary
+        self.assertIn("requested === 'summary' ? 'summary'",bill)
+        self.assertIn("section==='summary'&&<div",bill)
+        self.assertIn("section==='items'&&<div",bill)
+        self.assertIn("Back to item selection",bill)
+        self.assertNotIn("requested !== 'summary'",bill)
         self.assertIn("['people','People',Users]",core)
         self.assertNotIn("['summary','Summary',FileText]",core)
     def test_blue_allocation_states_and_preservation(self):
