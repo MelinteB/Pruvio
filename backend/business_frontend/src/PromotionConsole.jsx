@@ -25,6 +25,8 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
   const currentProgram=programs.find(p=>p.id===programId);
   const displayedMediaUrl=mediaUrl&&!mediaPreviewError?mediaUrl:localMediaPreview;
   const mediaCannotSave=uploadPending||mediaPreviewError;
+  const targetMediaType={png:'image/png',gif:'image/gif',mp4:'video/mp4'}[creativeFormat];
+  const mediaNeedsRendering=Boolean(artworkKey&&mediaUrl&&mediaType!==targetMediaType);
   function resetMedia(){
     setArtworkKey('');setMediaUrl('');setMediaType('image/jpeg');
     setLocalMediaPreview('');setUploadPending(false);setMediaPreviewError(false);
@@ -35,6 +37,7 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
     setEditingPromotionId(copy?'':p.id);
     setProgramId(p.program_id);setHeadline(p.headline);setMessage(p.message);
     setDays(p.duration_days||14);setDraftPreview(null);resetMedia();
+    setCreativeFormat(p.media_type==='image/gif'?'gif':p.media_type==='video/mp4'?'mp4':'png');
     setMediaUrl(p.media_url||'');setMediaType(p.media_type||'image/jpeg');
     setError('');
     setNotice(copy?'Copied into a new draft. Add or replace artwork before saving.':'Editing existing draft. Save changes before publishing.');
@@ -110,17 +113,21 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
       setError((e.message||'Picture upload failed')+' Local preview only: this picture is NOT saved and cannot be published.');
     }finally{setAssetBusy(false)}
   }
+  function renderSelectedArtwork(key){
+    return call('/v1/merchant/promotions/media/render',token,{
+      media_key:key,format:creativeFormat,
+      headline:headline.trim()||'Pruvs Rewards',
+      watermark_text:watermark.trim()||'Pruvs Business'
+    });
+  }
   async function renderArtwork(){
     if(!artworkKey){setError('Upload or generate a campaign picture first.');return;}
     setAssetBusy(true);setError('');
     try{
-      const result=await call('/v1/merchant/promotions/media/render',token,{
-        media_key:artworkKey,format:creativeFormat,headline:headline||'Pruvs Rewards',
-        watermark_text:watermark
-      });
+      const result=await renderSelectedArtwork(artworkKey);
       setMediaUrl(result.media_url);setMediaType(result.media_type);
       setUploadPending(false);setMediaPreviewError(false);
-      setNotice('Branded artwork ready. Review the preview and save your promotion draft.');
+      setNotice('Branded '+creativeFormat.toUpperCase()+' ready. Review the preview and save your promotion draft.');
     }catch(e){setError(e.message)}finally{setAssetBusy(false)}
   }
   useEffect(()=>{if(!published.some(p=>p.id===programId))setProgramId(published[0]?.id||'');},[programs,programId]);
@@ -171,26 +178,41 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
         <div className="pruvs-ai-actions"><button type="button" className="btn primary" disabled={!programId||aiBusy||assetBusy||busy||aiReadiness?.copy_ready===false} onClick={generateDraft}><WandSparkles size={17}/>{aiBusy?'Creating AI draft…':'Generate AI copy'}</button>
           <button type="button" className="btn primary" disabled={!programId||!draftPreview||!headline.trim()||assetBusy||aiBusy||busy||aiReadiness?.artwork_ready===false} onClick={generateAIArtwork}><Sparkles size={17}/>{assetBusy?'Creating artwork…':'Generate AI artwork'}</button>
           <label className="btn outline pruvs-ai-file"><ImagePlus size={17}/> Upload campaign picture<input type="file" accept="image/jpeg,image/png,image/webp" disabled={assetBusy} onChange={e=>{const file=e.target.files?.[0];e.target.value='';uploadArtwork(file)}}/></label>
-          <button type="button" className="btn outline" disabled={!artworkKey||assetBusy||!headline.trim()} onClick={renderArtwork}><Film size={17}/>{assetBusy?'Processing artwork…':'Generate branded artwork'}</button>
+          <button type="button" className="btn outline" disabled={!artworkKey||assetBusy||!headline.trim()} onClick={renderArtwork}><Film size={17}/>{assetBusy?'Processing artwork…':'Generate '+creativeFormat.toUpperCase()+' artwork'}</button>
         </div>
         {draftPreview&&<div className="pruvs-ai-preview"><strong>AI copy preview</strong><p><b>{draftPreview.cta}</b> · {draftPreview.visual_brief}</p><small>Suggested motion: {draftPreview.motion_storyboard}</small></div>}
         {(mediaUrl||localMediaPreview)&&<div className="pruvs-ai-preview" aria-label="Campaign creative preview">
           <strong>Creative preview · 4:5 mobile layout</strong>
-          {displayedMediaUrl&&(mediaType?.startsWith('video/')&&mediaUrl&&!mediaPreviewError?
-            <video src={displayedMediaUrl} controls muted playsInline preload="metadata" onLoadedData={()=>setMediaPreviewError(false)} onError={()=>setMediaPreviewError(true)}/>:
-            <img src={displayedMediaUrl} alt={draftPreview?.alt_text||headline||'Merchant campaign image'} onLoad={()=>{if(mediaUrl&&displayedMediaUrl===mediaUrl)setMediaPreviewError(false)}} onError={()=>{if(mediaUrl&&displayedMediaUrl===mediaUrl)setMediaPreviewError(true)}}/>)}
+          {displayedMediaUrl&&<div className="pruvs-business-creative">
+            {mediaType?.startsWith('video/')&&mediaUrl&&!mediaPreviewError?
+              <video src={displayedMediaUrl} controls muted autoPlay loop playsInline preload="metadata" onLoadedData={()=>setMediaPreviewError(false)} onError={()=>setMediaPreviewError(true)}/>:
+              <img src={displayedMediaUrl} alt="" onLoad={()=>{if(mediaUrl&&displayedMediaUrl===mediaUrl)setMediaPreviewError(false)}} onError={()=>{if(mediaUrl&&displayedMediaUrl===mediaUrl)setMediaPreviewError(true)}}/>}
+            <div className="pruvs-business-creative-text"><strong>{headline||'Your campaign headline'}</strong><p>{message||'Add a promotional message to preview the campaign.'}</p></div>
+          </div>}
           <small role="status">{uploadPending?'Local preview only — upload unsuccessful or still in progress. Cannot save.':mediaPreviewError?'Stored asset is not publicly accessible. Cannot save until it loads.':'Uploaded media preview · '+mediaType}</small>
           {mediaPreviewError&&<button type="button" className="btn subtle" onClick={()=>setMediaPreviewError(false)}>Retry preview</button>}
           <button type="button" className="btn subtle" disabled={assetBusy} onClick={removeMedia}>Remove picture / use text only</button>
         </div>}
-        <p className="helper">Add a promotion headline (below) to enable Generate branded artwork after a successful picture upload. No URL entry is required.</p>
+        {mediaNeedsRendering&&<p className="helper" role="status">This {creativeFormat.toUpperCase()} asset is not rendered yet. Saving will generate it automatically before storing the promotion.</p>}
+        {mediaUrl&&!artworkKey&&mediaType!==targetMediaType&&<p className="helper">To change this saved campaign's format, upload its original picture again.</p>}
+        <p className="helper">Upload a picture and add a headline to create branded artwork. No manual URL is needed.</p>
       </section>
       <form className="promo-form" onSubmit={e=>{
         e.preventDefault();
         if(mediaCannotSave){setError('The selected picture is not stored or its public preview failed. Remove it to save text only, or upload again.');return;}
         submit(async()=>{
+          let savedMediaUrl=mediaUrl;
+          let savedMediaType=mediaType;
+          if(mediaNeedsRendering){
+            const rendered=await renderSelectedArtwork(artworkKey);
+            if(!rendered.media_url||rendered.media_type!==targetMediaType)
+              throw new Error('Artwork generation did not return the selected media format. Nothing was saved.');
+            savedMediaUrl=rendered.media_url;
+            savedMediaType=rendered.media_type;
+            setMediaUrl(savedMediaUrl);setMediaType(savedMediaType);
+          }
           const payload={program_id:programId,headline:headline.trim(),message:message.trim(),duration_days:Number(days),
-            media_url:mediaUrl||null,media_type:mediaUrl?mediaType:null,media_alt:headline.trim()};
+            media_url:savedMediaUrl||null,media_type:savedMediaUrl?savedMediaType:null,media_alt:headline.trim()};
           if(editingPromotionId)await call('/v1/merchant/promotions/'+editingPromotionId,token,payload,'PATCH');
           else await call('/v1/merchant/promotions',token,payload);
           setEditingPromotionId('');setHeadline('');setMessage('');setDraftPreview(null);resetMedia();
