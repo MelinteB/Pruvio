@@ -16,7 +16,7 @@ export default function CampaignCreative({promotion:p,compact=false}){
         aria-label={p.media_alt||p.headline}>
         <source src={p.media_url} type={p.media_type}/>
       </video>:
-      <img className="pruvs-campaign-creative-media" src={p.media_url} loading="lazy" alt=""/>}
+      <img className="pruvs-campaign-creative-media" src={p.media_url} loading="lazy" alt={p.media_alt||p.headline}/>}
     <div className="pruvs-campaign-creative-overlay">
       <span className="pruvs-campaign-creative-kicker">PRUVS · {p.merchant_name}</span>
       <h3>{p.headline}</h3>
