@@ -168,7 +168,7 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
     {error&&<p className="promo-error" role="alert"><AlertCircle size={16}/>{error}</p>}
     {notice&&<p className="promo-notice" role="status"><CheckCircle2 size={16}/>{notice}</p>}
     {mode==='promotions'?<>
-      <p className="helper">Promotions are shown in the Pruvs customer app only after you explicitly publish them. A promotion points to one already-published loyalty program.</p>
+      <p className="helper">Choose a published loyalty program, edit the predefined text, generate your campaign copy and review its artwork. Publishing remains a separate merchant approval action.</p>
       <section className="pruvs-ai-studio">
         <div className="pruvs-ai-studio-heading"><Sparkles size={21}/><div><h3>Campaign studio · AI + creative assets</h3><p>Use the published loyalty program as the source of truth. AI suggests copy, but cannot change rewards or publish on its own.</p></div></div>
         <label className="pruvs-ai-program-select">Published loyalty program<select required value={programId} disabled={Boolean(editingPromotionId)} onChange={e=>changeProgram(e.target.value)}>{published.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></label>
@@ -232,6 +232,10 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
       <form className="promo-form" onSubmit={e=>{
         e.preventDefault();
         if(mediaCannotSave){setError('The selected picture is not stored or its public preview failed. Remove it to save text only, or upload again.');return;}
+        if(!programId||headline.trim().length<5||headline.trim().length>100||message.trim().length<10||message.trim().length>500||!Number.isInteger(Number(days))||Number(days)<1||Number(days)>90){
+          setError('Choose a program, a headline (5–100 characters), a message (10–500 characters) and display days (1–90).');
+          return;
+        }
         submit(async()=>{
           let savedMediaUrl=mediaUrl;
           let savedMediaType=mediaType;
@@ -252,9 +256,7 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
           await refresh();
         });
       }}>
-        <label>Published loyalty program<select required disabled={Boolean(editingPromotionId)} value={programId} onChange={e=>changeProgram(e.target.value)}>{published.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></label>
-        <label>Promotion headline<input value={headline} minLength={5} maxLength={100} required placeholder="A little extra for your next visit" onChange={e=>setHeadline(e.target.value)}/></label>
-        <label>Promotional message<textarea value={message} minLength={10} maxLength={500} required rows={3} placeholder="Join our loyalty program and earn a reward after qualifying visits." onChange={e=>setMessage(e.target.value)}/></label>
+        <p className="helper">Review the editable campaign text above before saving. Publishing remains a separate merchant approval action.</p>
         <label>Display period (days)<input type="number" min="1" max="90" value={days} onChange={e=>setDays(e.target.value)}/></label>
         <div className="pruvs-ai-actions">
           <button className="btn primary" disabled={busy||assetBusy||!programId||mediaCannotSave}>{editingPromotionId?'Update promotion draft':'Save promotion draft'}</button>
