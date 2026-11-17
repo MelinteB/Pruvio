@@ -1,4 +1,4 @@
-name: Verify deployed staging Core 7.1.58 / Business 0.6.14
+name: Verify staging Core 7.1.59 / Business 0.6.14 Scan-to-loyalty
 
 on:
   push:
@@ -41,6 +41,23 @@ jobs:
           npm ci --no-audit --no-fund
           npm test
           npm run build
+          node - <<'JS'
+          const fs=require('node:fs')
+          const script=fs.readFileSync('src/merchantMatchDemo.js','utf8')
+          const dialog=fs.readFileSync('src/CustomerReceiptCode.jsx','utf8')
+          const receipt=fs.readFileSync('src/Receipts.jsx','utf8')
+          const style=fs.readFileSync('src/customer-code-v12.css','utf8')
+          if(!script.includes("hostname==='pruvs-core-staging.onrender.com'") ||
+             !script.includes("import.meta.env.VITE_PRUVS_LOYALTY_DEMO_MERCHANT_MATCHING_ENABLED"))
+            throw Error('Demo matching must be isolated to staging and explicit local dev')
+          if(!dialog.includes('savedReceiptPhoto')||dialog.includes('type="file"'))
+            throw Error('Receipt code modal must reuse saved image, not upload again')
+          if(!receipt.includes('ReceiptLoyaltyOpportunity')||!receipt.includes('justScanned'))
+            throw Error('Scan results must expose loyalty option')
+          if(!style.includes('.pruvs-v12-form label.pruvs-v12-consent input[type="checkbox"]'))
+            throw Error('Compact accessible consent checkbox style missing')
+          console.log('PASS: staging-only receipt matching, direct scan action, saved original and consent layout')
+          JS
       - name: Verify Core build signature
         working-directory: backend
         run: |
@@ -49,7 +66,7 @@ jobs:
           import json
           from pathlib import Path
           x=json.loads(Path('frontend/dist/build-manifest.json').read_text())
-          assert x['version']=='7.1.58',x
+          assert x['version']=='7.1.59',x
           import re
           from app.reliability import RELEASE
           client=(Path('frontend/src/professional/ReleaseUpdateBanner.jsx').read_text())
