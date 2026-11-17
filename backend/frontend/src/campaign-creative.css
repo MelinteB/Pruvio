@@ -1,0 +1,23 @@
+/* Live campaign copy on top of the approved R2 picture/GIF/video.
+   Preserve the actual message in the DOM for accessible, selectable text. */
+.pruvs-campaign-creative{position:relative;isolation:isolate;overflow:hidden;border-radius:13px;
+ aspect-ratio:4 / 5;width:100%;min-height:250px;background:#173e35;color:#fff}
+.pruvs-campaign-creative-media{display:block;position:absolute;inset:0;width:100%;height:100%;
+ object-fit:cover;object-position:center;z-index:0}
+.pruvs-campaign-creative-overlay{position:absolute;inset:0;z-index:1;display:flex;
+ flex-direction:column;justify-content:flex-end;gap:8px;padding:clamp(13px,3.5vw,22px);
+ background:linear-gradient(180deg,rgba(5,26,24,.20) 0%,rgba(4,29,25,.27) 32%,
+ rgba(2,22,21,.85) 75%,rgba(2,22,21,.97) 100%);
+ color:#fff;pointer-events:none}
+.pruvs-campaign-creative-kicker{font-size:11px;font-weight:800;letter-spacing:.075em;
+ text-transform:uppercase;color:#bff4e1;overflow-wrap:anywhere}
+.pruvs-campaign-creative-overlay h3{color:#fff!important;font-size:clamp(16px,2.8vw,21px);
+ line-height:1.16;letter-spacing:-.01em;margin:0!important;overflow-wrap:anywhere;
+ display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.pruvs-campaign-creative-overlay p{color:#f5fff9!important;font-size:clamp(12px,2vw,14px);
+ line-height:1.45;margin:0!important;overflow-wrap:anywhere;display:-webkit-box;
+ -webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}
+.pruvs-campaign-creative-compact{aspect-ratio:4 / 5}
+.pruvs-campaign-creative-compact .pruvs-campaign-creative-overlay p{-webkit-line-clamp:3}
+@media (max-width:500px){.pruvs-campaign-creative-overlay{gap:6px;padding:13px}
+ .pruvs-campaign-creative-overlay p{-webkit-line-clamp:4}}
