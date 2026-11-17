@@ -1,7 +1,7 @@
 import { t } from "./i18n";
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Users, Share2, Copy, Minus, Plus, Check, ExternalLink, MessageCircle, UserRoundX } from 'lucide-react';
+import { Users, Share2, Copy, Minus, Plus, Check, ArrowRight, ExternalLink, MessageCircle, UserRoundX } from 'lucide-react';
 import ItemSwipeGesture from './ItemSwipeGesture';
 import { request, send, money, copy } from './api';
 import { useApp, useLoad, Title, Panel, Field, Spinner, Message, Badge } from './common';
@@ -200,6 +200,31 @@ export default function Bill() {
     }catch(e){setError(e.message);try{setData(await request('/bills/'+encodeURIComponent(token)))}catch{}}
     finally{saving.current=false;setBusy(false)}
   }
+  async function nextToSummary() {
+    if (!data || saving.current) return;
+    const isOwner = data.owner_user_id === user.id;
+    const own = data.participants.find(p => p.participant_id === data.my_participant_id);
+    if (!isOwner && data.status === 'open' && !own?.selection_confirmed_at) {
+      if (!own?.items_count) {
+        setError('Select at least one item before confirming your choices.');
+        return;
+      }
+      saving.current = true;
+      setBusy(true);
+      setError('');
+      try {
+        setData(await send('/bills/' + encodeURIComponent(token) + '/selection/complete'));
+        setNotice('Your item selection was confirmed to the bill owner. This is not a payment.');
+      } catch (e) {
+        setError(e.message || 'Unable to confirm your selected items.');
+        return;
+      } finally {
+        saving.current = false;
+        setBusy(false);
+      }
+    }
+    chooseSection('summary');
+  }
   async function select(item, quantity) {
     if (saving.current) return;
     const snapshot = data;
@@ -309,7 +334,35 @@ export default function Bill() {
    }}>Undo shared item</button>}
  </div>}</div></ItemSwipeGesture>;
         })}</Panel>
+ <div className="pruvs-next-summary">
+   <div><strong>{mine?.selection_confirmed_at?'Selection confirmed':'Finished selecting items?'}</strong>
+      <small>{owner?'Review the bill and available owner actions.':settled?'Review your share and payment status.':mine?.selection_confirmed_at?'Your owner has your selection. Next, review payment details.':'Select the items you enjoyed, then confirm them to the owner.'}</small></div>
+   <button type="button" className="primary" disabled={busy||(!owner&&!settled&&!mine?.items_count)} onClick={nextToSummary}>
+      {busy?'Saving…':!owner&&!settled&&!mine?.selection_confirmed_at?'Confirm selection & Next':'Next · Summary & payment'} <ArrowRight size={17}/>
+   </button>
+ </div>
  <section id="core-bill-summary" className="bill-workspace-summary" aria-label={t("Summary and payment confirmation" )}><h2 className="bill-inline-summary-heading">{t("Summary & payment")}</h2>
+   {!owner&&<p className="pruvs-selection-summary-note" role="status">
+     {mine?.selection_confirmed_at?'Selection confirmed to the bill owner.':'Your choices are still being selected or reviewed.'} Payment is tracked separately once the owner settles the bill.
+   </p>}
+   {owner&&<div className="pruvs-selection-owner-panel" role="region" aria-label="Participant selection confirmations">
+     <div className="row between wrap"><strong>Selection confirmations</strong><strong>
+        {data.participants.filter(p=>p.role!=='owner'&&p.selection_confirmed_at).length}/
+        {data.participants.filter(p=>p.role!=='owner').length} participants confirmed
+     </strong></div>
+     <p className="muted">Participants confirm their item selection with Next. This does not report or verify payment.</p>
+     <div className="pruvs-selection-owner-people">{data.participants.filter(p=>p.role!=='owner').map(p=>
+       <div key={p.participant_id} className="pruvs-selection-person">
+         <span><strong>{p.display_name}</strong><small>{p.items_count} item line{p.items_count===1?'':'s'} · {money(p.item_total,data.currency)}</small></span>
+         <span className={'pruvs-selection-badge '+(p.selection_confirmed_at?'is-complete':'')}>
+           {p.selection_confirmed_at?'Confirmed':p.items_count?'Selecting':'Not started'}
+         </span>
+       </div>)}</div>
+     <p className="muted">{data.can_close?'All items are assigned. You can review the available settlement and payment options below.':data.close_block_reason}</p>
+     <button type="button" className="secondary" onClick={()=>document.getElementById('core-bill-settle')?.scrollIntoView?.({block:'start',behavior:'smooth'})}>
+       View owner controls <ArrowRight size={16}/>
+     </button>
+   </div>}
    {settled&&<ClosedBillNotice canPay={!owner}/>}
  <div className="bill-summary-details"><Panel title={t("Everyone's share")}><div className="row between wrap"><small>{data.currency_reference?`${data.currency_reference.manual?t('Manual rate'):data.currency_reference.provider.toUpperCase()} · 1 ${data.currency} = ${data.currency_reference.rate} ${data.currency_reference.target}${data.currency_reference.date?' · '+data.currency_reference.date:''}`:t('No currency reference set yet.')}</small></div>{data.currency_reference?.source_url&&<small><a href={data.currency_reference.source_url} target="_blank" rel="noreferrer">{t('Reference source')}</a></small>}{data.participants.map(p => <div className="participant pruvs-color-share" key={p.participant_id} style={participantStyle(colors, p.participant_id)}><div className="row between"><div><strong>{p.display_name}{p.user_id === user.id ? ' · ' + t('You') : ''}</strong><small>{p.role} · {p.payment_status==='received'?t('Owner confirmed'):p.payment_status==='paid'?t('Payment reported'):t('Awaiting payment')} {p.payment_method ? '· ' + p.payment_method.replace('_', ' ') : ''}</small></div><strong>{data.currency_reference && Number.isFinite(Number(p.reference_total)) ? money(p.reference_total,data.currency_reference.target) : money(p.total, data.currency)}</strong></div>{data.currency_reference && <small>{t("Original share (settled in")} {data.currency}): {money(p.total,data.currency)}</small>}<small>{t("Items")} {money(p.item_total, data.currency)} {t("+ tip")} {money(p.tip_share, data.currency)}</small></div>)}{settled && !owner && <details className="pruvs-v7149-inline-pay"><summary>{t("Pay the bill owner")} · {money(mine.total,data.currency)}</summary><div className="pruvs-v7149-pay-body"><p>{t("Your amount:")} <strong>{money(mine.total, data.currency)}</strong></p><p className="muted">{t("Payment happens outside Pruvs. Marking paid is your confirmation, not bank verification.")}</p>{paymentLink && <a className="primary full" href={paymentLink} target="_blank" rel="noreferrer" onClick={() => act('payment', {
             method: linkMethod,

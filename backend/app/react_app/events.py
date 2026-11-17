@@ -32,6 +32,28 @@ def enqueue_participant_joined(db, session, participant):
                     f'{actor} joined {name}. Participants ({count}): {names}.')
         enqueue(db, user.id, 'participant_joined', title, body, f'/bill/{session.token}')
 
+
+def enqueue_selection_confirmed(db, session, participant):
+    """Send one owner-scoped Inbox notification when a participant clicks Next.
+
+    Called only on first confirmation after each selection edit. No payment claim.
+    """
+    if not participant.user_id or participant.user_id == session.owner_user_id:
+        return
+    owner = db.get(User, session.owner_user_id)
+    if not owner or owner.status != 'active':
+        return
+    label = receipt_label(db, session.case_id)
+    actor = (participant.display_name or 'Participant').strip()[:90]
+    ro = owner.preferred_language == 'ro'
+    title = ('Selectie finalizata' if ro else 'Item selection completed') + ' · ' + label
+    body = (
+        f'{actor} a confirmat articolele selectate. Verifica sumarul notei si optiunile disponibile.'
+        if ro else
+        f'{actor} confirmed their selected items. Review the bill summary and owner controls.'
+    )
+    enqueue(db, owner.id, 'selection_confirmed', title, body, f'/bill/{session.token}')
+
 def enqueue_transition(db,session,actor_user_id,kind):
     if kind not in ('split_settled','split_reopened') or session.owner_user_id!=actor_user_id:
         raise ValueError('Invalid split transition.')

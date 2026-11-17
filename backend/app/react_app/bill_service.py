@@ -688,6 +688,12 @@ def get_split_bill_session_summary(db: Session, session: SplitBillSession, *, en
             "role": participant.role,
             "status": participant.status,
             "items_count": len(participant_assignments),
+            "selection_confirmed_at": (participant.selection_confirmed_at.isoformat() + "Z")
+                if participant.selection_confirmed_at and participant_assignments else None,
+            "selection_status": (
+                "confirmed" if participant.selection_confirmed_at and participant_assignments
+                else "selecting" if participant_assignments else "not_started"
+            ),
             "units_count": round(units_count, 3),
             "item_total": item_total,
             "tip_share": tip_share,
@@ -845,6 +851,8 @@ def save_participant_selection(
             )
         )
 
+    # A changed allocation requires the participant to explicitly confirm again.
+    participant.selection_confirmed_at = None
     # Bump the session revision in the SAME transaction as assignment changes;
     # the earlier API implementation committed first, permitting a stale write.
     if state is None:
@@ -854,6 +862,32 @@ def save_participant_selection(
     state.modified_at=datetime.utcnow()
     db.commit()
     return get_split_bill_session_summary(db, session)
+
+def confirm_participant_selection(
+    db: Session, session: SplitBillSession, participant_id: int, actor_user_id: int
+) -> dict:
+    """Confirm selected items, not payment. Caller holds the bill's session lock."""
+    if session.status != "open":
+        raise ValueError("This bill is already settled; selections cannot change.")
+    participant = db.query(SplitBillParticipant).filter_by(
+        id=participant_id, session_id=session.id, user_id=actor_user_id,
+        status="joined"
+    ).with_for_update().first()
+    if not participant:
+        raise PermissionError("Only the signed-in participant can confirm their selection.")
+    selection_count = db.query(SplitBillItemAssignment.id).filter_by(
+        session_id=session.id, participant_id=participant_id
+    ).first()
+    if not selection_count:
+        raise ValueError("Select at least one item before confirming your choice.")
+    if participant.selection_confirmed_at is None:
+        participant.selection_confirmed_at = datetime.utcnow()
+        if participant.role != "owner":
+            from app.react_app.events import enqueue_selection_confirmed
+            enqueue_selection_confirmed(db, session, participant)
+        db.commit()
+    return get_split_bill_session_summary(db, session, ensure_translations=False)
+
 
 def close_split_bill_session(
     db: Session,
@@ -911,6 +945,7 @@ def reopen_split_bill_session(
         participant.paid_at = None
         participant.received_at = None
         participant.confirmed_by_user_id = None
+        participant.selection_confirmed_at = None
 
     from app.react_app.events import enqueue_transition
     enqueue_transition(db, session, owner_user_id, 'split_reopened')

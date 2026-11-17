@@ -87,3 +87,28 @@
 @media (prefers-reduced-motion: reduce) {
   .pruvs-floating-bill-overview *, .core-experience .item {transition:none!important;}
 }
+
+
+/* Participant handoff to payment summary; selection is never payment confirmation. */
+.pruvs-next-summary{display:flex;justify-content:space-between;align-items:center;gap:16px;
+ flex-wrap:wrap;padding:16px;margin:12px 0 22px;border:1px solid #a5c8c0;
+ border-radius:14px;background:#edf8f5}
+.pruvs-next-summary>div{display:grid;gap:5px;flex:1;min-width:190px}
+.pruvs-next-summary strong{color:#124e42}
+.pruvs-next-summary small{color:#53746d;line-height:1.4}
+.pruvs-next-summary button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px}
+.pruvs-selection-summary-note{padding:12px 14px;background:#e8f5f2;color:#144f42;border:1px solid #b0dbd2;border-radius:11px}
+.pruvs-selection-owner-panel{border-radius:14px;border:1px solid #b4d4ca;background:#f6fdfb;
+ padding:15px;margin-bottom:17px;display:grid;gap:10px}
+.pruvs-selection-owner-panel .row{gap:9px}
+.pruvs-selection-owner-panel .muted{margin:2px 0}
+.pruvs-selection-owner-people{display:grid;gap:7px}
+.pruvs-selection-person{display:flex;align-items:center;justify-content:space-between;gap:12px;
+ background:#fff;border:1px solid #e3eae8;border-radius:10px;padding:10px 12px}
+.pruvs-selection-person>span:first-child{display:grid;gap:2px;min-width:0}
+.pruvs-selection-person small{color:#57716b}
+.pruvs-selection-badge{display:inline-flex;align-items:center;border-radius:99px;
+ padding:5px 10px;background:#e7ebef;color:#556978;font-size:12px;font-weight:700;white-space:nowrap}
+.pruvs-selection-badge.is-complete{background:#d3f3e2;color:#096743}
+@media(max-width:600px){.pruvs-next-summary button{width:100%}
+ .pruvs-selection-person{align-items:flex-start;flex-direction:column;gap:6px}}
