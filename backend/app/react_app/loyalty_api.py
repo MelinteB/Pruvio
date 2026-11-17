@@ -75,6 +75,7 @@ def receipt_candidates(identity=Depends(current),db=Depends(get_db)):
                        'merchant_name':str(data.get('merchant_name') or 'Unknown merchant')[:160],
                        'receipt_total':data.get('receipt_total'),
                        'currency':data.get('currency'),
+                       'storage_mode': data.get('storage_mode'),
                        'matched_to_store':False,
                        'receipt_ref':pseudonym(bridge_secret,'receipt-v1',f'{uid}:{case.id}')})
     return {'receipts':result,'claiming_available':False,
