@@ -19,6 +19,8 @@ class SplitBillParticipant(Base):
 
     reminder_message = Column(String(500), nullable=True)
     reminder_at = Column(DateTime, nullable=True)
+    # Explicit choice confirmation, never a statement that payment was sent.
+    selection_confirmed_at = Column(DateTime, nullable=True)
 
     payment_status = Column(String(30), nullable=False, default="unpaid")
     payment_method = Column(String(40), nullable=True)
