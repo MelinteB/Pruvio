@@ -162,6 +162,14 @@ def test_diagnostics_reports_host_mismatch_without_leaking_urls(monkeypatch):
 
 
 def test_diagnostics_accept_valid_hostname(monkeypatch):
-    monkeypatch.setenv('PRUVS_CAMPAIGN_MEDIA_HOSTS', 'pub-example.r2.dev')
+    for key, value in {
+        'PRUVS_CAMPAIGN_R2_ENDPOINT_URL': 'https://sample.r2.cloudflarestorage.com',
+        'PRUVS_CAMPAIGN_R2_ACCESS_KEY_ID': 'dummy-id',
+        'PRUVS_CAMPAIGN_R2_SECRET_ACCESS_KEY': 'dummy-secret',
+        'PRUVS_CAMPAIGN_R2_BUCKET': 'public-demo',
+        'PRUVS_CAMPAIGN_MEDIA_PUBLIC_BASE_URL': 'https://pub-example.r2.dev',
+        'PRUVS_CAMPAIGN_MEDIA_HOSTS': 'pub-example.r2.dev',
+    }.items():
+        monkeypatch.setenv(key, value)
     report = media_v067.media_configuration_diagnostics()
     assert report == {'ready': True, 'issue': None, 'missing_settings': []}
