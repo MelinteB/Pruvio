@@ -1,0 +1,99 @@
+name: Verify combined Core 7.1.58 and Business 0.6.14 STAGING
+
+on:
+  push:
+    branches:
+      - release/pruvs-core-v7158-business-v0614-dynamic-customer-pilot-20261117
+  pull_request:
+    branches:
+      - release/pruvs-core-v7158-business-v0614-dynamic-customer-pilot-20261117
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            backend/frontend/package-lock.json
+            backend/business_frontend/package-lock.json
+      - name: Isolated Core, Business and AI campaign validation
+        working-directory: backend
+        run: |
+          python -m pip install -r business-requirements.txt 'Pillow>=10,<13' 'python-multipart>=0.0.9'
+          python -m compileall -q app/platform_combined.py app/react_app/loyalty_gateway.py app/react_main.py app/services/receipt_currency_service.py app/react_app/loyalty_v06.py app/react_app/loyalty_api.py business scripts/check_stage_schema_v066.py business_migrations
+          python -m pytest -q tests/test_combined_platform_routes.py tests/test_stage_schema_v066.py tests/test_combined_database_url_v066.py tests/test_stage_v067.py tests/test_wallet_legacy_v068.py tests/test_receipt_currency_v7153.py tests/test_pilot_readiness_v069.py tests/test_receipt_code_access_v0610.py tests/test_campaign_journey_v0611.py tests/test_pilot_enrollment_v0612.py tests/test_dynamic_customer_pilot_v7158.py
+      - name: Core React tests + production bundle
+        working-directory: backend/frontend
+        env:
+          VITE_PRUVS_CORE_V7140_ENABLED: 'true'
+          VITE_PRUVS_CORE_V7141_PROJECTS_ENABLED: 'true'
+          VITE_PRUVS_LOYALTY_UI_ENABLED: 'true'
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+          npm run build
+      - name: Verify Core build signature
+        working-directory: backend
+        run: |
+          python scripts/check_react_build.py
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          x=json.loads(Path('frontend/dist/build-manifest.json').read_text())
+          assert x['version']=='7.1.58',x
+          import re
+          from app.reliability import RELEASE
+          client=(Path('frontend/src/professional/ReleaseUpdateBanner.jsx').read_text())
+          stamp=(Path('frontend/scripts/stamp-build.mjs').read_text())
+          entry=(Path('frontend/src/main.jsx').read_text())
+          worker=(Path('app/static/react-service-worker.js').read_text())
+          assert x['version']==RELEASE
+          assert re.search(r"CLIENT_RELEASE\s*=\s*['\"]"+re.escape(RELEASE)+r"['\"]",client), 'Browser release mismatch'
+          assert "version:'"+RELEASE+"'" in stamp, 'Build stamp version mismatch'
+          assert "serviceWorker.register('/service-worker.js?v='+CLIENT_RELEASE" in entry, 'Worker registration must follow browser release'
+          assert "pruvs-shell-v"+RELEASE in worker, 'Service worker cache release mismatch'
+          print('PASS: Server, client, build and service-worker versions match')
+          assert '0.6.14' in Path('business/main.py').read_text()
+          assert Path('business_migrations/versions/b11a0612_pilot_enrollment.py').is_file()
+          assert Path('business/customer_pilot_eligibility_v0614.py').is_file()
+          PY
+      - name: Build Business merchant React under /business
+        working-directory: backend/business_frontend
+        env:
+          VITE_API_BASE: /business
+          VITE_PRUVS_CUSTOMER_URL: ''
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build -- --base=/business/
+      - name: Validate Business public assets and production isolation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          dist=Path('backend/business_frontend/dist')
+          assert (dist/'index.html').is_file()
+          assert (dist/'business-favicon.svg').is_file()
+          assert (dist/'merchant-enroll.html').is_file()
+          assert (dist/'merchant-login-entry.js').is_file()
+          assert '/business/assets/' in (dist/'index.html').read_text()
+          for js in (dist/'assets').glob('*.js'):
+              t=js.read_text()
+              assert 'http://127.0.0.1:8001' not in t
+              assert 'pruvs-business-api-staging.onrender.com/v1' not in t
+          journey=Path('backend/business_frontend/src')
+          entry=(journey/'main.jsx').read_text()
+          assert 'AdminWorkspace' in entry and 'onOpenLoyalty' in entry
+          assert (journey/'ActivationPanel.jsx').is_file()
+          assert (journey/'AdminWorkspace.jsx').is_file()
+          assert 'activation-journey.css' in (journey/'ActivationPanel.jsx').read_text()
+          print('PASS: Business 0.6.14 role-aware merchant journey')
+          print('PASS: Business v0.6.14 isolated staging UI')
+          PY
