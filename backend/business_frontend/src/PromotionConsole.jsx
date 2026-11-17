@@ -26,6 +26,8 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
     [watermark,setWatermark]=useState('Pruvs Business'),[artworkKey,setArtworkKey]=useState(''),
     [draftPreview,setDraftPreview]=useState(null),[aiBusy,setAiBusy]=useState(false),[assetBusy,setAssetBusy]=useState(false),[aiReadiness,setAiReadiness]=useState(null);
   const [creativeInstructions,setCreativeInstructions]=useState('');
+  const [imageOrigin,setImageOrigin]=useState(''); // upload | ai | empty
+  const [renderedSignature,setRenderedSignature]=useState('');
   const [editingPromotionId,setEditingPromotionId]=useState('');
   const [localMediaPreview,setLocalMediaPreview]=useState('');
   const [uploadPending,setUploadPending]=useState(false);
@@ -36,10 +38,13 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
   const displayedMediaUrl=mediaUrl&&!mediaPreviewError?mediaUrl:localMediaPreview;
   const mediaCannotSave=uploadPending||mediaPreviewError;
   const targetMediaType={png:'image/png',gif:'image/gif',mp4:'video/mp4'}[creativeFormat];
-  const mediaNeedsRendering=Boolean(artworkKey&&mediaUrl&&mediaType!==targetMediaType);
+  const renderSignature=[creativeFormat,headline.trim(),watermark.trim()].join('|');
+  const mediaNeedsRendering=Boolean(artworkKey&&mediaUrl&&(
+    mediaType!==targetMediaType||renderedSignature!==renderSignature));
   function resetMedia(){
     setArtworkKey('');setMediaUrl('');setMediaType('image/jpeg');
     setLocalMediaPreview('');setUploadPending(false);setMediaPreviewError(false);
+    setImageOrigin('');setRenderedSignature('');
   }
   function removeMedia(){resetMedia();setError('');setNotice('Picture removed. You may save a text-only promotion.')}
   function editPromotion(p,copy=false){
@@ -53,20 +58,29 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
     setNotice(copy?'Copied into a new draft. Add or replace artwork before saving.':'Editing existing draft. Save changes before publishing.');
   }
   async function generateDraft(){
+    if(uploadPending||mediaPreviewError){
+      setError('Finish uploading the campaign picture successfully before generating AI copy from it.');return;
+    }
     setAiBusy(true);setError('');setNotice('');
     try{
       const result=await call('/v1/merchant/promotions/ai-draft',token,{
         program_id:programId,goal:goal.trim(),audience:audience.trim(),tone,
         format:creativeFormat==='mp4'?'video':creativeFormat==='gif'?'gif':'image',
         duration_days:Number(days),watermark_text:watermark,
-        creative_instructions:creativeInstructions.trim()
+        creative_instructions:creativeInstructions.trim(),
+        media_key:imageOrigin==='upload'?artworkKey:null
       });
+      if(imageOrigin==='upload'&&!result.source_image_used)
+        throw new Error('AI copy did not use the uploaded picture. Retry after checking the image upload.');
       setHeadline(result.draft.headline);setMessage(result.draft.message);
       setDraftPreview(result.draft);
-      setNotice('AI draft generated. Review and edit it before saving; publishing remains manual.');
+      setNotice(result.source_image_used?'AI copy uses your uploaded picture as its subject. Review and edit before generating artwork.':'AI copy generated. Review and edit before saving; publishing remains manual.');
     }catch(e){setError(e.message)}finally{setAiBusy(false)}
   }
   async function generateAIArtwork(){
+    if(imageOrigin==='upload'){
+      setError('Your uploaded picture is the campaign foundation. Use Generate branded artwork to keep that picture.');return;
+    }
     if(!draftPreview || !programId || !headline.trim()){
       setError('Generate and review AI campaign copy first, then create artwork.');
       return;
@@ -79,6 +93,7 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
       });
       // Keep the original so rendering failures do not discard paid AI output.
       setArtworkKey(generated.media_key);setMediaUrl(generated.media_url);setMediaType(generated.media_type);
+      setImageOrigin('ai');setRenderedSignature('');
       setLocalMediaPreview('');setUploadPending(false);setMediaPreviewError(false);
       try{
         const branded=await call('/v1/merchant/promotions/media/render',token,{
@@ -86,6 +101,7 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
           headline:headline.trim(),watermark_text:watermark.trim()||'Pruvs Business'
         });
         setMediaUrl(branded.media_url);setMediaType(branded.media_type);
+        setRenderedSignature(renderSignature);
         setNotice('AI artwork generated and branded. Review the preview, save as draft and publish when approved.');
       }catch(renderError){
         setError('AI image was saved, but branding failed: '+renderError.message+'. Use Generate branded artwork to retry.');
@@ -104,6 +120,7 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
     const localUrl=URL.createObjectURL(file);
     setLocalMediaPreview(localUrl);setUploadPending(true);setMediaPreviewError(false);
     setArtworkKey('');setMediaUrl('');setMediaType('image/jpeg');
+    setImageOrigin('');setRenderedSignature('');setDraftPreview(null);
     setAssetBusy(true);setError('');setNotice('Uploading picture to campaign storage…');
     try{
       const form=new FormData();form.append('file',file);
@@ -117,8 +134,9 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
       }
       if(!data.media_key||!data.media_url||!data.media_type)throw Error('Upload did not return a saved campaign picture.');
       setArtworkKey(data.media_key);setMediaUrl(data.media_url);setMediaType(data.media_type);
+      setImageOrigin('upload');setRenderedSignature('');
       setUploadPending(false);setMediaPreviewError(false);
-      setNotice('Picture securely uploaded. Check the preview; add a headline to enable branded artwork.');
+      setNotice('Picture uploaded. AI will use the visible product or scene as the campaign subject; GIF/MP4 will animate this same image.');
     }catch(e){
       setUploadPending(true);
       setError((e.message||'Picture upload failed')+' Local preview only: this picture is NOT saved and cannot be published.');
@@ -137,6 +155,7 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
     try{
       const result=await renderSelectedArtwork(artworkKey);
       setMediaUrl(result.media_url);setMediaType(result.media_type);
+      setRenderedSignature(renderSignature);
       setUploadPending(false);setMediaPreviewError(false);
       setNotice('Branded '+creativeFormat.toUpperCase()+' ready. Review the preview and save your promotion draft.');
     }catch(e){setError(e.message)}finally{setAssetBusy(false)}
@@ -246,6 +265,7 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
             savedMediaUrl=rendered.media_url;
             savedMediaType=rendered.media_type;
             setMediaUrl(savedMediaUrl);setMediaType(savedMediaType);
+            setRenderedSignature(renderSignature);
           }
           const payload={program_id:programId,headline:headline.trim(),message:message.trim(),duration_days:Number(days),
             media_url:savedMediaUrl||null,media_type:savedMediaUrl?savedMediaType:null,media_alt:headline.trim()};
