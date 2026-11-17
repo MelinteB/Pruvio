@@ -13,25 +13,9 @@ router = APIRouter(prefix='/api/v1/loyalty', tags=['Rewards'])
 
 @router.get('/status')
 def status(identity=Depends(current)):
-    # Eligibility follows the server-authenticated account and Business-owned
-    # merchant approval. Never trust a client-supplied customer ID.
-    from app.react_app.loyalty_v06 import pilot_access
-    feature_enabled=enabled()
-    receipts_on=(feature_enabled and
-                 os.getenv('PRUVS_LOYALTY_RECEIPT_CLAIMS_ENABLED','false').lower()=='true')
-    v06_on=receipts_on and os.getenv('PRUVS_LOYALTY_RECEIPT_V06_ENABLED','false').lower()=='true'
-    codes_on=v06_on and os.getenv('PRUVS_LOYALTY_CUSTOMER_CODES_V12_ENABLED','false').lower()=='true'
-    access=pilot_access(identity[0].id) if v06_on else {
-        'eligible': False, 'reason': 'receipt_pilot_disabled'}
-    return {
-        'enabled': feature_enabled,
-        'receipt_claims_enabled': receipts_on,
-        'claims_read_enabled': v06_on,
-        'receipt_v06_enabled': bool(v06_on and access['eligible']),
-        'customer_codes_v12_enabled': bool(codes_on and access['eligible']),
-        'receipt_access_reason': access['reason'],
-        'message': 'Receipt earning requires an approved merchant program and verified purchase.'
-    }
+    # Policy lives outside the OCR/import path and always uses authenticated Core identity.
+    from app.react_app.loyalty_pilot_access_v7158 import receipt_status
+    return receipt_status(identity[0].id)
 
 @router.get('/offers')
 def offers(latitude:float|None=Query(None,ge=-90,le=90),
