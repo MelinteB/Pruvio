@@ -28,6 +28,7 @@ from app.services import standalone_app_service as receipts
 from app.services.document_service import resolve_document_path
 from app.services.receipt_storage import is_cloud, read_paid
 from app.react_app.loyalty_gateway import config,enabled,pseudonym,call_business,_base64url
+from app.react_app.loyalty_pilot_access_v7158 import pilot_access, pilot_allowed, pilot_ready
 
 router=APIRouter()
 MAX_UPLOAD_B64=8_000_000
@@ -38,54 +39,6 @@ class ClaimRequest(BaseModel):
     code:str=Field(min_length=24,max_length=24,pattern=r'^[A-Fa-f0-9]{24}$')
     share_consent:bool
     photo_base64:str|None=Field(default=None,max_length=MAX_UPLOAD_B64)
-
-
-def pilot_access(user_id):
-    """Determine eligibility for the *current signed-in account*.
-
-    Dynamic mode derives permission from a signed Business customer identity,
-    an existing membership, a published program, an active location and an
-    explicitly approved merchant. Never grant permission from browser user IDs.
-    Legacy ID-list mode remains available only for rollback; unknown modes
-    fail closed rather than broadening pilot access.
-    """
-    if user_id is None or not str(user_id).strip():
-        return {'eligible': False, 'reason': 'unauthenticated'}
-    mode=os.getenv('PRUVS_LOYALTY_CUSTOMER_ELIGIBILITY_MODE','legacy_ids').strip().lower()
-    if mode=='merchant_membership':
-        try:
-            result=call_business('/v1/customer/pilot/receipt-eligibility-v0614',user_id=user_id)
-        except HTTPException:
-            return {'eligible': False, 'reason': 'eligibility_unavailable'}
-        if not isinstance(result,dict) or type(result.get('eligible')) is not bool:
-            return {'eligible': False, 'reason': 'eligibility_unavailable'}
-        return {
-            'eligible': result['eligible'] is True,
-            'reason': result.get('reason','eligibility_unavailable'),
-        }
-    if mode=='legacy_ids':
-        allowed={part.strip() for part in os.getenv(
-            'PRUVS_LOYALTY_RECEIPT_V06_PILOT_USER_IDS',''
-        ).split(',') if part.strip()}
-        granted=str(user_id) in allowed
-        return {'eligible': granted, 'reason': 'legacy_invited' if granted else 'legacy_not_invited'}
-    return {'eligible': False, 'reason': 'eligibility_mode_unavailable'}
-
-
-def pilot_allowed(user_id):
-    return pilot_access(user_id)['eligible']
-
-
-def pilot_ready(user_id, *, require_eligibility=True):
-    if (not enabled() or os.getenv('PRUVS_LOYALTY_RECEIPT_CLAIMS_ENABLED','false').lower()!='true'
-            or os.getenv('PRUVS_LOYALTY_RECEIPT_V06_ENABLED','false').lower()!='true'):
-        raise HTTPException(503,'Verified receipt submissions are not enabled in this environment')
-    if require_eligibility:
-        access=pilot_access(user_id)
-        if not access['eligible']:
-            if access['reason']=='eligibility_unavailable':
-                raise HTTPException(503,'Customer receipt eligibility is temporarily unavailable')
-            raise HTTPException(403,'Join an approved merchant loyalty program to verify receipts')
 
 
 def image_to_jpeg(raw):
