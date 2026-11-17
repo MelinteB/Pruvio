@@ -144,17 +144,17 @@ def ai_readiness(staff: Staff = Depends(merchant_actor),
         schema_ready = bool(check_schema(db.get_bind()).get('campaign_media'))
     except Exception:
         schema_ready = False
-    # Validate HTTPS public host and R2 configuration without exposing credentials.
-    from .media_v067 import bucket_config
-    try:
-        bucket_config()
-        media_configured = True
-    except HTTPException:
-        media_configured = False
+    # Authenticated diagnostics expose reason codes only, never secret values.
+    from .media_v067 import media_configuration_diagnostics
+    media_diagnostic = media_configuration_diagnostics()
+    media_configured = media_diagnostic['ready']
     return {
         'copy_ready': bool(ai and has_key and schema_ready),
         'artwork_ready': bool(image and has_key and schema_ready and media_configured),
         'campaign_schema_ready': schema_ready,
         'media_ready': media_configured,
+        'media_issue': media_diagnostic['issue'],
+        'media_missing_settings': media_diagnostic['missing_settings'],
+        'ai_images_enabled': image,
         'message': 'AI generation is billed by the configured provider; publishing always requires merchant review.',
     }
