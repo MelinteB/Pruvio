@@ -109,7 +109,7 @@ def read_merchant_campaign_source(staff, media_key):
     No arbitrary public URL, bucket key, other merchant asset or receipt is accepted.
     """
     if not isinstance(media_key, str) or not re.fullmatch(
-        r'campaigns/' + re.escape(staff.merchant_id) + r'/[a-f0-9]{32}\\.jpg',
+        r'campaigns/' + re.escape(staff.merchant_id) + r'/[a-f0-9]{32}\.jpg',
         media_key,
     ):
         raise HTTPException(403, 'Campaign picture must belong to the signed-in merchant')
