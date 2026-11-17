@@ -20,7 +20,6 @@ FLAGS = (
 def enabled(monkeypatch):
     for name in FLAGS:
         monkeypatch.setenv(name, 'true')
-    monkeypatch.setenv('PRUVS_LOYALTY_CUSTOMER_ELIGIBILITY_MODE', 'merchant_membership')
     monkeypatch.setenv('PRUVS_LOYALTY_RECEIPT_V06_PILOT_USER_IDS', '2')
 
 
@@ -78,13 +77,15 @@ def test_unjoined_customer_denied_new_claim_but_can_read_history(enabled,monkeyp
     assert access.pilot_ready(6, require_eligibility=False) is None
 
 
-def test_unknown_mode_fails_closed_and_legacy_rollback_is_explicit(enabled,monkeypatch):
-    monkeypatch.setenv('PRUVS_LOYALTY_CUSTOMER_ELIGIBILITY_MODE', 'typo')
+def test_legacy_id_list_cannot_grant_receipt_access(enabled, monkeypatch):
+    monkeypatch.setenv('PRUVS_LOYALTY_RECEIPT_V06_PILOT_USER_IDS', '2,6,1000')
+    monkeypatch.setattr(access, 'call_business',lambda *args, **kwargs: {
+        'eligible': False, 'reason': 'no_joined_approved_merchant'
+    })
     assert access.pilot_allowed(2) is False
     assert access.pilot_allowed(6) is False
-    monkeypatch.setenv('PRUVS_LOYALTY_CUSTOMER_ELIGIBILITY_MODE', 'legacy_ids')
-    assert access.pilot_allowed(2) is True
-    assert access.pilot_allowed(6) is False
+    assert access.pilot_allowed(1000) is False
+    assert access.pilot_allowed(None) is False
 
 
 def test_flags_remain_enforced_even_with_approved_membership(enabled,monkeypatch):
