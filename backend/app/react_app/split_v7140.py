@@ -48,9 +48,16 @@ def check_revision(state,expected_revision):
         raise HTTPException(409,'The bill changed. Refresh before applying your selection.')
 
 
-def bump(state):
+def bump(state, db):
     state.revision += 1
     state.modified_at = datetime.utcnow()
+    # Owner-driven allocation changes can affect multiple members' shares.
+    # Require each participant to reconfirm after a new allocation revision.
+    from app.models.split_bill_participant import SplitBillParticipant
+    db.query(SplitBillParticipant).filter_by(session_id=state.session_id).update(
+        {SplitBillParticipant.selection_confirmed_at: None},
+        synchronize_session='fetch'
+    )
 
 
 def validate_open_owner(session,owner_id):
@@ -91,7 +98,7 @@ def set_equal_mode(db,session:SplitBillSession,owner_id:int,expected_revision:in
     db.add_all(pending)
     state.mode='equal'
     state.snapshot_json=json.dumps(snapshot,separators=(',',':'))
-    bump(state)
+    bump(state,db)
     db.commit()
 
 
@@ -111,7 +118,7 @@ def restore_item_mode(db,session:SplitBillSession,owner_id:int,expected_revision
     db.add_all(rows)
     state.mode='items'
     state.snapshot_json=None
-    bump(state)
+    bump(state,db)
     db.commit()
 
 
@@ -136,7 +143,7 @@ def share_item(db,session:SplitBillSession,owner_id:int,item_id:int,
       receipt_item_id=item.id,quantity=_item_quantity(item)/len(participant_ids),amount=cents/100)
       for pid,cents in shares.items()])
     db.add(SplitSharedItem(session_id=session.id,receipt_item_id=item.id))
-    bump(state)
+    bump(state,db)
     db.commit()
 
 
@@ -149,7 +156,7 @@ def unshare_item(db,session:SplitBillSession,owner_id:int,item_id:int,expected_r
     if not marker:raise HTTPException(404,'Shared item not found.')
     db.query(SplitBillItemAssignment).filter_by(session_id=session.id,receipt_item_id=item_id).delete(synchronize_session='fetch')
     db.delete(marker)
-    bump(state)
+    bump(state,db)
     db.commit()
 
 
@@ -183,7 +190,7 @@ def assign_all_to_participant(db,session:SplitBillSession,owner_id:int,
             quantity=round(_item_quantity(item),3),amount=_minor(item.total_price)/100))
     db.query(SplitBillItemAssignment).filter_by(session_id=session.id).delete(synchronize_session='fetch')
     db.add_all(rows)
-    bump(state)
+    bump(state,db)
     db.commit()
 
 def annotate_summary(db,session,summary):
