@@ -1,7 +1,7 @@
 """Live customer eligibility for Pruvs receipt rewards (Core v7.1.58).
 
 Only a signed-in Core account's server-derived identity is passed to Business.
-In dynamic mode, Business checks that it has a membership at a published,
+Business checks that it has a membership at a published,
 active and platform-approved merchant. Numeric user IDs never grant permission.
 """
 import os
@@ -10,32 +10,21 @@ from app.react_app.loyalty_gateway import call_business, enabled
 
 
 def pilot_access(user_id):
+    # The user identity is derived from the authenticated Core session.
+    # Business independently checks a joined, published program, active store
+    # and audited merchant approval. There is no customer-ID allowlist.
     if user_id is None or not str(user_id).strip():
         return {'eligible': False, 'reason': 'unauthenticated'}
-
-    mode=os.getenv('PRUVS_LOYALTY_CUSTOMER_ELIGIBILITY_MODE','legacy_ids').strip().lower()
-    if mode=='merchant_membership':
-        try:
-            result=call_business('/v1/customer/pilot/receipt-eligibility-v0614',user_id=user_id)
-        except HTTPException:
-            return {'eligible': False, 'reason': 'eligibility_unavailable'}
-        if not isinstance(result,dict) or type(result.get('eligible')) is not bool:
-            return {'eligible': False, 'reason': 'eligibility_unavailable'}
-        return {
-            'eligible': result['eligible'] is True,
-            'reason': result.get('reason','eligibility_unavailable'),
-        }
-
-    if mode=='legacy_ids':
-        # Backwards-compatible rollback only. Dynamic mode ignores this list.
-        allowed={part.strip() for part in os.getenv(
-            'PRUVS_LOYALTY_RECEIPT_V06_PILOT_USER_IDS',''
-        ).split(',') if part.strip()}
-        granted=str(user_id) in allowed
-        return {'eligible': granted, 'reason': 'legacy_invited' if granted else 'legacy_not_invited'}
-
-    # An unexpected configuration must not grant access.
-    return {'eligible': False, 'reason': 'eligibility_mode_unavailable'}
+    try:
+        result=call_business('/v1/customer/pilot/receipt-eligibility-v0614',user_id=user_id)
+    except HTTPException:
+        return {'eligible': False, 'reason': 'eligibility_unavailable'}
+    if not isinstance(result,dict) or type(result.get('eligible')) is not bool:
+        return {'eligible': False, 'reason': 'eligibility_unavailable'}
+    return {
+        'eligible': result['eligible'] is True,
+        'reason': result.get('reason','eligibility_unavailable'),
+    }
 
 
 def pilot_allowed(user_id):
