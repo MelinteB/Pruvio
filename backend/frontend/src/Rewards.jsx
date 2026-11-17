@@ -12,6 +12,12 @@ import CustomerReceiptCode from './CustomerReceiptCode';
 
 export default function Rewards(){
   const {user}=useApp();
+  // Unmount all account-owned in-memory state when a customer switches accounts.
+  // API access remains session-authenticated and scoped server-side.
+  return <AccountRewards key={String(user?.id??'anonymous')}/>;
+}
+function AccountRewards(){
+  const {user}=useApp();
   const location=useLocation();
   const promotedProgram=new URLSearchParams(location.search).get('program');
   // Receipt detail links carry this case ID; keep that selection when arriving
