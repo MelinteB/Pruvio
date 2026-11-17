@@ -87,16 +87,14 @@ export default function Bill() {
   const colors = participantColors(data?.participants || []);
   const [searchParams, setSearchParams] = useSearchParams();
   const requested = searchParams.get('view');
-  const section = requested === 'people' ? 'people' : 'items';
+  // The summary is a route-driven step, not content below item selection.
+  const section = requested === 'summary' ? 'summary' : requested === 'people' ? 'people' : 'items';
   const chooseSection = next => setSearchParams(current => {const params=new URLSearchParams(current);params.set('view',next);return params;});
-  // Support legacy ?view=summary links without rendering a third separate view.
+  // Each step replaces the preceding view and starts at the top of the screen.
   useEffect(() => {
-    if (requested !== 'summary' || !data) return;
-    const target = document.getElementById('core-bill-summary');
-    if (target && typeof target.scrollIntoView === 'function') {
-      target.scrollIntoView({ block: 'start' });
-    }
-  }, [requested, Boolean(data)]);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [section]);
   const saving = useRef(false);
   function openCurrency(){const current=data.currency_reference;setFxProvider(current?.provider||'bnr');setTargetCurrency(current?.target||'RON');setUseManualRate(!!current?.manual);setManualRate(current?.manual?current.rate:'');setFxPreview(null);setFxError('');setFxOpen(true)}
   async function previewCurrency(){setFxError('');try{const query=new URLSearchParams({base:data.currency,target:targetCurrency,amount:'1',provider:fxProvider,...(useManualRate?{manual_rate:manualRate}:{})});setFxPreview(await request('/fx/quote?'+query))}catch(e){setFxError(e.message)}}
@@ -284,7 +282,10 @@ export default function Bill() {
     payment = data.owner_payment_details, paymentLink = payment?.payment_link || payment?.revolut_payment_link, linkMethod = payment?.payment_link ? 'payment_link' : 'revolut';
   return <><Title eyebrow={t("A LITTLE LESS MATH" )} title={t('Split')+' · '+(data.source_name||t('Receipt'))} action={<button className="secondary" onClick={() => setShare(true)}><Share2 size={17} /> {t("Share bill")}</button>}><span className={'live-dot ' + (live === t("Live") ? 'connected' : '')} />{live} · {data.joined_participants_count}/{data.expected_participants_count} {t("people ·")} <Badge>{data.status}</Badge></Title>{error && <Message error={error} />} {notice && <Message>{notice}</Message>}
  <div className="pruvs-floating-bill-overview" role="region" aria-label={t("Always-visible shared bill overview" )}><BillSummaryStrip data={data} mine={mine} currency={data.currency} /></div>
- <BillFlowNav active={section} onChange={chooseSection} />
+ {section==='summary'?<nav className="pruvs-bill-summary-nav" aria-label="Bill step navigation">
+    <button type="button" className="secondary" onClick={()=>chooseSection('items')}>← Back to item selection</button>
+    <span>Step 2 of 2 · Summary & payment</span>
+  </nav>:<BillFlowNav active={section} onChange={chooseSection} />}
  {CORE_V7140&&owner&&section==='items'&&<Panel className="pruvs-v7150-allocation-panel" title="How to divide this bill">
    <p className="muted">Choose individual items, or split the entire receipt equally after everyone has joined. Switching back restores the earlier item selections.</p>
    <div className="row wrap">
@@ -340,7 +341,8 @@ export default function Bill() {
    <button type="button" className="primary" disabled={busy||(!owner&&!settled&&!mine?.items_count)} onClick={nextToSummary}>
       {busy?'Saving…':!owner&&!settled&&!mine?.selection_confirmed_at?'Confirm selection & Next':'Next · Summary & payment'} <ArrowRight size={17}/>
    </button>
- </div>
+ </div></div>}
+ {section==='summary'&&<div className="pruvs-bill-summary-screen">
  <section id="core-bill-summary" className="bill-workspace-summary" aria-label={t("Summary and payment confirmation" )}><h2 className="bill-inline-summary-heading">{t("Summary & payment")}</h2>
    {!owner&&<p className="pruvs-selection-summary-note" role="status">
      {mine?.selection_confirmed_at?'Selection confirmed to the bill owner.':'Your choices are still being selected or reviewed.'} Payment is tracked separately once the owner settles the bill.
