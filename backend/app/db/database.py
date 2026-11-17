@@ -99,6 +99,7 @@ def ensure_compatibility_schema() -> None:
         wanted = {
             "reminder_message": "VARCHAR(500)",
             "reminder_at": "TIMESTAMP NULL",
+            "selection_confirmed_at": "TIMESTAMP NULL",
             "payment_status": "VARCHAR(30) DEFAULT 'unpaid'",
             "payment_method": "VARCHAR(40)",
             "paid_at": "TIMESTAMP NULL",
