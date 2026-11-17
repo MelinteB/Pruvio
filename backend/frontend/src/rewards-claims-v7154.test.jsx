@@ -33,7 +33,7 @@ const unavailable=()=>Object.assign(new Error('Pilot status unavailable'),{statu
 function configure(claimResponse){
   request.mockImplementation(async path=>{
     if(path==='/loyalty/status')return {
-      enabled:true,receipt_v06_enabled:true,customer_codes_v12_enabled:true,
+      enabled:true,receipt_claims_enabled:true,receipt_v06_enabled:true,customer_codes_v12_enabled:true,
     };
     if(path==='/loyalty/receipts')return {receipts:[{
       case_id:9,merchant_name:'Bistro Central',receipt_total:39.50,currency:'RON',
