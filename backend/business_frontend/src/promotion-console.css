@@ -23,3 +23,15 @@
 .pruvs-ai-preview .btn{justify-self:start}
 .promo-entry .btn{flex-shrink:0}
 @media(max-width:880px){.promo-entry{flex-wrap:wrap}.promo-entry .btn{max-width:100%}}
+
+/* Merchant approval preview uses the same legible watermark treatment. */
+.pruvs-ai-preview .pruvs-business-creative{position:relative;width:min(360px,100%);
+ aspect-ratio:4 / 5;overflow:hidden;border-radius:12px;background:#12382e}
+.pruvs-ai-preview .pruvs-business-creative img,
+.pruvs-ai-preview .pruvs-business-creative video{position:absolute;inset:0;width:100%;
+ height:100%;max-width:none;object-fit:cover;border-radius:0}
+.pruvs-business-creative-text{position:absolute;inset:auto 0 0;padding:14px;color:#fff;
+ background:linear-gradient(0deg,rgba(3,26,22,.96),rgba(3,26,22,.75) 60%,transparent)}
+.pruvs-business-creative-text strong{color:#fff;font-size:16px;display:block}
+.pruvs-business-creative-text p{color:#fff;font-size:12px;margin:6px 0 0;
+ display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;overflow:hidden}

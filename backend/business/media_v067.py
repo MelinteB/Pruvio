@@ -132,9 +132,16 @@ class RenderArtworkIn(BaseModel):
 
 def frame(photo,idx,frames,text,headline):
     w,h=720,900
-    photo=ImageOps.fit(photo,(w,h),method=Image.Resampling.LANCZOS,
-         centering=(.5+.015*(idx/max(1,frames-1)-.5),.5))
-    canvas=photo.copy().convert('RGB');draw=ImageDraw.Draw(canvas)
+    # Deterministic Ken Burns move, even when source and target are both 4:5.
+    progress=idx/max(1,frames-1)
+    zoom=1.07+0.07*progress if frames>1 else 1.0
+    scaled=ImageOps.fit(photo,(round(w*zoom),round(h*zoom)),
+                        method=Image.Resampling.LANCZOS,centering=(.5,.5))
+    dx=scaled.width-w;dy=scaled.height-h
+    left=round(dx*(.15+.70*progress))
+    top=round(dy*(.20+.60*progress))
+    canvas=scaled.crop((left,top,left+w,top+h)).convert('RGB')
+    draw=ImageDraw.Draw(canvas)
     draw.rectangle((0,755,720,900),fill='#092a24')
     draw.rectangle((24,36,205,80),fill='#e5fff2')
     try:font=ImageFont.truetype('DejaVuSans-Bold.ttf',22)

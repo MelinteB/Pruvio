@@ -30,7 +30,7 @@ jobs:
         run: |
           python -m pip install -r business-requirements.txt 'Pillow>=10,<13' 'python-multipart>=0.0.9'
           python -m compileall -q app/platform_combined.py app/react_app/loyalty_gateway.py app/react_main.py app/services/receipt_currency_service.py app/react_app/loyalty_v06.py app/react_app/loyalty_api.py business scripts/check_stage_schema_v066.py business_migrations
-          python -m pytest -q tests/test_combined_platform_routes.py tests/test_stage_schema_v066.py tests/test_combined_database_url_v066.py tests/test_stage_v067.py tests/test_wallet_legacy_v068.py tests/test_receipt_currency_v7153.py tests/test_pilot_readiness_v069.py tests/test_receipt_code_access_v0610.py tests/test_campaign_journey_v0611.py tests/test_pilot_enrollment_v0612.py tests/test_dynamic_customer_pilot_v7158.py tests/test_ai_campaign_format_v067.py tests/test_campaign_media_studio_v0615.py
+          python -m pytest -q tests/test_combined_platform_routes.py tests/test_stage_schema_v066.py tests/test_combined_database_url_v066.py tests/test_stage_v067.py tests/test_wallet_legacy_v068.py tests/test_receipt_currency_v7153.py tests/test_pilot_readiness_v069.py tests/test_receipt_code_access_v0610.py tests/test_campaign_journey_v0611.py tests/test_pilot_enrollment_v0612.py tests/test_dynamic_customer_pilot_v7158.py tests/test_ai_campaign_format_v067.py tests/test_campaign_media_studio_v0615.py tests/test_campaign_creative_overlay_v0616.py
       - name: Core React tests + production bundle
         working-directory: backend/frontend
         env:
