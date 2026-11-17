@@ -9,7 +9,10 @@ export function predefinedCampaignBrief(program){
   return 'Introduce "'+title+'" to customers and invite them to participate. '+
     'Write an appealing, concise campaign headline and a clear message. '+
     'Explain that only merchant-verified qualifying purchases count toward the reward. '+
-    'Use a clear call to action, a tasteful 4:5 image concept and, for GIF/MP4, '+
+    'When an image is uploaded, make its visible product or scene the central subject '+
+    'of the headline, message and creative direction. Preserve that original photo '+
+    'in the finished creative rather than replacing it with an unrelated background. '+
+    'Use a clear call to action and, for GIF/MP4, '+
     'a subtle three-second animation. Keep the benefits accurate and avoid suggesting '+
     'any different minimum purchase, number of visits or reward value.';
 }
