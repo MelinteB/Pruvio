@@ -4,6 +4,15 @@ import './promotion-console.css';
 import './promo-v06.css';
 import {QRCodeSVG} from 'qrcode.react';
 const API = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
+export function predefinedCampaignBrief(program){
+  const title=String(program?.title||'this published loyalty program').trim();
+  return 'Introduce "'+title+'" to customers and invite them to participate. '+
+    'Write an appealing, concise campaign headline and a clear message. '+
+    'Explain that only merchant-verified qualifying purchases count toward the reward. '+
+    'Use a clear call to action, a tasteful 4:5 image concept and, for GIF/MP4, '+
+    'a subtle three-second animation. Keep the benefits accurate and avoid suggesting '+
+    'any different minimum purchase, number of visits or reward value.';
+}
 async function call(path,token,body,method){
   const response=await fetch(API+path,{method:body===undefined?'GET':(method||'POST'),headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},...(body===undefined?{}:{body:JSON.stringify(body)})});
   const data=await response.json().catch(()=>({}));
@@ -16,6 +25,7 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
     [tone,setTone]=useState('friendly'),[creativeFormat,setCreativeFormat]=useState('png'),
     [watermark,setWatermark]=useState('Pruvs Business'),[artworkKey,setArtworkKey]=useState(''),
     [draftPreview,setDraftPreview]=useState(null),[aiBusy,setAiBusy]=useState(false),[assetBusy,setAssetBusy]=useState(false),[aiReadiness,setAiReadiness]=useState(null);
+  const [creativeInstructions,setCreativeInstructions]=useState('');
   const [editingPromotionId,setEditingPromotionId]=useState('');
   const [localMediaPreview,setLocalMediaPreview]=useState('');
   const [uploadPending,setUploadPending]=useState(false);
@@ -48,7 +58,8 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
       const result=await call('/v1/merchant/promotions/ai-draft',token,{
         program_id:programId,goal:goal.trim(),audience:audience.trim(),tone,
         format:creativeFormat==='mp4'?'video':creativeFormat==='gif'?'gif':'image',
-        duration_days:Number(days),watermark_text:watermark
+        duration_days:Number(days),watermark_text:watermark,
+        creative_instructions:creativeInstructions.trim()
       });
       setHeadline(result.draft.headline);setMessage(result.draft.message);
       setDraftPreview(result.draft);
@@ -131,6 +142,11 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
     }catch(e){setError(e.message)}finally{setAssetBusy(false)}
   }
   useEffect(()=>{if(!published.some(p=>p.id===programId))setProgramId(published[0]?.id||'');},[programs,programId]);
+  // A changed program updates the starting brief; merchant edits remain intact otherwise.
+  useEffect(()=>{
+    const program=programs.find(p=>p.id===programId);
+    setCreativeInstructions(program?predefinedCampaignBrief(program):'');
+  },[programId]);
   useEffect(()=>{
     if(mode!=='promotions')return;
     let mounted=true;
