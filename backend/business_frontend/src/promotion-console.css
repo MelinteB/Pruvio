@@ -35,3 +35,26 @@
 .pruvs-business-creative-text strong{color:#fff;font-size:16px;display:block}
 .pruvs-business-creative-text p{color:#fff;font-size:12px;margin:6px 0 0;
  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;overflow:hidden}
+
+/* Editable Campaign Studio brief: written and approved before provider charges. */
+.pruvs-ai-program-select,.pruvs-ai-brief-editor label,.pruvs-ai-copy-editor label{
+ display:grid;gap:7px;font-size:12px;font-weight:700;color:#295a49}
+.pruvs-ai-program-select select,.pruvs-ai-brief-editor textarea,
+.pruvs-ai-copy-editor input,.pruvs-ai-copy-editor textarea{
+ box-sizing:border-box;width:100%;min-width:0;min-height:40px;padding:11px 12px;
+ background:#fff;color:#123d35;font:inherit;font-weight:400;line-height:1.5;
+ border:1px solid #bdcfca;border-radius:10px}
+.pruvs-ai-brief-editor,.pruvs-ai-copy-editor{
+ display:grid;gap:11px;padding:14px;border:1px solid #c9e5d9;border-radius:12px;
+ background:#f7fbf9}
+.pruvs-ai-brief-editor h4,.pruvs-ai-copy-editor h4{
+ margin:0;color:#164b3b;font-size:14px}
+.pruvs-ai-brief-editor .row{align-items:center;gap:9px}
+.pruvs-ai-brief-editor .btn{min-height:36px}
+.pruvs-ai-brief-editor small{color:#537d6c;line-height:1.4}
+.pruvs-ai-copy-editor .helper{margin:0}
+.pruvs-ai-brief-editor textarea,.pruvs-ai-copy-editor textarea{
+ resize:vertical;min-height:112px}
+.pruvs-ai-brief-editor textarea:focus-visible,.pruvs-ai-copy-editor input:focus-visible,
+.pruvs-ai-copy-editor textarea:focus-visible,.pruvs-ai-program-select select:focus-visible{
+ outline:2px solid #19846c;outline-offset:2px}
