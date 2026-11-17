@@ -102,6 +102,37 @@ def put(client,cfg,key,data,content_type):
         raise HTTPException(503,'Could not store campaign artwork') from None
     return {'media_url':media_url(cfg,key),'media_key':key,'media_type':content_type}
 
+def read_merchant_campaign_source(staff, media_key):
+    """Fetch only a previously uploaded, merchant-owned JPEG for AI image understanding.
+
+    The S3 key is derived from and constrained to the authenticated merchant.
+    No arbitrary public URL, bucket key, other merchant asset or receipt is accepted.
+    """
+    if not isinstance(media_key, str) or not re.fullmatch(
+        r'campaigns/' + re.escape(staff.merchant_id) + r'/[a-f0-9]{32}\.jpg',
+        media_key,
+    ):
+        raise HTTPException(403, 'Campaign picture must belong to the signed-in merchant')
+    client, cfg = storage()
+    try:
+        response = client.get_object(
+            Bucket=cfg['PRUVS_CAMPAIGN_R2_BUCKET'], Key=media_key
+        )
+        raw = response['Body'].read(MAX_FILE_BYTES + 1)
+    except Exception:
+        raise HTTPException(404, 'Uploaded campaign picture is unavailable') from None
+    if not raw or len(raw) > MAX_FILE_BYTES:
+        raise HTTPException(413, 'Campaign picture is too large for AI analysis')
+    try:
+        with Image.open(io.BytesIO(raw)) as picture:
+            if picture.format != 'JPEG':
+                raise ValueError('Only normalized campaign JPEGs are accepted')
+            picture.verify()
+    except (ValueError, OSError, Image.DecompressionBombError):
+        raise HTTPException(422, 'Uploaded campaign picture is not valid') from None
+    return raw
+
+
 def require_manager(staff):
     if staff.role not in ('owner','manager'):raise HTTPException(403,'Merchant manager role required')
 
