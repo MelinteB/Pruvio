@@ -12,6 +12,9 @@ import CustomerReceiptCode from './CustomerReceiptCode';
 export default function Rewards(){
   const location=useLocation();
   const promotedProgram=new URLSearchParams(location.search).get('program');
+  // Receipt detail links carry this case ID; keep that selection when arriving
+  // in Saved receipts instead of dropping the user into a general receipt list.
+  const selectedReceiptCase=new URLSearchParams(location.search).get('case');
   const [status,setStatus]=useState(null);
   const [offers,setOffers]=useState([]);
   const [promotions,setPromotions]=useState([]);
@@ -117,6 +120,14 @@ export default function Rewards(){
     }finally{setLoading(false);}
   }
   useEffect(()=>{refresh(null,tab);},[tab]);
+  useEffect(()=>{
+    if(selectedReceiptCase && tab!=='receipts')setTab('receipts');
+  },[selectedReceiptCase]);
+  useEffect(()=>{
+    if(!loading && tab==='receipts' && selectedReceiptCase){
+      document.getElementById('loyalty-receipt-'+selectedReceiptCase)?.scrollIntoView?.({block:'center'});
+    }
+  },[loading,tab,selectedReceiptCase]);
 
   function nearMe(){
     setError('');setMessage('');
@@ -150,6 +161,15 @@ export default function Rewards(){
   // Business is the authority for merchant eligibility. Old Business versions
   // without this flag fail closed for receipt claims, not for program discovery.
   const eligibleReceiptOffers=offers.filter(o=>o.receipt_pilot_allowed===true);
+  const receiptActionReason=membershipsState!=='ready'
+    ? 'Your loyalty memberships could not be checked. Try again.'
+    : !status?.receipt_claims_enabled
+      ? 'Receipt rewards are not enabled for your account in this environment.'
+      : !status?.receipt_v06_enabled
+        ? 'Receipt verification is not active for your account yet. Ask the Pruvs team to enable the customer pilot.'
+        : claimsState!=='ready'
+          ? 'Receipt claim verification is unavailable. Try again.'
+          : null;
   const earnedPrograms=eligibleReceiptOffers.filter(o=>joined.has(o.program.id)).map(o=>{
     const active=promotions.find(p=>p.program_id===o.program.id && p.status==='published' &&
       (!p.expires_at || Date.parse(p.expires_at)>Date.now()));
@@ -235,11 +255,22 @@ export default function Rewards(){
       {claimsState==='unavailable'&&<p role="status" className="pruvs-v7152-partial-warning">Receipt verification status is temporarily unavailable. Existing claims have not been confirmed as missing. New submissions are paused to prevent duplicates.</p>}
       {membershipsState==='ready'&&earnedPrograms.length===0&&<p role="status" className="pruvs-v7152-partial-warning">Your joined merchants are not yet accepting loyalty receipts. You can still save receipts and discover rewards. Once a merchant activates loyalty, you can earn stamps here.</p>}
       <p className="muted">To earn a stamp: choose an active merchant program, agree to share your receipt preview, and show the verification QR/code to the merchant. The merchant must confirm the purchase.</p>
-      {receipts.map(r=><div key={r.case_id} className="rewards-wallet-row pruvs-v7150-receipt-loyalty"><div><strong>{r.merchant_name||'Saved receipt'}</strong><p>{money(r.receipt_total,r.currency||'RON')}</p><small>Choose a loyalty program and verify the purchase with the merchant to earn a stamp.</small></div><Link to={'/receipt/'+r.case_id}>View receipt</Link>{membershipsState==='ready'&&claimsState==='ready'&&status?.customer_codes_v12_enabled
-            ?<CustomerReceiptCode caseId={r.case_id} programs={earnedPrograms} existingClaim={claims.find(c=>c.receipt_ref===r.receipt_ref)} onFinished={()=>refresh(null,'receipts')}/>
-            :membershipsState==='ready'&&claimsState==='ready'&&status?.receipt_v06_enabled
-              ?<ReceiptSubmission caseId={r.case_id} receiptRef={r.receipt_ref} claims={claims} programs={earnedPrograms} onSuccess={msg=>{setMessage(msg);refresh(null,'receipts')}}/>
-              :null}</div>)}
+      {selectedReceiptCase&&!receipts.some(r=>String(r.case_id)===selectedReceiptCase)&&<p role="status" className="pruvs-v7152-partial-warning">The selected receipt was not found in your saved receipts. Return to its details and try again.</p>}
+      {receipts.map(r=><div id={'loyalty-receipt-'+r.case_id} key={r.case_id}
+        className={'rewards-wallet-row pruvs-v7150-receipt-loyalty'+(String(r.case_id)===selectedReceiptCase?' pruvs-loyalty-selected-receipt':'')}>
+        <div><strong>{r.merchant_name||'Saved receipt'}</strong>
+          {String(r.case_id)===selectedReceiptCase&&<span className="pruvs-loyalty-selected-label">Selected receipt</span>}
+          <p>{money(r.receipt_total,r.currency||'RON')}</p>
+          <small>{receiptActionReason||(!earnedPrograms.length?'No joined, approved merchant program is available for this receipt. Join a loyalty program in Discover or ask the merchant to activate it.':'Choose the matching merchant loyalty program, share the receipt and ask the merchant to confirm the purchase.')}</small>
+          {!receiptActionReason&&!earnedPrograms.length&&<button className="secondary pruvs-loyalty-discover-link" type="button" onClick={()=>setTab('offers')}>Find loyalty programs</button>}
+        </div>
+        <Link to={'/receipt/'+r.case_id}>View receipt</Link>
+        {!receiptActionReason&&earnedPrograms.length>0&&status?.customer_codes_v12_enabled
+          ?<CustomerReceiptCode caseId={r.case_id} programs={earnedPrograms} existingClaim={claims.find(c=>c.receipt_ref===r.receipt_ref)} onFinished={()=>refresh(null,'receipts')}/>
+          :!receiptActionReason&&earnedPrograms.length>0&&status?.receipt_v06_enabled
+            ?<ReceiptSubmission caseId={r.case_id} receiptRef={r.receipt_ref} claims={claims} programs={earnedPrograms} onSuccess={msg=>{setMessage(msg);refresh(null,'receipts')}}/>
+            :<button type="button" className="secondary" disabled title={receiptActionReason||'Join an approved merchant loyalty program first.'}>Earn a stamp — unavailable</button>}
+      </div>)}
       {!receipts.length&&!error&&<p>No receipts found. <Link to="/upload">Scan a receipt</Link> to begin.</p>}
       <div className="row"><Ticket size={18}/><small>A merchant must confirm the purchase before any stamp is credited. Receipt verification is not POS settlement confirmation.</small></div>
     </Panel>}
