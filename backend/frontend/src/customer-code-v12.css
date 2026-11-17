@@ -2,3 +2,101 @@
 .pruvs-v7151-claim-qr{display:flex;align-items:center;flex-direction:column;gap:12px;padding:16px;border:1px solid #dce7f3;border-radius:14px;margin:12px 0;background:#fff;text-align:center}
 .pruvs-v7151-claim-qr svg{max-width:100%;height:auto}
 .pruvs-v7151-claim-qr small{color:#587086;font-size:12px;line-height:1.5}
+
+
+/* Core v7.1.59: isolated, accessible purchase-verification dialog.
+ * Override global input/label widths that used to stretch the checkbox
+ * and squeeze the entire consent text into a tiny vertical column.
+ */
+.pruvs-v12-overlay{
+  position:fixed;inset:0;z-index:300;
+  background:rgba(14,30,49,.65);
+  display:grid;place-items:center;
+  padding:16px;
+  overflow:auto;
+}
+.pruvs-v12-dialog,.pruvs-v12-dialog *{box-sizing:border-box}
+.pruvs-v12-dialog{
+  width:min(570px,100%)!important;min-width:0!important;
+  max-width:calc(100vw - 24px);
+  max-height:min(92dvh,780px);
+  overflow-x:hidden!important;overflow-y:auto;
+  border-radius:20px;
+  padding:clamp(18px,4vw,28px);
+  background:#fff;color:#18324a;
+  box-shadow:0 24px 80px #071a3047;
+  overflow-wrap:break-word;
+}
+.pruvs-v12-header{display:flex;align-items:center;gap:13px;margin-bottom:17px}
+.pruvs-v12-title-icon{
+  display:grid;place-items:center;width:42px;height:42px;flex:0 0 42px;
+  color:#167d69;background:#e7f5f0;border-radius:13px
+}
+.pruvs-v12-heading{min-width:0;flex:1}
+.pruvs-v12-heading small{display:block;color:#667e91;letter-spacing:.11em;font-size:10px;font-weight:800;margin:0 0 2px}
+.pruvs-v12-heading h2{margin:0;font-size:21px;line-height:1.25}
+.pruvs-v12-close{flex:0 0 38px!important;width:38px!important;height:38px;min-height:38px!important;border-radius:12px;display:grid;place-items:center;padding:0}
+.pruvs-v12-form{display:grid;gap:17px;min-width:0}
+.pruvs-v12-intro{margin:0;color:#52687f;line-height:1.65;font-size:13px}
+.pruvs-v12-form .pruvs-v12-field{display:grid;gap:8px;min-width:0;color:#253c50;font-size:13px;font-weight:650}
+.pruvs-v12-field select{
+  display:block;width:100%;min-width:0;max-width:100%;
+  color:#1c3044;border:1px solid #ccdae6;border-radius:12px;
+  background:#fff;padding:11px 13px;min-height:45px;
+}
+.pruvs-v12-scanned{
+  display:flex;gap:12px;align-items:flex-start;
+  min-width:0;padding:13px 14px;border:1px solid #cce3d9;
+  background:#f0faf6;border-radius:13px;
+  color:#146e5f;font-size:13px
+}
+.pruvs-v12-scanned>svg:first-child{flex:0 0 21px}
+.pruvs-v12-scanned>svg:last-child{flex:0 0 19px;margin-left:auto}
+.pruvs-v12-scanned>div{min-width:0;flex:1}
+.pruvs-v12-scanned strong{display:block;font-weight:750}
+.pruvs-v12-scanned p{margin:3px 0 0;color:#3e7569;font-size:12px;line-height:1.5}
+.pruvs-v12-form label.pruvs-v12-consent{
+  display:grid!important;
+  grid-template-columns:20px minmax(0,1fr)!important;
+  align-items:start!important;
+  gap:13px!important;
+  padding:15px!important;margin:0!important;
+  width:100%;max-width:100%;min-width:0;
+  background:#f7f9fc;border:1px solid #d6e0eb;border-radius:13px;
+  cursor:pointer;
+}
+.pruvs-v12-form label.pruvs-v12-consent input[type="checkbox"]{
+  appearance:auto!important;
+  width:19px!important;min-width:19px!important;max-width:19px!important;
+  height:19px!important;min-height:19px!important;
+  flex:0 0 19px!important;
+  padding:0!important;margin:3px 0 0!important;
+  accent-color:#167d69;cursor:pointer;
+}
+.pruvs-v12-form .pruvs-v12-consent span{
+  display:block!important;width:auto!important;min-width:0!important;max-width:100%!important;
+  white-space:normal!important;word-break:normal!important;overflow-wrap:break-word!important;
+  font-size:13px;line-height:1.55;color:#263c51
+}
+.pruvs-v12-consent span strong{display:block;margin:0 0 5px;font-weight:700;line-height:1.5}
+.pruvs-v12-consent span small{display:block;white-space:normal;color:#5f7489;font-size:12px;line-height:1.55}
+.pruvs-v12-form .pruvs-v12-notice{
+  display:flex;align-items:flex-start;gap:9px;margin:0;
+  color:#5b7285;font-size:12px;line-height:1.5
+}
+.pruvs-v12-notice svg{flex:0 0 16px;margin-top:2px}
+.pruvs-v12-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:10px}
+.pruvs-v12-actions button{display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.pruvs-v12-actions .pruvs-v12-submit{min-width:220px}
+.pruvs-v12-error{padding:12px 14px;border-radius:11px;border:1px solid #f2c7c7;background:#fff5f5;color:#a72b34!important;margin:0}
+.pruvs-v12-open{display:inline-flex;align-items:center;gap:8px}
+.pruvs-v12-code{text-align:center;display:grid;justify-items:center;gap:13px}
+.pruvs-v12-code>p{font-size:13px;line-height:1.6;color:#475d71}
+.pruvs-v12-success{display:flex;align-items:center;gap:8px;color:#0c7562;font-weight:700}
+.pruvs-v12-code-text{font-size:clamp(14px,3vw,22px)!important;letter-spacing:.025em!important;word-break:break-all}
+@media(max-width:480px){
+ .pruvs-v12-overlay{padding:10px}
+ .pruvs-v12-dialog{padding:18px;max-width:calc(100vw - 20px)}
+ .pruvs-v12-actions{display:grid;grid-template-columns:1fr}
+ .pruvs-v12-actions button,.pruvs-v12-actions .pruvs-v12-submit{width:100%;min-width:0}
+}

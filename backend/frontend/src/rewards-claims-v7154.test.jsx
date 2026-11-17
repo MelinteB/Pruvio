@@ -13,6 +13,7 @@ vi.mock('./common',()=>({
   Panel:({title,children})=><section><h2>{title}</h2>{children}</section>,
   Message:({children})=><div role="alert">{children}</div>,
   Spinner:()=> <span>Loading</span>,
+  useApp:()=>({user:{id:6}}),
 }));
 vi.mock('./CustomerReceiptCode',()=>({
   default:({existingClaim})=><div data-testid="claim-flow">

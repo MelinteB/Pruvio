@@ -12,7 +12,8 @@ vi.mock('./common',()=>({
   Title:({title,children})=><header><h1>{title}</h1>{children}</header>,
   Panel:({title,children,className})=><section className={className}>{title&&<h2>{title}</h2>}{children}</section>,
   Message:({children})=><div role="alert">{children}</div>,
-  Spinner:()=> <span>Loading</span>
+  Spinner:()=> <span>Loading</span>,
+  useApp:()=>({user:{id:6}})
 }));
 vi.mock('./CustomerReceiptCode',()=>({default:()=>null}));
 vi.mock('./ReceiptSubmission',()=>({default:()=>null}));
