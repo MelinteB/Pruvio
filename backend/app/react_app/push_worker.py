@@ -188,7 +188,7 @@ def deliver(db, event):
     # Provider acceptance does not prove display. An opted-in verified email
     # receives split activity independently, even if a push was accepted.
     split_activity = event.kind in ('reminder', 'project_reminder', 'split_settled', 'split_reopened',
-                                    'bill_settled', 'bill_reopened', 'payment_marked', 'participant_joined',
+                                    'bill_settled', 'bill_reopened', 'payment_marked', 'selection_confirmed', 'participant_joined',
                                     'payment_received', 'payment_receipt_reversed', 'payment_withdrawn', 'participant_removed')
     send_email_for_event = (event.kind != 'test' and pref.email_enabled and user.email
                             and user.is_email_verified and (split_activity or (not accepted and not retry)))
