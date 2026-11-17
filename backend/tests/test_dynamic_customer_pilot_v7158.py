@@ -3,11 +3,10 @@
 This suite calls no Render/Business API and uses no customer credentials.
 The Business-side membership and merchant approval gate has its own DB tests.
 """
-from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from app.react_app import loyalty_v06, loyalty_api
+from app.react_app import loyalty_pilot_access_v7158 as access
 
 FLAGS = (
     'PRUVS_LOYALTY_ENABLED',
@@ -32,17 +31,17 @@ def test_authenticated_account_uses_business_membership_not_legacy_id(enabled, m
         return {'eligible': str(user_id) == '6',
                 'reason': 'joined_approved_merchant' if str(user_id) == '6'
                            else 'no_joined_approved_merchant'}
-    monkeypatch.setattr(loyalty_v06, 'call_business', business)
+    monkeypatch.setattr(access, 'call_business', business)
 
-    assert loyalty_v06.pilot_allowed(6) is True
-    assert loyalty_v06.pilot_allowed(2) is False   # formerly allowlisted ID
+    assert access.pilot_allowed(6) is True
+    assert access.pilot_allowed(2) is False   # formerly allowlisted ID
     assert seen == [
         ('/v1/customer/pilot/receipt-eligibility-v0614', 6),
         ('/v1/customer/pilot/receipt-eligibility-v0614', 2),
     ]
 
-    s6 = loyalty_api.status(identity=(SimpleNamespace(id=6), None))
-    s2 = loyalty_api.status(identity=(SimpleNamespace(id=2), None))
+    s6 = access.receipt_status(6)
+    s2 = access.receipt_status(2)
     assert s6['customer_codes_v12_enabled'] is True
     assert s6['receipt_v06_enabled'] is True
     assert s2['customer_codes_v12_enabled'] is False
@@ -53,48 +52,48 @@ def test_authenticated_account_uses_business_membership_not_legacy_id(enabled, m
 def test_business_downtime_or_malformed_response_fails_closed(enabled,monkeypatch):
     def down(*args,**kwargs):
         raise HTTPException(status_code=503,detail='Business unavailable')
-    monkeypatch.setattr(loyalty_v06, 'call_business', down)
-    access=loyalty_v06.pilot_access(6)
+    monkeypatch.setattr(access, 'call_business', down)
+    access=access.pilot_access(6)
     assert access == {'eligible':False,'reason':'eligibility_unavailable'}
     with pytest.raises(HTTPException) as exc:
-        loyalty_v06.pilot_ready(6)
+        access.pilot_ready(6)
     assert exc.value.status_code == 503
-    assert loyalty_api.status(identity=(SimpleNamespace(id=6),None))[
+    assert access.receipt_status(6)[
         'customer_codes_v12_enabled'] is False
 
-    monkeypatch.setattr(loyalty_v06, 'call_business', lambda *args, **kwargs:
+    monkeypatch.setattr(access, 'call_business', lambda *args, **kwargs:
                         {'eligible': 'true', 'reason': 'joined_approved_merchant'})
-    assert loyalty_v06.pilot_allowed(6) is False
+    assert access.pilot_allowed(6) is False
 
 
 def test_unjoined_customer_denied_new_claim_but_can_read_history(enabled,monkeypatch):
-    monkeypatch.setattr(loyalty_v06, 'call_business', lambda *args, **kwargs:
+    monkeypatch.setattr(access, 'call_business', lambda *args, **kwargs:
                         {'eligible':False,'reason':'no_joined_approved_merchant'})
     with pytest.raises(HTTPException) as exc:
-        loyalty_v06.pilot_ready(6)
+        access.pilot_ready(6)
     assert exc.value.status_code == 403
 
     # Read-only claim history must survive a merchant's revoked approval.
-    monkeypatch.setattr(loyalty_v06, 'call_business', lambda *args, **kwargs: [])
-    assert loyalty_v06.my_claims(identity=(SimpleNamespace(id=6), None)) == []
+    monkeypatch.setattr(access, 'call_business', lambda *args, **kwargs: [])
+    assert access.pilot_ready(6, require_eligibility=False) is None
 
 
 def test_unknown_mode_fails_closed_and_legacy_rollback_is_explicit(enabled,monkeypatch):
     monkeypatch.setenv('PRUVS_LOYALTY_CUSTOMER_ELIGIBILITY_MODE', 'typo')
-    assert loyalty_v06.pilot_allowed(2) is False
-    assert loyalty_v06.pilot_allowed(6) is False
+    assert access.pilot_allowed(2) is False
+    assert access.pilot_allowed(6) is False
     monkeypatch.setenv('PRUVS_LOYALTY_CUSTOMER_ELIGIBILITY_MODE', 'legacy_ids')
-    assert loyalty_v06.pilot_allowed(2) is True
-    assert loyalty_v06.pilot_allowed(6) is False
+    assert access.pilot_allowed(2) is True
+    assert access.pilot_allowed(6) is False
 
 
 def test_flags_remain_enforced_even_with_approved_membership(enabled,monkeypatch):
-    monkeypatch.setattr(loyalty_v06, 'call_business', lambda *args, **kwargs:
+    monkeypatch.setattr(access, 'call_business', lambda *args, **kwargs:
                         {'eligible':True,'reason':'joined_approved_merchant'})
     monkeypatch.setenv('PRUVS_LOYALTY_RECEIPT_V06_ENABLED','false')
     with pytest.raises(HTTPException) as exc:
-        loyalty_v06.pilot_ready(6)
+        access.pilot_ready(6)
     assert exc.value.status_code == 503
-    s=loyalty_api.status(identity=(SimpleNamespace(id=6),None))
+    s=access.receipt_status(6)
     assert s['receipt_v06_enabled'] is False
     assert s['customer_codes_v12_enabled'] is False
