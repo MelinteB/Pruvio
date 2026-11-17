@@ -244,7 +244,7 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
           <small>Configuration checks do not validate R2 write permissions. Generation may incur provider charges. Nothing publishes automatically.</small>
         </div>}
         <div className="pruvs-ai-copy-editor" aria-label="Review campaign copy before artwork">
-          <h4>3. Campaign copy · review before creating artwork</h4>
+          <h4>3. Campaign copy · review and edit before generating artwork</h4>
           <p className="helper">Generate AI copy from your edited brief, then review the resulting headline and message before making artwork.</p>
           <label>Promotion headline<input value={headline} minLength={5} maxLength={100} required placeholder="A little extra for your next visit" onChange={e=>setHeadline(e.target.value)}/></label>
           <label>Promotional message<textarea value={message} minLength={10} maxLength={500} required rows={4} placeholder="Join our loyalty program and earn a reward after qualifying visits." onChange={e=>setMessage(e.target.value)}/></label>
