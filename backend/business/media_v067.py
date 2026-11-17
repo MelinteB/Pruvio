@@ -20,21 +20,59 @@ logger=logging.getLogger(__name__)
 MAX_FILE_BYTES=6_000_000
 Image.MAX_IMAGE_PIXELS=12_000_000
 
+CAMPAIGN_STORAGE_KEYS = (
+    'PRUVS_CAMPAIGN_R2_ENDPOINT_URL',
+    'PRUVS_CAMPAIGN_R2_ACCESS_KEY_ID',
+    'PRUVS_CAMPAIGN_R2_SECRET_ACCESS_KEY',
+    'PRUVS_CAMPAIGN_R2_BUCKET',
+    'PRUVS_CAMPAIGN_MEDIA_PUBLIC_BASE_URL',
+    'PRUVS_CAMPAIGN_MEDIA_HOSTS',
+)
+
+
+def media_configuration_diagnostics():
+    """Return only setting names and error codes; never expose credentials or URLs."""
+    values = {name: os.getenv(name, '').strip() for name in CAMPAIGN_STORAGE_KEYS}
+    missing = [name for name, value in values.items() if not value]
+    if missing:
+        return {'ready': False, 'issue': 'missing_settings', 'missing_settings': missing}
+    try:
+        endpoint = urlsplit(values['PRUVS_CAMPAIGN_R2_ENDPOINT_URL'])
+        public = urlsplit(values['PRUVS_CAMPAIGN_MEDIA_PUBLIC_BASE_URL'])
+    except ValueError:
+        return {'ready': False, 'issue': 'invalid_url', 'missing_settings': []}
+    if (endpoint.scheme != 'https' or not endpoint.hostname or
+            endpoint.username or endpoint.password or endpoint.query or endpoint.fragment):
+        return {'ready': False, 'issue': 'invalid_r2_endpoint', 'missing_settings': []}
+    if (public.scheme != 'https' or not public.hostname or
+            public.username or public.password or public.query or public.fragment):
+        return {'ready': False, 'issue': 'invalid_public_base_url', 'missing_settings': []}
+    allowed = {
+        host.strip().lower()
+        for host in values['PRUVS_CAMPAIGN_MEDIA_HOSTS'].split(',')
+        if host.strip()
+    }
+    if public.hostname.lower() not in allowed:
+        return {'ready': False, 'issue': 'public_hostname_not_allowlisted', 'missing_settings': []}
+    return {'ready': True, 'issue': None, 'missing_settings': []}
+
+
 def bucket_config():
-    keys=['PRUVS_CAMPAIGN_R2_ENDPOINT_URL','PRUVS_CAMPAIGN_R2_ACCESS_KEY_ID',
-          'PRUVS_CAMPAIGN_R2_SECRET_ACCESS_KEY','PRUVS_CAMPAIGN_R2_BUCKET',
-          'PRUVS_CAMPAIGN_MEDIA_PUBLIC_BASE_URL']
-    values={k:os.getenv(k,'').strip() for k in keys}
-    if not all(values.values()):
-        raise HTTPException(503,'Campaign media storage is not configured')
-    endpoint=urlsplit(values[keys[0]])
-    public=urlsplit(values[keys[4]])
-    allowed={v.strip().lower() for v in os.getenv('PRUVS_CAMPAIGN_MEDIA_HOSTS','').split(',') if v.strip()}
-    if endpoint.scheme!='https' or not endpoint.hostname or endpoint.username or endpoint.password or endpoint.query or endpoint.fragment:
-        raise HTTPException(503,'Campaign storage endpoint must be HTTPS')
-    if public.scheme!='https' or not public.hostname or public.hostname.lower() not in allowed or public.username or public.password or public.query or public.fragment:
-        raise HTTPException(503,'Campaign public CDN must be on an approved HTTPS host')
-    return values
+    status = media_configuration_diagnostics()
+    if not status['ready']:
+        errors = {
+            'missing_settings': 'Campaign media storage is not configured',
+            'invalid_r2_endpoint': 'Campaign storage endpoint must be HTTPS',
+            'invalid_public_base_url': 'Campaign public CDN must use HTTPS',
+            'public_hostname_not_allowlisted': 'Campaign public CDN must be on an approved HTTPS host',
+            'invalid_url': 'Campaign storage URL is invalid',
+        }
+        raise HTTPException(503, errors.get(status['issue'], 'Campaign media configuration invalid'))
+    return {
+        name: os.getenv(name, '').strip()
+        for name in CAMPAIGN_STORAGE_KEYS
+        if name != 'PRUVS_CAMPAIGN_MEDIA_HOSTS'
+    }
 
 def storage():
     cfg=bucket_config()

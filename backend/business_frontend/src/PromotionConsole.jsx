@@ -156,7 +156,18 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
           <label>Watermark text<input value={watermark} maxLength={70} onChange={e=>setWatermark(e.target.value)}/></label>
         </div>
         {currentProgram&&<div className="pruvs-ai-criteria"><strong>Program conditions (locked)</strong><small>{currentProgram.title} · Minimum {(currentProgram.min_purchase_minor/100).toFixed(2)} RON · {currentProgram.stamps_required} verified purchases → {(currentProgram.reward_minor/100).toFixed(2)} RON reward</small></div>}
-        {aiReadiness&&<p className="helper" role="status">AI copy: {aiReadiness.copy_ready?'Configured':'Unavailable'} · AI artwork: {aiReadiness.artwork_ready?'Configured':'Unavailable'} · Campaign media storage: {aiReadiness.media_ready?'Configured':'Not configured'}. {aiReadiness.media_ready===false?'Uploads require campaign R2 settings in Render. ':''}Generation may incur provider charges. Nothing publishes automatically.</p>}
+        {aiReadiness&&<div className="helper" role="status">
+          AI copy: {aiReadiness.copy_ready?'Configured':'Unavailable'} · AI artwork: {aiReadiness.artwork_ready?'Configured':'Unavailable'} · Campaign media storage: {aiReadiness.media_ready?'Configured':'Needs attention'}.
+          {aiReadiness.media_ready===false&&<p role="alert">
+            {aiReadiness.media_issue==='missing_settings'?'Missing Render settings: '+(aiReadiness.media_missing_settings||[]).join(', '):
+             aiReadiness.media_issue==='invalid_r2_endpoint'?'The R2 endpoint must be an HTTPS S3 API URL (not the public r2.dev URL).':
+             aiReadiness.media_issue==='invalid_public_base_url'?'The public base URL must start with https:// and contain only the media base path.':
+             aiReadiness.media_issue==='public_hostname_not_allowlisted'?'The public base URL hostname is not present in PRUVS_CAMPAIGN_MEDIA_HOSTS. Use the hostname only, without https://.':
+             'Check campaign storage URLs in the Render service environment.'}
+          </p>}
+          {aiReadiness.media_ready===true&&!aiReadiness.ai_images_enabled&&<p>AI image generation is disabled by PRUVS_BUSINESS_AI_IMAGES_ENABLED.</p>}
+          <small>Configuration checks do not validate R2 write permissions. Generation may incur provider charges. Nothing publishes automatically.</small>
+        </div>}
         <div className="pruvs-ai-actions"><button type="button" className="btn primary" disabled={!programId||aiBusy||assetBusy||busy||aiReadiness?.copy_ready===false} onClick={generateDraft}><WandSparkles size={17}/>{aiBusy?'Creating AI draft…':'Generate AI copy'}</button>
           <button type="button" className="btn primary" disabled={!programId||!draftPreview||!headline.trim()||assetBusy||aiBusy||busy||aiReadiness?.artwork_ready===false} onClick={generateAIArtwork}><Sparkles size={17}/>{assetBusy?'Creating artwork…':'Generate AI artwork'}</button>
           <label className="btn outline pruvs-ai-file"><ImagePlus size={17}/> Upload campaign picture<input type="file" accept="image/jpeg,image/png,image/webp" disabled={assetBusy} onChange={e=>{const file=e.target.files?.[0];e.target.value='';uploadArtwork(file)}}/></label>
