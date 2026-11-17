@@ -2,7 +2,7 @@ import React, {useEffect, useState} from 'react';
 import {QRCodeSVG} from 'qrcode.react';
 import {Link,useLocation} from 'react-router-dom';
 import {Compass, Gift, MapPin, RefreshCcw, ReceiptText, Ticket, CheckCircle2, X, Search} from 'lucide-react';
-import {Title, Panel, Message, Spinner} from './common';
+import {Title, Panel, Message, Spinner, useApp} from './common';
 import {request, send, money} from './api';
 import './rewards.css';
 import './rewards-v05.css';
@@ -10,6 +10,7 @@ import ReceiptSubmission from './ReceiptSubmission';
 import CustomerReceiptCode from './CustomerReceiptCode';
 
 export default function Rewards(){
+  const {user}=useApp();
   const location=useLocation();
   const promotedProgram=new URLSearchParams(location.search).get('program');
   // Receipt detail links carry this case ID; keep that selection when arriving
@@ -271,7 +272,7 @@ export default function Rewards(){
         </div>
         <Link to={'/receipt/'+r.case_id}>View receipt</Link>
         {!receiptActionReason&&earnedPrograms.length>0&&status?.customer_codes_v12_enabled
-          ?<CustomerReceiptCode caseId={r.case_id} programs={earnedPrograms} existingClaim={claims.find(c=>c.receipt_ref===r.receipt_ref)} onFinished={()=>refresh(null,'receipts')}/>
+          ?<CustomerReceiptCode caseId={r.case_id} userId={user?.id} storageMode={r.storage_mode} programs={earnedPrograms} existingClaim={claims.find(c=>c.receipt_ref===r.receipt_ref)} onFinished={()=>refresh(null,'receipts')}/>
           :!receiptActionReason&&earnedPrograms.length>0&&status?.receipt_v06_enabled
             ?<ReceiptSubmission caseId={r.case_id} receiptRef={r.receipt_ref} claims={claims} programs={earnedPrograms} onSuccess={msg=>{setMessage(msg);refresh(null,'receipts')}}/>
             :<button type="button" className="secondary" disabled title={receiptActionReason||'Join an approved merchant loyalty program first.'}>Earn a stamp — unavailable</button>}
