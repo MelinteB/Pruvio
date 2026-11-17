@@ -1,16 +1,17 @@
 """Merchant-controlled AI campaign draft assistant, no automatic publication or discounts."""
 from __future__ import annotations
-import json, os
+import json, logging, os
 from urllib.request import Request,urlopen
 from urllib.error import HTTPError,URLError
 from fastapi import APIRouter,Depends,HTTPException
-from pydantic import BaseModel,Field
+from pydantic import BaseModel,Field,ValidationError
 from sqlalchemy.orm import Session
 from .db import get_db
 from .models import Program,Store,Merchant,Staff
 from .security import merchant_actor
 
 router=APIRouter(tags=['Campaign Studio AI'])
+logger=logging.getLogger(__name__)
 
 class CampaignBrief(BaseModel):
     program_id:str=Field(min_length=36,max_length=36)
@@ -36,6 +37,33 @@ class GeneratedDraft(BaseModel):
     visual_brief:str=Field(min_length=12,max_length=300)
     motion_storyboard:str=Field(min_length=5,max_length=400)
     watermark_text:str=Field(max_length=70)
+
+
+def parse_generated_draft(provider_response:dict,creative_format:str,requested_watermark:str)->GeneratedDraft:
+    """Validate provider text without logging merchant, customer or generated copy."""
+    if provider_response.get('status')=='incomplete':
+        raise HTTPException(502,'AI campaign draft was interrupted. Please retry or shorten the goal.')
+    segments=[c.get('text','') for item in provider_response.get('output',[])
+              for c in item.get('content',[]) if c.get('type')=='output_text']
+    if not segments:
+        raise HTTPException(502,'AI provider did not return a campaign draft')
+    try:
+        content=json.loads(''.join(segments))
+        if isinstance(content,dict):
+            # The merchant controls the watermark; generated changes are ignored.
+            content['watermark_text']=requested_watermark
+            # A still image has no motion. A short/empty storyboard is not an error here.
+            motion=content.get('motion_storyboard')
+            if creative_format=='image' and (not isinstance(motion,str) or not motion.strip()):
+                content['motion_storyboard']='Static image; no animation.'
+        return GeneratedDraft.model_validate(content)
+    except (ValueError,TypeError) as exc:
+        if isinstance(exc,ValidationError):
+            issues=[{'field':'.'.join(map(str,e['loc'])),'type':e['type']} for e in exc.errors()]
+        else:
+            issues=[{'field':'response_json','type':type(exc).__name__}]
+        logger.warning('AI campaign response validation failed: %s',issues)
+        raise ValueError('AI campaign format mismatch') from None
 
 @router.post('/v1/merchant/promotions/ai-draft')
 def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
@@ -70,7 +98,11 @@ def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Sessio
       'Clearly explain that only merchant-verified purchases count toward the reward. '
       'Avoid financial promises. Headlines are short. Image brief describes a 4:5 vertical '
       'mobile display with text-safe margins. Motion storyboard is a simple 3-second '
-      'animated card with no copyrighted imagery. Watermark must be the requested watermark.')
+      'animated card with no copyrighted imagery. Watermark must be the requested watermark. '
+      'Respect these exact field character limits: headline 5-100; message 10-500; '
+      'cta 3-42; alt_text 5-160; visual_brief 12-300; motion_storyboard 5-400; '
+      'watermark_text 0-70. For a still image format, set motion_storyboard to '
+      '"Static image; no animation." Do not include any invented monetary conditions.')
     body={
        'model':os.getenv('PRUVS_CAMPAIGN_AI_MODEL','gpt-6-luna'),
        'instructions':instructions,
@@ -79,23 +111,32 @@ def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Sessio
        'text':{'format':{'type':'json_schema','name':'pruvs_campaign_draft',
                          'strict':True,'schema':SCHEMA}}
     }
-    req=Request('https://api.openai.com/v1/responses',
-        data=json.dumps(body).encode('utf-8'),method='POST',
-        headers={'Authorization':'Bearer '+secret,'Content-Type':'application/json'})
-    try:
-        with urlopen(req,timeout=18) as response:
-            payload_json=json.loads(response.read(100_000))
-    except (HTTPError,URLError,TimeoutError,ValueError):
-        raise HTTPException(502,'AI campaign draft could not be generated; check API configuration.') from None
-    if payload_json.get('status')=='incomplete':
-        raise HTTPException(502,'AI campaign draft was interrupted. Please retry or shorten the goal.')
-    segments=[c.get('text','') for item in payload_json.get('output',[])
-                for c in item.get('content',[]) if c.get('type')=='output_text']
-    if not segments:raise HTTPException(502,'AI provider did not return a campaign draft')
-    try:result=GeneratedDraft.model_validate_json(''.join(segments))
-    except (ValueError,TypeError):
-        raise HTTPException(502,'AI draft did not match the Pruvs campaign format') from None
-    result.watermark_text=payload.watermark_text.strip() or 'Pruvs Business'
-    return {'draft':result.model_dump(),'criteria':facts,
-            'review_required':True,'published':False,
-            'note':'Merchant must review the draft. No reward or campaign is published automatically.'}
+    # One additional AI request is allowed only after a format-validation failure.
+    # This can incur one extra provider charge; no automatic saving or publishing occurs.
+    for attempt in range(2):
+        request_body=dict(body)
+        if attempt:
+            request_body['instructions']=(instructions+' Your previous response failed field-length '
+                'validation. Regenerate all seven required fields, respecting every length limit. '
+                'Use only the original supplied merchant facts.')
+        req=Request('https://api.openai.com/v1/responses',
+            data=json.dumps(request_body).encode('utf-8'),method='POST',
+            headers={'Authorization':'Bearer '+secret,'Content-Type':'application/json'})
+        try:
+            with urlopen(req,timeout=18) as response:
+                payload_json=json.loads(response.read(100_000))
+        except HTTPError as exc:
+            logger.warning('AI campaign provider returned HTTP status=%s',exc.code)
+            raise HTTPException(502,'AI campaign draft could not be generated; check API configuration.') from None
+        except (URLError,TimeoutError,ValueError):
+            logger.warning('AI campaign provider request or response decoding failed')
+            raise HTTPException(502,'AI campaign draft could not be generated; check API configuration.') from None
+        try:
+            result=parse_generated_draft(payload_json,payload.format,facts['requested_watermark'])
+            return {'draft':result.model_dump(),'criteria':facts,
+                    'review_required':True,'published':False,
+                    'note':'Merchant must review the draft. No reward or campaign is published automatically.'}
+        except ValueError:
+            if not attempt:
+                continue
+            raise HTTPException(502,'AI draft did not match the Pruvs campaign format') from None
