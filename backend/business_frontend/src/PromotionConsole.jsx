@@ -199,8 +199,28 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
           <label>Watermark text<input value={watermark} maxLength={70} onChange={e=>setWatermark(e.target.value)}/></label>
         </div>
         {currentProgram&&<div className="pruvs-ai-criteria"><strong>Program conditions (locked)</strong><small>{currentProgram.title} · Minimum {(currentProgram.min_purchase_minor/100).toFixed(2)} RON · {currentProgram.stamps_required} verified purchases → {(currentProgram.reward_minor/100).toFixed(2)} RON reward</small></div>}
+        <div className="pruvs-ai-image-source" aria-label="Main campaign picture">
+          <div><h4>1. Main campaign picture and subject</h4>
+            <p>Upload a product or scene photo first. Pruvs AI will describe what is visible in this image and use it as the main subject. PNG, GIF and MP4 will use the same photo.</p></div>
+          <label className="btn outline pruvs-ai-file"><ImagePlus size={17}/>{imageOrigin==='upload'?'Replace main picture':'Upload main campaign picture'}
+            <input type="file" accept="image/jpeg,image/png,image/webp" disabled={assetBusy||aiBusy} onChange={e=>{const file=e.target.files?.[0];e.target.value='';uploadArtwork(file)}}/></label>
+          {imageOrigin==='upload'&&<small role="status">Uploaded picture selected as primary creative. AI won't replace it with a generic background.</small>}
+          {!mediaUrl&&!localMediaPreview&&<small>Optional for a text-only promotion. To make a photo-led campaign, upload the image before generating copy.</small>}
+        </div>
+        {(mediaUrl||localMediaPreview)&&<div className="pruvs-ai-preview" aria-label="Campaign creative preview">
+          <strong>Creative preview · 4:5 mobile layout</strong>
+          {displayedMediaUrl&&<div className="pruvs-business-creative">
+            {mediaType?.startsWith('video/')&&mediaUrl&&!mediaPreviewError?
+              <video src={displayedMediaUrl} controls muted autoPlay loop playsInline preload="metadata" onLoadedData={()=>setMediaPreviewError(false)} onError={()=>setMediaPreviewError(true)}/>:
+              <img src={displayedMediaUrl} alt="" onLoad={()=>{if(mediaUrl&&displayedMediaUrl===mediaUrl)setMediaPreviewError(false)}} onError={()=>{if(mediaUrl&&displayedMediaUrl===mediaUrl)setMediaPreviewError(true)}}/>}
+            <div className="pruvs-business-creative-text"><strong>{headline||'Your campaign headline'}</strong><p>{message||'Add a promotional message to preview the campaign.'}</p></div>
+          </div>}
+          <small role="status">{uploadPending?'Local preview only — upload unsuccessful or still in progress. Cannot save.':mediaPreviewError?'Stored asset is not publicly accessible. Cannot save until it loads.':'Uploaded media preview · '+mediaType}</small>
+          {mediaPreviewError&&<button type="button" className="btn subtle" onClick={()=>setMediaPreviewError(false)}>Retry preview</button>}
+          <button type="button" className="btn subtle" disabled={assetBusy} onClick={removeMedia}>Remove picture / use text only</button>
+        </div>}
         <div className="pruvs-ai-brief-editor" aria-label="Predefined campaign brief editor">
-          <div className="row between wrap"><h4>Predefined campaign text · edit before generating</h4>
+          <div className="row between wrap"><h4>2. Predefined campaign text · edit before generating</h4>
             <button type="button" className="btn subtle" disabled={!currentProgram||aiBusy||assetBusy} onClick={()=>setCreativeInstructions(predefinedCampaignBrief(currentProgram))}>Restore predefined text</button></div>
           <label htmlFor="pruvs-campaign-brief">Your campaign instructions</label>
           <textarea id="pruvs-campaign-brief" value={creativeInstructions} rows={6} maxLength={1200}
@@ -221,32 +241,21 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
           <small>Configuration checks do not validate R2 write permissions. Generation may incur provider charges. Nothing publishes automatically.</small>
         </div>}
         <div className="pruvs-ai-copy-editor" aria-label="Review campaign copy before artwork">
-          <h4>Campaign copy · review and edit before generating artwork</h4>
+          <h4>3. Campaign copy · review before creating artwork</h4>
           <p className="helper">Generate AI copy from your edited brief, then review the resulting headline and message before making artwork.</p>
           <label>Promotion headline<input value={headline} minLength={5} maxLength={100} required placeholder="A little extra for your next visit" onChange={e=>setHeadline(e.target.value)}/></label>
           <label>Promotional message<textarea value={message} minLength={10} maxLength={500} required rows={4} placeholder="Join our loyalty program and earn a reward after qualifying visits." onChange={e=>setMessage(e.target.value)}/></label>
         </div>
         <div className="pruvs-ai-actions"><button type="button" className="btn primary" disabled={!programId||aiBusy||assetBusy||busy||aiReadiness?.copy_ready===false} onClick={generateDraft}><WandSparkles size={17}/>{aiBusy?'Creating AI draft…':'Generate AI copy'}</button>
-          <button type="button" className="btn primary" disabled={!programId||!draftPreview||!headline.trim()||assetBusy||aiBusy||busy||aiReadiness?.artwork_ready===false} onClick={generateAIArtwork}><Sparkles size={17}/>{assetBusy?'Creating artwork…':'Generate AI artwork'}</button>
-          <label className="btn outline pruvs-ai-file"><ImagePlus size={17}/> Upload campaign picture<input type="file" accept="image/jpeg,image/png,image/webp" disabled={assetBusy} onChange={e=>{const file=e.target.files?.[0];e.target.value='';uploadArtwork(file)}}/></label>
+          {imageOrigin==='upload'?<p className="pruvs-ai-photo-note" role="status">Your uploaded picture is the campaign's main visual. Select PNG, GIF or MP4, then generate branded artwork or save the draft to render it automatically.</p>:
+            <button type="button" className="btn primary" disabled={!programId||!draftPreview||!headline.trim()||assetBusy||aiBusy||busy||aiReadiness?.artwork_ready===false} onClick={generateAIArtwork}><Sparkles size={17}/>{assetBusy?'Creating artwork…':'Generate AI background (no photo)'}</button>}
+
           <button type="button" className="btn outline" disabled={!artworkKey||assetBusy||!headline.trim()} onClick={renderArtwork}><Film size={17}/>{assetBusy?'Processing artwork…':'Generate '+creativeFormat.toUpperCase()+' artwork'}</button>
         </div>
         {draftPreview&&<div className="pruvs-ai-preview"><strong>AI copy preview</strong><p><b>{draftPreview.cta}</b> · {draftPreview.visual_brief}</p><small>Suggested motion: {draftPreview.motion_storyboard}</small></div>}
-        {(mediaUrl||localMediaPreview)&&<div className="pruvs-ai-preview" aria-label="Campaign creative preview">
-          <strong>Creative preview · 4:5 mobile layout</strong>
-          {displayedMediaUrl&&<div className="pruvs-business-creative">
-            {mediaType?.startsWith('video/')&&mediaUrl&&!mediaPreviewError?
-              <video src={displayedMediaUrl} controls muted autoPlay loop playsInline preload="metadata" onLoadedData={()=>setMediaPreviewError(false)} onError={()=>setMediaPreviewError(true)}/>:
-              <img src={displayedMediaUrl} alt="" onLoad={()=>{if(mediaUrl&&displayedMediaUrl===mediaUrl)setMediaPreviewError(false)}} onError={()=>{if(mediaUrl&&displayedMediaUrl===mediaUrl)setMediaPreviewError(true)}}/>}
-            <div className="pruvs-business-creative-text"><strong>{headline||'Your campaign headline'}</strong><p>{message||'Add a promotional message to preview the campaign.'}</p></div>
-          </div>}
-          <small role="status">{uploadPending?'Local preview only — upload unsuccessful or still in progress. Cannot save.':mediaPreviewError?'Stored asset is not publicly accessible. Cannot save until it loads.':'Uploaded media preview · '+mediaType}</small>
-          {mediaPreviewError&&<button type="button" className="btn subtle" onClick={()=>setMediaPreviewError(false)}>Retry preview</button>}
-          <button type="button" className="btn subtle" disabled={assetBusy} onClick={removeMedia}>Remove picture / use text only</button>
-        </div>}
         {mediaNeedsRendering&&<p className="helper" role="status">This {creativeFormat.toUpperCase()} asset is not rendered yet. Saving will generate it automatically before storing the promotion.</p>}
         {mediaUrl&&!artworkKey&&mediaType!==targetMediaType&&<p className="helper">To change this saved campaign's format, upload its original picture again.</p>}
-        <p className="helper">Upload a picture and add a headline to create branded artwork. No manual URL is needed.</p>
+        <p className="helper">Your uploaded picture stays the main creative. Set a headline to create branded artwork, or save to render the selected format automatically. No manual URL is needed.</p>
       </section>
       <form className="promo-form" onSubmit={e=>{
         e.preventDefault();
