@@ -171,6 +171,7 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
       <p className="helper">Promotions are shown in the Pruvs customer app only after you explicitly publish them. A promotion points to one already-published loyalty program.</p>
       <section className="pruvs-ai-studio">
         <div className="pruvs-ai-studio-heading"><Sparkles size={21}/><div><h3>Campaign studio · AI + creative assets</h3><p>Use the published loyalty program as the source of truth. AI suggests copy, but cannot change rewards or publish on its own.</p></div></div>
+        <label className="pruvs-ai-program-select">Published loyalty program<select required value={programId} disabled={Boolean(editingPromotionId)} onChange={e=>changeProgram(e.target.value)}>{published.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></label>
         <div className="pruvs-ai-grid">
           <label>Campaign goal<input value={goal} minLength={8} maxLength={300} onChange={e=>setGoal(e.target.value)}/></label>
           <label>Target audience<input value={audience} maxLength={140} onChange={e=>setAudience(e.target.value)}/></label>
@@ -179,6 +180,15 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
           <label>Watermark text<input value={watermark} maxLength={70} onChange={e=>setWatermark(e.target.value)}/></label>
         </div>
         {currentProgram&&<div className="pruvs-ai-criteria"><strong>Program conditions (locked)</strong><small>{currentProgram.title} · Minimum {(currentProgram.min_purchase_minor/100).toFixed(2)} RON · {currentProgram.stamps_required} verified purchases → {(currentProgram.reward_minor/100).toFixed(2)} RON reward</small></div>}
+        <div className="pruvs-ai-brief-editor" aria-label="Predefined campaign brief editor">
+          <div className="row between wrap"><h4>Predefined campaign text · edit before generating</h4>
+            <button type="button" className="btn subtle" disabled={!currentProgram||aiBusy||assetBusy} onClick={()=>setCreativeInstructions(predefinedCampaignBrief(currentProgram))}>Restore predefined text</button></div>
+          <label htmlFor="pruvs-campaign-brief">Your campaign instructions</label>
+          <textarea id="pruvs-campaign-brief" value={creativeInstructions} rows={6} maxLength={1200}
+            placeholder="Describe the promotion you want Pruvs AI to write."
+            onChange={e=>setCreativeInstructions(e.target.value)}/>
+          <small>{creativeInstructions.length}/1200 characters · This editable brief guides AI copy generation. The locked loyalty conditions above always take priority.</small>
+        </div>
         {aiReadiness&&<div className="helper" role="status">
           AI copy: {aiReadiness.copy_ready?'Configured':'Unavailable'} · AI artwork: {aiReadiness.artwork_ready?'Configured':'Unavailable'} · Campaign media storage: {aiReadiness.media_ready?'Configured':'Needs attention'}.
           {aiReadiness.media_ready===false&&<p role="alert">
@@ -191,6 +201,12 @@ export default function PromotionConsole({token,programs,mode='promotions'}){
           {aiReadiness.media_ready===true&&!aiReadiness.ai_images_enabled&&<p>AI image generation is disabled by PRUVS_BUSINESS_AI_IMAGES_ENABLED.</p>}
           <small>Configuration checks do not validate R2 write permissions. Generation may incur provider charges. Nothing publishes automatically.</small>
         </div>}
+        <div className="pruvs-ai-copy-editor" aria-label="Review campaign copy before artwork">
+          <h4>Campaign copy · review and edit before generating artwork</h4>
+          <p className="helper">Generate AI copy from your edited brief, then review the resulting headline and message before making artwork.</p>
+          <label>Promotion headline<input value={headline} minLength={5} maxLength={100} required placeholder="A little extra for your next visit" onChange={e=>setHeadline(e.target.value)}/></label>
+          <label>Promotional message<textarea value={message} minLength={10} maxLength={500} required rows={4} placeholder="Join our loyalty program and earn a reward after qualifying visits." onChange={e=>setMessage(e.target.value)}/></label>
+        </div>
         <div className="pruvs-ai-actions"><button type="button" className="btn primary" disabled={!programId||aiBusy||assetBusy||busy||aiReadiness?.copy_ready===false} onClick={generateDraft}><WandSparkles size={17}/>{aiBusy?'Creating AI draft…':'Generate AI copy'}</button>
           <button type="button" className="btn primary" disabled={!programId||!draftPreview||!headline.trim()||assetBusy||aiBusy||busy||aiReadiness?.artwork_ready===false} onClick={generateAIArtwork}><Sparkles size={17}/>{assetBusy?'Creating artwork…':'Generate AI artwork'}</button>
           <label className="btn outline pruvs-ai-file"><ImagePlus size={17}/> Upload campaign picture<input type="file" accept="image/jpeg,image/png,image/webp" disabled={assetBusy} onChange={e=>{const file=e.target.files?.[0];e.target.value='';uploadArtwork(file)}}/></label>
