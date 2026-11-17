@@ -4,7 +4,7 @@ No customer receipt data is ever accepted here. Uploads are re-encoded to
 strip EXIF and checked by Pillow; media keys are scoped to authenticated merchant.
 """
 from __future__ import annotations
-import io, os, re, tempfile, subprocess
+import io, logging, os, re, tempfile, subprocess
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -16,6 +16,7 @@ from .models import Staff
 from .security import merchant_actor
 
 router=APIRouter(tags=['Campaign media'])
+logger=logging.getLogger(__name__)
 MAX_FILE_BYTES=6_000_000
 Image.MAX_IMAGE_PIXELS=12_000_000
 
@@ -56,7 +57,10 @@ def put(client,cfg,key,data,content_type):
     try:
         client.put_object(Bucket=cfg['PRUVS_CAMPAIGN_R2_BUCKET'],Key=key,Body=data,
                ContentType=content_type,CacheControl='public, max-age=31536000, immutable')
-    except Exception:
+    except Exception as exc:
+        status=getattr(exc,'response',{}).get('ResponseMetadata',{}).get('HTTPStatusCode')
+        logger.warning('Campaign media storage write failed (type=%s, provider_status=%s)',
+                       type(exc).__name__, status)
         raise HTTPException(503,'Could not store campaign artwork') from None
     return {'media_url':media_url(cfg,key),'media_key':key,'media_type':content_type}
 

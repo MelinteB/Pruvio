@@ -68,7 +68,8 @@ def promo_json(p,db):
             'currency':program.currency if program else 'RON',
             'headline':p.headline,'message':p.message,'status':p.status,
             'media_url':p.media_url,'media_type':p.media_type,'media_alt':p.media_alt,
-            'expires_at':p.expires_at.isoformat() if p.expires_at else None}
+            'expires_at':p.expires_at.isoformat() if p.expires_at else None,
+            'duration_days':p.duration_days}
 
 class PromotionIn(BaseModel):
     program_id: str
@@ -110,6 +111,31 @@ def merchant_create_promo(payload:PromotionIn,staff:Staff=Depends(merchant_actor
                     status='draft',duration_days=payload.duration_days)
     db.add(promo);db.commit();db.refresh(promo)
     return promo_json(promo,db)
+
+@router.patch('/v1/merchant/promotions/{promotion_id}')
+def update_promotion_draft(promotion_id:str,payload:PromotionIn,
+                           staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    """Allow editing only merchant-owned, unpublished drafts."""
+    campaign_schema_ready(db)
+    can_manage(staff)
+    promo=db.get(Promotion,promotion_id)
+    if not promo or promo.merchant_id!=staff.merchant_id:
+        raise HTTPException(404,'Promotion not found')
+    if promo.status!='draft':
+        raise HTTPException(409,'Only unpublished drafts may be edited; copy the offer instead.')
+    program=owned_program(db,staff,promo.program_id)
+    if program.status!='published' or payload.program_id!=promo.program_id:
+        raise HTTPException(409,'Keep the original published loyalty program for this draft.')
+    media_url,media_type,media_alt=campaign_media(payload)
+    promo.headline=payload.headline.strip()
+    promo.message=payload.message.strip()
+    promo.duration_days=payload.duration_days
+    promo.media_url=media_url
+    promo.media_type=media_type
+    promo.media_alt=media_alt
+    db.commit()
+    return promo_json(promo,db)
+
 
 @router.post('/v1/merchant/promotions/{promotion_id}/publish')
 def publish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):

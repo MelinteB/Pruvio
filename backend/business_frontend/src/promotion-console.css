@@ -18,3 +18,8 @@
 .pruvs-ai-preview img,.pruvs-ai-preview video{width:min(250px,100%);height:auto;aspect-ratio:4/5;object-fit:cover;border-radius:12px;background:#e7f2ea}
 .pruvs-ai-preview small{color:#627b6e}
 @media(max-width:700px){.pruvs-ai-grid{grid-template-columns:1fr}}
+
+.pruvs-ai-preview img,.pruvs-ai-preview video{width:min(360px,100%);max-width:100%;aspect-ratio:4/5;object-fit:cover;display:block}
+.pruvs-ai-preview .btn{justify-self:start}
+.promo-entry .btn{flex-shrink:0}
+@media(max-width:880px){.promo-entry{flex-wrap:wrap}.promo-entry .btn{max-width:100%}}

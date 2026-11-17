@@ -144,13 +144,17 @@ def ai_readiness(staff: Staff = Depends(merchant_actor),
         schema_ready = bool(check_schema(db.get_bind()).get('campaign_media'))
     except Exception:
         schema_ready = False
-    media_configured = all(os.getenv(key, '').strip() for key in (
-        'PRUVS_CAMPAIGN_R2_ENDPOINT_URL', 'PRUVS_CAMPAIGN_R2_ACCESS_KEY_ID',
-        'PRUVS_CAMPAIGN_R2_SECRET_ACCESS_KEY', 'PRUVS_CAMPAIGN_R2_BUCKET',
-        'PRUVS_CAMPAIGN_MEDIA_PUBLIC_BASE_URL', 'PRUVS_CAMPAIGN_MEDIA_HOSTS'))
+    # Validate HTTPS public host and R2 configuration without exposing credentials.
+    from .media_v067 import bucket_config
+    try:
+        bucket_config()
+        media_configured = True
+    except HTTPException:
+        media_configured = False
     return {
         'copy_ready': bool(ai and has_key and schema_ready),
         'artwork_ready': bool(image and has_key and schema_ready and media_configured),
         'campaign_schema_ready': schema_ready,
+        'media_ready': media_configured,
         'message': 'AI generation is billed by the configured provider; publishing always requires merchant review.',
     }
