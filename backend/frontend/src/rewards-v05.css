@@ -1,1 +1,7 @@
 .rewards-featured{margin:16px 0 26px}.rewards-featured h2{font-size:1.25rem;margin-bottom:12px}.rewards-promotion{border:1px solid #96dbce;background:linear-gradient(135deg,#f1fffa,#fff)}.rewards-promo-tag{display:block;color:#07887d;letter-spacing:.08em;font-size:.7rem;font-weight:800}.rewards-claim-form{display:grid;gap:8px;margin:8px 0;padding:12px;border:1px solid #d1ebe5;border-radius:12px}.rewards-claim-form label{display:grid;gap:4px;font-size:.78rem}.rewards-claim-form input,.rewards-claim-form select{padding:9px;border:1px solid #b3d6d0;border-radius:9px;background:white}.rewards-claim-error{color:#b02d47}
+
+/* Selected receipt context survives the receipt-details → loyalty navigation. */
+.pruvs-loyalty-selected-receipt{border:2px solid #1464d2!important;border-radius:13px;background:#f4f8ff;scroll-margin-top:115px;padding:14px}
+.pruvs-loyalty-selected-label{display:inline-block;margin:7px 0 1px;font-size:11px;color:#1458bb;font-weight:700}
+.pruvs-loyalty-discover-link{margin-top:9px;font-size:12px;min-height:32px}
+.pruvs-v7150-receipt-loyalty>button:disabled{white-space:normal;text-align:center;cursor:not-allowed}
