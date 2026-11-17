@@ -164,3 +164,55 @@ def test_enabled_without_b11_tables_fails_closed(monkeypatch):
         with pytest.raises(HTTPException) as error:
             pilot.require_db_mode(db)
         assert error.value.status_code==503
+
+
+# v0.6.14: customer eligibility is dynamically derived from current membership
+# and audited merchant approval, never from a configured numerical user ID.
+def test_dynamic_customer_receipt_access_tracks_membership_and_merchant_decision(data,monkeypatch):
+    from business.models import Membership
+    from business.customer_pilot_eligibility_v0614 import receipt_eligibility
+
+    db,m1,m2,owner,other,admin,program=data
+    monkeypatch.setenv('PRUVS_BUSINESS_RECEIPT_PILOT_ENABLED','true')
+    db.add(Membership(consumer_id='signed-customer-6',program_id=program.id))
+    db.commit()
+
+    assert receipt_eligibility(consumer_id='signed-customer-6',db=db)=={
+        'eligible':False,'reason':'no_joined_approved_merchant'}
+    assert receipt_eligibility(consumer_id='signed-customer-2',db=db)['eligible'] is False
+
+    pilot.request_pilot_access(staff=owner,db=db)
+    pilot.platform_decide_pilot(m1.id,pilot.PilotDecisionIn(action='approve'),
+                                staff=admin,db=db)
+    assert receipt_eligibility(consumer_id='signed-customer-6',db=db)=={
+        'eligible':True,'reason':'joined_approved_merchant'}
+    assert receipt_eligibility(consumer_id='signed-customer-2',db=db)['eligible'] is False
+
+    pilot.platform_decide_pilot(m1.id,pilot.PilotDecisionIn(action='revoke',note='Test revoke'),
+                                staff=admin,db=db)
+    assert receipt_eligibility(consumer_id='signed-customer-6',db=db)['eligible'] is False
+
+
+def test_dynamic_customer_receipt_access_fails_closed_when_pilot_or_store_inactive(data,monkeypatch):
+    from business.models import Membership,Store
+    from business.customer_pilot_eligibility_v0614 import receipt_eligibility
+
+    db,m1,m2,owner,other,admin,program=data
+    db.add(Membership(consumer_id='signed-customer-6',program_id=program.id))
+    db.commit()
+    pilot.request_pilot_access(staff=owner,db=db)
+    pilot.platform_decide_pilot(m1.id,pilot.PilotDecisionIn(action='approve'),
+                                staff=admin,db=db)
+    monkeypatch.setenv('PRUVS_BUSINESS_RECEIPT_PILOT_ENABLED','false')
+    assert receipt_eligibility(consumer_id='signed-customer-6',db=db)=={
+        'eligible':False,'reason':'receipt_pilot_disabled'}
+
+    monkeypatch.setenv('PRUVS_BUSINESS_RECEIPT_PILOT_ENABLED','true')
+    store=db.get(Store,program.store_id)
+    store.active=False
+    db.commit()
+    assert receipt_eligibility(consumer_id='signed-customer-6',db=db)['eligible'] is False
+    store.active=True
+    program.status='draft'
+    db.commit()
+    assert receipt_eligibility(consumer_id='signed-customer-6',db=db)['eligible'] is False

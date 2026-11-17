@@ -28,6 +28,7 @@ from app.services import standalone_app_service as receipts
 from app.services.document_service import resolve_document_path
 from app.services.receipt_storage import is_cloud, read_paid
 from app.react_app.loyalty_gateway import config,enabled,pseudonym,call_business,_base64url
+from app.react_app.loyalty_pilot_access_v7158 import pilot_access, pilot_allowed, pilot_ready
 
 router=APIRouter()
 MAX_UPLOAD_B64=8_000_000
@@ -38,20 +39,6 @@ class ClaimRequest(BaseModel):
     code:str=Field(min_length=24,max_length=24,pattern=r'^[A-Fa-f0-9]{24}$')
     share_consent:bool
     photo_base64:str|None=Field(default=None,max_length=MAX_UPLOAD_B64)
-
-
-def pilot_allowed(user_id):
-    # Fail closed: v0.6 claims require an explicit customer allowlist.
-    allowed={part.strip() for part in os.getenv('PRUVS_LOYALTY_RECEIPT_V06_PILOT_USER_IDS','').split(',') if part.strip()}
-    return str(user_id) in allowed
-
-
-def pilot_ready(user_id):
-    if not pilot_allowed(user_id):
-        raise HTTPException(403,'This receipt verification pilot is limited to invited accounts')
-    if (not enabled() or os.getenv('PRUVS_LOYALTY_RECEIPT_CLAIMS_ENABLED','false').lower()!='true'
-            or os.getenv('PRUVS_LOYALTY_RECEIPT_V06_ENABLED','false').lower()!='true'):
-        raise HTTPException(503,'Verified receipt submissions are not enabled in this environment')
 
 
 def image_to_jpeg(raw):
@@ -154,7 +141,8 @@ def claim_v06(case_id:int,payload:ClaimRequest,identity=Depends(current),db=Depe
 
 @router.get('/claims')
 def my_claims(identity=Depends(current)):
-    pilot_ready(identity[0].id)
+    # Previously submitted claims remain readable if a merchant loses approval.
+    pilot_ready(identity[0].id, require_eligibility=False)
     return call_business('/v1/customer/pilot/claims',user_id=identity[0].id)
 
 

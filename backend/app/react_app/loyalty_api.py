@@ -13,11 +13,9 @@ router = APIRouter(prefix='/api/v1/loyalty', tags=['Rewards'])
 
 @router.get('/status')
 def status(identity=Depends(current)):
-    # No Business secrets, tokens, or user IDs are exposed.
-    return {'enabled':enabled(), 'receipt_claims_enabled':enabled() and os.getenv('PRUVS_LOYALTY_RECEIPT_CLAIMS_ENABLED','false').lower()=='true',
-            'receipt_v06_enabled':enabled() and os.getenv('PRUVS_LOYALTY_RECEIPT_CLAIMS_ENABLED','false').lower()=='true' and os.getenv('PRUVS_LOYALTY_RECEIPT_V06_ENABLED','false').lower()=='true' and __import__('app.react_app.loyalty_v06',fromlist=['pilot_allowed']).pilot_allowed(identity[0].id),
-            'customer_codes_v12_enabled':enabled() and os.getenv('PRUVS_LOYALTY_RECEIPT_CLAIMS_ENABLED','false').lower()=='true' and os.getenv('PRUVS_LOYALTY_CUSTOMER_CODES_V12_ENABLED','false').lower()=='true' and os.getenv('PRUVS_LOYALTY_RECEIPT_V06_ENABLED','false').lower()=='true' and __import__('app.react_app.loyalty_v06',fromlist=['pilot_allowed']).pilot_allowed(identity[0].id),
-            'message':'Receipt earning requires verified merchant integration and merchant approval.'}
+    # Policy lives outside the OCR/import path and always uses authenticated Core identity.
+    from app.react_app.loyalty_pilot_access_v7158 import receipt_status
+    return receipt_status(identity[0].id)
 
 @router.get('/offers')
 def offers(latitude:float|None=Query(None,ge=-90,le=90),

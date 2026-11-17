@@ -21,7 +21,7 @@ from .security import merchant_actor, customer_actor, verify_password, encode_me
 from .schemas import LoginIn, StoreIn, ProgramIn, CampaignGoal, CampaignIn, ReceiptProofIn, ConfirmIn, DemoReceiptIn
 
 settings=get_settings()
-app=FastAPI(title='Pruvs Business API',version='0.6.13',docs_url='/docs' if settings.app_env!='production' else None)
+app=FastAPI(title='Pruvs Business API',version='0.6.14',docs_url='/docs' if settings.app_env!='production' else None)
 app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=False,
                    allow_methods=['GET','POST'],allow_headers=['Authorization','Content-Type'])
 app.include_router(merchant_enrollment_router)
@@ -35,6 +35,8 @@ from .pilot_readiness_v069 import router as receipt_readiness_router
 app.include_router(receipt_readiness_router)
 from .pilot_enrollment_v0612 import router as pilot_enrollment_router
 app.include_router(pilot_enrollment_router)
+from .customer_pilot_eligibility_v0614 import router as customer_eligibility_router
+app.include_router(customer_eligibility_router)
 
 def owned(db, cls, object_id, merchant_id):
     item=db.get(cls,object_id)

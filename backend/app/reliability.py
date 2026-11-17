@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-RELEASE = "7.1.57"
+RELEASE = "7.1.58"
 
 def bounded_seconds(name: str, default: float, minimum: float, maximum: float) -> float:
     """Use safe runtime polling limits even with an invalid environment value."""
