@@ -52,7 +52,7 @@ def enqueue_selection_confirmed(db, session, participant):
         if ro else
         f'{actor} confirmed their selected items. Review the bill summary and owner controls.'
     )
-    enqueue(db, owner.id, 'selection_confirmed', title, body, f'/bill/{session.token}?view=summary')
+    enqueue(db, owner.id, 'selection_confirmed', title, body, f'/bill/{session.token}')
 
 def enqueue_transition(db,session,actor_user_id,kind):
     if kind not in ('split_settled','split_reopened') or session.owner_user_id!=actor_user_id:
