@@ -64,7 +64,6 @@
     scroll-behavior:auto!important;
     transition-duration:.01ms!important;
   }
-  .pruvs-campaign-creative-media:is(video){display:none}
 }
 @media(prefers-contrast:more){
   .core-experience,.pruvs-business-2027{
