@@ -132,7 +132,9 @@ def test_frontend_keeps_media_server_generated():
     assert "setMediaUrl(data.media_url)" in source
     assert "Local preview only" in source
     assert "mediaCannotSave" in source
-    assert "Copy to new draft" in source
+    library = (Path(__file__).resolve().parents[1] / "business_frontend" / "src" / "CampaignLibrary.jsx").read_text(encoding="utf-8")
+    assert "Duplicate" in library
+    assert "Reopen draft" in library
 
 
 def test_diagnostics_list_missing_setting_names_without_secrets(monkeypatch):
