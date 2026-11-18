@@ -263,7 +263,7 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
         {draftPreview&&<div className="pruvs-ai-preview"><strong>AI copy preview</strong><p><b>{draftPreview.cta}</b> · {draftPreview.visual_brief}</p><small>Suggested motion: {draftPreview.motion_storyboard}</small></div>}
         {mediaNeedsRendering&&<p className="helper" role="status">This {creativeFormat.toUpperCase()} asset is not rendered yet. Saving will generate it automatically before storing the promotion.</p>}
         {mediaUrl&&!artworkKey&&mediaType!==targetMediaType&&<p className="helper">To change this saved campaign's format, upload its original picture again.</p>}
-        <p className="helper">The original uploaded picture stays the creative source. You must review and approve the message and selected format before publishing.</p>
+        <p className="helper">The original uploaded picture stays the creative source. No manual URL is needed. Review and approve the message and selected format before publishing.</p>
           </div>
           <div className="pruvs-studio-2027-preview">
             <CorePromotionPreview
