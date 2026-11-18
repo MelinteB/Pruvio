@@ -4,6 +4,7 @@ import './promotion-console.css';
 import './promo-v06.css';
 import {QRCodeSVG} from 'qrcode.react';
 import CorePromotionPreview from './CorePromotionPreview.jsx';
+import CampaignLibrary from './CampaignLibrary.jsx';
 import './studio-2027.css';
 const API = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
 export function predefinedCampaignBrief(program){
@@ -24,7 +25,7 @@ async function call(path,token,body,method){
   if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:'Operation failed ('+response.status+')');
   return data;
 }
-export default function PromotionConsole({token,programs,merchantName='',mode='promotions'}){
+export default function PromotionConsole({token,programs,merchantName='',mode='promotions',initialView='studio',canManage=true}){
   const [list,setList]=useState([]),[programId,setProgramId]=useState(''),[headline,setHeadline]=useState(''),[message,setMessage]=useState(''),[mediaUrl,setMediaUrl]=useState(''),[mediaType,setMediaType]=useState('image/jpeg'),[days,setDays]=useState(14),[amount,setAmount]=useState(''),[code,setCode]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
   const [goal,setGoal]=useState('Encourage loyal customers to return'),[audience,setAudience]=useState('Local regular customers'),
     [tone,setTone]=useState('friendly'),[creativeFormat,setCreativeFormat]=useState('png'),
@@ -34,6 +35,7 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
   const [imageOrigin,setImageOrigin]=useState(''); // upload | ai | empty
   const [renderedSignature,setRenderedSignature]=useState('');
   const [editingPromotionId,setEditingPromotionId]=useState('');
+  const [workspaceView,setWorkspaceView]=useState(initialView);
   const [localMediaPreview,setLocalMediaPreview]=useState('');
   const [uploadPending,setUploadPending]=useState(false);
   const [mediaPreviewError,setMediaPreviewError]=useState(false);
@@ -54,6 +56,8 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
   function removeMedia(){resetMedia();setError('');setNotice('Picture removed. You may save a text-only promotion.')}
   function editPromotion(p,copy=false){
     if(p.status!=='draft'&&!copy)return;
+    setWorkspaceView('studio');
+    document.getElementById('pruvs-business-campaign-workspace')?.scrollIntoView?.({behavior:'smooth',block:'start'});
     setEditingPromotionId(copy?'':p.id);
     setProgramId(p.program_id);setHeadline(p.headline);setMessage(p.message);
     setDays(p.duration_days||14);setDraftPreview(null);resetMedia();
@@ -184,14 +188,48 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
     resetMedia();setNotice('');setError('');
   }
   async function refresh(){if(mode!=='promotions')return;try{setList(await call('/v1/merchant/promotions',token));}catch(e){setError(e.message)}}
+  function startNewCampaign(){
+    setEditingPromotionId('');setHeadline('');setMessage('');setDays(14);setDraftPreview(null);
+    resetMedia();setError('');setNotice('Create a campaign draft. Publication always requires approval.');
+    setWorkspaceView('studio');
+  }
+  function manage(action,p,confirmation,noticeMessage,after){
+    if(confirmation&&!window.confirm(confirmation))return;
+    submit(async()=>{
+      const result=await call('/v1/merchant/promotions/'+p.id+'/'+action,token,{});
+      if(after)after(result);
+      setNotice(noticeMessage);
+      await refresh();
+    });
+  }
+  function reopenForEditing(p){
+    manage('reopen',p,null,'Campaign reopened as a private editable draft.',result=>editPromotion(result));
+  }
+  function confirmPublish(p){
+    manage('publish',p,'Publish "'+p.headline+'" to Pruvs Core? Customers will be able to discover it.','Campaign published to Pruvs Core.');
+  }
+  function unpublishCampaign(p){
+    manage('unpublish',p,'Remove "'+p.headline+'" from customer discovery? The campaign will be paused.','Campaign paused and removed from customer discovery.');
+  }
+  function archiveCampaign(p){
+    manage('archive',p,'Archive "'+p.headline+'"? It will remain private and can be restored later.','Campaign archived and hidden from customers.');
+  }
+  function restoreCampaign(p){
+    manage('restore',p,null,'Archived campaign restored as a private draft.');
+  }
   useEffect(()=>{refresh();},[token,mode]);
   async function submit(fn){setBusy(true);setError('');setNotice('');try{await fn()}catch(e){setError(e.message)}finally{setBusy(false)}}
   const findProgram=(id)=>programs.find(p=>p.id===id);
-  return <section className="panel promo-console">
+  return <section id="pruvs-business-campaign-workspace" className="panel promo-console">
     <div className="panel-heading"><h2>{mode==='promotions'?'Promote a loyalty program':'Merchant purchase verification code'}</h2><span>PRUVS PILOT</span></div>
     {error&&<p className="promo-error" role="alert"><AlertCircle size={16}/>{error}</p>}
     {notice&&<p className="promo-notice" role="status"><CheckCircle2 size={16}/>{notice}</p>}
     {mode==='promotions'?<>
+      <div className="pruvs-campaign-workspace-tabs" role="group" aria-label="Campaign workspace views">
+        <button type="button" className={workspaceView==='studio'?'active':''} aria-pressed={workspaceView==='studio'} onClick={()=>setWorkspaceView('studio')}><Sparkles size={17}/> Campaign Studio</button>
+        <button type="button" className={workspaceView==='library'?'active':''} aria-pressed={workspaceView==='library'} onClick={()=>setWorkspaceView('library')}><Megaphone size={17}/> Campaign Library <span>{list.filter(p=>p.status==='draft'||p.status==='paused').length} unpublished</span></button>
+      </div>
+      {workspaceView==='studio'&&canManage&&<>
       <p className="helper">Start with your photograph. Edit the campaign brief, generate or write the copy, and approve the Core-facing creative. Publishing remains a separate action.</p>
       <section className="pruvs-ai-studio">
         <div className="pruvs-ai-studio-heading">
@@ -310,8 +348,8 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
           if(editingPromotionId)await call('/v1/merchant/promotions/'+editingPromotionId,token,payload,'PATCH');
           else await call('/v1/merchant/promotions',token,payload);
           setEditingPromotionId('');setHeadline('');setMessage('');setDraftPreview(null);resetMedia();
-          setNotice('Promotion saved as draft. Review the saved media preview below and publish when ready.');
-          await refresh();
+          setNotice('Promotion saved as draft. Manage it in your Campaign Library when ready.');
+          await refresh();setWorkspaceView('library');
         });
       }}>
         <p className="helper">Review the editable campaign text above before saving. Publishing remains a separate merchant approval action.</p>
@@ -322,7 +360,17 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
         </div>
       </form>
       {!published.length&&<p className="helper">Publish a loyalty program first to create a promotion.</p>}
-      <div className="promo-list">{list.map(p=><article key={p.id} className="promo-entry"><Megaphone size={19}/><div>{p.media_url&&(p.media_type?.startsWith('video/')?<video src={p.media_url} muted autoPlay loop playsInline preload="none" style={{maxWidth:180,maxHeight:140,objectFit:'cover'}}/>:<img src={p.media_url} loading="lazy" style={{maxWidth:180,maxHeight:140,objectFit:'cover'}} alt={p.media_alt||p.headline}/>)}<strong>{p.headline}</strong><p>{p.message}</p><small>{p.program_title} · {p.status}{p.expires_at?' · Until '+new Date(p.expires_at).toLocaleDateString():''}</small></div>{p.status==='draft'?<><button type="button" className="btn subtle" disabled={busy} onClick={()=>editPromotion(p)}>Edit draft</button><button type="button" className="btn primary" disabled={busy} onClick={()=>submit(async()=>{await call('/v1/merchant/promotions/'+p.id+'/publish',token,{});setNotice('Promotion published to Pruvs.');await refresh()})}>Publish</button></>:<><button type="button" className="btn subtle" disabled={busy} onClick={()=>editPromotion(p,true)}>Copy to new draft</button>{p.status==='published'&&<button type="button" className="btn subtle" disabled={busy} onClick={()=>submit(async()=>{await call('/v1/merchant/promotions/'+p.id+'/unpublish',token,{});setNotice('Promotion removed from customer discovery.');await refresh()})}>Unpublish</button>}</>}</article>)}</div>
+      </>}
+      {workspaceView==='studio'&&!canManage&&<p className="helper">Only merchant owners or managers can edit and publish campaigns. You may review the campaign library.</p>}
+      {workspaceView==='library'&&<CampaignLibrary campaigns={list} busy={busy} canManage={canManage}
+        onCreate={canManage?startNewCampaign:undefined}
+        onEdit={canManage?p=>editPromotion(p):undefined}
+        onCopy={canManage?p=>editPromotion(p,true):undefined}
+        onPublish={canManage?confirmPublish:undefined}
+        onUnpublish={canManage?unpublishCampaign:undefined}
+        onReopen={canManage?reopenForEditing:undefined}
+        onArchive={canManage?archiveCampaign:undefined}
+        onRestore={canManage?restoreCampaign:undefined}/>}
     </>:<>
       <p className="helper">After a completed sale, issue a one-time purchase code. Give it to the customer, who must select an owned receipt in Pruvs. The claim still requires your approval before any stamps are credited. This pilot does not verify the fiscal transaction with a POS.</p>
       <form className="promo-form" onSubmit={e=>{e.preventDefault();submit(async()=>{const value=Math.round(Number(amount)*100);if(!Number.isSafeInteger(value)||value<=0)throw new Error('Enter a valid amount.');const result=await call('/v1/merchant/pilot/purchases/issue',token,{program_id:programId,amount_minor:value});setCode({...result,program_id:programId});setNotice('Code created for completed checkout. It expires after 30 minutes.')})}}>
