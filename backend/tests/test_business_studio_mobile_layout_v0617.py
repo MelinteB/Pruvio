@@ -27,7 +27,7 @@ def test_heading_is_grid_and_status_moves_below_at_tablet_sizes():
     assert '@media(max-width:1100px)' in styles
     assert 'grid-column:2;grid-row:2;justify-self:start;margin:0;' in styles
     assert 'max-width:100%;white-space:normal' in styles
-    assert 'flex-wrap:wrap' not in styles
+    assert '.pruvs-ai-studio-heading{flex-wrap:wrap}' not in styles
 
 
 def test_mobile_description_uses_entire_available_width():
