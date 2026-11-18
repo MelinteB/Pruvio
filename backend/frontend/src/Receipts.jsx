@@ -44,7 +44,7 @@ const historyDate=(date)=>{
   const d=new Date(date);
   return Number.isNaN(d.getTime())?'Scan date unavailable':new Intl.DateTimeFormat(undefined,{year:'numeric',month:'short',day:'numeric'}).format(d);
 };
-export function History({home=false,billsOnly=false}) {
+export function History({home=false,billsOnly=false,children=null}) {
   const {user}=useApp();
   const [offset,setOffset]=useState(0);
   const [tab,setTab]=useState(billsOnly?'open':'receipts');
@@ -137,12 +137,13 @@ export function History({home=false,billsOnly=false}) {
   const label=home?'Recent receipts':isSplitTab?(tab==='open'?'Open shared bills':'Settled shared bills'):
     tab==='archived'?(showRemoved?'Removed records':'Archived records'):'Receipts';
   return <>
-    <Title eyebrow={home?'YOUR EVERYDAY, SIMPLIFIED':'YOUR BILL LIBRARY'}
-      title={home?t('Overview'):billsOnly?t('Your shared bills'):t('Your receipts and bills')}
-      action={home?null:<Link className="primary" to="/upload"><ScanLine size={18}/>{t('Scan a receipt')}</Link>}>
-      {home?t('Good moments. Fair shares.'):'Organized by merchant and scan date. Expand a receipt to see its splits.'}
-    </Title>
+    {!home&&<Title eyebrow="YOUR BILL LIBRARY"
+      title={billsOnly?t('Your shared bills'):t('Your receipts and bills')}
+      action={<Link className="primary" to="/upload"><ScanLine size={18}/>{t('Scan a receipt')}</Link>}>
+      Organized by merchant and scan date. Expand a receipt to see its splits.
+    </Title>}
     {home&&<HomeWelcome user={user}/>}
+    {home&&children}}
     {billsOnly&&!home&&CORE_PROJECTS_ENABLED&&<div className="pruvs-project-entry"><div><strong>Projects</strong><p className="muted">Combine receipts and split bills, invite participants, and see everyone's balances.</p></div><Link className="primary" to="/projects">Open projects</Link></div>}
     {error&&<Message error={error}/>}{actionError&&<Message error={actionError}/>}
     {!home&&<nav className="receipt-status-tabs" aria-label={t("Receipt and bill views" )}>
@@ -160,7 +161,7 @@ export function History({home=false,billsOnly=false}) {
       <div><strong>{data.bill_counts?.open??0}</strong><span>{t('Open bills')}</span></div>
       <div><strong>{data.bill_counts?.settled??0}</strong><span>{t('Settled bills')}</span></div>
     </div>}
-    <div className="section-heading"><h2>{label}</h2><small className="muted">{t("Grouped by merchant · newest scans first")}</small></div>
+    <div className="section-heading"><h2>{label}</h2>{!home&&<small className="muted">{t("Grouped by merchant · newest scans first")}</small>}</div>
     {loading?<Spinner/>:data&&<>
       <div className="merchant-tree" aria-label={t("Merchants and receipts" )}>
         {visible.map(merchant=><details key={merchant.key} className="merchant-group panel">
