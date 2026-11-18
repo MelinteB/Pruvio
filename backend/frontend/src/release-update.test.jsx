@@ -31,19 +31,19 @@ describe('Core release update banner',()=>{
     expect(screen.queryByRole('button',{name:'Reload'})).toBeNull();
   });
   it('allows dismissing a specific update across component remounts',async()=>{
-    serve('7.1.60');
+    serve('7.1.61');
     render(<ReleaseUpdateBanner/>);
     expect(await screen.findByText('A newer Pruvs version is ready.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button',{name:'Dismiss update notice'}));
     expect(screen.queryByRole('button',{name:'Reload'})).toBeNull();
-    expect(window.localStorage.getItem(dismissedKey)).toBe('7.1.60');
+    expect(window.localStorage.getItem(dismissedKey)).toBe('7.1.61');
     cleanup();
     render(<ReleaseUpdateBanner/>);
     await waitFor(()=>expect(fetch).toHaveBeenCalledTimes(2));
     expect(screen.queryByRole('button',{name:'Reload'})).toBeNull();
     cleanup();
     // Dismissal of one release must not hide a newer update.
-    serve('7.1.61');
+    serve('7.1.62');
     render(<ReleaseUpdateBanner/>);
     expect(await screen.findByText('A newer Pruvs version is ready.')).toBeTruthy();
   });
