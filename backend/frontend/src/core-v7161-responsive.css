@@ -75,7 +75,7 @@
     width:100%;min-height:52px;height:auto;
     border:0;border-radius:12px;padding:7px 3px;
     background:transparent;color:#657996;
-    font:700 10px/1.15 inherit;text-align:center;
+    font-family:inherit;font-size:10px;font-weight:700;line-height:1.15;text-align:center;
     box-shadow:none;white-space:nowrap;touch-action:manipulation;
   }
   .core-experience nav.mobile-nav.core-v7161-nav>a.active,
