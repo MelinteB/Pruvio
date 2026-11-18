@@ -76,5 +76,5 @@ def test_release_metadata_matches_across_bundles():
     assert "version:'7.1.61'" in read('frontend/scripts/stamp-build.mjs')
     assert "pruvs-shell-v7.1.61" in read('app/static/react-service-worker.js')
     assert "CLIENT_RELEASE = '7.1.61'" in read('frontend/src/professional/ReleaseUpdateBanner.jsx')
-    assert "version='0.6.16'" in read('business/main.py')
-    assert 'Pruvs Business · v0.6.16' in read('business_frontend/src/main.jsx')
+    assert "version='0.6.17'" in read('business/main.py')
+    assert 'Pruvs Business · v0.6.17' in read('business_frontend/src/main.jsx')

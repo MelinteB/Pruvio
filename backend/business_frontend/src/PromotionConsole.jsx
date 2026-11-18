@@ -221,7 +221,7 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
   async function submit(fn){setBusy(true);setError('');setNotice('');try{await fn()}catch(e){setError(e.message)}finally{setBusy(false)}}
   const findProgram=(id)=>programs.find(p=>p.id===id);
   return <section id="pruvs-business-campaign-workspace" className="panel promo-console">
-    <div className="panel-heading"><h2>{mode==='promotions'?'Promote a loyalty program':'Merchant purchase verification code'}</h2><span>PRUVS PILOT</span></div>
+    <div className="panel-heading"><h2>{mode==='promotions'?'Campaigns':'Merchant purchase verification code'}</h2>{mode!=='promotions'&&<span>PRUVS PILOT</span>}</div>
     {error&&<p className="promo-error" role="alert"><AlertCircle size={16}/>{error}</p>}
     {notice&&<p className="promo-notice" role="status"><CheckCircle2 size={16}/>{notice}</p>}
     {mode==='promotions'?<>
@@ -230,15 +230,14 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
         <button type="button" className={workspaceView==='library'?'active':''} aria-pressed={workspaceView==='library'} onClick={()=>setWorkspaceView('library')}><Megaphone size={17}/> Campaign Library <span>{list.filter(p=>p.status==='draft'||p.status==='paused').length} unpublished</span></button>
       </div>
       {workspaceView==='studio'&&canManage&&<>
-      <p className="helper">Start with your photograph. Edit the campaign brief, generate or write the copy, and approve the Core-facing creative. Publishing remains a separate action.</p>
       <section className="pruvs-ai-studio">
         <div className="pruvs-ai-studio-heading">
           <span className="pruvs-studio-2027-icon"><Sparkles size={23}/></span>
-          <div><span className="pruvs-studio-2027-eyebrow">CREATIVE WORKSPACE · PRUVS BUSINESS</span>
-            <h3>Campaign Studio</h3>
-            <p>Build from your real photograph, direct the creative, refine AI copy, and review the offer exactly as customers will see it.</p>
+          <div className="pruvs-studio-2027-heading-copy">
+            <h3>Create a campaign</h3>
+            <p>Use your photo, refine the message and preview the offer before publishing.</p>
           </div>
-          <span className="pruvs-studio-2027-privacy"><CheckCircle2 size={15}/> Approval required</span>
+          <span className="pruvs-studio-2027-privacy"><CheckCircle2 size={15}/> Approval required before publishing</span>
         </div>
         <div className="pruvs-studio-2027-progress" aria-label="Campaign creation stages">
           <span className={mediaUrl?'is-done':''}>01 <b>Photo</b><small>{mediaUrl?'Added':'Optional'}</small></span>
