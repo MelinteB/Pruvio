@@ -1,0 +1,129 @@
+/* 2027 merchant UI. Readable density, quiet depth, real operational hierarchy. */
+.pruvs-business-2027.shell{
+  min-height:100vh;background:var(--pruvs-canvas);
+}
+.pruvs-business-2027 .sidebar{
+  width:264px;background:#142824;color:#e8f7ef;
+  border-right:1px solid rgba(255,255,255,.08);
+  padding:28px 17px 22px;
+}
+.pruvs-business-2027 .brand{letter-spacing:-.045em;padding:0 11px 28px;font-size:23px}
+.pruvs-business-2027 .brand span{color:#b1dfc9;font-size:13px}
+.pruvs-business-2027 .tenant{
+  background:rgba(255,255,255,.07);border:1px solid rgba(230,255,239,.13);
+  border-radius:17px;padding:15px 12px;
+}
+.pruvs-business-2027 .tenant-avatar{
+  background:#d6f4e4;color:#174e3d;border-radius:13px;
+}
+.pruvs-business-2027 .side-label{color:#97c0ad}
+.pruvs-business-2027 .nav-link{
+  color:#bcd2c6;min-height:45px;border-radius:13px;letter-spacing:-.012em;
+  font-size:13px;font-weight:650;
+}
+.pruvs-business-2027 .nav-link:hover{
+  background:rgba(248,255,248,.10);color:#fff;
+}
+.pruvs-business-2027 .nav-link.active{
+  color:#093c2c;background:#d1f3e1;box-shadow:inset 0 0 0 1px rgba(23,116,86,.10);
+}
+.pruvs-business-2027 .sidebar-foot .pilot-chip{
+  color:#bde6d0;background:#223e34;border-color:#35594a;border-radius:13px;
+}
+.pruvs-business-2027 .foot-caption{color:#93b6a5}
+.pruvs-business-2027 .main{background:
+  radial-gradient(ellipse at 75% 5%,rgba(205,244,224,.38),transparent 34%),
+  #f5f8f4}
+.pruvs-business-2027 .topbar{
+  position:sticky;top:0;z-index:12;height:73px;
+  padding:0 clamp(20px,3vw,46px);
+  background:rgba(255,255,255,.89);backdrop-filter:blur(16px);
+  border-bottom:1px solid #deebe2;
+}
+.pruvs-business-2027 .breadcrumb{color:var(--pruvs-muted)}
+.pruvs-business-2027 .breadcrumb b{color:var(--pruvs-ink)}
+.pruvs-business-2027 .env-label{color:#476d5b}
+.pruvs-business-2027 .user-circle{background:#d6f4e4;color:#14684e}
+.pruvs-business-2027 .content{padding:clamp(25px,3.2vw,44px) clamp(18px,3.3vw,50px) 100px;max-width:1560px}
+.pruvs-business-2027 .page-head{margin-bottom:28px}
+.pruvs-business-2027 .page-head h1{
+  color:#142c24;letter-spacing:-.055em;font-size:clamp(28px,3vw,39px);
+  line-height:1.13;margin:10px 0 10px;
+}
+.pruvs-business-2027 .page-head p{font-size:14px;color:var(--pruvs-muted)}
+.pruvs-business-2027 .eyebrow{letter-spacing:.14em;color:#15795c}
+.pruvs-business-2027 .panel,.pruvs-business-2027 .stat{
+  background:var(--pruvs-surface);border:1px solid var(--pruvs-border);
+  border-radius:var(--pruvs-radius-lg);
+  box-shadow:var(--pruvs-shadow);
+}
+.pruvs-business-2027 .panel{padding:clamp(17px,2vw,25px)}
+.pruvs-business-2027 .stat{padding:22px}
+.pruvs-business-2027 .stat strong{letter-spacing:-.05em;color:#112a21}
+.pruvs-business-2027 .btn{min-height:44px;border-radius:13px;letter-spacing:-.01em}
+.pruvs-business-2027 .btn.primary{
+  background:#08795d;color:#fff;border:1px solid #08795d;
+  box-shadow:0 5px 13px rgba(8,121,93,.16);
+}
+.pruvs-business-2027 .btn.primary:hover{background:#065c48;transform:translateY(-1px)}
+.pruvs-business-2027 .btn.outline{
+  border:1px solid #a8cbb9;background:#fff;color:#105d46;
+}
+.pruvs-business-2027 .btn.subtle{background:#e9f7ef;color:#0d6a50}
+.pruvs-business-2027 .btn:disabled{transform:none;box-shadow:none}
+.pruvs-business-2027 :is(input,select,textarea){
+  border-radius:13px;border-color:#c9dcd0;color:#1b3a2c;
+}
+.pruvs-business-2027 :is(input,select,textarea):focus-visible{
+  border-color:#08795d;
+}
+.pruvs-business-2027 .panel-heading h2,
+.pruvs-business-2027 .stat-top{
+  color:#17372b;
+}
+.pruvs-business-2027 .pruvs-program-row{
+  border-radius:17px;border-color:#dbe9df;
+}
+.pruvs-business-2027 .pruvs-program-row:hover{
+  box-shadow:0 9px 30px rgba(13,50,36,.07)
+}
+.pruvs-business-2027 .info-banner{
+  border-radius:15px;background:#edf8f2;border-color:#cde8d9;color:#285c47
+}
+.pruvs-business-2027 .notice{
+  border-radius:14px;box-shadow:0 4px 14px rgba(12,90,60,.04)
+}
+.pruvs-business-2027.login-screen{
+  min-height:100svh;background:#fcfdfa;
+}
+.pruvs-business-2027 .login-art{
+  background:
+    radial-gradient(circle at 90% 15%,rgba(139,214,168,.28),transparent 30%),
+    radial-gradient(circle at 10% 95%,rgba(102,168,153,.24),transparent 44%),
+    linear-gradient(143deg,#0f2c26 0%,#174e3f 100%);
+}
+.pruvs-business-2027 .login-card{
+  max-width:445px;border-radius:25px;background:#fff;
+  border:1px solid #e0e9e3;padding:clamp(23px,3vw,40px);
+  box-shadow:0 26px 72px rgba(21,58,42,.08)
+}
+.pruvs-business-2027 .login-card h2{color:#102c21}
+.pruvs-business-2027 .login-card p{color:#537168}
+.pruvs-business-nav-scrim{display:none}
+@media(max-width:850px){
+  .pruvs-business-2027 .sidebar{z-index:31}
+  .pruvs-business-2027 .topbar{z-index:12}
+  .pruvs-business-2027 .pruvs-business-nav-scrim{
+    display:block;position:fixed;inset:0;z-index:20;
+    width:100%;height:100%;border:0;border-radius:0;
+    background:rgba(9,24,17,.50);
+  }
+  .pruvs-business-2027 .content{padding:26px 19px 88px}
+}
+@media(max-width:600px){
+  .pruvs-business-2027 .topbar{height:65px}
+  .pruvs-business-2027 .page-head{gap:9px}
+  .pruvs-business-2027 .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .pruvs-business-2027 .stat{padding:16px;min-height:125px}
+  .pruvs-business-2027 .panel{border-radius:20px}
+}
