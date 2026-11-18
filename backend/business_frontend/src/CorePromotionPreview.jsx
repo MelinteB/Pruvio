@@ -18,6 +18,14 @@ export default function CorePromotionPreview({
   onMediaError,onMediaReady,mediaPending=false,
 }){
   const [viewport,setViewport]=useState('phone');
+  const [reduceMotion,setReduceMotion]=useState(false);
+  useEffect(()=>{
+    if(typeof window.matchMedia!=='function')return;
+    const pref=window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update=()=>setReduceMotion(pref.matches);
+    update();pref.addEventListener?.('change',update);
+    return()=>pref.removeEventListener?.('change',update);
+  },[]);
   const [imageBroken,setImageBroken]=useState(false);
   useEffect(()=>setImageBroken(false),[mediaUrl]);
   const hasMedia=Boolean(mediaUrl&&(/^(https:\/\/|blob:)/i.test(mediaUrl))&&
@@ -48,8 +56,8 @@ export default function CorePromotionPreview({
       <article className="pruvs-promo">
         {hasMedia&&!imageBroken?<div className="pruvs-campaign-creative">
           {video?
-            <video className="pruvs-campaign-creative-media" src={mediaUrl}
-              muted autoPlay loop playsInline preload="metadata"
+            <video key={reduceMotion?'manual':'auto'} className="pruvs-campaign-creative-media" src={mediaUrl}
+              muted autoPlay={!reduceMotion} controls={reduceMotion} loop playsInline preload="metadata"
               aria-label={title}
               onLoadedData={()=>onMediaReady?.()} onError={()=>{setImageBroken(true);onMediaError?.()}}/>:
             <img className="pruvs-campaign-creative-media" src={mediaUrl} alt={title}
