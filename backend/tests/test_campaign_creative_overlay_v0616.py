@@ -36,7 +36,10 @@ def test_merchants_get_rendered_gif_or_mp4_before_draft_save():
     assert 'const rendered=await renderSelectedArtwork(artworkKey)' in studio
     assert 'rendered.media_type!==targetMediaType' in studio
     assert 'media_url:savedMediaUrl||null' in studio
-    assert 'pruvs-business-creative-text' in studio
+    assert 'CorePromotionPreview' in studio
+    preview = (ROOT / 'business_frontend/src/CorePromotionPreview.jsx').read_text(encoding='utf-8')
+    assert 'pruvs-campaign-creative-overlay' in preview
+    assert 'pruvs-campaign-creative-kicker' in preview
 
 
 def test_public_creative_only_accepts_https_image_or_video():
