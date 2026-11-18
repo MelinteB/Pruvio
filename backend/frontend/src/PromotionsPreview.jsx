@@ -1,6 +1,6 @@
 import React,{useEffect,useState} from 'react';
 import {Link} from 'react-router-dom';
-import {Megaphone,Gift} from 'lucide-react';
+import {Gift} from 'lucide-react';
 import {request} from './api';
 import './promotions-preview.css';
 import CampaignCreative,{hasCampaignCreative} from './CampaignCreative.jsx';
@@ -11,7 +11,7 @@ export default function PromotionsPreview(){
   async function refresh(){
     setState('loading');
     try{
-      const data=await request('/loyalty/promotions?limit=3');
+      const data=await request('/loyalty/promotions?limit=1');
       if(!Array.isArray(data))throw new Error('Invalid promotion response');
       setItems(data);setState('ready');
     }catch{
@@ -26,7 +26,7 @@ export default function PromotionsPreview(){
   </section>;
   if(state==='loading'||!items.length)return null;
   return <section className="pruvs-promos" aria-label="Merchant loyalty promotions">
-    <div className="pruvs-promos-heading"><div><Megaphone size={20}/><strong>Offers from participating businesses</strong></div><Link to="/rewards">Explore all rewards</Link></div>
+
     <div className="pruvs-promos-grid">{items.map(p=><article className="pruvs-promo" key={p.id}>
       {hasCampaignCreative(p)?
         <CampaignCreative promotion={p}/>:
@@ -34,5 +34,6 @@ export default function PromotionsPreview(){
       <div className="pruvs-promo-meta"><Gift size={16}/>{p.stamps_required} qualifying receipts → {(p.reward_minor/100).toFixed(2)} {p.currency} reward</div>
       <Link to={'/rewards?program='+encodeURIComponent(p.program_id)}>See loyalty program</Link>
     </article>)}</div>
+    <Link className="pruvs-promos-more" to="/rewards">Explore rewards</Link>
   </section>;
 }
