@@ -36,7 +36,6 @@ const ExpenseView = lazy(() => expenseRoute().then(m => ({ default: m.ExpenseVie
 import './style.css';
 import './ui-refresh.css';
 import './professional-ui.css';
-import { BrandPhrase } from './professional/BrandExperience';
 import { Welcome, JoinByLink } from './professional/CorePages';
 import './core-experience.css';
 import './bill-projects.css';
@@ -55,6 +54,7 @@ import '../../shared_ui/pruvs-2027-tokens.css';
 import '../../shared_ui/pruvs-campaign-card-2027.css';
 import './core-2027.css';
 import './core-v7160-brand.css';
+import './core-v7161-responsive.css';
 const PRUVS_REWARDS_UI_ENABLED = import.meta.env.VITE_PRUVS_LOYALTY_UI_ENABLED === 'true';
 function Guard({
   children,
@@ -111,8 +111,16 @@ function App() {
     [loading, setLoading] = useState(true),
     [config, setConfig] = useState(null),
     [unreadCount, setUnreadCount] = useState(0),
-    [membership, setMembership] = useState(null);
+    [membership, setMembership] = useState(null),
+    [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
+  useEffect(() => { setMobileMenuOpen(false); }, [location.pathname, session?.user?.id]);
+  useEffect(() => {
+    if (!mobileMenuOpen) return undefined;
+    const onEscape = event => { if (event.key === 'Escape') setMobileMenuOpen(false); };
+    document.addEventListener('keydown', onEscape);
+    return () => document.removeEventListener('keydown', onEscape);
+  }, [mobileMenuOpen]);
   const accept = useCallback(value => {
     setIdentity(value);
     setSession(value);
@@ -212,8 +220,8 @@ function App() {
     membership,
     refreshMembership,
     logout
-  }}><div className={user ? 'app with-sidebar pruvs-professional core-experience' : 'app pruvs-professional core-experience'}><a className="skip-link" href="#main-content">{t('Skip to content')}</a><header className="topbar"><div className="brand-membership"><Link to="/" className="brand"><picture><source type="image/webp" srcSet="/static/pruvs-logo-compact.webp"/><img src="/static/pruvs-logo.png" alt={t("Pruvs" )} width="146" height="53" decoding="async" /></picture></Link><BrandPhrase route={location.pathname} />{user && <Link to="/subscription" className={"membership-plan-badge plan-" + (membership?.plan || "pending")} title={t("View subscriptions and Pruvs Credits" )} aria-label={membership?.plan ? "Subscription: " + membership.plan.toUpperCase() : "Subscription loading"}>{membership?.plan ? membership.plan.toUpperCase() : "…"}</Link>}</div><div className="row">{user&&<Link className="core-v7160-top-scan" to="/upload"><ScanLine size={17}/> Scan a receipt</Link>}<Link to="/support" className="help-link"><HelpCircle size={19} /><span>{t("Help")}</span></Link>{user ? <Link to="/account" className="avatar" title={user.name}>{(user.name || user.username || 'P').slice(0, 1).toUpperCase()}</Link> : <Link className="secondary small" to="/login">{t("Sign in")}</Link>}</div></header>
- {user && <aside className="sidebar"><div className="core-v7160-sidebar-logo"><img src="/static/pruvs-mark-compact.webp" alt=""/><div>PRUVS<small>YOUR SHARED MOMENTS</small></div></div><div className="eyebrow">{t("YOUR SPACE")}</div>{nav.map(([url, label, Icon]) => <NavLink key={url} to={url} end={url === '/' || url === '/admin' || url === '/expenses'}><Icon size={20} /><span>{label}</span>{url === '/inbox' && unreadCount > 0 && <span className="inbox-unread-count" aria-label={`${unreadCount} ${t('unread')}`}>{unreadCount > 99 ? '99+' : unreadCount}</span>}</NavLink>)}<div className="core-v7160-sidebar-feature"><span><ScanLine size={19}/></span><strong>Split your next bill</strong><small>Scan a receipt, invite your people and see clear shares.</small><Link to="/upload">Start scanning <ScanLine size={14}/></Link></div><div className="sidebar-bottom"><p>{t("Shared fairly.")} <br /> {t("Remembered simply.")}</p><small>{t("Pruvs · Core Experience")} {CLIENT_RELEASE}</small></div></aside>}
+  }}><div className={user ? 'app with-sidebar pruvs-professional core-experience' : 'app pruvs-professional core-experience'}><a className="skip-link" href="#main-content">{t('Skip to content')}</a><header className="topbar"><div className="brand-membership"><Link to="/" className="brand"><picture><source type="image/webp" srcSet="/static/pruvs-logo-compact.webp"/><img src="/static/pruvs-logo.png" alt={t("Pruvs" )} width="146" height="53" decoding="async" /></picture></Link>{user && <Link to="/subscription" className={"membership-plan-badge plan-" + (membership?.plan || "pending")} title={t("View subscriptions and Pruvs Credits" )} aria-label={membership?.plan ? "Subscription: " + membership.plan.toUpperCase() : "Subscription loading"}>{membership?.plan ? membership.plan.toUpperCase() : "…"}</Link>}</div><div className="row">{user&&<Link className="core-v7160-top-scan" to="/upload"><ScanLine size={17}/> Scan a receipt</Link>}<Link to="/support" className="help-link"><HelpCircle size={19} /><span>{t("Help")}</span></Link>{user ? <Link to="/account" className="avatar" title={user.name}>{(user.name || user.username || 'P').slice(0, 1).toUpperCase()}</Link> : <Link className="secondary small" to="/login">{t("Sign in")}</Link>}</div></header>
+ {user && <aside className="sidebar">{nav.map(([url, label, Icon]) => <NavLink key={url} to={url} end={url === '/' || url === '/admin' || url === '/expenses'}><Icon size={20} /><span>{label}</span>{url === '/inbox' && unreadCount > 0 && <span className="inbox-unread-count" aria-label={`${unreadCount} ${t('unread')}`}>{unreadCount > 99 ? '99+' : unreadCount}</span>}</NavLink>)}<div className="sidebar-bottom"><small>v{CLIENT_RELEASE}</small></div></aside>}
  <main id="main-content" className="content" tabIndex="-1"><ReleaseUpdateBanner /><ErrorBoundary key={(user?.id || "guest") + ":" + location.pathname}><Suspense fallback={<div className="core-route-loading" role="status" aria-live="polite"><Spinner /></div>}><Routes>
  <Route path="/login" element={user ? <Navigate to={safeNext(new URLSearchParams(location.search).get("next"))} replace /> : <Auth key="login" />} /><Route path="/register" element={user ? <Navigate to={invitedBillDestination(new URLSearchParams(location.search).get("next")) || safeNext(new URLSearchParams(location.search).get("next"))} replace /> : <Auth key="register" mode="register" />} /><Route path="/reset" element={<Auth key="reset" mode="reset" />} /><Route path="/reset-password" element={<Navigate to="/reset" />} /><Route path="/password-reset" element={<Navigate to="/reset" />} />
  <Route path="/" element={user ? <Guard><>
@@ -222,6 +230,38 @@ function App() {
  <History home />
  </></Guard> : <Welcome />} /><Route path="/join" element={<Guard><JoinByLink /></Guard>} /><Route path="/bills" element={<Guard><History billsOnly /></Guard>} />{CORE_PROJECTS_ENABLED && <Route path="/projects" element={<Guard><BillProjects /></Guard>} />}{CORE_PROJECTS_ENABLED && <Route path="/projects/join/:token" element={<Guard><ProjectInviteJoin /></Guard>} />}{CORE_PROJECTS_ENABLED && <Route path="/projects/:id" element={<Guard><BillProjects /></Guard>} />}<Route path="/history" element={<Guard><History /></Guard>} /><Route path="/expenses" element={<Guard><Expenses /></Guard>} /><Route path="/expenses/new" element={<Guard><ExpenseNew /></Guard>} /><Route path="/expenses/:id" element={<Guard><ExpenseView /></Guard>} />{PRUVS_REWARDS_UI_ENABLED && <Route path="/rewards" element={<Guard><Rewards /></Guard>} />}<Route path="/upload" element={<Guard><Upload /></Guard>} /><Route path="/receipt/:id" element={<Guard><Receipt /></Guard>} /><Route path="/bill/:token" element={<Guard><Bill /></Guard>} /><Route path="/join/:token" element={<Guard><Join /></Guard>} /><Route path="/subscription" element={<Guard><><Title eyebrow={t("MEMBERSHIP" )} title={t("Subscriptions & Pruvs Credits" )} action={<Link className="secondary" to="/account">{t("Back to Account")}</Link>}>{t("Compare Free, Plus and Business plans, check included usage and manage your subscription.")}</Title><Membership /></></Guard>} /><Route path="/account" element={<Guard><Account /></Guard>} /><Route path="/account/companies" element={<Guard><CompanySettings /></Guard>} /><Route path="/inbox" element={<Guard><Inbox /></Guard>} /><Route path="/account/notifications" element={<Guard><Navigate to="/account#preferences" replace /></Guard>} /><Route path="/notifications" element={<Guard>{location.search.includes('enrol=1') || location.hash.startsWith('#confirm=') ? <Notifications /> : <Navigate to="/account#preferences" replace />}</Guard>} /><Route path="/notifications/open/:id" element={<Guard><NotificationOpen /></Guard>} /><Route path="/admin/*" element={<Guard admin><Admin /></Guard>} /><Route path="/terms" element={<Legal kind="terms" />} /><Route path="/privacy" element={<Legal kind="privacy" />} /><Route path="/support" element={<Support />} /><Route path="*" element={<Panel><h1>{t("Page not found")}</h1><Link to="/">{t("Back to Pruvs")}</Link></Panel>} />
  </Routes></Suspense></ErrorBoundary><footer><span>{t("© Pruvs")}</span><Link to="/terms">{t("Terms")}</Link><Link to="/privacy">{t("Privacy")}</Link><Link to="/support">{t("Support")}</Link></footer></main>
- {user && <nav className="mobile-nav core-mobile-nav" aria-label={t('Main navigation')}>{[['/', t('Home'), Home], ['/bills', t('Bills'), Users], ...(CORE_PROJECTS_ENABLED ? [['/projects', 'Projects', FolderKanban]] : []), ...(PRUVS_REWARDS_UI_ENABLED ? [['/rewards', 'Wallet', Wallet]] : []), ['/inbox', t('Inbox'), Bell], ['/account', t('Profile'), UserRound]].map(([url, label, Icon]) => <NavLink to={url} key={url} end={url === '/'}><Icon size={21} /><span>{label}</span>{url === '/inbox' && unreadCount > 0 && <span className="inbox-unread-count" aria-label={`${unreadCount} ${t('unread')}`}>{unreadCount > 99 ? '99+' : unreadCount}</span>}</NavLink>)}<Link to="/upload" className="core-fab" aria-label={t('Scan a receipt')}><Plus size={24}/></Link></nav>}</div></Context.Provider>;
+ {user && <>
+   <nav className="mobile-nav core-mobile-nav core-v7161-nav" aria-label={t('Main navigation')}>
+     {[['/', t('Home'), Home], ['/bills', t('Bills'), Users]].map(([url,label,Icon])=>
+       <NavLink to={url} key={url} end={url==='/'}><Icon size={21}/><span>{label}</span></NavLink>)}
+     <Link to="/upload" className="core-v7161-scan-tab" aria-label={t('Scan a receipt')}><ScanLine size={22}/><span>{t('Scan')}</span></Link>
+     <NavLink to={PRUVS_REWARDS_UI_ENABLED?'/rewards':'/history'}><Wallet size={21}/><span>{PRUVS_REWARDS_UI_ENABLED?t('Rewards'):t('History')}</span></NavLink>
+     <button type="button" className={'core-v7161-more-tab'+(mobileMenuOpen?' active':'')}
+       aria-haspopup="dialog" aria-expanded={mobileMenuOpen} aria-controls="core-more-menu"
+       onClick={()=>setMobileMenuOpen(value=>!value)}>
+       <Menu size={21}/><span>{t('More')}</span>{unreadCount>0&&<i className="core-v7161-more-dot" aria-label={`${unreadCount} unread messages`}/>}
+     </button>
+   </nav>
+   {mobileMenuOpen&&<div className="core-v7161-menu-backdrop" onClick={()=>setMobileMenuOpen(false)}>
+     <section id="core-more-menu" className="core-v7161-menu-sheet" role="dialog"
+       aria-modal="true" aria-label="More navigation" onClick={event=>event.stopPropagation()}>
+       <header><strong>More</strong><button type="button" autoFocus onClick={()=>setMobileMenuOpen(false)} aria-label="Close menu">Close</button></header>
+       <div className="core-v7161-menu-links">
+         {[['/history',t('Receipt history'),ReceiptText],
+           ['/inbox',t('Inbox'),Bell],
+           ['/expenses',t('Expenses'),BriefcaseBusiness],
+           ...(CORE_PROJECTS_ENABLED?[['/projects',t('Projects'),FolderKanban]]:[]),
+           ['/account',t('Account'),UserRound],
+           ['/subscription',t('Membership'),Wallet],
+           ['/support',t('Help & support'),HelpCircle],
+           ...(user?.is_admin?[['/admin',t('Admin'),ShieldCheck]]:[])
+         ].map(([url,label,Icon])=>
+           <NavLink key={url} to={url} onClick={()=>setMobileMenuOpen(false)}>
+             <Icon size={20}/><span>{label}</span>{url==='/inbox'&&unreadCount>0&&<b>{unreadCount>99?'99+':unreadCount}</b>}
+           </NavLink>)}
+       </div>
+     </section>
+   </div>}
+ </>}</div></Context.Provider>;
 }
 createRoot(document.getElementById('root')).render(<BrowserRouter><App /></BrowserRouter>);
