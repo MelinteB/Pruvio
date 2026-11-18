@@ -4,6 +4,7 @@ import './promotion-console.css';
 import './promo-v06.css';
 import {QRCodeSVG} from 'qrcode.react';
 import CorePromotionPreview from './CorePromotionPreview.jsx';
+import './studio-2027.css';
 const API = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
 export function predefinedCampaignBrief(program){
   const title=String(program?.title||'this published loyalty program').trim();
@@ -271,8 +272,8 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
               headline={headline} message={message}
               mediaUrl={displayedMediaUrl} mediaType={mediaType}
               mediaPending={uploadPending}
-              onMediaError={()=>{if(mediaUrl&&!uploadPending)setMediaPreviewError(true)}}
-              onMediaReady={()=>{if(mediaUrl&&!uploadPending)setMediaPreviewError(false)}}
+              onMediaError={()=>{if(mediaUrl&&!uploadPending&&displayedMediaUrl===mediaUrl)setMediaPreviewError(true)}}
+              onMediaReady={()=>{if(mediaUrl&&!uploadPending&&displayedMediaUrl===mediaUrl)setMediaPreviewError(false)}}
             />
             {(mediaUrl||localMediaPreview)&&<div className="pruvs-studio-2027-media-actions">
               <p role="status">{uploadPending?'Local preview only — upload pending or unsuccessful. Saving is blocked.':mediaPreviewError?'Stored picture could not be loaded. Fix the media URL before saving.':'Creative stored · '+mediaType}</p>
