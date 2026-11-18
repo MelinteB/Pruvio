@@ -51,6 +51,9 @@ import './receipt-paper.css';
 import './core-v7140.css';
 import './pruvs-stage-v7149.css';
 import './pruvs-stage-v7150.css';
+import '../../shared_ui/pruvs-2027-tokens.css';
+import '../../shared_ui/pruvs-campaign-card-2027.css';
+import './core-2027.css';
 const PRUVS_REWARDS_UI_ENABLED = import.meta.env.VITE_PRUVS_LOYALTY_UI_ENABLED === 'true';
 function Guard({
   children,
