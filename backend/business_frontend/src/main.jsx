@@ -5,6 +5,7 @@ import './style.css';
 import '../../shared_ui/pruvs-2027-tokens.css';
 import './business-2027.css';
 import './business-v0615-brand.css';
+import './business-v0616-responsive.css';
 import PromotionConsole from './PromotionConsole';
 import MerchantOverview from './MerchantOverview.jsx';
 import ReceiptInbox from './ReceiptInbox';
