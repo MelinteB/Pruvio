@@ -32,38 +32,8 @@
   border:1px solid #d6e7db;border-radius:19px;
   padding:18px 10px 19px;min-width:0;overflow:hidden;
 }
-.pruvs-core-preview-stage .pruvs-promo{
-  width:100%;max-width:342px;min-width:0;
-  box-sizing:border-box;background:#fff;
-  border:1px solid #d4e4dc;border-radius:19px;padding:12px;
-  box-shadow:0 12px 24px rgba(9,62,38,.09);
-}
+.pruvs-core-preview-stage .pruvs-promo{width:100%;max-width:342px;min-width:0;box-sizing:border-box}
 .pruvs-core-preview-stage.is-desktop .pruvs-promo{max-width:406px}
-.pruvs-core-preview-stage .pruvs-campaign-creative{
-  min-height:275px;border-radius:14px;
-}
-.pruvs-core-preview-stage .pruvs-campaign-creative-overlay{
-  padding:17px;gap:8px
-}
-.pruvs-core-preview-stage .pruvs-campaign-creative-overlay h3{
-  font-size:clamp(17px,2.4vw,21px);line-height:1.18;
-}
-.pruvs-core-preview-stage .pruvs-campaign-creative-overlay p{
-  font-size:12px;line-height:1.45;
-}
-.pruvs-core-preview-stage .pruvs-promo h3{
-  color:#173e30;
-}
-.pruvs-core-preview-stage .pruvs-promo p{color:#426254}
-.pruvs-core-preview-stage .pruvs-promo-meta{
-  color:#3b6251;line-height:1.5;margin:13px 4px;
-}
-.pruvs-core-preview-cta{
-  display:flex;align-items:center;justify-content:center;
-  font-size:13px;font-weight:750;min-height:43px;
-  color:#fff;background:#0b795b;border-radius:11px;
-  padding:10px 12px;
-}
 .pruvs-core-preview-foot{
   display:grid;gap:5px;padding:11px 3px 1px;
   border-top:1px solid #e3ebe5;
