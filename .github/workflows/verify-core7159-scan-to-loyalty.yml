@@ -1,4 +1,4 @@
-name: Verify combined Core 7.1.59 and Business 0.6.14 STAGING
+name: Verify combined Core 7.1.60 and Business 0.6.15 STAGING
 
 on:
   push:
@@ -66,7 +66,7 @@ jobs:
           import json
           from pathlib import Path
           x=json.loads(Path('frontend/dist/build-manifest.json').read_text())
-          assert x['version']=='7.1.59',x
+          assert x['version']=='7.1.60',x
           import re
           from app.reliability import RELEASE
           client=(Path('frontend/src/professional/ReleaseUpdateBanner.jsx').read_text())
@@ -79,7 +79,7 @@ jobs:
           assert "serviceWorker.register('/service-worker.js?v='+CLIENT_RELEASE" in entry, 'Worker registration must follow browser release'
           assert "pruvs-shell-v"+RELEASE in worker, 'Service worker cache release mismatch'
           print('PASS: Server, client, build and service-worker versions match')
-          assert '0.6.14' in Path('business/main.py').read_text()
+          assert '0.6.15' in Path('business/main.py').read_text()
           assert Path('business_migrations/versions/b11a0612_pilot_enrollment.py').is_file()
           assert Path('business/customer_pilot_eligibility_v0614.py').is_file()
           PY
@@ -111,6 +111,6 @@ jobs:
           assert (journey/'ActivationPanel.jsx').is_file()
           assert (journey/'AdminWorkspace.jsx').is_file()
           assert 'activation-journey.css' in (journey/'ActivationPanel.jsx').read_text()
-          print('PASS: Business 0.6.14 role-aware merchant journey')
-          print('PASS: Business v0.6.14 isolated staging UI')
+          print('PASS: Business 0.6.15 role-aware merchant journey')
+          print('PASS: Business v0.6.15 isolated staging UI')
           PY
