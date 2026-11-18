@@ -172,4 +172,4 @@ def test_new_release_versions_are_synchronized():
     assert 'RELEASE = "7.1.61"' in reliability
     assert "version:'7.1.61'" in script
     assert 'pruvs-shell-v7.1.61' in worker
-    assert "version='0.6.16'" in business
+    assert "version='0.6.17'" in business
