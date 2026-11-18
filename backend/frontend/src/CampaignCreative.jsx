@@ -1,4 +1,4 @@
-import React from 'react';
+import React,{useEffect,useState} from 'react';
 import './campaign-creative.css';
 
 /** The R2 asset stays separate from campaign copy; overlay avoids editing private assets. */
@@ -10,9 +10,17 @@ export function hasCampaignCreative(p){
 export default function CampaignCreative({promotion:p,compact=false}){
   if(!hasCampaignCreative(p))return null;
   const video=p.media_type.startsWith('video/');
+  const [reduceMotion,setReduceMotion]=useState(false);
+  useEffect(()=>{
+    if(typeof window.matchMedia!=='function')return;
+    const pref=window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update=()=>setReduceMotion(pref.matches);
+    update();pref.addEventListener?.('change',update);
+    return()=>pref.removeEventListener?.('change',update);
+  },[]);
   return <div className={'pruvs-campaign-creative'+(compact?' pruvs-campaign-creative-compact':'')}>
     {video?
-      <video className="pruvs-campaign-creative-media" muted autoPlay loop playsInline preload="metadata"
+      <video key={reduceMotion?'manual':'auto'} className="pruvs-campaign-creative-media" muted autoPlay={!reduceMotion} controls={reduceMotion} loop playsInline preload="metadata"
         aria-label={p.media_alt||p.headline}>
         <source src={p.media_url} type={p.media_type}/>
       </video>:
