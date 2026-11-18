@@ -143,7 +143,7 @@ export function History({home=false,billsOnly=false,children=null}) {
       Organized by merchant and scan date. Expand a receipt to see its splits.
     </Title>}
     {home&&<HomeWelcome user={user}/>}
-    {home&&children}}
+    {home&&children}
     {billsOnly&&!home&&CORE_PROJECTS_ENABLED&&<div className="pruvs-project-entry"><div><strong>Projects</strong><p className="muted">Combine receipts and split bills, invite participants, and see everyone's balances.</p></div><Link className="primary" to="/projects">Open projects</Link></div>}
     {error&&<Message error={error}/>}{actionError&&<Message error={actionError}/>}
     {!home&&<nav className="receipt-status-tabs" aria-label={t("Receipt and bill views" )}>
