@@ -1,0 +1,179 @@
+/*
+ * Business 0.6.16 — independently branded, device-adaptive merchant UI.
+ * Sidebar is desktop navigation only: phones/tablets get an accessible drawer.
+ */
+.pruvs-business-compact-brand,.pruvs-business-mobile-login-brand{display:none}
+.pruvs-business-2027.shell{max-width:100%;min-width:0}
+.pruvs-business-2027 .main{flex:1 1 auto;width:100%;max-width:100%;min-width:0}
+.pruvs-business-2027 .content{min-width:0;width:100%}
+.pruvs-business-2027 .content>*{min-width:0}
+.pruvs-business-2027 :is(.panel,.promo-console,.pruvs-ai-studio,.pruvs-campaign-library){min-width:0;max-width:100%}
+.pruvs-business-2027 img,.pruvs-business-2027 video,
+.pruvs-business-2027 iframe,.pruvs-business-2027 canvas{max-width:100%}
+.pruvs-business-2027 .topbar .breadcrumb{min-width:0}
+.pruvs-business-2027 .topbar .breadcrumb b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pruvs-business-2027 .topbar .top-right{flex:none}
+@media(max-width:1180px){
+  .pruvs-business-2027 .pruvs-biz-command-kpis{
+    grid-template-columns:repeat(2,minmax(0,1fr))
+  }
+  .pruvs-business-2027 .pruvs-studio-2027-workspace{
+    grid-template-columns:minmax(0,1fr)
+  }
+  .pruvs-business-2027 .pruvs-studio-2027-preview{
+    max-width:540px;position:static
+  }
+}
+@media(max-width:1024px){
+  .pruvs-business-2027.shell{display:block}
+  .pruvs-business-2027 .sidebar{
+    display:flex!important;position:fixed!important;
+    left:0;top:0;bottom:0;z-index:71;
+    width:min(310px,86vw)!important;max-width:86vw;
+    height:100dvh;max-height:100dvh;
+    overflow-y:auto;overscroll-behavior:contain;
+    transform:translateX(-110%);
+    visibility:hidden;
+    box-shadow:18px 0 45px rgba(4,27,17,.25);
+    transition:transform .2s ease,visibility .2s;
+  }
+  .pruvs-business-2027 .sidebar.show{
+    transform:translateX(0);visibility:visible;
+  }
+  .pruvs-business-2027 .pruvs-business-nav-scrim{
+    position:fixed;display:block;inset:0;
+    background:rgba(7,29,18,.56);
+    border:0;width:100%;height:100%;border-radius:0;
+    z-index:70;padding:0;
+  }
+  .pruvs-business-2027 .main{width:100%;max-width:100%;margin:0}
+  .pruvs-business-2027 .hamburger{
+    display:inline-flex;align-items:center;justify-content:center;
+    flex:none;min-width:44px;min-height:44px;padding:9px;
+    border-radius:11px;color:#174f38;background:#eef7ee;
+  }
+  .pruvs-business-2027 .topbar{
+    position:sticky;top:0;z-index:30;
+    height:66px;padding:0 clamp(13px,3.5vw,29px);
+    gap:10px;
+  }
+  .pruvs-business-2027 .pruvs-business-compact-brand{
+    display:inline-flex;align-items:center;gap:7px;min-width:0;
+    margin-right:auto;font-size:14px;color:#1b5639;font-weight:800;
+  }
+  .pruvs-business-2027 .pruvs-business-compact-brand img{
+    width:32px;height:32px;border-radius:9px;object-fit:contain;
+  }
+  .pruvs-business-2027 .topbar .breadcrumb{margin-right:auto}
+  .pruvs-business-2027 .topbar .env-label{display:none}
+  .pruvs-business-2027 .content{
+    width:100%;max-width:940px;
+    padding:24px clamp(14px,3.5vw,28px) 90px;
+    margin:0 auto;
+  }
+  .pruvs-business-2027 .page-head{margin-bottom:20px}
+  .pruvs-business-2027 .page-head h1{
+    font-size:clamp(25px,4vw,33px);margin:3px 0 5px;
+  }
+  .pruvs-business-2027 .two-col,
+  .pruvs-business-2027 .integration-grid{grid-template-columns:minmax(0,1fr)}
+  .pruvs-business-2027 .pruvs-campaign-library{padding:clamp(13px,2.5vw,22px)}
+  .pruvs-business-2027 .pruvs-campaign-library-toolbar{align-items:stretch}
+  .pruvs-business-2027 .pruvs-campaign-library-search{min-width:0;width:100%;flex:1 1 100%}
+  .pruvs-business-2027 .pruvs-campaign-library-dialog{
+    max-height:calc(100dvh - 30px);max-width:min(100%,560px);
+  }
+  .pruvs-business-2027 .pruvs-campaign-library-backdrop{padding:15px}
+}
+@media(min-width:701px) and (max-width:1024px){
+  .pruvs-business-2027 .pruvs-studio-2027-preview{max-width:570px}
+  .pruvs-business-2027 .pruvs-biz-command-hero{
+    grid-template-columns:minmax(0,1fr);min-height:0
+  }
+}
+@media(max-width:700px){
+  .pruvs-business-2027 .topbar .breadcrumb{display:none}
+  .pruvs-business-2027 .pruvs-business-compact-brand{margin-right:auto}
+  .pruvs-business-2027 .content{padding:17px 13px 88px}
+  .pruvs-business-2027 .page-head{display:flex;flex-wrap:wrap;gap:10px}
+  .pruvs-business-2027 .page-head p{font-size:12px;line-height:1.5}
+  .pruvs-business-2027 .panel{min-height:0;padding:15px;border-radius:17px}
+  .pruvs-business-2027 .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .pruvs-business-2027 .pruvs-biz-command-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .pruvs-business-2027 .pruvs-biz-command-hero{min-height:0}
+  .pruvs-business-2027 .pruvs-biz-command-copy{padding:23px 18px}
+  .pruvs-business-2027 .pruvs-biz-command-heading{align-items:flex-start;flex-wrap:wrap}
+  .pruvs-business-2027 .pruvs-biz-command-lower{grid-template-columns:minmax(0,1fr)}
+  .pruvs-business-2027 .pruvs-biz-setup,
+  .pruvs-business-2027 .pruvs-biz-next-campaign{padding:18px}
+  .pruvs-business-2027 .pruvs-ai-studio{padding:12px;gap:15px}
+  .pruvs-business-2027 .pruvs-ai-studio-heading{gap:10px}
+  .pruvs-business-2027 .pruvs-ai-studio-heading h3{font-size:22px}
+  .pruvs-business-2027 .pruvs-ai-studio-heading p{font-size:12px}
+  .pruvs-business-2027 .pruvs-ai-grid{grid-template-columns:minmax(0,1fr)}
+  .pruvs-business-2027 :is(input,textarea,select){max-width:100%;font-size:16px}
+  .pruvs-business-2027 .pruvs-ai-actions{display:flex;flex-direction:column;align-items:stretch}
+  .pruvs-business-2027 .pruvs-ai-actions>.btn{width:100%;justify-content:center}
+  .pruvs-business-2027 .pruvs-ai-brief-editor .row{align-items:flex-start}
+  .pruvs-business-2027 .pruvs-studio-2027-preview{width:100%;max-width:100%}
+  .pruvs-business-2027 .pruvs-core-preview{min-width:0}
+  .pruvs-business-2027 .pruvs-campaign-library-filters{
+    display:flex;flex-wrap:nowrap;max-width:100%;
+    overflow-x:auto;overscroll-behavior-inline:contain;
+    scrollbar-width:thin;scroll-snap-type:x proximity;
+    padding:5px;
+  }
+  .pruvs-business-2027 .pruvs-campaign-library-filters button{
+    flex:none;scroll-snap-align:start;white-space:nowrap
+  }
+  .pruvs-business-2027 .pruvs-campaign-library-grid{grid-template-columns:minmax(0,1fr)}
+  .pruvs-business-2027 .pruvs-campaign-library-actions button{min-height:44px}
+  .pruvs-business-2027 .pruvs-campaign-library-dialog{
+    padding:12px;border-radius:17px;max-height:calc(100dvh - 18px);
+  }
+  .pruvs-business-2027 .pruvs-campaign-library-backdrop{padding:9px}
+  .pruvs-business-2027 .form-row,.pruvs-business-2027 .card-grid{
+    grid-template-columns:minmax(0,1fr)
+  }
+  .pruvs-business-2027 .modal-backdrop{
+    padding:10px;align-items:center;overflow:auto
+  }
+  .pruvs-business-2027 .modal{max-height:calc(100dvh - 20px);min-width:0}
+  .pruvs-business-2027 .modal-head,.pruvs-business-2027 .modal-body{padding:17px}
+  .pruvs-business-2027 .list-row{min-width:0}
+  .pruvs-business-2027 .row-main small{overflow-wrap:anywhere}
+  .pruvs-business-2027 .promo-console>.promo-form{padding:13px;gap:10px}
+  .pruvs-business-2027 .promo-console>.promo-form>label{min-width:0;flex-basis:100%}
+}
+@media(max-width:420px){
+  .pruvs-business-2027 .content{padding-inline:10px}
+  .pruvs-business-2027 .topbar{padding:0 10px}
+  .pruvs-business-2027 .pruvs-biz-command-kpis{gap:7px}
+  .pruvs-business-2027 .pruvs-biz-command-metric{padding:12px}
+  .pruvs-business-2027 .pruvs-biz-command-metric strong{font-size:clamp(22px,6vw,29px)}
+  .pruvs-business-2027 .pruvs-campaign-library{padding:10px}
+  .pruvs-business-2027 .pruvs-studio-2027-progress{gap:4px;padding:5px}
+  .pruvs-business-2027 .pruvs-studio-2027-progress>span{padding:8px 5px}
+  .pruvs-business-2027 .pruvs-studio-2027-progress b{font-size:11px}
+}
+.pruvs-business-mobile-login-brand{
+  align-items:center;gap:10px;color:#174d34;font-size:20px;font-weight:800;
+  margin-bottom:14px;
+}
+.pruvs-business-mobile-login-brand img{width:39px;height:39px;object-fit:contain}
+.pruvs-business-mobile-login-brand b{color:#118559}
+@media(max-width:850px){
+  .pruvs-business-2027 .pruvs-business-mobile-login-brand{
+    display:flex;justify-content:center
+  }
+  .pruvs-business-2027.login-screen .login-side{
+    min-height:100dvh;display:flex;flex-direction:column;align-items:stretch;
+    justify-content:center;padding:20px;
+  }
+  .pruvs-business-2027.login-screen .login-card{
+    max-width:450px;width:100%;margin:0 auto;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .pruvs-business-2027 .sidebar{transition:none}
+}
