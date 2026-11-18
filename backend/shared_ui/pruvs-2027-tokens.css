@@ -1,0 +1,75 @@
+/*
+ * Pruvs 2027 — shared, incremental design foundation.
+ * Consumer and merchant UIs use the same color/spacing/focus/motion primitives.
+ * Product surfaces remain individually scoped so a redesign cannot override
+ * payment semantics, merchant approvals, or admin permissions.
+ */
+:root{
+  --pruvs-ink:#152922;
+  --pruvs-ink-soft:#334d44;
+  --pruvs-muted:#5d736b;
+  --pruvs-surface:#ffffff;
+  --pruvs-canvas:#f5f8f4;
+  --pruvs-border:#dfe8e2;
+  --pruvs-accent:#08795d;
+  --pruvs-accent-strong:#075943;
+  --pruvs-accent-soft:#e5f6ee;
+  --pruvs-navy:#152d2c;
+  --pruvs-warm:#f7f0e6;
+  --pruvs-radius-sm:12px;
+  --pruvs-radius-md:18px;
+  --pruvs-radius-lg:26px;
+  --pruvs-shadow:0 14px 48px rgba(15,40,34,.07);
+  --pruvs-shadow-hover:0 18px 46px rgba(11,54,42,.14);
+  --pruvs-ease:cubic-bezier(.2,.75,.25,1);
+  --pruvs-focus:#0b765c;
+}
+.core-experience,.pruvs-business-2027{
+  color:var(--pruvs-ink);
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-synthesis:none;
+  text-rendering:optimizeLegibility;
+}
+.core-experience :is(button,a,input,select,textarea,[role="tab"]):focus-visible,
+.pruvs-business-2027 :is(button,a,input,select,textarea,[role="tab"]):focus-visible{
+  outline:3px solid var(--pruvs-focus);
+  outline-offset:3px;
+}
+.core-experience :is(button,input,select,textarea),
+.pruvs-business-2027 :is(button,input,select,textarea){
+  touch-action:manipulation;
+}
+.core-experience :is(input,select,textarea),
+.pruvs-business-2027 :is(input,select,textarea){
+  font-size:16px;
+}
+.core-experience :is(button,.primary,.secondary),
+.pruvs-business-2027 :is(button,.btn){
+  transition:background-color .18s var(--pruvs-ease),border-color .18s var(--pruvs-ease),
+    box-shadow .18s var(--pruvs-ease),transform .18s var(--pruvs-ease);
+}
+.core-experience button:disabled,.pruvs-business-2027 button:disabled{
+  cursor:not-allowed;
+}
+.core-experience :is(.panel,.bill-card),
+.pruvs-business-2027 :is(.panel,.stat,.pruvs-program-row){
+  min-width:0;
+}
+@media(prefers-reduced-motion:reduce){
+  .core-experience *, .core-experience *::before,.core-experience *::after,
+  .pruvs-business-2027 *, .pruvs-business-2027 *::before,
+  .pruvs-business-2027 *::after{
+    animation-duration:.01ms!important;
+    animation-iteration-count:1!important;
+    scroll-behavior:auto!important;
+    transition-duration:.01ms!important;
+  }
+  .pruvs-campaign-creative-media:is(video){display:none}
+}
+@media(prefers-contrast:more){
+  .core-experience,.pruvs-business-2027{
+    --pruvs-border:#657d71;
+    --pruvs-muted:#344b42;
+    --pruvs-focus:#044f3c;
+  }
+}
