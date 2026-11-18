@@ -54,7 +54,7 @@ function PreviewDialog({campaign,onClose}){
 }
 
 export default function CampaignLibrary({
-  campaigns=[],busy=false,onEdit,onCopy,onPublish,onUnpublish,
+  campaigns=[],busy=false,canManage=true,onEdit,onCopy,onPublish,onUnpublish,
   onReopen,onArchive,onRestore,onCreate,
 }){
   const [filter,setFilter]=useState('unpublished');
@@ -75,7 +75,7 @@ export default function CampaignLibrary({
     return !q||[p.headline,p.message,p.program_title,p.merchant_name]
       .some(value=>String(value||'').toLocaleLowerCase().includes(q));
   });
-  const canCreate=typeof onCreate==='function';
+  const canCreate=canManage&&typeof onCreate==='function';
   return <section className="pruvs-campaign-library" aria-label="Campaign management">
     <div className="pruvs-campaign-library-heading">
       <div><span className="pruvs-campaign-library-overline">CAMPAIGN MANAGEMENT</span>
@@ -126,25 +126,25 @@ export default function CampaignLibrary({
         </div>
         <div className="pruvs-campaign-library-actions">
           <button type="button" className="pruvs-campaign-library-preview" onClick={()=>setPreview(p)}><Eye size={16}/> Preview</button>
-          {p.effectiveStatus==='draft'&&<>
+          {canManage&&p.effectiveStatus==='draft'&&<>
             <button type="button" disabled={busy} onClick={()=>onEdit?.(p)}><PenLine size={16}/> Edit</button>
             <button type="button" className="is-publish" disabled={busy} onClick={()=>onPublish?.(p)}><Globe2 size={16}/> Publish</button>
             <button type="button" disabled={busy} onClick={()=>onArchive?.(p)}><Archive size={16}/> Archive</button>
           </>}
-          {p.effectiveStatus==='paused'&&<>
+          {canManage&&p.effectiveStatus==='paused'&&<>
             <button type="button" className="is-primary" disabled={busy} onClick={()=>onReopen?.(p)}><RotateCcw size={16}/> Reopen draft</button>
             <button type="button" disabled={busy} onClick={()=>onCopy?.(p)}><Copy size={16}/> Duplicate</button>
             <button type="button" disabled={busy} onClick={()=>onArchive?.(p)}><Archive size={16}/> Archive</button>
           </>}
-          {p.effectiveStatus==='published'&&<>
+          {canManage&&p.effectiveStatus==='published'&&<>
             <button type="button" disabled={busy} onClick={()=>onCopy?.(p)}><Copy size={16}/> Duplicate</button>
             <button type="button" disabled={busy} onClick={()=>onUnpublish?.(p)}><PauseCircle size={16}/> Unpublish</button>
           </>}
-          {p.effectiveStatus==='expired'&&<>
+          {canManage&&p.effectiveStatus==='expired'&&<>
             <button type="button" disabled={busy} onClick={()=>onCopy?.(p)}><Copy size={16}/> New from this</button>
             <button type="button" disabled={busy} onClick={()=>onArchive?.(p)}><Archive size={16}/> Archive</button>
           </>}
-          {p.effectiveStatus==='archived'&&<>
+          {canManage&&p.effectiveStatus==='archived'&&<>
             <button type="button" className="is-primary" disabled={busy} onClick={()=>onRestore?.(p)}><FolderOpen size={16}/> Restore draft</button>
             <button type="button" disabled={busy} onClick={()=>onCopy?.(p)}><Copy size={16}/> Duplicate</button>
           </>}
