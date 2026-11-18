@@ -59,7 +59,10 @@ def promo_json(p,db):
     program=db.get(Program,p.program_id)
     store=db.get(Store,program.store_id) if program else None
     merchant=db.get(Merchant,p.merchant_id)
-    return {'id':p.id,'merchant_name':merchant.name if merchant else '',
+    return {'id':p.id,
+            'created_at':p.created_at.isoformat() if getattr(p,'created_at',None) else None,
+            'published_at':p.published_at.isoformat() if getattr(p,'published_at',None) else None,
+            'merchant_name':merchant.name if merchant else '',
             'store_name':store.name if store else '', 'store_address':store.address if store else '',
             'program_id':p.program_id,'program_title':program.title if program else '',
             'stamps_required':program.stamps_required if program else 0,
@@ -158,6 +161,68 @@ def unpublish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),db:
     if not p or p.merchant_id!=staff.merchant_id:raise HTTPException(404,'Promotion not found')
     if p.status!='published':raise HTTPException(409,'Only live promotions may be unpublished')
     p.status='paused';db.commit();return promo_json(p,db)
+
+def owned_campaign(db:Session,staff:Staff,promotion_id:str)->Promotion:
+    promotion=db.get(Promotion,promotion_id)
+    if not promotion or promotion.merchant_id!=staff.merchant_id:
+        raise HTTPException(404,'Promotion not found')
+    return promotion
+
+
+def can_reopen_program(db:Session,staff:Staff,promotion:Promotion)->None:
+    program=owned_program(db,staff,promotion.program_id)
+    if program.status!='published':
+        raise HTTPException(409,'The linked loyalty program must be published first.')
+
+
+@router.post('/v1/merchant/promotions/{promotion_id}/reopen')
+def reopen_unpublished_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    """A paused (unpublished) promotion returns to editable draft state."""
+    campaign_schema_ready(db)
+    can_manage(staff)
+    promotion=owned_campaign(db,staff,promotion_id)
+    if promotion.status!='paused':
+        raise HTTPException(409,'Only paused promotions may be reopened for editing.')
+    can_reopen_program(db,staff,promotion)
+    promotion.status='draft'
+    promotion.published_at=None
+    promotion.expires_at=None
+    db.commit()
+    return promo_json(promotion,db)
+
+
+@router.post('/v1/merchant/promotions/{promotion_id}/archive')
+def archive_unpublished_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    """Archive only unpublished or already-expired promotions. Never silently hide live offers."""
+    campaign_schema_ready(db)
+    can_manage(staff)
+    promotion=owned_campaign(db,staff,promotion_id)
+    expired=(
+        promotion.status=='published' and promotion.expires_at is not None
+        and aware(promotion.expires_at)<=utcnow()
+    )
+    if promotion.status not in ('draft','paused') and not expired:
+        raise HTTPException(409,'Unpublish the live campaign before archiving it.')
+    promotion.status='archived'
+    db.commit()
+    return promo_json(promotion,db)
+
+
+@router.post('/v1/merchant/promotions/{promotion_id}/restore')
+def restore_archived_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    """Restore an archived offer as a draft; it never republishes automatically."""
+    campaign_schema_ready(db)
+    can_manage(staff)
+    promotion=owned_campaign(db,staff,promotion_id)
+    if promotion.status!='archived':
+        raise HTTPException(409,'Only archived promotions may be restored.')
+    can_reopen_program(db,staff,promotion)
+    promotion.status='draft'
+    promotion.published_at=None
+    promotion.expires_at=None
+    db.commit()
+    return promo_json(promotion,db)
+
 
 @router.get('/v1/promotions')
 def public_promotions(limit:int=Query(12,ge=1,le=30),db:Session=Depends(get_db)):
