@@ -1,0 +1,113 @@
+/*
+ * Pruvs Business v0.6.15.
+ * The emerald/white business monogram is the brand source. Core receives
+ * its own distinct blue/navy experience in core-v7160-brand.css.
+ */
+.pruvs-business-2027{
+  --biz-green:#0c805a;
+  --biz-green-dark:#0b4434;
+  --biz-green-pale:#e3f5e9;
+  --biz-ink:#193d30;
+  --biz-border:#d8e6db;
+  background:#f3f8f2;
+  color:var(--biz-ink);
+}
+.pruvs-business-2027 .sidebar{
+  width:274px;padding:25px 15px 22px;
+  background:linear-gradient(180deg,#092b22 0%,#103e31 55%,#0c3329 100%);
+  border-right:1px solid #1d543d;
+}
+.pruvs-business-2027 .sidebar .brand{
+  display:flex;align-items:center;gap:11px;padding:0 10px 27px;
+  color:#fff;font-size:24px;letter-spacing:-.07em;font-weight:840;
+}
+.pruvs-business-2027 .sidebar .brand-symbol{
+  display:block;width:48px;height:48px;object-fit:contain;flex:none;
+  border-radius:15px;box-shadow:0 8px 24px #0005;
+}
+.pruvs-business-2027 .sidebar .brand span{display:block;margin-top:-2px;font-size:12px;letter-spacing:.035em;color:#abdfbd;font-weight:700}
+.pruvs-business-2027 .sidebar .tenant{
+  display:flex;align-items:center;gap:10px;padding:15px 11px;
+  border-radius:15px;border:1px solid #ffffff1f;
+  background:linear-gradient(130deg,#ffffff11,#ffffff07);
+}
+.pruvs-business-2027 .sidebar .tenant-avatar{
+  display:grid;place-items:center;width:40px;height:40px;background:#c0eed0;
+  color:#146144;font-weight:850;border-radius:13px
+}
+.pruvs-business-2027 .sidebar .tenant b{color:#f2fff7;font-size:12px}
+.pruvs-business-2027 .sidebar .tenant small{color:#a8cdb6;font-size:10px}
+.pruvs-business-2027 .sidebar .side-label{font-size:10px;letter-spacing:.16em;color:#95bfa6;padding:19px 12px 11px}
+.pruvs-business-2027 .sidebar .nav-link{
+  display:flex;align-items:center;gap:12px;min-height:46px;
+  padding:10px 12px;margin:3px 0;border-radius:12px;
+  background:transparent;color:#b0d0bc;font-weight:680;font-size:12px;letter-spacing:-.005em;
+}
+.pruvs-business-2027 .sidebar .nav-link svg{flex:none}
+.pruvs-business-2027 .sidebar .nav-link span{flex:1;text-align:left}
+.pruvs-business-2027 .sidebar .nav-link:hover{color:#fff;background:#ffffff13}
+.pruvs-business-2027 .sidebar .nav-link.active{
+  background:#e0f9e9;color:#0a5135;
+  border-color:#b8edca;box-shadow:0 5px 15px #07180d27;
+}
+.pruvs-business-2027 .sidebar-foot{
+  padding:22px 7px 0;border-top:1px solid #ffffff13;margin-top:18px;
+}
+.pruvs-business-2027 .sidebar .pilot-chip{
+  display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:10px;
+  background:#1b4936;border:1px solid #31674a;color:#bbf4c8;font-size:10px;font-weight:760;
+}
+.pruvs-business-2027 .sidebar .logout{color:#ffcec6}
+.pruvs-business-2027 .sidebar .foot-caption{font-size:10px;color:#94b89d}
+.pruvs-business-2027 .main{
+  background:#f4f8f2;
+  background-image:radial-gradient(ellipse at 80% 1%,#dff1e4,transparent 28%);
+}
+.pruvs-business-2027 .topbar{
+  padding:0 clamp(20px,3vw,48px);height:76px;
+  background:#fffffff0;border-bottom:1px solid #d9e8df;backdrop-filter:blur(16px);
+}
+.pruvs-business-2027 .topbar .breadcrumb{font-size:12px;color:#6b8475;gap:10px}
+.pruvs-business-2027 .topbar .breadcrumb b{font-size:13px;color:#1a4832}
+.pruvs-business-2027 .topbar .user-circle{background:#d9f4e3;color:#0e744b;border-color:#bce4ca}
+.pruvs-business-2027 .topbar .env-label{color:#317858}
+.pruvs-business-2027 .content{
+  padding:clamp(22px,3vw,43px) clamp(17px,3vw,48px) 100px;
+  max-width:1560px;
+}
+.pruvs-business-2027 .page-head h1{font-size:clamp(27px,2.8vw,39px);letter-spacing:-.053em;color:#173d2d}
+.pruvs-business-2027 .page-head p{color:#668473}
+.pruvs-business-2027 .page-head .eyebrow{color:#198a57;letter-spacing:.14em}
+.pruvs-business-2027 .btn.primary{background:#087b53;border-color:#087b53;box-shadow:0 6px 18px #076e4428}
+.pruvs-business-2027 .btn.primary:hover{background:#076641}
+.pruvs-business-2027 .panel,.pruvs-business-2027 .stat{
+  border-color:#d9e6dd;box-shadow:0 10px 30px #1a562610;
+}
+.pruvs-business-2027 :is(button,input,select,textarea):focus-visible{outline:3px solid #279767;outline-offset:2px}
+.pruvs-business-2027 .pruvs-campaign-workspace-tabs{
+  display:flex;gap:6px;padding:6px;border:1px solid #d3e8da;
+  border-radius:15px;background:#e8f5eb;flex-wrap:wrap;align-self:start;
+}
+.pruvs-business-2027 .pruvs-campaign-workspace-tabs button{
+  display:flex;align-items:center;gap:9px;min-height:44px;padding:10px 15px;
+  color:#5c7c65;background:transparent;border:0;border-radius:10px;font-size:12px;font-weight:760;
+}
+.pruvs-business-2027 .pruvs-campaign-workspace-tabs button.active{
+  color:#11683f;background:#fff;box-shadow:0 4px 16px #0b4d2819;
+}
+.pruvs-business-2027 .pruvs-campaign-workspace-tabs button span{
+  color:#0c8151;background:#d7f3e2;border-radius:20px;padding:4px 7px;font-size:10px;
+}
+.pruvs-business-2027 .promo-console{padding:clamp(17px,2vw,24px)}
+.pruvs-business-2027 .promo-console>.panel-heading span{font-size:10px;color:#428263}
+@media(max-width:850px){
+ .pruvs-business-2027 .sidebar{width:min(285px,85vw)}
+ .pruvs-business-2027 .content{padding:22px 17px 90px}
+ .pruvs-business-2027 .topbar{height:68px}
+}
+@media(max-width:540px){
+ .pruvs-business-2027 .sidebar .brand{padding-bottom:19px}
+ .pruvs-business-2027 .pruvs-campaign-workspace-tabs{width:100%}
+ .pruvs-business-2027 .pruvs-campaign-workspace-tabs button{flex:1;justify-content:center;flex-wrap:wrap}
+ .pruvs-business-2027 .promo-console{padding:12px}
+}
