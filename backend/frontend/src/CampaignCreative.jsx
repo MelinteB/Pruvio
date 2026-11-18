@@ -8,8 +8,6 @@ export function hasCampaignCreative(p){
 }
 
 export default function CampaignCreative({promotion:p,compact=false}){
-  if(!hasCampaignCreative(p))return null;
-  const video=p.media_type.startsWith('video/');
   const [reduceMotion,setReduceMotion]=useState(false);
   useEffect(()=>{
     if(typeof window.matchMedia!=='function')return;
@@ -18,6 +16,8 @@ export default function CampaignCreative({promotion:p,compact=false}){
     update();pref.addEventListener?.('change',update);
     return()=>pref.removeEventListener?.('change',update);
   },[]);
+  if(!hasCampaignCreative(p))return null;
+  const video=p.media_type.startsWith('video/');
   return <div className={'pruvs-campaign-creative'+(compact?' pruvs-campaign-creative-compact':'')}>
     {video?
       <video key={reduceMotion?'manual':'auto'} className="pruvs-campaign-creative-media" muted autoPlay={!reduceMotion} controls={reduceMotion} loop playsInline preload="metadata"
