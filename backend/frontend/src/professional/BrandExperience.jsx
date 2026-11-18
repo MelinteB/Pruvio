@@ -35,10 +35,8 @@ export function HomeWelcome({ user }) {
   return <section className="core-home-dashboard core-v7160-dashboard" aria-label="Pruvs Home">
     <div className="core-v7160-hero">
       <div className="core-v7160-hero-copy">
-        <div className="core-v7160-brand-line"><span className="core-v7160-brand-symbol"><img src="/static/pruvs-mark-compact.webp" alt="" decoding="async"/></span><span>PRUVS <i/> YOUR MOMENTS, ORGANIZED</span></div>
-        <span className="core-v7160-hero-eyebrow">YOUR PERSONAL WORKSPACE</span>
-        <h1>Welcome back, <span>{firstName}.</span><br/>Make the moments count.</h1>
-        <p>Keep the dinner. Skip the maths. Scan a receipt, share items with friends and always know where things stand.</p>
+        <h1>Welcome back, <span>{firstName}.</span></h1>
+        <p>Scan, split and keep track of shared bills in one place.</p>
         <div className="core-v7160-hero-actions">
           <Link to="/upload" className="core-v7160-hero-primary"><Camera size={19}/> Scan a receipt <ArrowRight size={18}/></Link>
           <Link to="/join" className="core-v7160-hero-secondary"><Users size={18}/> Join a shared bill</Link>
@@ -47,7 +45,6 @@ export function HomeWelcome({ user }) {
       </div>
       <div className="core-v7160-visual" aria-hidden="true">
         <div className="core-v7160-visual-glow"/>
-        <div className="core-v7160-floating-mark"><img src="/static/pruvs-mark-compact.webp" alt=""/></div>
         <div className="core-v7160-receipt-demo">
           <div className="core-v7160-demo-head"><span className="core-v7160-demo-symbol"><ReceiptText size={20}/></span><div><b>Shared dinner</b><small>ILLUSTRATIVE EXAMPLE</small></div><span className="core-v7160-demo-dot"/></div>
           <div className="core-v7160-demo-total"><small>Example bill total</small><strong>184.50 <em>RON</em></strong></div>
@@ -55,7 +52,6 @@ export function HomeWelcome({ user }) {
           <div className="core-v7160-demo-share"><div><span className="core-v7160-avatar a">A</span><span className="core-v7160-avatar b">B</span><span className="core-v7160-avatar c">C</span></div><strong>One bill. Clear shares.</strong></div>
           <div className="core-v7160-demo-cta">Review everyone's share <ArrowUpRight size={15}/></div>
         </div>
-        <span className="core-v7160-floating-tag"><Sparkles size={16}/> Less maths. More moments.</span>
       </div>
     </div>
     <div className="core-v7160-section-title"><div><span className="core-v7160-kicker">WHAT WOULD YOU LIKE TO DO?</span><h2>Your next move, made simple.</h2></div><Link to="/history">View everything <ChevronRight size={17}/></Link></div>
@@ -66,9 +62,6 @@ export function HomeWelcome({ user }) {
         <span className="core-v7160-journey-bar"/>
       </Link>
     )}</div>
-    <div className="core-v7160-bottom-guide"><div><span className="core-v7160-kicker">HOW IT WORKS</span><h2>From a receipt to a fair split.</h2><p>Everything stays visible, so your friends can pick their own items and the owner can confirm the final share.</p></div>
-      <div className="core-v7160-guide-steps"><span><b>01</b> Scan <ArrowRight size={16}/></span><span><b>02</b> Invite <ArrowRight size={16}/></span><span><b>03</b> Split & review</span></div>
-    </div>
   </section>;
 }
 

@@ -29,7 +29,7 @@ describe('Core v7.1.55 customer campaign discovery',()=>{
     expect(screen.getByAltText('Lunch campaign creative')).toBeTruthy();
     const link=screen.getByRole('link',{name:'See loyalty program'});
     expect(link.getAttribute('href')).toContain('program='+campaign.program_id);
-    expect(request).toHaveBeenCalledWith('/loyalty/promotions?limit=3');
+    expect(request).toHaveBeenCalledWith('/loyalty/promotions?limit=1');
   });
   it('does not mistake an unavailable campaign service for an empty program list',async()=>{
     request.mockRejectedValueOnce(new Error('HTTP 503'));

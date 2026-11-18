@@ -156,7 +156,7 @@ def test_core_and_business_use_different_original_logo_assets():
     business=(ROOT/'business_frontend/src/main.jsx').read_text()
     merchant=(ROOT/'business_frontend/src/MerchantOverview.jsx').read_text()
     assert '/static/pruvs-logo.png' in core
-    assert '/static/pruvs-mark-compact.webp' in core
+    assert '/static/pruvs-mark-compact.webp' not in core  # no duplicated sidebar logo
     assert '#1958e6' in core_css
     assert 'business-favicon.svg' in business
     assert '/business/business-favicon.svg' in merchant
@@ -169,7 +169,7 @@ def test_new_release_versions_are_synchronized():
     script=(ROOT/'frontend/scripts/stamp-build.mjs').read_text()
     worker=(ROOT/'app/static/react-service-worker.js').read_text()
     business=(ROOT/'business/main.py').read_text()
-    assert 'RELEASE = "7.1.60"' in reliability
-    assert "version:'7.1.60'" in script
-    assert 'pruvs-shell-v7.1.60' in worker
-    assert "version='0.6.15'" in business
+    assert 'RELEASE = "7.1.61"' in reliability
+    assert "version:'7.1.61'" in script
+    assert 'pruvs-shell-v7.1.61' in worker
+    assert "version='0.6.16'" in business
