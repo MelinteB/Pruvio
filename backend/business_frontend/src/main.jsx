@@ -34,6 +34,12 @@ function Login({onLogin}){
 function App(){
  const [token,setToken]=useState(''),[page,setPage]=useState('overview'),[menu,setMenu]=useState(false),[me,setMe]=useState(null),[stores,setStores]=useState([]),[programs,setPrograms]=useState([]),[claims,setClaims]=useState([]),[campaigns,setCampaigns]=useState([]),[stats,setStats]=useState(null),[notice,setNotice]=useState(null),[modal,setModal]=useState(''),[busy,setBusy]=useState(false);
  const inform=(text,error=false)=>setNotice({text,error});
+ useEffect(()=>{
+   if(!menu)return;
+   const close=e=>{if(e.key==='Escape')setMenu(false)};
+   document.addEventListener('keydown',close);
+   return()=>document.removeEventListener('keydown',close);
+ },[menu]);
  async function reload(t=token){
   if(!t)return;
   try{
