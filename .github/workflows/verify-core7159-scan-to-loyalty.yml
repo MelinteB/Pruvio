@@ -1,4 +1,4 @@
-name: Verify combined Core 7.1.60 and Business 0.6.15 STAGING
+name: Verify Core 7.1.61 / Business 0.6.16 responsive staging
 
 on:
   push:
