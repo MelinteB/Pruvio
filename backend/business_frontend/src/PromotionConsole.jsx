@@ -199,7 +199,7 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
             <h3>Campaign Studio</h3>
             <p>Build from your real photograph, direct the creative, refine AI copy, and review the offer exactly as customers will see it.</p>
           </div>
-          <span className="pruvs-studio-2027-privacy"><CheckCircle2 size={15}/> Merchant approved</span>
+          <span className="pruvs-studio-2027-privacy"><CheckCircle2 size={15}/> Approval required</span>
         </div>
         <div className="pruvs-studio-2027-progress" aria-label="Campaign creation stages">
           <span className={mediaUrl?'is-done':''}>01 <b>Photo</b><small>{mediaUrl?'Added':'Optional'}</small></span>
