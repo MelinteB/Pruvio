@@ -1,0 +1,167 @@
+/* Pruvs Core 2027 design foundation — calm consumer-first, fast mobile UX.
+ * Existing bill state, amounts, payment actions, receipt flows stay unchanged.
+ */
+.core-experience{
+  --blue:var(--pruvs-accent);
+  --navy:var(--pruvs-ink);
+  --muted:var(--pruvs-muted);
+  --border:var(--pruvs-border);
+  --core-primary:var(--pruvs-accent);
+  --core-primary-dark:var(--pruvs-accent-strong);
+  --core-ink:var(--pruvs-ink);
+  --core-subtle:var(--pruvs-muted);
+  --core-line:var(--pruvs-border);
+  --core-wash:var(--pruvs-canvas);
+  --core-card:#fff;
+  --core-radius:24px;
+  --core-shadow:var(--pruvs-shadow);
+  min-height:100vh;
+  background:radial-gradient(ellipse 50% 350px at 90% 0%,#def2e6,transparent),var(--pruvs-canvas);
+  color:var(--pruvs-ink);
+}
+.core-experience .topbar{
+  background:rgba(255,255,255,.92);
+  border-bottom:1px solid var(--pruvs-border);
+  backdrop-filter:blur(18px);
+}
+.core-experience .sidebar{
+  background:#ffffff;
+  border-right:1px solid #dfe9e1;
+}
+.core-experience .sidebar>.eyebrow{color:#567a65}
+.core-experience .sidebar>a{
+  color:#567267;border-radius:13px;
+  min-height:45px;
+}
+.core-experience .sidebar>a.active{
+  background:#dcf3e7;color:#096d52;
+  border:1px solid #c2e3d0;
+}
+.core-experience .sidebar>a:hover{
+  background:#eaf7ef;color:#155e47;
+}
+.core-experience .topbar .avatar{
+  background:#dcf3e7;border:1px solid #b4ddc6;color:#075f45;
+}
+.core-experience .content{
+  padding-top:clamp(24px,2.5vw,38px);
+}
+.core-experience .page-title h1,
+.core-experience .section-heading h2,
+.core-experience .panel>h2{
+  color:var(--pruvs-ink);letter-spacing:-.04em;
+}
+.core-experience .page-title .eyebrow,.core-overline{color:#13775c}
+.core-experience .page-title p{color:var(--pruvs-muted)}
+.core-experience .panel{
+  background:#fff;border:1px solid var(--pruvs-border);
+  border-radius:var(--pruvs-radius-lg);
+  box-shadow:var(--pruvs-shadow);
+}
+.core-experience .primary{
+  border:1px solid var(--pruvs-accent);
+  background:var(--pruvs-accent);color:#fff;
+  box-shadow:0 5px 14px rgba(8,121,93,.14);
+  min-height:44px;
+}
+.core-experience .primary:hover{
+  background:var(--pruvs-accent-strong);
+  border-color:var(--pruvs-accent-strong);
+}
+.core-experience .secondary{
+  border:1px solid #b9d2c5;
+  background:#fff;color:#205747;
+  min-height:44px;
+}
+.core-experience .secondary:hover{background:#edf8f1}
+.core-experience .badge.green,.core-experience .badge.blue{
+  border-radius:999px;background:#e0f5e9;color:#096547;
+}
+.core-experience .stats .panel{
+  min-height:128px;
+  border:1px solid var(--pruvs-border);
+  box-shadow:var(--pruvs-shadow);
+}
+.core-experience .stats .panel::before{background:var(--pruvs-accent)}
+.core-experience .stats .panel strong{
+  color:#13352a;letter-spacing:-.045em
+}
+.core-experience .stats .panel svg{color:#529d7c}
+.core-experience .core-home-hero{
+  background:
+    radial-gradient(circle at 95% 10%,rgba(140,226,178,.24),transparent 30%),
+    linear-gradient(120deg,#123e32 0%,#146a53 96%);
+  border:1px solid rgba(234,255,240,.15);
+  border-radius:var(--pruvs-radius-lg);
+  box-shadow:0 18px 54px rgba(12,77,49,.16);
+}
+.core-experience .core-home-hero h2,
+.core-experience .core-home-hero p{color:#fff}
+.core-experience .core-home-hero h2 span{color:#cafce2}
+.core-experience .core-home-hero .core-overline{color:#a9f6cb}
+.core-experience .core-hero-cta{
+  background:#fff;border-color:#fff;color:#0b664e;
+  box-shadow:0 5px 16px rgba(10,55,36,.15);
+}
+.core-experience .core-hero-cta:hover{
+  background:#ecfff5;color:#07533d;
+}
+.core-experience .icon-tile,
+.core-experience .core-onboard-icon{
+  background:#e0f5e9;color:#0b795d;border-radius:16px;
+}
+.core-experience .core-public-hero{
+  background:linear-gradient(130deg,#fff,#f0f8f1 60%,#e3f5e8);
+  border-color:#cbe9d6;border-radius:30px;
+}
+.core-experience .core-public-copy h1{color:#143a2d}
+.core-experience .core-public-copy h1 span{color:#0a8260}
+.core-experience .core-public-copy>p{color:#4c6c5e}
+.core-experience .core-public-receipt{
+  color:#214b3c;border-color:#cfe6d7;
+  box-shadow:0 25px 62px rgba(19,77,48,.14);
+}
+.core-experience .core-public-receipt strong{color:#174432}
+.core-experience .core-onboarding-step{
+  border-color:var(--pruvs-border);border-radius:23px;
+}
+.core-experience .core-section-head h2{color:#163d2f}
+.core-experience .list-row,.core-experience .receipt-branch{
+  border-color:#e3ebe5;
+}
+.core-experience .bill-card:hover{
+  box-shadow:var(--pruvs-shadow-hover);
+}
+.core-experience .core-mobile-nav{
+  background:rgba(255,255,255,.95);
+  backdrop-filter:blur(18px);
+  border-color:var(--pruvs-border);
+}
+.core-experience .core-mobile-nav a.active{
+  color:var(--pruvs-accent);
+}
+.core-experience .core-fab{
+  background:var(--pruvs-accent);
+  box-shadow:0 8px 23px rgba(8,120,91,.25);
+}
+.core-experience :is(input,select,textarea){
+  border:1px solid #c4d6c9;
+  color:#173f30;
+  border-radius:13px;
+}
+.core-experience input:focus,.core-experience select:focus,
+.core-experience textarea:focus{
+  border-color:#0a795d;
+  outline:2px solid #69bb99;
+  outline-offset:2px;
+}
+.core-experience .empty{
+  background:#fff;border-color:#c8dccc;border-radius:20px;
+}
+@media(max-width:750px){
+  .core-experience .content{padding-inline:clamp(13px,4vw,21px)}
+  .core-experience .panel{border-radius:21px;padding:clamp(15px,3vw,20px)}
+  .core-experience .core-home-hero{min-height:0}
+  .core-experience .page-title h1{font-size:clamp(25px,6vw,32px)}
+  .core-experience .pruvs-promo{border-radius:20px}
+}
