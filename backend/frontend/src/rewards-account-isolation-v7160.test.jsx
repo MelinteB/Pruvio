@@ -59,14 +59,14 @@ describe('Pruvs Rewards account boundary',()=>{
     });
     const view=render(<MemoryRouter><Rewards/></MemoryRouter>);
     fireEvent.click(screen.getByRole('button',{name:'My wallet'}));
-    expect(await screen.findByRole('button',{name:'Generate checkout QR'})).toBeTruthy();
+    expect(await screen.findByRole('button',{name:'Unlock reward QR'})).toBeTruthy();
 
     current.userId=202;
     view.rerender(<MemoryRouter><Rewards/></MemoryRouter>);
     // Account switch resets to Discover; no previous user's voucher remains visible.
-    expect(screen.queryByRole('button',{name:'Generate checkout QR'})).toBeNull();
+    expect(screen.queryByRole('button',{name:'Unlock reward QR'})).toBeNull();
     fireEvent.click(screen.getByRole('button',{name:'My wallet'}));
-    expect(await screen.findByText('No rewards yet. Merchant-approved purchases count toward rewards.')).toBeTruthy();
-    expect(screen.queryByRole('button',{name:'Generate checkout QR'})).toBeNull();
+    expect(await screen.findByText('The reward QR appears here only after the required receipts are approved.')).toBeTruthy();
+    expect(screen.queryByRole('button',{name:'Unlock reward QR'})).toBeNull();
   });
 });
