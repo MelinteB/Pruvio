@@ -11,7 +11,6 @@ from urllib.parse import urlsplit
 from datetime import timedelta, timezone
 from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -264,8 +263,7 @@ def public_promotions(limit:int=Query(12,ge=1,le=30),db:Session=Depends(get_db))
         .order_by(Promotion.published_at.desc(),Promotion.id.desc())
         .limit(limit)
     ).all()
-    return JSONResponse(content=[promo_json(p,db) for p in rows],
-      headers={'Cache-Control':'private, no-store, max-age=0'})
+    return [promo_json(p,db) for p in rows]
 
 class IssuePurchaseIn(BaseModel):
     program_id: str
