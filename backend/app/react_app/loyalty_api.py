@@ -82,6 +82,16 @@ def receipt_candidates(identity=Depends(current),db=Depends(get_db)):
             'message':'A merchant/POS receipt reference must be verified before earning loyalty rewards.'}
 
 
+@router.get('/places/{place_id}')
+def place_details(place_id:str,identity=Depends(current)):
+    # Business rejects unknown/unlinked places and enforces a live-campaign
+    # association before making a billable Google Places call.
+    import re
+    if not re.fullmatch(r'[A-Za-z0-9_-]{8,260}',place_id):
+        raise HTTPException(422,'Invalid place ID')
+    return call_business('/v1/places/'+place_id)
+
+
 @router.get('/promotions')
 def promotions(limit:int=Query(12,ge=1,le=30), identity=Depends(current)):
     return call_business('/v1/promotions',params={'limit':limit})
