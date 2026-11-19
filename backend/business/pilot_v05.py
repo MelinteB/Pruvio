@@ -55,6 +55,12 @@ def pilot_enabled():
     if os.getenv('PRUVS_BUSINESS_RECEIPT_PILOT_ENABLED','false').lower() != 'true':
         raise HTTPException(503,'Receipt verification pilot is not enabled.')
 
+def _promo_google_place_id(db,store):
+    if not store:return None
+    from .google_places_v0618 import linked_place_id
+    return linked_place_id(db,store.id)
+
+
 def promo_json(p,db):
     program=db.get(Program,p.program_id)
     store=db.get(Store,program.store_id) if program else None
@@ -63,6 +69,9 @@ def promo_json(p,db):
             'created_at':p.created_at.isoformat() if getattr(p,'created_at',None) else None,
             'published_at':p.published_at.isoformat() if getattr(p,'published_at',None) else None,
             'merchant_name':merchant.name if merchant else '',
+            'store_latitude':store.latitude if store else None,
+            'store_longitude':store.longitude if store else None,
+            'google_place_id':_promo_google_place_id(db,store),
             'store_name':store.name if store else '', 'store_address':store.address if store else '',
             'program_id':p.program_id,'program_title':program.title if program else '',
             'stamps_required':program.stamps_required if program else 0,
