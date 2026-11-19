@@ -1,5 +1,6 @@
 import React,{useEffect,useState} from 'react';
 import './campaign-creative.css';
+import './campaign-creative-v7162.css';
 
 /** The R2 asset stays separate from campaign copy; overlay avoids editing private assets. */
 export function hasCampaignCreative(p){
