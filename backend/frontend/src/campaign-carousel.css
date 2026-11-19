@@ -1,27 +1,21 @@
 .campaign-carousel {
   display: grid;
-  gap: 8px;
+  gap: 12px;
   min-width: 0;
+  width: 100%;
 }
 
-.campaign-carousel-controls {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
+.campaign-carousel-viewport {
+  display: grid;
+  grid-template-columns: repeat(var(--campaigns-visible, 1), minmax(0, 1fr));
+  gap: clamp(10px, 1.5vw, 18px);
+  overflow: hidden;
+  width: 100%;
+  border-radius: 18px;
 }
 
-.campaign-carousel-controls button {
-  display: inline-grid;
-  place-items: center;
-  min-width: 44px;
-  min-height: 44px;
-  padding: 0;
-  border-radius: 10px;
-}
-
-.campaign-carousel-viewport,
 .campaign-carousel-slide {
+  width: 100%;
   min-width: 0;
 }
 
@@ -30,7 +24,44 @@
 }
 
 .rewards-featured .campaign-carousel {
-  width: min(100%, 640px);
+  width: min(100%, 1200px);
+}
+
+.campaign-carousel-status {
+  display: grid;
+  grid-template-columns: max-content minmax(80px, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: min(100%, 240px);
+  color: #607286;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .04em;
+}
+
+.campaign-carousel-progress {
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #dce6e3;
+}
+
+.campaign-carousel-progress i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #16866b, #55b99e);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.campaign-carousel-progress i[data-active='true'] {
+  animation: campaign-progress 8s linear both;
+}
+
+.campaign-carousel-progress i[data-paused='true'] {
+  animation-play-state: paused;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -48,4 +79,18 @@
 @keyframes campaign-slide-in {
   from { opacity: 0; transform: translateX(var(--campaign-slide-start)); }
   to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes campaign-progress {
+  to { transform: scaleX(1); }
+}
+
+@media (max-width: 700px) {
+  .campaign-carousel { gap: 9px; }
+  .campaign-carousel-viewport { border-radius: 14px; }
+  .campaign-carousel-status { width: min(72%, 220px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .campaign-carousel-progress i { transform: scaleX(1); }
 }

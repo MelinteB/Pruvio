@@ -1,5 +1,4 @@
-import React, {useEffect, useId, useRef, useState} from 'react';
-import {ChevronLeft, ChevronRight, Pause, Play} from 'lucide-react';
+import React, {useEffect, useRef, useState} from 'react';
 import {t} from './i18n';
 import './campaign-carousel.css';
 
@@ -20,21 +19,26 @@ export function livePromotions(promotions) {
 
 export default function CampaignCarousel({campaigns, label, initialCampaignId, renderCampaign}) {
   const region = useRef(null);
-  const rotationOnPointerDown = useRef(null);
-  const slidesId = useId();
+  const remainingDelay = useRef(ROTATION_DELAY);
   const [selectedId, setSelectedId] = useState(initialCampaignId);
-  const [direction, setDirection] = useState('');
-  const [paused, setPaused] = useState(Boolean(initialCampaignId));
+  const [direction, setDirection] = useState('next');
   const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [touching, setTouching] = useState(false);
   const [visible, setVisible] = useState(() => !document.hidden);
   const [inView, setInView] = useState(() => typeof IntersectionObserver === 'undefined');
+  const [visibleCount, setVisibleCount] = useState(1);
   const [reduceMotion, setReduceMotion] = useState(() => Boolean(window.matchMedia?.(MOTION_QUERY).matches));
 
   const count = campaigns.length;
   const index = Math.max(0, campaigns.findIndex(campaign => campaign.id === selectedId));
   const current = campaigns[index];
   const nextId = campaigns[(index + 1) % count]?.id;
-  const rotating = count > 1 && !paused && !hovered && !reduceMotion && visible && inView;
+  const shownCount = Math.min(visibleCount, count);
+  const visibleCampaigns = Array.from({length: shownCount}, (_, offset) => campaigns[(index + offset) % count]);
+  const pausedByInteraction = hovered || focused || touching;
+  const rotationAvailable = count > shownCount && !reduceMotion && visible && inView;
+  const rotating = rotationAvailable && !pausedByInteraction;
 
   useEffect(() => {
     const update = () => setVisible(!document.hidden);
@@ -45,6 +49,19 @@ export default function CampaignCarousel({campaigns, label, initialCampaignId, r
   useEffect(() => {
     if (typeof IntersectionObserver === 'undefined') return;
     const observer = new IntersectionObserver(([entry]) => setInView(entry.isIntersecting));
+    observer.observe(region.current);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const update = width => setVisibleCount(width >= 980 ? 3 : width >= 560 ? 2 : 1);
+    const measure = () => update(region.current?.getBoundingClientRect().width || window.innerWidth);
+    measure();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measure);
+      return () => window.removeEventListener('resize', measure);
+    }
+    const observer = new ResizeObserver(([entry]) => update(entry.contentRect.width));
     observer.observe(region.current);
     return () => observer.disconnect();
   }, []);
@@ -63,50 +80,45 @@ export default function CampaignCarousel({campaigns, label, initialCampaignId, r
 
   useEffect(() => {
     if (!rotating) return;
+    const startedAt = Date.now();
+    let completed = false;
     const timer = window.setTimeout(() => {
+      completed = true;
+      remainingDelay.current = ROTATION_DELAY;
       setDirection('next');
       setSelectedId(nextId);
-    }, ROTATION_DELAY);
-    return () => window.clearTimeout(timer);
+    }, remainingDelay.current);
+    return () => {
+      window.clearTimeout(timer);
+      if (!completed) remainingDelay.current = Math.max(0, remainingDelay.current - (Date.now() - startedAt));
+    };
   }, [rotating, current?.id, nextId]);
-
-  function move(offset) {
-    setPaused(true);
-    setDirection(offset > 0 ? 'next' : 'previous');
-    setSelectedId(campaigns[(index + offset + count) % count].id);
-  }
 
   return <div ref={region} className="campaign-carousel" role="region" aria-label={label}
     aria-roledescription={count > 1 ? t('carousel') : undefined}
     onFocusCapture={event => {
-      if (!event.currentTarget.contains(event.relatedTarget)) setPaused(true);
+      if (!event.currentTarget.contains(event.relatedTarget)) setFocused(true);
+    }}
+    onBlurCapture={event => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
     }}
     onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
-    {count > 1 && <div className="campaign-carousel-controls">
-      {!reduceMotion && <button type="button" aria-controls={slidesId}
-        aria-label={t(paused ? 'Resume campaign rotation' : 'Pause campaign rotation')}
-        onPointerDown={() => { rotationOnPointerDown.current = paused; }}
-        onClick={event => {
-          // Pointer focus can pause the carousel before this click is delivered.
-          const previous = event.detail ? rotationOnPointerDown.current ?? paused : paused;
-          rotationOnPointerDown.current = null;
-          setPaused(!previous);
-        }}>
-        {paused ? <Play size={17} aria-hidden="true"/> : <Pause size={17} aria-hidden="true"/>}
-      </button>}
-      <button type="button" aria-controls={slidesId} aria-label={t('Previous campaign')} onClick={() => move(-1)}>
-        <ChevronLeft size={20} aria-hidden="true"/>
-      </button>
-      <button type="button" aria-controls={slidesId} aria-label={t('Next campaign')} onClick={() => move(1)}>
-        <ChevronRight size={20} aria-hidden="true"/>
-      </button>
-    </div>}
-    <div className="campaign-carousel-viewport" id={slidesId} aria-live={rotating ? 'off' : 'polite'}>
-      {current && <div className="campaign-carousel-slide" key={current.id} data-direction={direction}
+    <div onPointerDown={event => { if (event.pointerType === 'touch') setTouching(true); }}
+      onPointerUp={event => { if (event.pointerType === 'touch') setTouching(false); }}
+      onPointerCancel={() => setTouching(false)}>
+    <div className="campaign-carousel-viewport" aria-live="off"
+      style={{'--campaigns-visible': shownCount}}>
+      {visibleCampaigns.map((campaign, offset) => <div className="campaign-carousel-slide" key={campaign.id} data-direction={direction}
         role={count > 1 ? 'group' : undefined} aria-roledescription={count > 1 ? t('slide') : undefined}
-        aria-label={count > 1 ? t('{current} of {total}').replace('{current}', index + 1).replace('{total}', count) : undefined}>
-        {renderCampaign(current)}
-      </div>}
+        aria-label={count > 1 ? t('{current} of {total}').replace('{current}', ((index + offset) % count) + 1).replace('{total}', count) : undefined}>
+        {renderCampaign(campaign)}
+      </div>)}
     </div>
+    </div>
+    {count > 1 && <div className="campaign-carousel-status" aria-hidden="true">
+      <span>{index + 1} / {count}</span>
+      <div className="campaign-carousel-progress"><i key={current?.id} data-active={rotationAvailable}
+        data-paused={pausedByInteraction}/></div>
+    </div>}
   </div>;
 }

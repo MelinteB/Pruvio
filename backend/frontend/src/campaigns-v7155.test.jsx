@@ -36,7 +36,7 @@ describe('Core v7.1.55 customer campaign discovery',()=>{
     expect(request).toHaveBeenCalledWith('/loyalty/promotions');
     expect(screen.queryByRole('button',{name:'Next campaign'})).toBeNull();
   });
-  it('loops through distinct promotions for one program and hides repeated promotion IDs',async()=>{
+  it('presents distinct promotions automatically without playback controls',async()=>{
     vi.useFakeTimers();
     vi.spyOn(document,'hidden','get').mockReturnValue(false);
     request.mockResolvedValue([campaign,{...campaign,headline:'Duplicate creative'},secondCampaign]);
@@ -46,12 +46,7 @@ describe('Core v7.1.55 customer campaign discovery',()=>{
     expect(screen.getByAltText('Weekend campaign creative')).toBeTruthy();
     await act(()=>vi.advanceTimersByTime(8000));
     expect(screen.getByAltText('Lunch campaign creative')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button',{name:'Previous campaign'}));
-    expect(screen.getByAltText('Weekend campaign creative')).toBeTruthy();
-    await act(()=>vi.advanceTimersByTime(8000));
-    expect(screen.getByAltText('Weekend campaign creative')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button',{name:'Next campaign'}));
-    expect(screen.getByAltText('Lunch campaign creative')).toBeTruthy();
+    expect(screen.queryByRole('button',{name:/campaign|rotation/i})).toBeNull();
   });
   it('pauses while the document is hidden and when keyboard focus enters',async()=>{
     vi.useFakeTimers();
@@ -64,15 +59,15 @@ describe('Core v7.1.55 customer campaign discovery',()=>{
     expect(screen.getByAltText('Lunch campaign creative')).toBeTruthy();
     hidden.mockReturnValue(false);
     await act(async()=>fireEvent(document,new Event('visibilitychange')));
-    await act(()=>screen.getByRole('link',{name:'See loyalty program'}).focus());
-    expect(screen.getByRole('button',{name:'Resume campaign rotation'})).toBeTruthy();
+    await act(()=>screen.getAllByRole('link',{name:'See loyalty program'})[0].focus());
+    expect(screen.queryByRole('button',{name:/campaign rotation/i})).toBeNull();
     await act(()=>vi.advanceTimersByTime(8000));
     expect(screen.getByAltText('Lunch campaign creative')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button',{name:'Resume campaign rotation'}));
+    await act(()=>screen.getAllByRole('link',{name:'See loyalty program'})[0].blur());
     await act(()=>vi.advanceTimersByTime(8000));
     expect(screen.getByAltText('Weekend campaign creative')).toBeTruthy();
   });
-  it('allows manual navigation with reduced motion and never starts rotation',async()=>{
+  it('honours reduced motion without displaying carousel controls',async()=>{
     vi.useFakeTimers();
     vi.spyOn(document,'hidden','get').mockReturnValue(false);
     vi.stubGlobal('matchMedia',vi.fn(()=>({matches:true})));
@@ -81,8 +76,7 @@ describe('Core v7.1.55 customer campaign discovery',()=>{
     await act(()=>vi.advanceTimersByTime(8000));
     expect(screen.getByAltText('Lunch campaign creative')).toBeTruthy();
     expect(screen.queryByRole('button',{name:/campaign rotation/i})).toBeNull();
-    fireEvent.click(screen.getByRole('button',{name:'Next campaign'}));
-    expect(screen.getByAltText('Weekend campaign creative')).toBeTruthy();
+    expect(screen.queryByRole('button',{name:/next campaign|previous campaign/i})).toBeNull();
   });
   it('does not mistake an unavailable campaign service for an empty program list',async()=>{
     request.mockRejectedValueOnce(new Error('HTTP 503'));
