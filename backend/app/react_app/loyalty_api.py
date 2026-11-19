@@ -89,6 +89,14 @@ def promotions(response:Response, limit:int=Query(12,ge=1,le=30), identity=Depen
     response.headers['Cache-Control']='private, no-store, max-age=0'
     return call_business('/v1/promotions',params={'limit':limit})
 
+@router.get('/places/{place_id}')
+def merchant_place_details(place_id:str,identity=Depends(current)):
+    # Scoped bridge token; never expose the server Google Places key to Core.
+    if len(place_id)>255 or not place_id.replace('_','').replace('-','').isalnum():
+        raise HTTPException(422,'Invalid place identifier.')
+    return call_business('/v1/customer/places/'+place_id,user_id=identity[0].id)
+
+
 class ReceiptClaimIn(BaseModel):
     program_id: str=Field(min_length=36,max_length=36)
     code: str=Field(min_length=24,max_length=24,pattern=r'^[A-Fa-f0-9]{24}$')
