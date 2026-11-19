@@ -17,6 +17,7 @@ from .config import get_settings
 from .merchant_enrollment import router as merchant_enrollment_router
 from .models import Merchant, Staff, Store, Program, Membership, ReceiptClaim, Reward, Campaign, utcnow
 from .models_v067 import DiscountRedemption
+from .google_places_v0618 import router as google_places_router, linked_place_id
 from .security import merchant_actor, customer_actor, verify_password, encode_merchant_token, decode
 from .schemas import LoginIn, StoreIn, ProgramIn, CampaignGoal, CampaignIn, ReceiptProofIn, ConfirmIn, DemoReceiptIn
 
@@ -25,6 +26,7 @@ app=FastAPI(title='Pruvs Business API',version='0.6.17',docs_url='/docs' if sett
 app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=False,
                    allow_methods=['GET','POST'],allow_headers=['Authorization','Content-Type'])
 app.include_router(merchant_enrollment_router)
+app.include_router(google_places_router)
 from .ai_campaign_v067 import router as ai_campaign_router
 app.include_router(ai_campaign_router)
 from .ai_campaign_artwork_v0611 import router as ai_artwork_router
@@ -48,9 +50,10 @@ def merchant_check(staff):
     if staff.role not in ('owner','manager'):
         raise HTTPException(403,'Merchant manager role required')
 
-def store_json(s):
+def store_json(s, db=None):
     return dict(id=s.id,merchant_id=s.merchant_id,name=s.name,address=s.address,
-                latitude=s.latitude,longitude=s.longitude,active=s.active)
+                latitude=s.latitude,longitude=s.longitude,active=s.active,
+                google_place_id=linked_place_id(db,s.id) if db is not None else None)
 
 def program_json(p):
     return dict(id=p.id,store_id=p.store_id,merchant_id=p.merchant_id,title=p.title,
@@ -111,14 +114,14 @@ def overview(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
 
 @app.get('/v1/merchant/stores')
 def get_stores(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
-    return [store_json(s) for s in db.scalars(select(Store).where(Store.merchant_id==staff.merchant_id)).all()]
+    return [store_json(s,db=db) for s in db.scalars(select(Store).where(Store.merchant_id==staff.merchant_id)).all()]
 
 @app.post('/v1/merchant/stores',status_code=201)
 def add_store(payload:StoreIn,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     merchant_check(staff)
     s=Store(merchant_id=staff.merchant_id,**payload.model_dump())
     db.add(s);db.commit();db.refresh(s)
-    return store_json(s)
+    return store_json(s,db=db)
 
 @app.get('/v1/merchant/programs')
 def get_programs(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
@@ -284,7 +287,7 @@ def discover(latitude:float|None=Query(default=None,ge=-90,le=90),longitude:floa
         if distance is not None and distance>radius_km:continue
         if p.merchant_id not in eligibility:
             eligibility[p.merchant_id]=merchant_pilot_allowed(db,p.merchant_id)
-        results.append({'merchant_id':m.id,'merchant_name':m.name,'store':store_json(s),
+        results.append({'merchant_id':m.id,'merchant_name':m.name,'store':store_json(s,db=db),
                         'program':program_json(p),'receipt_pilot_allowed':eligibility[p.merchant_id],
                         'distance_km':round(distance,2) if distance is not None else None})
     return sorted(results,key=lambda r:(r['distance_km'] is None,r['distance_km'] or 0))[:100]
