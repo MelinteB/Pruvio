@@ -12,6 +12,7 @@ import ReceiptInbox from './ReceiptInbox';
 import CustomerDemo from './CustomerDemo.jsx';
 import ProgramManager from './ProgramManager.jsx';
 import AdminWorkspace from './AdminWorkspace.jsx';
+import LocationManager from './LocationManager.jsx';
 
 const API = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
 const money = (v) => `${(v/100).toFixed(2)} RON`;
@@ -75,7 +76,7 @@ function App(){
  {page==='overview'&&<MerchantOverview
     merchantName={me?.merchant_name} stats={stats} stores={stores} programs={programs} claims={claims}
     onNavigate={setPage} onAddStore={()=>setModal('store')} onAddProgram={()=>setModal('program')}/>}
- {page==='stores'&&<section className="panel"><div className="panel-heading"><h2>Store locations</h2><span>{stores.length} TOTAL</span></div>{stores.length?<div className="list">{stores.map(s=><div className="list-row" key={s.id}><div className="row-icon"><Store size={19}/></div><div className="row-main"><b>{s.name}</b><small><MapPin size={13}/>{s.address||'Address not specified'}</small></div><span className="pill good">Active</span></div>)}</div>:<Empty title="No locations yet" detail="Add a business location to make offers discoverable to nearby Pruvs customers."/>}</section>}
+ {page==='stores'&&<><section className="panel"><div className="panel-heading"><h2>Store locations</h2><span>{stores.length} TOTAL</span></div>{stores.length?<div className="list">{stores.map(s=><div className="list-row" key={s.id}><div className="row-icon"><Store size={19}/></div><div className="row-main"><b>{s.name}</b><small><MapPin size={13}/>{s.address||'Address not specified'}</small></div><span className="pill good">Active</span></div>)}</div>:<Empty title="No locations yet" detail="Add a business location to make offers discoverable to nearby Pruvs customers."/>}</section>{stores.length>0&&<LocationManager stores={stores} token={token} onChange={()=>reload(token)} onNotice={text=>inform(text)}/>}</>}
  {page==='loyalty'&&<ProgramManager programs={programs} stores={stores} token={token} onRefresh={()=>reload(token)} notify={inform} onAddStore={()=>setModal('store')} onCreateProgram={()=>setModal('program')} onVerifyPurchases={()=>setPage('claims')}/>}
   {page==='claims'&&<ReceiptInbox token={token} onChange={reload} onOpenLoyalty={()=>setPage('loyalty')}/>}
 
@@ -83,7 +84,15 @@ function App(){
  {page==='promotions'&&<PromotionConsole token={token} programs={programs} merchantName={me?.merchant_name} mode="promotions" initialView="library" canManage={['owner','manager'].includes(me?.role)}/>} 
  {page==='pilot'&&<PromotionConsole token={token} programs={programs} mode="pilot"/>}
  {page==='integrations'&&<><div className="integration-grid"><section className="panel"><div className="row-between"><div className="row-icon"><ScanLine size={20}/></div><span className="pill good">Demo enabled</span></div><h2>QR voucher verification</h2><p>Check a Pruvs reward code and confirm its redemption after the discount is applied in the merchant checkout.</p><RedemptionForm token={token} onSuccess={()=>{reload();inform('Voucher redeemed successfully')}} onError={x=>inform(x,true)}/></section><section className="panel"><div className="row-between"><div className="row-icon"><Plug size={20}/></div><span className="pill">Not connected</span></div><h2>POS / SIBS connector</h2><p>Future merchant ECR and approved payment integrations. No live merchant or SIBS system access is configured in this starter.</p></section></div><ReconciliationPanel token={token}/><div className="info-banner"><ShieldCheck size={21}/><span>Production integrations will require per-merchant credentials, scoped permissions, idempotent checkout events, reconciliation and approval.</span></div></>}
- </main></div>{modal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setModal('')}}><div className="modal"><div className="modal-head"><div><span className="eyebrow">MERCHANT SETUP</span><h2>{modal==='store'?'Add store location':modal==='program'?'Create loyalty program':'Campaign studio'}</h2></div><button className="icon-btn" onClick={()=>setModal('')}><X size={20}/></button></div>{modal==='store'&&<StoreForm busy={busy} onSave={x=>perform('/v1/merchant/stores',x)}/ >}{modal==='program'&&<ProgramForm stores={stores} busy={busy} onSave={x=>perform('/v1/merchant/programs',x)}/ >}{modal==='campaign'&&<CampaignForm token={token} busy={busy} onSave={x=>perform('/v1/merchant/campaigns',x)} onError={x=>inform(x,true)}/>}</div></div>}</div>
+ </main></div>{modal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setModal('')}}><div className="modal"><div className="modal-head"><div><span className="eyebrow">MERCHANT SETUP</span><h2>{modal==='store'?'Add store location':modal==='program'?'Create loyalty program':'Campaign studio'}</h2></div><button className="icon-btn" onClick={()=>setModal('')}><X size={20}/></button></div>{modal==='store'&&<StoreForm busy={busy} token={token} onSave={async (values,placeId)=>{
+  const created=await perform('/v1/merchant/stores',values);
+  if(created?.id&&placeId){
+    try{
+      await request('/v1/merchant/stores/'+encodeURIComponent(created.id)+'/google-place',token,'POST',{place_id:placeId});
+      await reload(token);inform('Store and Google Maps listing connected.');
+    }catch(e){inform('Store saved, but Google Maps linking needs attention: '+e.message,true)}
+  }
+}}/>}{modal==='program'&&<ProgramForm stores={stores} busy={busy} onSave={x=>perform('/v1/merchant/programs',x)}/ >}{modal==='campaign'&&<CampaignForm token={token} busy={busy} onSave={x=>perform('/v1/merchant/campaigns',x)} onError={x=>inform(x,true)}/>}</div></div>}</div>
 }
 function RedemptionForm({token,onSuccess,onError}){
  const [code,setCode]=useState(''),[quote,setQuote]=useState(null),[loading,setLoading]=useState(false);
@@ -138,7 +147,51 @@ function ReconciliationPanel({token}){
   </>}
  </section>;
 }
-function StoreForm({onSave,busy}){const [name,setName]=useState(''),[address,setAddress]=useState(''),[latitude,setLatitude]=useState('44.4268'),[longitude,setLongitude]=useState('26.1025');return <form className="modal-body" onSubmit={e=>{e.preventDefault();onSave({name,address,latitude:Number(latitude),longitude:Number(longitude)})}}><Field label="Store name"><input required minLength={2} value={name} onChange={e=>setName(e.target.value)} placeholder="Example: My Café – Central"/></Field><Field label="Address"><input value={address} onChange={e=>setAddress(e.target.value)} placeholder="Street, city"/></Field><div className="form-row"><Field label="Latitude"><input type="number" step="any" required value={latitude} onChange={e=>setLatitude(e.target.value)}/></Field><Field label="Longitude"><input type="number" step="any" required value={longitude} onChange={e=>setLongitude(e.target.value)}/></Field></div><p className="helper">Coordinates default to Bucharest for demonstration. Enter the actual store coordinates.</p><button disabled={busy} className="btn primary full">{busy?'Saving…':'Save location'}</button></form>}
+function StoreForm({onSave,busy,token}){
+ const [name,setName]=useState(''),[address,setAddress]=useState('');
+ const [latitude,setLatitude]=useState(''),[longitude,setLongitude]=useState('');
+ const [q,setQ]=useState(''),[places,setPlaces]=useState([]),[selected,setSelected]=useState(null);
+ const [searching,setSearching]=useState(false),[googleError,setGoogleError]=useState('');
+ async function googleSearch(){
+   setSearching(true);setGoogleError('');setPlaces([]);
+   try{
+     const response=await request('/v1/merchant/places/search?q='+encodeURIComponent(q.trim()),token);
+     setPlaces(response.places||[]);
+   }catch(e){setGoogleError(e.message)}finally{setSearching(false)}
+ }
+ return <form className="modal-body" onSubmit={e=>{
+   e.preventDefault();
+   if(!name.trim()||!address.trim()||!latitude||!longitude)return;
+   onSave({name:name.trim(),address:address.trim(),latitude:Number(latitude),longitude:Number(longitude)},selected?.place_id);
+ }}>
+   <div className="pruvs-location-form-search">
+     <label>Find your business on Google Maps</label>
+     <div><input type="search" maxLength={120} value={q}
+       placeholder="e.g. Bistro Central Bucharest" onChange={e=>setQ(e.target.value)}/>
+       <button type="button" className="btn outline" disabled={searching||q.trim().length<3} onClick={googleSearch}>
+         <MapPin size={15}/>{searching?'Searching…':'Search Google Maps'}
+       </button></div>
+     {googleError&&<p className="promo-error" role="alert">{googleError}</p>}
+     {places.length>0&&<div className="pruvs-location-form-results">{places.map(p=>
+       <button type="button" key={p.place_id} className={selected?.place_id===p.place_id?'selected':''}
+         onClick={()=>setSelected(p)}><b>{p.name}</b><small>{p.address}</small><span>{selected?.place_id===p.place_id?'Selected':'Select listing'}</span></button>
+     )}</div>}
+     {selected&&<small>Selected listing: {selected.name}. Only its Google Place ID will be saved; verify your own business details below.</small>}
+   </div>
+   <Field label="Your store name"><input required minLength={2} maxLength={180} value={name}
+     onChange={e=>setName(e.target.value)} placeholder="Registered business name"/></Field>
+   <Field label="Your store address"><input required maxLength={250} value={address}
+     onChange={e=>setAddress(e.target.value)} placeholder="Street, city, country"/></Field>
+   <div className="form-row">
+     <Field label="Latitude"><input type="number" step="any" min="-90" max="90" required value={latitude}
+       onChange={e=>setLatitude(e.target.value)} placeholder="44.4268"/></Field>
+     <Field label="Longitude"><input type="number" step="any" min="-180" max="180" required value={longitude}
+       onChange={e=>setLongitude(e.target.value)} placeholder="26.1025"/></Field>
+   </div>
+   <p className="helper">Confirm actual coordinates. Google search is optional; ratings and reviews are fetched live and never saved.</p>
+   <button disabled={busy} className="btn primary full">{busy?'Saving…':'Save location'}</button>
+ </form>
+}
 function ProgramForm({stores,onSave,busy}){const [store,setStore]=useState(stores[0]?.id||''),[title,setTitle]=useState(''),[desc,setDesc]=useState(''),[stamps,setStamps]=useState(5),[minimum,setMinimum]=useState(30),[reward,setReward]=useState(20);return <form className="modal-body" onSubmit={e=>{e.preventDefault();onSave({store_id:store,title,description:desc,stamps_required:Number(stamps),min_purchase_minor:Math.round(Number(minimum)*100),reward_minor:Math.round(Number(reward)*100),currency:'RON'})}}>{!stores.length?<p className="error-text">Create a store first to add a loyalty program.</p>:<><Field label="Store location"><select required value={store} onChange={e=>setStore(e.target.value)}>{stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></Field><Field label="Program name"><input value={title} required minLength={3} onChange={e=>setTitle(e.target.value)} placeholder="Lunch Rewards"/></Field><Field label="Customer description"><textarea rows="2" value={desc} onChange={e=>setDesc(e.target.value)} placeholder="How the program works"/></Field><div className="form-row"><Field label="Qualifying receipts"><input min="2" max="30" type="number" value={stamps} onChange={e=>setStamps(e.target.value)}/></Field><Field label="Reward (RON)"><input min="1" step="0.01" type="number" value={reward} onChange={e=>setReward(e.target.value)}/></Field></div><Field label="Minimum receipt spend (RON)"><input min="0" step="0.01" type="number" value={minimum} onChange={e=>setMinimum(e.target.value)}/></Field><button disabled={busy} className="btn primary full">{busy?'Saving…':'Save as draft'}</button></>}</form>}
 function CampaignForm({token,busy,onSave,onError}){const [goal,setGoal]=useState(''),[title,setTitle]=useState(''),[message,setMessage]=useState(''),[suggesting,setSuggesting]=useState(false);async function suggest(){setSuggesting(true);try{const r=await request('/v1/merchant/campaign-suggestions',token,'POST',{goal});setTitle(r.title);setMessage(r.message)}catch(ex){onError(ex.message)}finally{setSuggesting(false)}}return <form className="modal-body" onSubmit={e=>{e.preventDefault();onSave({goal,title,message})}}><Field label="Business objective"><textarea rows="2" required minLength={8} value={goal} onChange={e=>setGoal(e.target.value)} placeholder="Increase repeat visits on weekdays"/></Field><button className="btn outline full" disabled={suggesting||goal.length<8} type="button" onClick={suggest}><Sparkles size={16}/> {suggesting?'Generating…':'Generate starter suggestion'}</button><div className="info-banner small">This version uses a template generator, not a live AI model. All drafts require human approval.</div><Field label="Campaign title"><input required minLength={3} value={title} onChange={e=>setTitle(e.target.value)}/></Field><Field label="Customer message"><textarea rows="4" required minLength={5} value={message} onChange={e=>setMessage(e.target.value)}/></Field><button disabled={busy} className="btn primary full">{busy?'Saving…':'Save campaign draft'}</button></form>}
 
