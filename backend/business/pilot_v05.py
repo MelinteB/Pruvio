@@ -73,6 +73,19 @@ def is_customer_visible(p,db,now=None):
                 and merchant.status=='active' and store and store.active)
 
 
+def linked_google_place_id(db,store):
+    """Optional place ID only. Never hold up Core campaigns if location linking
+    is disabled or the new additive table hasn't been migrated."""
+    if not store or os.getenv('PRUVS_BUSINESS_PLACES_ENABLED','false').lower()!='true':
+        return None
+    from sqlalchemy import inspect
+    if not inspect(db.get_bind()).has_table('merchant_store_places_v0618'):
+        return None
+    from .places_v0618 import StorePlaceLink
+    row=db.get(StorePlaceLink,store.id)
+    return row.place_id if row and row.merchant_id==store.merchant_id else None
+
+
 def promo_json(p,db):
     program=db.get(Program,p.program_id)
     store=db.get(Store,program.store_id) if program else None
@@ -90,7 +103,7 @@ def promo_json(p,db):
             'store_id':store.id if store else None,
             'store_latitude':store.latitude if store else None,
             'store_longitude':store.longitude if store else None,
-            'store_place_id':getattr(store,'google_place_id',None) if store else None,
+            'store_place_id':linked_google_place_id(db,store),
             'effective_status':effective_campaign_status(p),
             'is_public':is_customer_visible(p,db),
             'headline':p.headline,'message':p.message,'status':p.status,
