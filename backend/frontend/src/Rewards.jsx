@@ -281,10 +281,10 @@ function AccountRewards(){
               </div>
               <button type="button" className="secondary" disabled={!!busy || claimsState==='unavailable'}
                 onClick={()=>{
-                  const warning='Leave '+(m.title||'this program')+'?\\n\\n'+
-                    'This is permanent for the linked receipts: they cannot be reused in this or any other campaign, even if you join again.\\n'+
-                    'You will lose '+(m.stamps||0)+' stamps, '+pending.length+' pending receipts and '+rewardCount+' unused rewards.\\n'+
-                    'Saved receipt originals remain in your Pruvs account.\\n\\nContinue?';
+                  const warning='Leave '+(m.title||'this program')+'?\n\n'+
+                    'This is permanent for the linked receipts: they cannot be reused in this or any other campaign, even if you join again.\n'+
+                    'You will lose '+(m.stamps||0)+' stamps, '+pending.length+' pending receipts and '+rewardCount+' unused rewards.\n'+
+                    'Saved receipt originals remain in your Pruvs account.\n\nContinue?';
                   if(window.confirm(warning))
                     perform('leave-'+m.program_id,()=>send('/loyalty/programs/'+m.program_id+'/leave',{confirm_forfeit:true}),()=> 'You left '+(m.title||'the program')+'. Its linked receipts cannot be reused.');
                 }}>Leave program</button>
