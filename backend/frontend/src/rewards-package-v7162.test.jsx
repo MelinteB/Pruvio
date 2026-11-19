@@ -64,13 +64,13 @@ function mount(){
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.resetAllMocks()});
 
 describe('Core v7.1.62 loyalty receipt package correction',()=>{
-  it('lists linked campaign receipts and QR actions for each required purchase',async()=>{
+  it('lists linked receipts with one campaign-level verification action',async()=>{
     setup();mount();
     expect(await screen.findByText('Receipts linked to this campaign')).toBeTruthy();
     expect(screen.getByText('1 awaiting package review · 2 receipt slots remaining')).toBeTruthy();
-    const qr=screen.getAllByTestId('receipt-qr').map(element=>element.textContent);
-    expect(qr.some(text=>text.includes('14: pending'))).toBe(true);
-    expect(qr.some(text=>text.includes('15: new'))).toBe(true);
+    expect(screen.getByText('Campaign purchase verification')).toBeTruthy();
+    expect(screen.getByTestId('receipt-qr').textContent).toContain('14: pending');
+    expect(screen.getByRole('combobox',{name:'Purchase receipt'}).textContent).toContain('New purchase');
     expect(screen.getByText('View saved receipt')).toBeTruthy();
   });
   it('warns before leaving and never submits without explicit confirmation',async()=>{

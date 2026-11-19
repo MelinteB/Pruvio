@@ -12,11 +12,11 @@
 .core-experience .sidebar-bottom{margin-top:auto;padding:18px 12px 4px}
 .core-experience .sidebar-bottom small{letter-spacing:0;font-size:11px;color:#9eb3dc}
 .core-experience .pruvs-promos{
-  display:grid;gap:8px;justify-items:start;
+  display:grid;gap:8px;justify-items:stretch;
   margin:14px 0 24px;padding:0;
   background:transparent;border:0;
 }
-.core-experience .pruvs-promos-grid{display:grid;grid-template-columns:minmax(0,1fr);width:min(100%,435px);gap:0}
+.core-experience .pruvs-promos-grid{display:grid;grid-template-columns:minmax(0,1fr);width:100%;gap:0}
 .core-experience .pruvs-promos .pruvs-promo{width:100%;min-width:0}
 .core-experience .pruvs-promos-more{
   display:inline-flex;align-items:center;gap:6px;

@@ -1,7 +1,7 @@
 import React, {useEffect, useState} from 'react';
 import {QRCodeSVG} from 'qrcode.react';
 import {Link,useLocation} from 'react-router-dom';
-import {Compass, Gift, MapPin, RefreshCcw, ReceiptText, Ticket, CheckCircle2, X, Search} from 'lucide-react';
+import {Compass, Gift, MapPin, RefreshCcw, CheckCircle2, X, Search} from 'lucide-react';
 import {Title, Panel, Message, Spinner, useApp} from './common';
 import {request, send, money} from './api';
 import {t} from './i18n';
@@ -11,7 +11,6 @@ import './rewards-package-v7162.css';
 import CampaignCarousel,{livePromotions} from './CampaignCarousel.jsx';
 import CampaignCreative,{hasCampaignCreative} from './CampaignCreative.jsx';
 import OfferLocation from './OfferLocation.jsx';
-import ReceiptSubmission from './ReceiptSubmission';
 import CustomerReceiptCode from './CustomerReceiptCode';
 
 export default function Rewards(){
@@ -24,9 +23,6 @@ function AccountRewards(){
   const {user}=useApp();
   const location=useLocation();
   const promotedProgram=new URLSearchParams(location.search).get('program');
-  // Receipt detail links carry this case ID; keep that selection when arriving
-  // in Saved receipts instead of dropping the user into a general receipt list.
-  const selectedReceiptCase=new URLSearchParams(location.search).get('case');
   const [status,setStatus]=useState(null);
   const [offers,setOffers]=useState([]);
   const [promotions,setPromotions]=useState([]);
@@ -154,14 +150,6 @@ function AccountRewards(){
     }finally{setLoading(false);}
   }
   useEffect(()=>{refresh(null,tab);},[tab]);
-  useEffect(()=>{
-    if(selectedReceiptCase && tab!=='wallet')setTab('wallet');
-  },[selectedReceiptCase]);
-  useEffect(()=>{
-    if(!loading && tab==='wallet' && selectedReceiptCase){
-      document.getElementById('loyalty-receipt-'+selectedReceiptCase)?.scrollIntoView?.({block:'center'});
-    }
-  },[loading,tab,selectedReceiptCase]);
 
   function nearMe(){
     setError('');setMessage('');
@@ -206,19 +194,6 @@ function AccountRewards(){
   // Business is the authority for merchant eligibility. Old Business versions
   // without this flag fail closed for receipt claims, not for program discovery.
   const eligibleReceiptOffers=offers.filter(o=>o.receipt_pilot_allowed===true);
-  const receiptActionReason=membershipsState!=='ready'
-    ? 'Your loyalty memberships could not be checked. Try again.'
-    : !status?.receipt_claims_enabled
-      ? 'Receipt rewards are not enabled for your account in this environment.'
-      : !status?.receipt_v06_enabled
-        ? (status?.receipt_access_reason==='no_joined_approved_merchant'
-          ? 'Join a loyalty program from an approved merchant in Discover to earn stamps.'
-          : status?.receipt_access_reason==='eligibility_unavailable'
-            ? 'Merchant eligibility cannot be checked right now. Try again shortly.'
-            : 'Receipt verification is not active for your account yet.')
-        : claimsState!=='ready'
-          ? 'Receipt claim verification is unavailable. Try again.'
-          : null;
   const earnedPrograms=eligibleReceiptOffers.filter(o=>joined.has(o.program.id)).map(o=>{
     const active=activePromotionByProgram.get(o.program.id);
     return active?{...o, promotionHeadline:active.headline}:o;
@@ -296,8 +271,12 @@ function AccountRewards(){
           // including when a claim was rejected or the enrollment was left.
           const unused=receipts.filter(r=>!claims.some(c=>c.receipt_ref===r.receipt_ref));
           const selected=selectedReceiptByProgram[m.program_id];
-          const receipt=unused.find(r=>String(r.case_id)===String(selected))||unused[0];
           const rewardCount=(wallet.rewards||[]).filter(r=>r.program_id===m.program_id && ['available','reserved'].includes(r.status)).length;
+          const pendingChoices=pending.map(claim=>({claim,receipt:receipts.find(r=>r.receipt_ref===claim.receipt_ref)})).filter(x=>x.receipt);
+          const newChoices=remaining>0&&rewardCount===0?unused.map(receipt=>({claim:null,receipt})):[];
+          const verificationChoices=[...pendingChoices,...newChoices];
+          const choice=verificationChoices.find(x=>String(x.receipt.case_id)===String(selected))||verificationChoices[0];
+          const receipt=choice?.receipt;
           return <div className="pruvs-package-program" key={m.program_id}>
             <div className="rewards-wallet-row pruvs-v7151-membership">
               <div><strong>{m.title||p?.title||'Loyalty program'}</strong>
@@ -319,6 +298,8 @@ function AccountRewards(){
               <div className="pruvs-package-head"><strong>Receipts linked to this campaign</strong>
                 <small>{pending.length} awaiting package review · {remaining} receipt slot{remaining===1?'':'s'} remaining</small>
               </div>
+              {!offer&&<p className="muted">This campaign is not currently accepting purchase verification.</p>}
+              {offer&&!status?.customer_codes_v12_enabled&&<p className="muted">Campaign purchase verification is not enabled for this account in the current environment.</p>}
               {claimsState==='unavailable'&&<p role="status">Receipt status could not be loaded. QR creation is unavailable until verification is restored.</p>}
               {claimsState==='ready'&&<>
                 {linked.length>0?<ol className="pruvs-package-list">
@@ -330,25 +311,22 @@ function AccountRewards(){
                         <small className={'pruvs-package-status '+c.status}>{c.status==='pending'?'Awaiting package review':c.status==='approved'?'Merchant verified':c.status==='cancelled'?'Forfeited on leaving':c.status==='rejected'?'Rejected':c.status}</small>
                         {original&&<Link to={'/receipt/'+original.case_id}>View saved receipt</Link>}
                       </div>
-                      {c.status==='pending' && original && offer && status?.customer_codes_v12_enabled &&
-                        <CustomerReceiptCode key={'qr-'+c.claim_id} caseId={original.case_id}
-                          userId={user?.id} storageMode={original.storage_mode}
-                          programs={[offer]} existingClaim={c} onFinished={()=>refresh(null,'wallet')}/>}
                     </li>;
                   })}
                 </ol>:<p className="muted">No receipts linked yet. Add one saved receipt per required purchase.</p>}
-                {remaining>0&&rewardCount===0&&offer&&status?.customer_codes_v12_enabled&&
+                {verificationChoices.length>0&&offer&&status?.customer_codes_v12_enabled&&
                   <div className="pruvs-package-add">
-                    <strong>Verify another receipt ({target-remaining+1} of {target})</strong>
-                    {unused.length?<><label>Select a saved receipt
+                    <strong>Campaign purchase verification</strong>
+                    <small>{choice?.claim?'Reopen the campaign verification code for this pending purchase.':'Choose a saved purchase for this campaign. The merchant confirms it before progress is added.'}</small>
+                    <label>Purchase receipt
                       <select value={receipt?.case_id||''} onChange={e=>setSelectedReceiptByProgram(v=>({...v,[m.program_id]:e.target.value}))}>
-                        {unused.map(r=><option key={r.case_id} value={r.case_id}>{r.merchant_name||'Receipt'} · {money(r.receipt_total,r.currency||'RON')} · #{r.case_id}</option>)}
+                        {verificationChoices.map(({receipt:r,claim})=><option key={(claim?'pending-':'new-')+r.case_id} value={r.case_id}>{claim?'Awaiting verification':'New purchase'} · {r.merchant_name||'Receipt'} · {money(r.receipt_total,r.currency||'RON')} · #{r.case_id}</option>)}
                       </select>
-                    </label><CustomerReceiptCode key={'new-'+m.program_id+'-'+receipt.case_id}
+                    </label><CustomerReceiptCode key={'campaign-'+m.program_id+'-'+receipt.case_id}
                       caseId={receipt.case_id} userId={user?.id} storageMode={receipt.storage_mode}
-                      programs={[offer]} onFinished={()=>refresh(null,'wallet')}/></>
-                    :<Link to="/upload">Scan a receipt to continue</Link>}
+                      programs={[offer]} existingClaim={choice?.claim} onFinished={()=>refresh(null,'wallet')}/>
                   </div>}
+                {!verificationChoices.length&&remaining>0&&rewardCount===0&&<Link to="/upload">Scan a receipt to continue this campaign</Link>}
                 {rewardCount>0&&<p className="pruvs-package-ready">You have an unused reward. Redeem it before beginning another package of receipts.</p>}
                 {remaining===0&&pending.length>0&&<p className="pruvs-package-ready">All required receipts are linked. The merchant must unlock and review each QR before approving the entire package.</p>}
                 {m.status!=='published'&&<p className="muted">Program paused. Existing receipt records remain linked; new QR submissions require an active program.</p>}
@@ -379,35 +357,8 @@ function AccountRewards(){
           <button type="button" className="secondary" onClick={()=>{setActiveVoucher(null);refresh(null,'wallet')}}>Close and refresh</button>
          </section></div>}
     </>}
-    {!loading && status?.enabled && tab==='wallet' && walletState==='ready' && <Panel title="Earn a stamp">
-      {membershipsState!=='ready'&&<p role="status" className="pruvs-v7152-partial-warning">
-        Your saved receipts are available, but loyalty enrollment could not be verified. Receipt claiming is temporarily unavailable; retry when the merchant service is ready.
-      </p>}
-      {claimsState==='unavailable'&&<p role="status" className="pruvs-v7152-partial-warning">Receipt verification status is temporarily unavailable. Existing claims have not been confirmed as missing. New submissions are paused to prevent duplicates.</p>}
-      {membershipsState==='ready'&&earnedPrograms.length===0&&<p role="status" className="pruvs-v7152-partial-warning">Your joined merchants are not yet accepting loyalty receipts. You can still save receipts and discover rewards. Once a merchant activates loyalty, you can earn stamps here.</p>}
-      <p className="muted">To earn a stamp: choose an active merchant program, agree to share your receipt preview, and show the verification QR/code to the merchant. The merchant must confirm the purchase.</p>
-      {selectedReceiptCase&&!receipts.some(r=>String(r.case_id)===selectedReceiptCase)&&<p role="status" className="pruvs-v7152-partial-warning">The selected receipt was not found in your saved receipts. Return to its details and try again.</p>}
-      {receipts.map(r=><div id={'loyalty-receipt-'+r.case_id} key={r.case_id}
-        className={'rewards-wallet-row pruvs-v7150-receipt-loyalty'+(String(r.case_id)===selectedReceiptCase?' pruvs-loyalty-selected-receipt':'')}>
-        <div><strong>{r.merchant_name||'Saved receipt'}</strong>
-          {String(r.case_id)===selectedReceiptCase&&<span className="pruvs-loyalty-selected-label">Selected receipt</span>}
-          <p>{money(r.receipt_total,r.currency||'RON')}</p>
-          <small>{receiptActionReason||(!earnedPrograms.length?'No joined, approved merchant program is available for this receipt. Join a loyalty program in Discover or ask the merchant to activate it.':'Choose the matching merchant loyalty program, share the receipt and ask the merchant to confirm the purchase.')}</small>
-          {(status?.receipt_access_reason==='no_joined_approved_merchant'||(!receiptActionReason&&!earnedPrograms.length))&&
-            <button className="secondary pruvs-loyalty-discover-link" type="button" onClick={()=>setTab('offers')}>Discover approved loyalty programs</button>}
-        </div>
-        <Link to={'/receipt/'+r.case_id}>View receipt</Link>
-        {!receiptActionReason&&earnedPrograms.length>0&&status?.customer_codes_v12_enabled
-          ?<CustomerReceiptCode caseId={r.case_id} userId={user?.id} storageMode={r.storage_mode} programs={earnedPrograms} existingClaim={claims.find(c=>c.receipt_ref===r.receipt_ref)} onFinished={()=>refresh(null,'wallet')}/>
-          :!receiptActionReason&&earnedPrograms.length>0&&status?.receipt_v06_enabled
-            ?<ReceiptSubmission caseId={r.case_id} receiptRef={r.receipt_ref} claims={claims} programs={earnedPrograms} onSuccess={msg=>{setMessage(msg);refresh(null,'wallet')}}/>
-            :<button type="button" className="secondary" disabled title={receiptActionReason||'Join an approved merchant loyalty program first.'}>Earn a stamp — unavailable</button>}
-      </div>)}
-      {!receipts.length&&!error&&<p>No receipts found. <Link to="/upload">Scan a receipt</Link> to begin.</p>}
-      <div className="row"><Ticket size={18}/><small>A merchant must confirm the purchase before any stamp is credited. Receipt verification is not POS settlement confirmation.</small></div>
-    </Panel>}
     {!loading && status?.enabled && tab==='receipts' && <Panel title="Saved receipts">
-      <p className="muted">Review your scans here. To submit a qualifying receipt for merchant verification, use Earn a stamp in My wallet.</p>
+      <p className="muted">Review your scans here. Loyalty progress and purchase verification are managed from the joined campaign in My wallet.</p>
       {receipts.map(r=><div className="rewards-wallet-row" key={r.case_id}>
         <div><strong>{r.merchant_name||'Saved receipt'}</strong><small>{money(r.receipt_total,r.currency||'RON')}</small></div>
         <Link to={'/receipt/'+r.case_id}>View receipt</Link>

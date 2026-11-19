@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { LayoutDashboard, Store, Gift, ScanLine, Sparkles, Plug, ShieldCheck, LogOut, Menu, X, Plus, Check, ArrowUpRight, Clock, MapPin, ChevronRight, CircleCheck, AlertCircle } from 'lucide-react';
 import './style.css';
@@ -97,12 +97,27 @@ function App(){
  {page==='campaigns'&&<PromotionConsole token={token} programs={programs} merchantName={me?.merchant_name} locale={language} mode="promotions" initialView="studio" canManage={['owner','manager'].includes(me?.role)}/>} 
  {page==='promotions'&&<PromotionConsole token={token} programs={programs} merchantName={me?.merchant_name} locale={language} mode="promotions" initialView="library" canManage={['owner','manager'].includes(me?.role)}/>} 
  {page==='pilot'&&<PromotionConsole token={token} programs={programs} mode="pilot"/>}
- {page==='integrations'&&<><div className="integration-grid"><section className="panel"><div className="row-between"><div className="row-icon"><ScanLine size={20}/></div><span className="pill good">Demo enabled</span></div><h2>QR voucher verification</h2><p>Check a Pruvs reward code and confirm its redemption after the discount is applied in the merchant checkout.</p><RedemptionForm token={token} onSuccess={()=>{reload();inform('Voucher redeemed successfully')}} onError={x=>inform(x,true)}/></section><section className="panel"><div className="row-between"><div className="row-icon"><Plug size={20}/></div><span className="pill">Not connected</span></div><h2>POS / SIBS connector</h2><p>Future merchant ECR and approved payment integrations. No live merchant or SIBS system access is configured in this starter.</p></section></div><ReconciliationPanel token={token}/><div className="info-banner"><ShieldCheck size={21}/><span>Production integrations will require per-merchant credentials, scoped permissions, idempotent checkout events, reconciliation and approval.</span></div></>}
+ {page==='integrations'&&<><div className="integration-grid"><section className="panel pruvs-checkout-panel"><div className="row-between"><div className="row-icon"><ScanLine size={20}/></div><span className="pill good">Checkout ready</span></div><h2>Issue payment and apply campaign discount</h2><p>Enter or scan the customer’s campaign reward code, verify it, then record the completed payment with the discount applied.</p><RedemptionForm token={token} onSuccess={()=>{reload();inform('Payment recorded and campaign discount redeemed')}} onError={x=>inform(x,true)}/></section><section className="panel"><div className="row-between"><div className="row-icon"><Plug size={20}/></div><span className="pill">Not connected</span></div><h2>POS / SIBS connector</h2><p>Future merchant ECR and approved payment integrations. No live merchant or SIBS system access is configured in this starter.</p></section></div><ReconciliationPanel token={token}/><div className="info-banner"><ShieldCheck size={21}/><span>Production integrations will require per-merchant credentials, scoped permissions, idempotent checkout events, reconciliation and approval.</span></div></>}
  </main></div>{modal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setModal('')}}><div className="modal"><div className="modal-head"><div><span className="eyebrow">{t('Merchant setup')}</span><h2>{t(modal==='store'?'Add store location':modal==='program'?'Create loyalty program':'Campaign Studio')}</h2></div><button className="icon-btn" onClick={()=>setModal('')}><X size={20}/></button></div>{modal==='store'&&<StoreForm busy={busy} token={token} onSave={saveStore}/>}{modal==='program'&&<ProgramForm stores={stores} busy={busy} onSave={x=>perform('/v1/merchant/programs',x)}/ >}{modal==='campaign'&&<CampaignForm token={token} busy={busy} onSave={x=>perform('/v1/merchant/campaigns',x)} onError={x=>inform(x,true)}/>}</div></div>}</div>
 }
 function RedemptionForm({token,onSuccess,onError}){
+ const scanInput=useRef(null);
  const [code,setCode]=useState(''),[quote,setQuote]=useState(null),[loading,setLoading]=useState(false);
  const [saleRef,setSaleRef]=useState(''),[saleAmount,setSaleAmount]=useState('');
+ async function scanQr(file){
+   if(!file)return;
+   try{
+     if(!('BarcodeDetector' in window))throw Error('QR scanning is not supported on this device. Enter the campaign code manually.');
+     const detector=new window.BarcodeDetector({formats:['qr_code']});
+     const image=await createImageBitmap(file);
+     const codes=await detector.detect(image);
+     image.close?.();
+     const value=String(codes[0]?.rawValue||'').trim().toUpperCase();
+     if(!value)throw Error('No campaign QR code was found. Try again or enter the code manually.');
+     setCode(value);setQuote(null);
+   }catch(e){onError(e.message||'Could not scan the campaign QR code.');}
+   finally{if(scanInput.current)scanInput.current.value='';}
+ }
  async function lookup(){setLoading(true);setQuote(null);try{
    const result=await request('/v1/merchant/redemptions/lookup',token,'POST',{code:code.trim().toUpperCase()});
    setQuote(result);setSaleAmount((result.reward_minor/100).toFixed(2));
@@ -117,15 +132,19 @@ function RedemptionForm({token,onSuccess,onError}){
    onSuccess?.(result);
  }catch(e){onError(e.message)}finally{setLoading(false)}}
  return <div className="redeem-box">
-  <Field label="Customer reward QR / one-time code"><input placeholder="Scan or enter the 12-character voucher code" value={code} maxLength={32} onChange={e=>{setCode(e.target.value.toUpperCase());setQuote(null)}}/></Field>
-  <button type="button" className="btn outline full" disabled={loading||code.length<8} onClick={lookup}>Verify reward code</button>
+  <div className="pruvs-checkout-step"><span>1</span><div><b>Campaign reward code</b><small>Use the code issued from the customer’s campaign reward.</small></div></div>
+  <Field label="Enter campaign code"><input placeholder="Enter the one-time campaign reward code" value={code} maxLength={64} onChange={e=>{setCode(e.target.value.toUpperCase());setQuote(null)}}/></Field>
+  <div className="pruvs-code-actions"><button type="button" className="btn outline" disabled={loading||code.length<8} onClick={lookup}>Verify campaign code</button>
+  <label className="btn outline pruvs-scan-code"><ScanLine size={17}/> Scan campaign QR<input ref={scanInput} type="file" accept="image/*" capture="environment" onChange={e=>scanQr(e.target.files?.[0])}/></label></div>
   {quote&&<form className="pruvs-redemption-confirm" onSubmit={e=>{e.preventDefault();confirm()}}>
+    <div className="pruvs-checkout-step"><span>2</span><div><b>Complete customer payment</b><small>Record the sale and apply the verified campaign discount.</small></div></div>
     <div className="redeem-quote"><b>{quote.program_title}</b><strong>{money(quote.reward_minor)}</strong>
     <p>Apply this discount at the merchant checkout before confirming. The sale reference is recorded for reconciliation.</p></div>
     <Field label="Completed sale / fiscal receipt reference"><input required minLength={3} maxLength={120} placeholder="Receipt or POS transaction reference" value={saleRef} onChange={e=>setSaleRef(e.target.value)}/></Field>
     <Field label="Sale total before discount (RON)"><input type="number" min={(quote.reward_minor/100).toFixed(2)} step="0.01" required value={saleAmount} onChange={e=>setSaleAmount(e.target.value)}/></Field>
-    <small>Merchant-attested confirmation only. Pruvs does not alter the POS payment or verify bank settlement.</small>
-    <button type="submit" className="btn primary full" disabled={loading||!saleRef.trim()}>Confirm completed sale and record discount</button>
+    {saleAmount&&Number(saleAmount)*100>=quote.reward_minor&&<div className="pruvs-payment-total"><span>Customer pays after discount</span><strong>{money(Math.max(0,Math.round(Number(saleAmount)*100)-quote.reward_minor))}</strong></div>}
+    <small>Merchant-attested confirmation only. Pruvs records the payment reference and discount but does not verify bank settlement.</small>
+    <button type="submit" className="btn primary full" disabled={loading||!saleRef.trim()}>Record payment and apply discount</button>
    </form>}
  </div>;
 }

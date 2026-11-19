@@ -41,29 +41,24 @@ function setup(approved,{receiptEnabled=true}={}){
 }
 function mount(path='/rewards'){
   render(<MemoryRouter initialEntries={[path]}><Rewards/></MemoryRouter>);
-  if(!path.includes('case='))fireEvent.click(screen.getByRole('button',{name:'My wallet'}));
+  fireEvent.click(screen.getByRole('button',{name:'My wallet'}));
 }
 describe('Core 7.1.56 Business-authoritative merchant pilot eligibility',()=>{
   it('does not offer receipt code if merchant is not Business-approved',async()=>{
     setup(false);mount();
-    expect(await screen.findByText(/Your joined merchants are not yet accepting loyalty receipts/)).toBeTruthy();
+    expect(await screen.findByText(/not currently accepting purchase verification/)).toBeTruthy();
     expect(screen.queryByRole('button',{name:'Earn a stamp'})).toBeNull();
-    expect(screen.getByRole('button',{name:'Earn a stamp — unavailable'}).disabled).toBe(true);
-    expect(screen.getByText('Bistro Central')).toBeTruthy();
   });
-  it('preserves selected receipt from detail link and highlights its loyalty row',async()=>{
+  it('keeps verification at campaign level when arriving from a receipt link',async()=>{
     setup(true);mount('/rewards?tab=receipts&case=42');
-    const selected=await screen.findByText('Selected receipt');
-    const row=within(selected.closest('#loyalty-receipt-42'));
-    expect(row.getByRole('link',{name:'View receipt'}).getAttribute('href')).toBe('/receipt/42');
-    expect(row.getByRole('button',{name:'Earn a stamp'}).disabled).toBe(false);
-    expect(selected.closest('.pruvs-loyalty-selected-receipt')).toBeTruthy();
+    expect(await screen.findByText('Campaign purchase verification')).toBeTruthy();
+    expect(screen.getByRole('combobox',{name:'Purchase receipt'}).value).toBe('42');
+    expect(screen.queryByText('Selected receipt')).toBeNull();
   });
   it('explains when receipt claiming is disabled instead of hiding the action',async()=>{
     setup(true,{receiptEnabled:false});
     mount('/rewards?tab=receipts&case=42');
-    expect(await screen.findByText(/Receipt rewards are not enabled for your account/)).toBeTruthy();
-    expect(screen.getByRole('button',{name:/Earn a stamp — unavailable/}).disabled).toBe(true);
+    expect(await screen.findByText(/Campaign purchase verification is not enabled/)).toBeTruthy();
     expect(screen.queryByRole('button',{name:'Earn a stamp'})).toBeNull();
   });
   it('allows claiming only after Business advertises merchant approval',async()=>{
