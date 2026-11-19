@@ -1,4 +1,4 @@
-name: Verify Core 7.1.62 / Business 0.6.18 responsive staging
+name: Verify Core and Business responsive staging
 
 on:
   push:
@@ -64,11 +64,10 @@ jobs:
           python scripts/check_react_build.py
           python - <<'PY'
           import json
-          from pathlib import Path
-          x=json.loads(Path('frontend/dist/build-manifest.json').read_text())
-          assert x['version']=='7.1.62',x
           import re
+          from pathlib import Path
           from app.reliability import RELEASE
+          x=json.loads(Path('frontend/dist/build-manifest.json').read_text())
           client=(Path('frontend/src/professional/ReleaseUpdateBanner.jsx').read_text())
           stamp=(Path('frontend/scripts/stamp-build.mjs').read_text())
           entry=(Path('frontend/src/main.jsx').read_text())
@@ -79,7 +78,10 @@ jobs:
           assert "serviceWorker.register('/service-worker.js?v='+CLIENT_RELEASE" in entry, 'Worker registration must follow browser release'
           assert "pruvs-shell-v"+RELEASE in worker, 'Service worker cache release mismatch'
           print('PASS: Server, client, build and service-worker versions match')
-          assert '0.6.18' in Path('business/main.py').read_text()
+          business=Path('business/main.py').read_text()
+          merchant_ui=Path('business_frontend/src/main.jsx').read_text()
+          business_release=re.search(r"FastAPI\(title='Pruvs Business API',version='(\d+\.\d+\.\d+)'", business)
+          assert business_release and f'Pruvs Business · v{business_release[1]}' in merchant_ui, 'Business release mismatch'
           assert Path('business_migrations/versions/b11a0612_pilot_enrollment.py').is_file()
           assert Path('business/customer_pilot_eligibility_v0614.py').is_file()
           PY
@@ -111,6 +113,5 @@ jobs:
           assert (journey/'ActivationPanel.jsx').is_file()
           assert (journey/'AdminWorkspace.jsx').is_file()
           assert 'activation-journey.css' in (journey/'ActivationPanel.jsx').read_text()
-          print('PASS: Business 0.6.18 role-aware merchant journey')
-          print('PASS: Business v0.6.18 isolated staging UI')
+          print('PASS: Business role-aware merchant journey and isolated staging UI')
           PY

@@ -20,7 +20,8 @@ afterEach(()=>{cleanup();vi.restoreAllMocks();});
 
 describe('Core release update banner',()=>{
   it('uses current compiled Core version, with semantic comparison',()=>{
-    expect(CLIENT_RELEASE).toBe('7.1.62');
+    expect(CLIENT_RELEASE).toBe('7.1.63');
+    expect(isNewerRelease(CLIENT_RELEASE)).toBe(false);
     expect(isNewerRelease('7.1.62')).toBe(false);
     expect(isNewerRelease('7.1.58')).toBe(false);
     expect(isNewerRelease(nextRelease)).toBe(true);
@@ -28,7 +29,7 @@ describe('Core release update banner',()=>{
     expect(isNewerRelease('7.1.invalid')).toBe(false);
   });
   it('does not offer a reload after browser already matches the server release',async()=>{
-    serve('7.1.62');
+    serve(CLIENT_RELEASE);
     render(<ReleaseUpdateBanner/>);
     await waitFor(()=>expect(fetch).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole('button',{name:'Reload'})).toBeNull();
@@ -60,7 +61,7 @@ describe('Core release update banner',()=>{
     expect(shouldOfferUpdate({status:'ready',version:laterRelease},CLIENT_RELEASE,null,nextRelease)).toBe(true);
   });
   it('does not show a banner when server is not ready or version is invalid',()=>{
-    expect(shouldOfferUpdate({status:'unavailable',version:'7.1.62'})).toBe(false);
+    expect(shouldOfferUpdate({status:'unavailable',version:nextRelease})).toBe(false);
     expect(shouldOfferUpdate({status:'ready',version:'broken'})).toBe(false);
   });
 });

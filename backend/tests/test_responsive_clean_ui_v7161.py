@@ -22,7 +22,8 @@ def test_core_brand_is_unique_and_marketing_banners_removed():
     assert 'core-v7160-floating-mark' not in hero
     assert 'core-v7160-bottom-guide' not in hero
     assert 'Offers from participating businesses' not in promos
-    assert "request('/loyalty/promotions?limit=1')" in promos
+    assert "request('/loyalty/promotions')" in promos
+    assert '<CampaignCarousel campaigns={items}' in promos
 
 def test_home_has_actions_first_and_optional_offers_after():
     main=read('frontend/src/main.jsx')
@@ -72,9 +73,9 @@ def test_business_mobile_drawer_covers_tablet_and_campaign_studio():
     assert 'aria-expanded={menu}' in main
 
 def test_release_metadata_matches_across_bundles():
-    assert 'RELEASE = "7.1.62"' in read('app/reliability.py')
-    assert "version:'7.1.62'" in read('frontend/scripts/stamp-build.mjs')
-    assert "pruvs-shell-v7.1.62" in read('app/static/react-service-worker.js')
-    assert "CLIENT_RELEASE = '7.1.62'" in read('frontend/src/professional/ReleaseUpdateBanner.jsx')
-    assert "version='0.6.18'" in read('business/main.py')
-    assert 'Pruvs Business · v0.6.18' in read('business_frontend/src/main.jsx')
+    assert 'RELEASE = "7.1.63"' in read('app/reliability.py')
+    assert "version:'7.1.63'" in read('frontend/scripts/stamp-build.mjs')
+    assert "pruvs-shell-v7.1.63" in read('app/static/react-service-worker.js')
+    assert "CLIENT_RELEASE = '7.1.63'" in read('frontend/src/professional/ReleaseUpdateBanner.jsx')
+    assert "version='0.6.19'" in read('business/main.py')
+    assert 'Pruvs Business · v0.6.19' in read('business_frontend/src/main.jsx')
