@@ -43,6 +43,6 @@ def test_business_release_is_independent_of_core():
     api = (ROOT / 'business/main.py').read_text(encoding='utf-8')
     ui = (UI / 'main.jsx').read_text(encoding='utf-8')
     core = (ROOT / 'app/reliability.py').read_text(encoding='utf-8')
-    assert "version='0.6.19'" in api
-    assert 'Pruvs Business · v0.6.19' in ui
-    assert 'RELEASE = "7.1.63"' in core
+    assert "version='0.6.20'" in api
+    assert 'Pruvs Business · v0.6.20' in ui
+    assert 'RELEASE = "7.1.64"' in core
