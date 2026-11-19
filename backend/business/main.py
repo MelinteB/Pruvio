@@ -25,6 +25,14 @@ settings=get_settings()
 app=FastAPI(title='Pruvs Business API',version='0.6.18',docs_url='/docs' if settings.app_env!='production' else None)
 app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=False,
                    allow_methods=['GET','POST','PATCH'],allow_headers=['Authorization','Content-Type'])
+@app.middleware('http')
+async def campaign_cache_policy(request,call_next):
+    response=await call_next(request)
+    if request.url.path.endswith('/v1/promotions') or request.url.path.endswith('/v1/merchant/promotions') or '/v1/places/' in request.url.path:
+        response.headers['Cache-Control']='private, no-store, max-age=0'
+        response.headers['Pragma']='no-cache'
+    return response
+
 app.include_router(merchant_enrollment_router)
 app.include_router(google_places_router)
 from .ai_campaign_v067 import router as ai_campaign_router
