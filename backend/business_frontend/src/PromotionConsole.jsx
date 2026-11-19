@@ -4,11 +4,18 @@ import './promotion-console.css';
 import './promo-v06.css';
 import {QRCodeSVG} from 'qrcode.react';
 import CorePromotionPreview from './CorePromotionPreview.jsx';
+import {useBusinessLocale} from './BusinessLocale.jsx';
 import CampaignLibrary from './CampaignLibrary.jsx';
 import './studio-2027.css';
 const API = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
-export function predefinedCampaignBrief(program){
+export function predefinedCampaignBrief(program,language='en'){
   const title=String(program?.title||'this published loyalty program').trim();
+  if(language==='ro')return 'Prezintă programul "'+title+'" și invită clienții să participe. '+
+    'Scrie un titlu atractiv, scurt, și un mesaj clar în limba română. '+
+    'Explică faptul că doar cumpărăturile eligibile verificate de comerciant contribuie la recompensă. '+
+    'Dacă există o fotografie, produsul sau scena vizibilă trebuie să fie subiectul principal. '+
+    'Păstrează fotografia originală și folosește o animație subtilă de trei secunde pentru GIF/MP4. '+
+    'Nu modifica numărul de cumpărături, pragul minim sau valoarea recompensei.';
   return 'Introduce "'+title+'" to customers and invite them to participate. '+
     'Write an appealing, concise campaign headline and a clear message. '+
     'Explain that only merchant-verified qualifying purchases count toward the reward. '+
@@ -26,6 +33,7 @@ async function call(path,token,body,method){
   return data;
 }
 export default function PromotionConsole({token,programs,merchantName='',mode='promotions',initialView='studio',canManage=true}){
+  const {language,t}=useBusinessLocale();
   const [list,setList]=useState([]),[programId,setProgramId]=useState(''),[headline,setHeadline]=useState(''),[message,setMessage]=useState(''),[mediaUrl,setMediaUrl]=useState(''),[mediaType,setMediaType]=useState('image/jpeg'),[days,setDays]=useState(14),[amount,setAmount]=useState(''),[code,setCode]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
   const [goal,setGoal]=useState('Encourage loyal customers to return'),[audience,setAudience]=useState('Local regular customers'),
     [tone,setTone]=useState('friendly'),[creativeFormat,setCreativeFormat]=useState('png'),
@@ -76,7 +84,7 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
         program_id:programId,goal:goal.trim(),audience:audience.trim(),tone,
         format:creativeFormat==='mp4'?'video':creativeFormat==='gif'?'gif':'image',
         duration_days:Number(days),watermark_text:watermark,
-        creative_instructions:creativeInstructions.trim(),
+        creative_instructions:creativeInstructions.trim(),language,
         media_key:imageOrigin==='upload'?artworkKey:null
       });
       if(imageOrigin==='upload'&&!result.source_image_used)
@@ -173,8 +181,8 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
   // A changed program updates the starting brief; merchant edits remain intact otherwise.
   useEffect(()=>{
     const program=programs.find(p=>p.id===programId);
-    setCreativeInstructions(program?predefinedCampaignBrief(program):'');
-  },[programId]);
+    setCreativeInstructions(program?predefinedCampaignBrief(program,language):'');
+  },[programId,language]);
   useEffect(()=>{
     if(mode!=='promotions')return;
     let mounted=true;
@@ -225,38 +233,38 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
   async function submit(fn){setBusy(true);setError('');setNotice('');try{await fn()}catch(e){setError(e.message)}finally{setBusy(false)}}
   const findProgram=(id)=>programs.find(p=>p.id===id);
   return <section id="pruvs-business-campaign-workspace" className="panel promo-console">
-    <div className="panel-heading"><h2>{mode==='promotions'?'Campaigns':'Merchant purchase verification code'}</h2>{mode!=='promotions'&&<span>PRUVS PILOT</span>}</div>
+    <div className="panel-heading"><h2>{mode==='promotions'?t('Campaigns'):'Merchant purchase verification code'}</h2>{mode!=='promotions'&&<span>PRUVS PILOT</span>}</div>
     {error&&<p className="promo-error" role="alert"><AlertCircle size={16}/>{error}</p>}
     {notice&&<p className="promo-notice" role="status"><CheckCircle2 size={16}/>{notice}</p>}
     {mode==='promotions'?<>
       <div className="pruvs-campaign-workspace-tabs" role="group" aria-label="Campaign workspace views">
-        <button type="button" className={workspaceView==='studio'?'active':''} aria-pressed={workspaceView==='studio'} onClick={()=>setWorkspaceView('studio')}><Sparkles size={17}/> Campaign Studio</button>
-        <button type="button" className={workspaceView==='library'?'active':''} aria-pressed={workspaceView==='library'} onClick={()=>setWorkspaceView('library')}><Megaphone size={17}/> Campaign Library <span>{list.filter(p=>p.status==='draft'||p.status==='paused').length} unpublished</span></button>
+        <button type="button" className={workspaceView==='studio'?'active':''} aria-pressed={workspaceView==='studio'} onClick={()=>setWorkspaceView('studio')}><Sparkles size={17}/> {t('Campaign Studio')}</button>
+        <button type="button" className={workspaceView==='library'?'active':''} aria-pressed={workspaceView==='library'} onClick={()=>setWorkspaceView('library')}><Megaphone size={17}/> {t('Campaign Library')} <span>{list.filter(p=>p.status==='draft'||p.status==='paused').length} {t('Unpublished').toLowerCase()}</span></button>
       </div>
       {workspaceView==='studio'&&canManage&&<>
       <section className="pruvs-ai-studio">
         <div className="pruvs-ai-studio-heading">
           <span className="pruvs-studio-2027-icon"><Sparkles size={23}/></span>
           <div className="pruvs-studio-2027-heading-copy">
-            <h3>Create a campaign</h3>
-            <p>Use your photo, refine the message and preview the offer before publishing.</p>
+            <h3>{t('Create a campaign')}</h3>
+            <p>{t('Use your photo, refine the message and preview the offer before publishing.')}</p>
           </div>
-          <span className="pruvs-studio-2027-privacy"><CheckCircle2 size={15}/> Approval required before publishing</span>
+          <span className="pruvs-studio-2027-privacy"><CheckCircle2 size={15}/> {t('Approval required before publishing')}</span>
         </div>
         <div className="pruvs-studio-2027-progress" aria-label="Campaign creation stages">
-          <span className={mediaUrl?'is-done':''}>01 <b>Photo</b><small>{mediaUrl?'Added':'Optional'}</small></span>
-          <span className={creativeInstructions.trim()?'is-done':''}>02 <b>Direction</b><small>Editable brief</small></span>
-          <span className={headline.trim().length>=5&&message.trim().length>=10?'is-done':''}>03 <b>Copy</b><small>Review required</small></span>
-          <span className={mediaUrl&&mediaType===targetMediaType&&!mediaNeedsRendering?'is-done':''}>04 <b>Creative</b><small>Draft then publish</small></span>
+          <span className={mediaUrl?'is-done':''}>01 <b>{t('Photo')}</b><small>{mediaUrl?'Added':'Optional'}</small></span>
+          <span className={creativeInstructions.trim()?'is-done':''}>02 <b>{t('Direction')}</b><small>Editable brief</small></span>
+          <span className={headline.trim().length>=5&&message.trim().length>=10?'is-done':''}>03 <b>{t('Copy')}</b><small>Review required</small></span>
+          <span className={mediaUrl&&mediaType===targetMediaType&&!mediaNeedsRendering?'is-done':''}>04 <b>{t('Creative')}</b><small>Draft then publish</small></span>
         </div>
         <div className="pruvs-studio-2027-workspace">
           <div className="pruvs-studio-2027-editor">
-        <label className="pruvs-ai-program-select">Published loyalty program<select required value={programId} disabled={Boolean(editingPromotionId)} onChange={e=>changeProgram(e.target.value)}>{published.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></label>
+        <label className="pruvs-ai-program-select">{t('Published loyalty program')}<select required value={programId} disabled={Boolean(editingPromotionId)} onChange={e=>changeProgram(e.target.value)}>{published.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></label>
         <div className="pruvs-ai-grid">
-          <label>Campaign goal<input value={goal} minLength={8} maxLength={300} onChange={e=>setGoal(e.target.value)}/></label>
-          <label>Target audience<input value={audience} maxLength={140} onChange={e=>setAudience(e.target.value)}/></label>
-          <label>Brand tone<select value={tone} onChange={e=>setTone(e.target.value)}><option value="friendly">Friendly</option><option value="premium">Premium</option><option value="playful">Playful</option><option value="professional">Professional</option></select></label>
-          <label>Creative format<select value={creativeFormat} onChange={e=>setCreativeFormat(e.target.value)}><option value="png">Branded image</option><option value="gif">Animated GIF (3 seconds)</option><option value="mp4">Short video MP4 (3 seconds)</option></select></label>
+          <label>{t('Campaign goal')}<input value={goal} minLength={8} maxLength={300} onChange={e=>setGoal(e.target.value)}/></label>
+          <label>{t('Target audience')}<input value={audience} maxLength={140} onChange={e=>setAudience(e.target.value)}/></label>
+          <label>{t('Brand tone')}<select value={tone} onChange={e=>setTone(e.target.value)}><option value="friendly">Friendly</option><option value="premium">Premium</option><option value="playful">Playful</option><option value="professional">Professional</option></select></label>
+          <label>{t('Creative format')}<select value={creativeFormat} onChange={e=>setCreativeFormat(e.target.value)}><option value="png">Branded image</option><option value="gif">Animated GIF (3 seconds)</option><option value="mp4">Short video MP4 (3 seconds)</option></select></label>
           <label>Watermark text<input value={watermark} maxLength={70} onChange={e=>setWatermark(e.target.value)}/></label>
         </div>
         {currentProgram&&<div className="pruvs-ai-criteria"><strong>Program conditions (locked)</strong><small>{currentProgram.title} · Minimum {(currentProgram.min_purchase_minor/100).toFixed(2)} RON · {currentProgram.stamps_required} verified purchases → {(currentProgram.reward_minor/100).toFixed(2)} RON reward</small></div>}
@@ -270,7 +278,7 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
         </div>
         <div className="pruvs-ai-brief-editor" aria-label="Predefined campaign brief editor">
           <div className="row between wrap"><h4>2. Predefined campaign text · edit before generating</h4>
-            <button type="button" className="btn subtle" disabled={!currentProgram||aiBusy||assetBusy} onClick={()=>setCreativeInstructions(predefinedCampaignBrief(currentProgram))}>Restore predefined text</button></div>
+            <button type="button" className="btn subtle" disabled={!currentProgram||aiBusy||assetBusy} onClick={()=>setCreativeInstructions(predefinedCampaignBrief(currentProgram,language))}>Restore predefined text</button></div>
           <label htmlFor="pruvs-campaign-brief">Your campaign instructions</label>
           <textarea id="pruvs-campaign-brief" value={creativeInstructions} rows={6} maxLength={1200}
             placeholder="Describe the promotion you want Pruvs AI to write."
@@ -292,8 +300,8 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
         <div className="pruvs-ai-copy-editor" aria-label="Review campaign copy before artwork">
           <h4>3. Campaign copy · review and edit before generating artwork</h4>
           <p className="helper">Generate AI copy from your edited brief, then review the resulting headline and message before making artwork.</p>
-          <label>Promotion headline<input value={headline} minLength={5} maxLength={100} required placeholder="A little extra for your next visit" onChange={e=>setHeadline(e.target.value)}/><small className="pruvs-studio-char-count">{headline.length}/100 characters · Visible on the Core preview</small></label>
-          <label>Promotional message<textarea value={message} minLength={10} maxLength={500} required rows={4} placeholder="Join our loyalty program and earn a reward after qualifying visits." onChange={e=>setMessage(e.target.value)}/><small className="pruvs-studio-char-count">{message.length}/500 characters · Core cards show a concise version</small></label>
+          <label>{t('Promotion headline')}<input value={headline} minLength={5} maxLength={100} required placeholder="A little extra for your next visit" onChange={e=>setHeadline(e.target.value)}/><small className="pruvs-studio-char-count">{headline.length}/100 characters · Visible on the Core preview</small></label>
+          <label>{t('Promotional message')}<textarea value={message} minLength={10} maxLength={500} required rows={4} placeholder="Join our loyalty program and earn a reward after qualifying visits." onChange={e=>setMessage(e.target.value)}/><small className="pruvs-studio-char-count">{message.length}/500 characters · Core cards show a concise version</small></label>
         </div>
         <div className="pruvs-ai-actions"><button type="button" className="btn primary" disabled={!programId||uploadPending||mediaPreviewError||aiBusy||assetBusy||busy||aiReadiness?.copy_ready===false} onClick={generateDraft}><WandSparkles size={17}/>{aiBusy?'Creating AI draft…':'Generate AI copy'}</button>
           {imageOrigin==='upload'?<p className="pruvs-ai-photo-note" role="status">Your uploaded picture is the campaign's main visual. Select PNG, GIF or MP4, then generate branded artwork or save the draft to render it automatically.</p>:
@@ -356,9 +364,9 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
         });
       }}>
         <p className="helper">Review the editable campaign text above before saving. Publishing remains a separate merchant approval action.</p>
-        <label>Display period (days)<input type="number" min="1" max="90" value={days} onChange={e=>setDays(e.target.value)}/></label>
+        <label>{t('Display period (days)')}<input type="number" min="1" max="90" value={days} onChange={e=>setDays(e.target.value)}/></label>
         <div className="pruvs-ai-actions">
-          <button className="btn primary" disabled={busy||assetBusy||!programId||mediaCannotSave}>{editingPromotionId?'Update promotion draft':'Save promotion draft'}</button>
+          <button className="btn primary" disabled={busy||assetBusy||!programId||mediaCannotSave}>{editingPromotionId?t('Update promotion draft'):t('Save promotion draft')}</button>
           {editingPromotionId&&<button type="button" className="btn subtle" onClick={()=>{setEditingPromotionId('');setHeadline('');setMessage('');resetMedia();setNotice('Draft editing canceled.')}}>Cancel editing</button>}
         </div>
       </form>
@@ -378,7 +386,7 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
     </>:<>
       <p className="helper">After a completed sale, issue a one-time purchase code. Give it to the customer, who must select an owned receipt in Pruvs. The claim still requires your approval before any stamps are credited. This pilot does not verify the fiscal transaction with a POS.</p>
       <form className="promo-form" onSubmit={e=>{e.preventDefault();submit(async()=>{const value=Math.round(Number(amount)*100);if(!Number.isSafeInteger(value)||value<=0)throw new Error('Enter a valid amount.');const result=await call('/v1/merchant/pilot/purchases/issue',token,{program_id:programId,amount_minor:value});setCode({...result,program_id:programId});setNotice('Code created for completed checkout. It expires after 30 minutes.')})}}>
-        <label>Published loyalty program<select required value={programId} onChange={e=>changeProgram(e.target.value)}>{published.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></label>
+        <label>{t('Published loyalty program')}<select required value={programId} onChange={e=>changeProgram(e.target.value)}>{published.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></label>
         <label>Actual completed receipt amount (RON)<input type="number" min="0.01" step="0.01" required value={amount} onChange={e=>setAmount(e.target.value)}/></label>
         <button className="btn primary" disabled={!programId||busy}><Ticket size={17}/> Issue one-time purchase code</button>
       </form>
