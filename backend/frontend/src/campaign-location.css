@@ -1,0 +1,21 @@
+/* Compact shared merchant location extension for Core cards and Business previews. */
+.pruvs-campaign-location{display:grid;gap:10px;margin:12px 2px 8px;padding:12px 0 2px;border-top:1px solid #e4eaf1;min-width:0}
+.pruvs-campaign-place-main{display:flex;align-items:flex-start;gap:9px;min-width:0}
+.pruvs-campaign-place-pin{display:grid;place-items:center;width:32px;height:32px;flex:none;border-radius:10px;background:#e6f3ea;color:#0b7756}
+.pruvs-campaign-place-main>div{display:grid;gap:3px;min-width:0}
+.pruvs-campaign-place-main strong{color:#16392c;font-size:12px;line-height:1.35}
+.pruvs-campaign-place-main small{color:#647e6d;font-size:11px;line-height:1.35;overflow-wrap:anywhere}
+.pruvs-campaign-place-links{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.pruvs-campaign-place-links a{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:37px;padding:8px 9px;border-radius:9px;background:#f1f7f3;border:1px solid #dce9df;color:#145b46;font-size:11px;font-weight:750;text-decoration:none}
+.pruvs-campaign-place-links a:hover{background:#dff2e7}
+.pruvs-campaign-place-reviews{display:flex;align-items:center;gap:6px;justify-content:flex-start;min-height:37px;padding:8px 4px;border:0;background:transparent;color:#185c44;font-size:11px;font-weight:750}
+.pruvs-campaign-place-reviews svg:last-child{margin-left:auto}
+.pruvs-campaign-review-summary{display:grid;gap:9px;padding:11px;border:1px solid #e2e9df;border-radius:12px;background:#fdfefa}
+.pruvs-campaign-review{padding:8px 0;border-bottom:1px solid #e7ece6}
+.pruvs-campaign-review div{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between}
+.pruvs-campaign-review strong{font-size:11px;color:#2c503d}
+.pruvs-campaign-review small{font-size:11px;color:#6c8c77}
+.pruvs-campaign-review p{margin:5px 0;color:#506958;font-size:11px;line-height:1.5;overflow-wrap:anywhere}
+.pruvs-campaign-review a,.pruvs-campaign-review-summary>a{display:inline-flex;align-items:center;gap:4px;color:#177153;font-size:11px;text-decoration:underline}
+@media(max-width:430px){.pruvs-campaign-place-links a{flex:1 1 105px;font-size:10px}
+ .pruvs-campaign-place-links a:nth-child(n+3){flex:1 1 80px}}
