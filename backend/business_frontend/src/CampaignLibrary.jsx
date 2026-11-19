@@ -3,6 +3,7 @@ import {Archive,ArrowRight,ArrowUpRight,CalendarDays,Check,Clock3,
   Copy,Eye,FolderOpen,Globe2,ImageIcon,PauseCircle,PenLine,Play,
   RotateCcw,Search,ShieldCheck,Sparkles,X} from 'lucide-react';
 import CorePromotionPreview from './CorePromotionPreview.jsx';
+import {useBusinessLanguage} from './i18n.jsx';
 import './campaign-library-v0615.css';
 
 /**
@@ -57,6 +58,7 @@ export default function CampaignLibrary({
   campaigns=[],busy=false,canManage=true,onEdit,onCopy,onPublish,onUnpublish,
   onReopen,onRepublish,onArchive,onRestore,onCreate,
 }){
+  const {t}=useBusinessLanguage();
   const [filter,setFilter]=useState('unpublished');
   const [query,setQuery]=useState('');
   const [preview,setPreview]=useState(null);
@@ -79,18 +81,18 @@ export default function CampaignLibrary({
   return <section className="pruvs-campaign-library" aria-label="Campaign management">
     <div className="pruvs-campaign-library-heading">
       <div><span className="pruvs-campaign-library-overline">CAMPAIGN MANAGEMENT</span>
-        <h2>Your campaign library</h2>
+        <h2>{t('My campaigns')}</h2>
         <p>Review work in progress, resume paused offers, and control what appears in Pruvs Core.</p>
       </div>
       {canCreate&&<button type="button" className="pruvs-campaign-library-create" onClick={onCreate}>
-        <Sparkles size={17}/> New campaign <ArrowUpRight size={16}/>
+        <Sparkles size={17}/> {t('Create a campaign')} <ArrowUpRight size={16}/>
       </button>}
     </div>
     <div className="pruvs-campaign-library-toolbar">
       <div className="pruvs-campaign-library-filters" role="group" aria-label="Filter campaigns">
         {OPTIONS.map(([key,title])=><button type="button" key={key}
           className={filter===key?'is-active':''} aria-pressed={filter===key}
-          onClick={()=>setFilter(key)}>{title}<span>{counts[key]??0}</span></button>)}
+          onClick={()=>setFilter(key)}>{t(title)}<span>{counts[key]??0}</span></button>)}
       </div>
       <label className="pruvs-campaign-library-search"><Search size={17}/>
         <input type="search" value={query} onChange={e=>setQuery(e.target.value)}
@@ -125,30 +127,30 @@ export default function CampaignLibrary({
           </div>
         </div>
         <div className="pruvs-campaign-library-actions">
-          <button type="button" className="pruvs-campaign-library-preview" onClick={()=>setPreview(p)}><Eye size={16}/> Preview</button>
+          <button type="button" className="pruvs-campaign-library-preview" onClick={()=>setPreview(p)}><Eye size={16}/> {t('Preview')}</button>
           {canManage&&p.effectiveStatus==='draft'&&<>
-            <button type="button" disabled={busy} onClick={()=>onEdit?.(p)}><PenLine size={16}/> Edit</button>
-            <button type="button" className="is-publish" disabled={busy} onClick={()=>onPublish?.(p)}><Globe2 size={16}/> Publish</button>
-            <button type="button" disabled={busy} onClick={()=>onArchive?.(p)}><Archive size={16}/> Archive</button>
+            <button type="button" disabled={busy} onClick={()=>onEdit?.(p)}><PenLine size={16}/> {t('Edit')}</button>
+            <button type="button" className="is-publish" disabled={busy} onClick={()=>onPublish?.(p)}><Globe2 size={16}/> {t('Publish')}</button>
+            <button type="button" disabled={busy} onClick={()=>onArchive?.(p)}><Archive size={16}/> {t('Archive')}</button>
           </>}
           {canManage&&p.effectiveStatus==='paused'&&<>
-            <button type="button" className="is-publish" disabled={busy} onClick={()=>onRepublish?.(p)}><Globe2 size={16}/> Republish</button>
+            <button type="button" className="is-publish" disabled={busy} onClick={()=>onRepublish?.(p)}><Globe2 size={16}/> {t('Republish')}</button>
             <button type="button" className="is-primary" disabled={busy} onClick={()=>onReopen?.(p)}><RotateCcw size={16}/> Edit before publishing</button>
-            <button type="button" disabled={busy} onClick={()=>onCopy?.(p)}><Copy size={16}/> Duplicate</button>
-            <button type="button" disabled={busy} onClick={()=>onArchive?.(p)}><Archive size={16}/> Archive</button>
+            <button type="button" disabled={busy} onClick={()=>onCopy?.(p)}><Copy size={16}/> {t('Duplicate')}</button>
+            <button type="button" disabled={busy} onClick={()=>onArchive?.(p)}><Archive size={16}/> {t('Archive')}</button>
           </>}
           {canManage&&p.effectiveStatus==='published'&&<>
-            <button type="button" disabled={busy} onClick={()=>onCopy?.(p)}><Copy size={16}/> Duplicate</button>
-            <button type="button" disabled={busy} onClick={()=>onUnpublish?.(p)}><PauseCircle size={16}/> Unpublish</button>
+            <button type="button" disabled={busy} onClick={()=>onCopy?.(p)}><Copy size={16}/> {t('Duplicate')}</button>
+            <button type="button" disabled={busy} onClick={()=>onUnpublish?.(p)}><PauseCircle size={16}/> {t('Unpublish')}</button>
           </>}
           {canManage&&p.effectiveStatus==='expired'&&<>
-            <button type="button" className="is-publish" disabled={busy} onClick={()=>onRepublish?.(p)}><Globe2 size={16}/> Republish</button>
+            <button type="button" className="is-publish" disabled={busy} onClick={()=>onRepublish?.(p)}><Globe2 size={16}/> {t('Republish')}</button>
             <button type="button" disabled={busy} onClick={()=>onCopy?.(p)}><Copy size={16}/> New from this</button>
-            <button type="button" disabled={busy} onClick={()=>onArchive?.(p)}><Archive size={16}/> Archive</button>
+            <button type="button" disabled={busy} onClick={()=>onArchive?.(p)}><Archive size={16}/> {t('Archive')}</button>
           </>}
           {canManage&&p.effectiveStatus==='archived'&&<>
             <button type="button" className="is-primary" disabled={busy} onClick={()=>onRestore?.(p)}><FolderOpen size={16}/> Restore draft</button>
-            <button type="button" disabled={busy} onClick={()=>onCopy?.(p)}><Copy size={16}/> Duplicate</button>
+            <button type="button" disabled={busy} onClick={()=>onCopy?.(p)}><Copy size={16}/> {t('Duplicate')}</button>
           </>}
         </div>
       </article>)}
