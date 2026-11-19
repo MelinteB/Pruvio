@@ -36,3 +36,15 @@
 .pruvs-location-google-stars a{margin-left:0}
 .pruvs-location-map{height:205px}
 }
+.pruvs-location-form-search{display:grid;gap:10px;border:1px solid #d5e8dd;background:#f6fbf7;border-radius:15px;padding:13px}
+.pruvs-location-form-search>label{font-size:12px;font-weight:800;color:#23684e}
+.pruvs-location-form-search>div:first-of-type{display:flex;flex-wrap:wrap;gap:8px}
+.pruvs-location-form-search input{flex:1 1 195px;min-width:0}
+.pruvs-location-form-search>div:first-of-type button{flex:1 1 160px;display:inline-flex;justify-content:center;gap:6px}
+.pruvs-location-form-search>small{font-size:11px;color:#4a745e}
+.pruvs-location-form-results{display:grid;gap:5px;max-height:210px;overflow-y:auto}
+.pruvs-location-form-results>button{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:5px;text-align:left;background:#fff;border:1px solid #d8e7db;border-radius:10px;padding:11px;color:#245c43}
+.pruvs-location-form-results>button.selected{border-color:#0f825b;background:#e2f7e9}
+.pruvs-location-form-results>button b{flex:1 1 100%;font-size:12px}
+.pruvs-location-form-results>button small{font-size:11px;flex:1 1 65%;color:#597a67}
+.pruvs-location-form-results>button span{font-size:10px;font-weight:800}
