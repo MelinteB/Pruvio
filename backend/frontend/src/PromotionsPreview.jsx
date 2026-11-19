@@ -4,6 +4,7 @@ import {Gift} from 'lucide-react';
 import {request} from './api';
 import './promotions-preview.css';
 import CampaignCreative,{hasCampaignCreative} from './CampaignCreative.jsx';
+import OfferLocation from './OfferLocation.jsx';
 /** Shows explicitly published, not-expired Business promotions; the parent gates this UI. */
 export default function PromotionsPreview(){
   const [items,setItems]=useState([]);
@@ -43,6 +44,7 @@ export default function PromotionsPreview(){
         <CampaignCreative promotion={p}/>:
         <><small className="pruvs-promo-tag">LOCAL REWARDS · {p.merchant_name}</small><h3>{p.headline}</h3><p>{p.message}</p></>}
       <div className="pruvs-promo-meta"><Gift size={16}/>{p.stamps_required} qualifying receipts → {(p.reward_minor/100).toFixed(2)} {p.currency} reward</div>
+      <OfferLocation promotion={p} compact/>
       <Link to={'/rewards?program='+encodeURIComponent(p.program_id)}>See loyalty program</Link>
     </article>)}</div>
     <Link className="pruvs-promos-more" to="/rewards">Explore rewards</Link>
