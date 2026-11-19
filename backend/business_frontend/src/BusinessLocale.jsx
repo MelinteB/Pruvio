@@ -38,6 +38,7 @@ const rom = {
   'All campaigns':'Toate campaniile','Draft':'Schiță','Paused':'Pauzată',
   'Expired':'Expirată','Archived':'Arhivată','Preview':'Previzualizare',
   'Edit':'Editează','Publish':'Publică','Unpublish':'Retrage',
+  'Pause':'Pauzează','Resume':'Reia','Draft':'Schiță',
   'Republish now':'Republică acum','Duplicate':'Duplică','Archive':'Arhivează',
   'Restore draft':'Restaurează schița','Edit draft':'Editează schița',
   'New from this':'Campanie nouă din aceasta',
