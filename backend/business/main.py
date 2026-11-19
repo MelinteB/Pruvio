@@ -411,12 +411,21 @@ def confirm_redemption_code(payload:RedemptionSaleIn,staff:Staff=Depends(merchan
         currency=program.currency,verification_source='merchant_attested',created_at=utcnow())
     db.add(record)
     r.status='redeemed';r.redemption_code=None;r.reserved_until=None;r.redeemed_at=utcnow()
+    # A completed voucher should make a finished program joinable again.
+    # Flush because Business sessions use autoflush=False: otherwise the
+    # redeemed voucher would still appear as 'reserved' in the safety query.
+    db.flush()
+    from .loyalty_cycles_v0618 import close_completed_cycle
+    ready_to_rejoin=close_completed_cycle(
+        db,consumer_id=r.consumer_id,program_id=r.program_id
+    )
     try:db.commit()
     except IntegrityError:
         db.rollback();raise HTTPException(409,'Duplicate or already reconciled redemption') from None
     return {'status':'redeemed','reward_id':r.id,'reconciliation_id':record.id,
             'discount_minor':record.discount_minor,'currency':record.currency,
-            'verification_source':'merchant_attested'}
+            'verification_source':'merchant_attested',
+            'can_join_again':ready_to_rejoin}
 
 def redemption_json(db,row):
     claim=db.get(ReceiptClaim,row.source_claim_id) if row.source_claim_id else None
