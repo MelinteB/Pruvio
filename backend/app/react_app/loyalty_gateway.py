@@ -76,7 +76,7 @@ def call_business(path, *, method='GET', user_id=None, params=None, body=None):
     Mutating requests are never retried to avoid duplicate operations.
     """
     base, secret = config()
-    valid_prefixes = ('/v1/discover', '/v1/promotions', '/v1/customer/')
+    valid_prefixes = ('/v1/discover', '/v1/promotions', '/v1/customer/', '/v1/places/')
     if not isinstance(path, str) or not any(path == p or path.startswith(p) for p in valid_prefixes):
         raise ValueError('Unsupported Business API operation')
     if method not in ('GET', 'POST'):
