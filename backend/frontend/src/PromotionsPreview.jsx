@@ -19,7 +19,18 @@ export default function PromotionsPreview(){
       setState('unavailable');
     }
   }
-  useEffect(()=>{refresh();},[]);
+  useEffect(()=>{
+    refresh();
+    // Refresh visibility whenever customers return to Core. Unpublished
+    // campaigns disappear without requiring a hard browser reload.
+    const onFocus=()=>{if(!document.hidden)refresh()};
+    window.addEventListener('focus',onFocus);
+    document.addEventListener('visibilitychange',onFocus);
+    return()=>{
+      window.removeEventListener('focus',onFocus);
+      document.removeEventListener('visibilitychange',onFocus);
+    };
+  },[]);
   if(state==='unavailable')return <section className="pruvs-promos" role="status">
     <p>Merchant campaigns are temporarily unavailable. Your rewards and receipts are unaffected.</p>
     <button type="button" onClick={refresh}>Retry campaigns</button>
