@@ -3,47 +3,33 @@ from pathlib import Path
 from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 
 from business import pilot_v05, media_v067
 from business.ai_campaign_artwork_v0611 import ai_readiness
+from business.db import Base
+from business.models import Merchant, Program, Promotion, Store
 
 
-class FakeDB:
-    def __init__(self, promotion):
-        self.promotion = promotion
-        self.commits = 0
-        self.program = SimpleNamespace(
-            id="program1", merchant_id="merchant1", status="published",
-            title="Breakfast rewards", store_id="store1",
-            min_purchase_minor=2000, stamps_required=2, reward_minor=1000,
-            currency="RON",
-        )
-
-    def get(self, model, pk):
-        if model is pilot_v05.Promotion:
-            return self.promotion if pk == "promo1" else None
-        if model is pilot_v05.Program:
-            return self.program if pk == "program1" else None
-        if model is pilot_v05.Store:
-            return SimpleNamespace(name="Bistro Central", address="Bucharest")
-        if model is pilot_v05.Merchant:
-            return SimpleNamespace(name="Bistro Central")
-        return None
-
-    def commit(self):
-        self.commits += 1
-
-    def get_bind(self):
-        return None
-
-
-def draft(status="draft"):
-    return SimpleNamespace(
-        id="promo1", merchant_id="merchant1", program_id="program1",
-        headline="Existing title", message="Existing message", status=status,
-        media_url=None, media_type=None, media_alt=None, duration_days=14,
-        expires_at=None,
-    )
+@pytest.fixture
+def campaign_db():
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        db.add_all([
+            Merchant(id="merchant1", name="Bistro Central"),
+            Store(id="store1", merchant_id="merchant1", name="Bistro Central",
+                  address="Bucharest", latitude=44.4, longitude=26.1),
+            Program(id="program1", merchant_id="merchant1", store_id="store1",
+                    title="Breakfast rewards", min_purchase_minor=2000,
+                    stamps_required=2, reward_minor=1000, currency="RON", status="published"),
+            Promotion(id="promo1", merchant_id="merchant1", program_id="program1",
+                      headline="Existing title", message="Existing message", status="draft"),
+        ])
+        db.commit()
+        yield db
+    engine.dispose()
 
 
 def payload(**overrides):
@@ -56,9 +42,8 @@ def payload(**overrides):
     return pilot_v05.PromotionIn(**args)
 
 
-def test_draft_update_scoped_and_preserves_program_conditions(monkeypatch):
-    monkeypatch.setattr(pilot_v05, "campaign_schema_ready", lambda db: None)
-    db = FakeDB(draft())
+def test_draft_update_scoped_and_preserves_program_conditions(campaign_db):
+    db = campaign_db
     staff = SimpleNamespace(role="owner", merchant_id="merchant1")
     result = pilot_v05.update_promotion_draft("promo1", payload(), staff, db)
     assert result["headline"] == "Fresh breakfast promotion"
@@ -67,29 +52,29 @@ def test_draft_update_scoped_and_preserves_program_conditions(monkeypatch):
     assert result["min_purchase_minor"] == 2000
     assert result["stamps_required"] == 2
     assert result["status"] == "draft"
-    assert db.commits == 1
+    assert db.get(Promotion,"promo1").headline == "Fresh breakfast promotion"
 
 
-def test_published_promotion_cannot_be_edited(monkeypatch):
-    monkeypatch.setattr(pilot_v05, "campaign_schema_ready", lambda db: None)
-    db = FakeDB(draft("published"))
+def test_published_promotion_cannot_be_edited(campaign_db):
+    db = campaign_db
+    db.get(Promotion,"promo1").status="published"
+    db.commit()
     with pytest.raises(HTTPException) as error:
         pilot_v05.update_promotion_draft(
             "promo1", payload(), SimpleNamespace(role="owner", merchant_id="merchant1"), db
         )
     assert error.value.status_code == 409
-    assert db.commits == 0
+    assert db.get(Promotion,"promo1").headline == "Existing title"
 
 
-def test_other_merchant_cannot_edit_draft(monkeypatch):
-    monkeypatch.setattr(pilot_v05, "campaign_schema_ready", lambda db: None)
-    db = FakeDB(draft())
+def test_other_merchant_cannot_edit_draft(campaign_db):
+    db = campaign_db
     with pytest.raises(HTTPException) as error:
         pilot_v05.update_promotion_draft(
             "promo1", payload(), SimpleNamespace(role="owner", merchant_id="other"), db
         )
     assert error.value.status_code == 404
-    assert db.commits == 0
+    assert db.get(Promotion,"promo1").headline == "Existing title"
 
 
 def test_campaign_media_requires_approved_host(monkeypatch):
@@ -134,7 +119,7 @@ def test_frontend_keeps_media_server_generated():
     assert "mediaCannotSave" in source
     library = (Path(__file__).resolve().parents[1] / "business_frontend" / "src" / "CampaignLibrary.jsx").read_text(encoding="utf-8")
     assert "Duplicate" in library
-    assert "Reopen draft" in library
+    assert "Edit before publishing" in library
 
 
 def test_diagnostics_list_missing_setting_names_without_secrets(monkeypatch):

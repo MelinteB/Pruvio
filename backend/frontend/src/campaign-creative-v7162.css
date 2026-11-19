@@ -1,0 +1,64 @@
+/* Editorial, image-led campaign creative. The photo/GIF/video remains the hero;
+   copy is blended over its darker lower third instead of a floating white card.
+   Shared by Core live card and the Business customer preview. */
+.pruvs-campaign-creative{
+  border-radius:20px!important;
+  box-shadow:0 16px 35px rgba(4,17,34,.18);
+  background:#132539;
+}
+.pruvs-campaign-creative:after{
+  content:'';position:absolute;z-index:0;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 65% 14%,transparent 25%,rgba(1,9,23,.23) 100%);
+}
+.pruvs-campaign-creative-overlay{
+  inset:auto 0 0!important;min-height:55%;
+  justify-content:flex-end;padding:clamp(19px,4.3vw,33px)!important;
+  background:linear-gradient(0deg,rgba(3,12,25,.93) 0%,
+    rgba(3,12,25,.78) 38%,rgba(3,12,25,.28) 78%,transparent 100%)!important;
+  gap:10px!important;filter:none;
+}
+.pruvs-campaign-creative-kicker{
+  align-self:flex-start;max-width:100%;font-size:10px!important;
+  font-weight:850;letter-spacing:.16em!important;text-transform:uppercase;
+  padding:7px 0 6px!important;background:none!important;
+  border-bottom:1px solid rgba(255,255,255,.58);
+  color:#e6f1ff!important;text-shadow:0 2px 8px rgba(0,0,0,.5);
+}
+.pruvs-campaign-creative-overlay h3{
+  color:#fff!important;font-size:clamp(22px,3vw,32px)!important;
+  font-weight:850;letter-spacing:-.052em!important;line-height:1.05!important;
+  text-shadow:0 3px 12px rgba(0,0,0,.55);
+  max-width:94%;
+}
+.pruvs-campaign-creative-overlay p{
+  max-width:90%;font-size:clamp(12px,1.4vw,14px)!important;
+  font-weight:550;line-height:1.48!important;color:#f1f6ff!important;
+  text-shadow:0 2px 8px rgba(0,0,0,.7);
+  -webkit-line-clamp:3!important;
+}
+.pruvs-campaign-location-link{
+  display:flex;position:absolute;right:14px;top:14px;z-index:4;
+  align-items:center;gap:6px;max-width:calc(100% - 28px);
+  min-height:37px;padding:8px 11px;border-radius:999px;
+  border:1px solid rgba(255,255,255,.42);
+  background:rgba(8,22,37,.46);backdrop-filter:blur(14px);
+  color:#fff!important;text-decoration:none;font-size:11px;font-weight:750;
+  box-shadow:0 7px 18px rgba(0,0,0,.14);
+}
+.pruvs-campaign-location-link:hover{background:rgba(7,30,61,.77)}
+.pruvs-campaign-location-link:focus-visible{outline:3px solid #fff;outline-offset:3px}
+.pruvs-campaign-creative-compact .pruvs-campaign-creative-overlay{min-height:62%}
+.pruvs-campaign-creative-compact .pruvs-campaign-creative-overlay h3{font-size:clamp(19px,3vw,26px)!important}
+@media(max-width:520px){
+  .pruvs-campaign-creative{border-radius:16px!important}
+  .pruvs-campaign-creative-overlay{padding:20px 16px!important;gap:7px!important}
+  .pruvs-campaign-creative-overlay h3{font-size:clamp(20px,6.2vw,27px)!important}
+  .pruvs-campaign-creative-overlay p{max-width:100%;font-size:12px!important;-webkit-line-clamp:3!important}
+  .pruvs-campaign-location-link{min-height:41px}
+}
+@media(prefers-reduced-transparency:reduce){
+  .pruvs-campaign-location-link{backdrop-filter:none;background:#132b4b}
+}
+@media(prefers-reduced-motion:reduce){
+  .pruvs-campaign-creative-media{animation:none}
+}

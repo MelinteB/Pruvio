@@ -160,8 +160,12 @@ def approval_guard(db,claim,staff):
     if not review or aware(review.at)<utcnow()-timedelta(minutes=15):
         raise HTTPException(409,'Open and review the receipt before approving or rejecting')
     # A rotated customer code invalidates earlier review authorization.
-    # Receipt-evidence "view" events alone cannot bypass current code unlock.
+    # An old view must not be reused after issuing/unlocking a fresh QR.
     from .pilot_v12 import require_code_unlock
     require_code_unlock(db,claim,staff)
+    from .models_v12 import CustomerClaimCode
+    code=db.get(CustomerClaimCode,claim.id)
+    if code and (not code.unlocked_at or aware(review.at)<aware(code.unlocked_at)):
+        raise HTTPException(409,'Reopen and review this receipt after scanning its latest QR code')
     db.add(ReceiptEvidenceAccess(claim_id=claim.id,staff_id=staff.id,
                  merchant_id=staff.merchant_id,action='decision'))

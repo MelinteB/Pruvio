@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 
 // Must match backend/app/reliability.py RELEASE. CI checks that these remain
 // aligned; a stale client version creates an update banner that never resolves.
-export const CLIENT_RELEASE = '7.1.61';
+export const CLIENT_RELEASE = '7.1.63';
 
 const DISMISSED_KEY = 'pruvs:release-update:dismissed-v1';
 const RELOADED_KEY = 'pruvs:release-update:reload-attempted-v1';

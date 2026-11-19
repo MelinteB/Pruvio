@@ -30,7 +30,7 @@ describe('Clean Core home and featured campaign',()=>{
     }]);
     render(<MemoryRouter><PromotionsPreview/></MemoryRouter>);
     expect(await screen.findByText('Coffee reward')).toBeTruthy();
-    expect(request).toHaveBeenCalledWith('/loyalty/promotions?limit=1');
+    expect(request).toHaveBeenCalledWith('/loyalty/promotions');
     expect(screen.queryByText('Offers from participating businesses')).toBeNull();
     expect(screen.getByRole('link',{name:'Explore rewards'})).toHaveProperty('href');
   });

@@ -1,0 +1,10 @@
+.pruvs-language-switch{display:inline-flex;align-items:center;gap:6px;flex:none;min-width:0}
+.pruvs-language-switch select{width:auto!important;min-width:66px!important;max-width:72px!important;min-height:39px!important;
+ border:1px solid #bbd9c8;border-radius:10px;background:#fff;color:#105f41;
+ padding:7px 8px!important;font:800 12px/1.2 system-ui!important;cursor:pointer}
+.pruvs-language-label{font-size:10px;font-weight:700;color:#4b755e;white-space:nowrap}
+.pruvs-language-switch:focus-within select{outline:3px solid #7cbaa0;outline-offset:2px}
+.pruvs-business-language-login{display:flex;justify-content:flex-end;margin:0 0 7px}
+@media(max-width:850px){.pruvs-language-label{display:none}.pruvs-language-switch select{min-width:62px!important}}
+@media(max-width:440px){.pruvs-business-2027 .topbar .pruvs-language-switch{margin-left:auto}
+.pruvs-business-2027 .topbar .user-circle{display:none}}

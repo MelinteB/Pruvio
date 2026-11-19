@@ -1,5 +1,7 @@
 import React,{useEffect,useState} from 'react';
+import {MapPin,ExternalLink} from 'lucide-react';
 import './campaign-creative.css';
+import './campaign-creative-v7162.css';
 
 /** The R2 asset stays separate from campaign copy; overlay avoids editing private assets. */
 export function hasCampaignCreative(p){
@@ -18,6 +20,9 @@ export default function CampaignCreative({promotion:p,compact=false}){
   },[]);
   if(!hasCampaignCreative(p))return null;
   const video=p.media_type.startsWith('video/');
+  const locationQuery=encodeURIComponent([p.store_name||p.merchant_name,p.store_address].filter(Boolean).join(', '));
+  const mapsUrl='https://www.google.com/maps/search/?api=1&query='+locationQuery+
+     (p.google_place_id?'&query_place_id='+encodeURIComponent(p.google_place_id):'');
   return <div className={'pruvs-campaign-creative'+(compact?' pruvs-campaign-creative-compact':'')}>
     {video?
       <video key={reduceMotion?'manual':'auto'} className="pruvs-campaign-creative-media" muted autoPlay={!reduceMotion} controls={reduceMotion} loop playsInline preload="metadata"
@@ -30,5 +35,8 @@ export default function CampaignCreative({promotion:p,compact=false}){
       <h3>{p.headline}</h3>
       <p>{p.message}</p>
     </div>
+    {(p.google_place_id||p.store_address)&&<a className="pruvs-campaign-location-link" href={mapsUrl}
+      target="_blank" rel="noopener noreferrer" aria-label={'Open '+(p.store_name||p.merchant_name||'location')+' in Google Maps'}>
+      <MapPin size={15}/> Visit location <ExternalLink size={13}/></a>}
   </div>;
 }

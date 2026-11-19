@@ -1,5 +1,5 @@
 """Pruvs customer-facing Rewards API; authenticated and same-origin only."""
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Response
 from pydantic import BaseModel, Field
 from decimal import Decimal, InvalidOperation
 import os
@@ -35,12 +35,16 @@ def join(program_id:str,identity=Depends(current)):
     except (ValueError,AttributeError): raise HTTPException(422, 'Invalid program ID.') from None
     return call_business('/v1/customer/programs/'+program_id+'/join', method='POST', user_id=identity[0].id)
 
+class LeaveProgramIn(BaseModel):
+    confirm_forfeit: bool = False
+
 @router.post('/programs/{program_id}/leave')
-def leave(program_id:str,identity=Depends(current)):
+def leave(program_id:str,payload:LeaveProgramIn|None=None,identity=Depends(current)):
     from uuid import UUID
     try:program_id=str(UUID(program_id))
     except (ValueError,AttributeError):raise HTTPException(422,'Invalid program ID.') from None
-    return call_business('/v1/customer/programs/'+program_id+'/leave',method='POST',user_id=identity[0].id)
+    return call_business('/v1/customer/programs/'+program_id+'/leave',method='POST',
+                         user_id=identity[0].id,body=payload.model_dump() if payload else None)
 
 @router.get('/memberships')
 def memberships(identity=Depends(current)):
@@ -83,8 +87,19 @@ def receipt_candidates(identity=Depends(current),db=Depends(get_db)):
 
 
 @router.get('/promotions')
-def promotions(limit:int=Query(12,ge=1,le=30), identity=Depends(current)):
+def promotions(response:Response, limit:int=Query(12,ge=1,le=30), identity=Depends(current)):
+    # Explicit no-store: a paused merchant campaign must not remain visible
+    # from an intermediary or browser cache on the authenticated customer feed.
+    response.headers['Cache-Control']='private, no-store, max-age=0'
     return call_business('/v1/promotions',params={'limit':limit})
+
+@router.get('/places/{place_id}')
+def merchant_place_details(place_id:str,identity=Depends(current)):
+    # Scoped bridge token; never expose the server Google Places key to Core.
+    if len(place_id)>255 or not place_id.replace('_','').replace('-','').isalnum():
+        raise HTTPException(422,'Invalid place identifier.')
+    return call_business('/v1/customer/places/'+place_id,user_id=identity[0].id)
+
 
 class ReceiptClaimIn(BaseModel):
     program_id: str=Field(min_length=36,max_length=36)

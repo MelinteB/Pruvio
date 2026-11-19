@@ -17,14 +17,17 @@ from .config import get_settings
 from .merchant_enrollment import router as merchant_enrollment_router
 from .models import Merchant, Staff, Store, Program, Membership, ReceiptClaim, Reward, Campaign, utcnow
 from .models_v067 import DiscountRedemption
+from .google_places_v0618 import router as google_places_router, linked_place_id, validate_store_place
+from .models_v0618 import MerchantStorePlace
 from .security import merchant_actor, customer_actor, verify_password, encode_merchant_token, decode
 from .schemas import LoginIn, StoreIn, ProgramIn, CampaignGoal, CampaignIn, ReceiptProofIn, ConfirmIn, DemoReceiptIn
 
 settings=get_settings()
-app=FastAPI(title='Pruvs Business API',version='0.6.17',docs_url='/docs' if settings.app_env!='production' else None)
+app=FastAPI(title='Pruvs Business API',version='0.6.19',docs_url='/docs' if settings.app_env!='production' else None)
 app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=False,
                    allow_methods=['GET','POST'],allow_headers=['Authorization','Content-Type'])
 app.include_router(merchant_enrollment_router)
+app.include_router(google_places_router)
 from .ai_campaign_v067 import router as ai_campaign_router
 app.include_router(ai_campaign_router)
 from .ai_campaign_artwork_v0611 import router as ai_artwork_router
@@ -37,6 +40,8 @@ from .pilot_enrollment_v0612 import router as pilot_enrollment_router
 app.include_router(pilot_enrollment_router)
 from .customer_pilot_eligibility_v0614 import router as customer_eligibility_router
 app.include_router(customer_eligibility_router)
+from .receipt_packages_v0618 import router as receipt_package_router
+app.include_router(receipt_package_router)
 
 def owned(db, cls, object_id, merchant_id):
     item=db.get(cls,object_id)
@@ -48,9 +53,10 @@ def merchant_check(staff):
     if staff.role not in ('owner','manager'):
         raise HTTPException(403,'Merchant manager role required')
 
-def store_json(s):
+def store_json(s, db=None):
     return dict(id=s.id,merchant_id=s.merchant_id,name=s.name,address=s.address,
-                latitude=s.latitude,longitude=s.longitude,active=s.active)
+                latitude=s.latitude,longitude=s.longitude,active=s.active,
+                google_place_id=linked_place_id(db,s.id) if db is not None else None)
 
 def program_json(p):
     return dict(id=p.id,store_id=p.store_id,merchant_id=p.merchant_id,title=p.title,
@@ -73,7 +79,7 @@ def aware(dt):
 
 @app.get('/health')
 def health():
-    return {'service':'Pruvs Business','version':'0.6.17','status':'ok'}
+    return {'service':'Pruvs Business','version':'0.6.19','status':'ok'}
 
 @app.get('/ready', include_in_schema=False)
 def readiness():
@@ -82,10 +88,10 @@ def readiness():
     try:
         checks=check_schema(engine())
         if not all(checks.values()):
-            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.17'})
-        return {'status':'ready','version':'0.6.17'}
+            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.19'})
+        return {'status':'ready','version':'0.6.19'}
     except Exception:
-        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.17'})
+        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.19'})
 
 @app.post('/v1/merchant/login')
 def login(payload:LoginIn, db:Session=Depends(get_db)):
@@ -111,14 +117,20 @@ def overview(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
 
 @app.get('/v1/merchant/stores')
 def get_stores(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
-    return [store_json(s) for s in db.scalars(select(Store).where(Store.merchant_id==staff.merchant_id)).all()]
+    return [store_json(s,db=db) for s in db.scalars(select(Store).where(Store.merchant_id==staff.merchant_id)).all()]
 
 @app.post('/v1/merchant/stores',status_code=201)
 def add_store(payload:StoreIn,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     merchant_check(staff)
-    s=Store(merchant_id=staff.merchant_id,**payload.model_dump())
-    db.add(s);db.commit();db.refresh(s)
-    return store_json(s)
+    place = validate_store_place(db, payload.google_place_id) if payload.google_place_id else None
+    s = Store(merchant_id=staff.merchant_id, **payload.model_dump(exclude={'google_place_id'}))
+    db.add(s)
+    if place:
+        db.flush()
+        db.add(MerchantStorePlace(store_id=s.id, merchant_id=staff.merchant_id, place_id=place['place_id']))
+    db.commit()
+    db.refresh(s)
+    return store_json(s,db=db)
 
 @app.get('/v1/merchant/programs')
 def get_programs(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
@@ -208,6 +220,12 @@ def approve_claim(claim_id:str,staff:Staff=Depends(merchant_actor),db:Session=De
     if not c:raise HTTPException(404,'Claim not found')
     if c.status!='pending':raise HTTPException(409,'Claim already processed')
     from .pilot_v06 import approval_guard
+    # v1.2 customer-QR claims must be approved as one complete package.
+    # Keep the legacy single-claim route for older receipt pilots only.
+    from .models_v12 import CustomerClaimCode
+    from sqlalchemy import inspect
+    if inspect(db.get_bind()).has_table(CustomerClaimCode.__tablename__) and db.get(CustomerClaimCode,c.id):
+        raise HTTPException(409,'This receipt belongs to a package. Review all required receipts and approve the package together.')
     approval_guard(db,c,staff)
     p=owned(db,Program,c.program_id,staff.merchant_id)
     membership=db.scalar(select(Membership).where(Membership.consumer_id==c.consumer_id,Membership.program_id==p.id).with_for_update())
@@ -277,14 +295,13 @@ def discover(latitude:float|None=Query(default=None,ge=-90,le=90),longitude:floa
     eligibility={}
     for p in published:
         s=db.get(Store,p.store_id)
-        if not s or not s.active:continue
         m=db.get(Merchant,p.merchant_id)
-        if not m or m.status!='active':continue
+        if not program_is_discoverable(p,m,s):continue
         distance=dist_km(latitude,longitude,s.latitude,s.longitude) if latitude is not None else None
         if distance is not None and distance>radius_km:continue
         if p.merchant_id not in eligibility:
             eligibility[p.merchant_id]=merchant_pilot_allowed(db,p.merchant_id)
-        results.append({'merchant_id':m.id,'merchant_name':m.name,'store':store_json(s),
+        results.append({'merchant_id':m.id,'merchant_name':m.name,'store':store_json(s,db=db),
                         'program':program_json(p),'receipt_pilot_allowed':eligibility[p.merchant_id],
                         'distance_km':round(distance,2) if distance is not None else None})
     return sorted(results,key=lambda r:(r['distance_km'] is None,r['distance_km'] or 0))[:100]
@@ -292,7 +309,10 @@ def discover(latitude:float|None=Query(default=None,ge=-90,le=90),longitude:floa
 @app.post('/v1/customer/programs/{program_id}/join')
 def join_program(program_id:str,consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
     p=db.get(Program,program_id)
-    if not p or p.status!='published':raise HTTPException(404,'Program not available')
+    merchant=db.get(Merchant,p.merchant_id) if p else None
+    store=db.get(Store,p.store_id) if p else None
+    if not program_is_discoverable(p,merchant,store):
+        raise HTTPException(404,'Program not available')
     existing=db.scalar(select(Membership).where(Membership.consumer_id==consumer_id,Membership.program_id==program_id))
     if existing:return {'membership_id':existing.id,'stamps':existing.stamps,'already_joined':True}
     membership=Membership(consumer_id=consumer_id,program_id=program_id)
@@ -306,19 +326,44 @@ def join_program(program_id:str,consumer_id:str=Depends(customer_actor),db:Sessi
     return {'membership_id':membership.id,'stamps':0,'already_joined':False}
 
 
+class LeaveProgramIn(BaseModel):
+    # Explicit approval is mandatory when any receipt or reward value is forfeited.
+    confirm_forfeit: bool = False
+
+
 @app.post('/v1/customer/programs/{program_id}/leave')
-def leave_program(program_id:str,consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
-    membership=db.scalar(select(Membership).where(Membership.consumer_id==consumer_id,
-               Membership.program_id==program_id).with_for_update())
-    if not membership:return {'left':True,'already_left':True}
-    pending=db.scalar(select(func.count(ReceiptClaim.id)).where(ReceiptClaim.consumer_id==consumer_id,
-                      ReceiptClaim.program_id==program_id,ReceiptClaim.status=='pending'))
-    pending_rewards=db.scalar(select(func.count(Reward.id)).where(Reward.consumer_id==consumer_id,
-                Reward.program_id==program_id,Reward.status.in_(('available','reserved'))))
-    if membership.stamps or pending or pending_rewards:
-        raise HTTPException(409,'You have stamps, pending receipts or unredeemed rewards. Redeem or resolve them before leaving.')
-    db.delete(membership);db.commit()
-    return {'left':True,'already_left':False}
+def leave_program(program_id:str,body:LeaveProgramIn|None=None,
+                  consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
+    membership=db.scalar(select(Membership).where(
+        Membership.consumer_id==consumer_id,
+        Membership.program_id==program_id).with_for_update())
+    if not membership:
+        return {'left':True,'already_left':True}
+    # Preserve claim rows and their globally unique receipt identifiers forever
+    # for deduplication/audit. They cannot be transferred to another campaign.
+    pending=db.scalars(select(ReceiptClaim).where(
+        ReceiptClaim.consumer_id==consumer_id,
+        ReceiptClaim.program_id==program_id,
+        ReceiptClaim.status=='pending').with_for_update()).all()
+    active_rewards=db.scalars(select(Reward).where(
+        Reward.consumer_id==consumer_id,
+        Reward.program_id==program_id,
+        Reward.status.in_(('available','reserved'))).with_for_update()).all()
+    if (membership.stamps or pending or active_rewards) and not (body and body.confirm_forfeit is True):
+        raise HTTPException(409,'Leaving forfeits stamps, pending receipts and unused rewards. Confirm the warning to continue.')
+    for claim in pending:
+        claim.status='cancelled'
+    for reward in active_rewards:
+        reward.status='forfeited'
+        reward.redemption_code=None
+        reward.reserved_until=None
+    forfeited={'stamps':membership.stamps,'pending_receipts':len(pending),
+               'unused_rewards':len(active_rewards)}
+    db.delete(membership)
+    db.commit()
+    return {'left':True,'already_left':False,'forfeited':forfeited,
+            'message':'Receipt links remain permanently used and cannot be submitted to other programs.'}
+
 
 @app.post('/v1/customer/claims',status_code=201)
 def claim_receipt(payload:ReceiptProofIn,consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
@@ -411,12 +456,21 @@ def confirm_redemption_code(payload:RedemptionSaleIn,staff:Staff=Depends(merchan
         currency=program.currency,verification_source='merchant_attested',created_at=utcnow())
     db.add(record)
     r.status='redeemed';r.redemption_code=None;r.reserved_until=None;r.redeemed_at=utcnow()
+    # A completed voucher should make a finished program joinable again.
+    # Flush because Business sessions use autoflush=False: otherwise the
+    # redeemed voucher would still appear as 'reserved' in the safety query.
+    db.flush()
+    from .loyalty_cycles_v0618 import close_completed_cycle
+    ready_to_rejoin=close_completed_cycle(
+        db,consumer_id=r.consumer_id,program_id=r.program_id
+    )
     try:db.commit()
     except IntegrityError:
         db.rollback();raise HTTPException(409,'Duplicate or already reconciled redemption') from None
     return {'status':'redeemed','reward_id':r.id,'reconciliation_id':record.id,
             'discount_minor':record.discount_minor,'currency':record.currency,
-            'verification_source':'merchant_attested'}
+            'verification_source':'merchant_attested',
+            'can_join_again':ready_to_rejoin}
 
 def redemption_json(db,row):
     claim=db.get(ReceiptClaim,row.source_claim_id) if row.source_claim_id else None
@@ -495,7 +549,7 @@ def dev_receipt_proof(payload:DemoReceiptIn,request:Request,staff:Staff=Depends(
                 'demo-customer-'+staff.merchant_id,demo_receipt_id,p.store_id,payload.amount_minor,p.currency),
             'warning':'SIMULATED receipt: not a fiscal transaction or Pruvs Core scan'}
 
-from .pilot_v05 import router as pilot_v05_router
+from .pilot_v05 import program_is_discoverable, router as pilot_v05_router
 app.include_router(pilot_v05_router)
 
 from .pilot_v06 import router as pilot_v06_router

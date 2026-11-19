@@ -139,7 +139,7 @@ def test_campaign_library_supports_status_filters_preview_and_inactive_actions()
     entry=(ROOT/'business_frontend/src/main.jsx').read_text()
     for word in ("Unpublished","Drafts","Paused","Live","Expired","Archived","All campaigns"):
         assert word in frontend
-    for action in ("Reopen draft","Restore draft","Unpublish","Publish","Archive","Preview"):
+    for action in ("Edit before publishing","Restore draft","Unpublish","Publish","Archive","Preview"):
         assert action in frontend
     assert "p.status==='published'&&p.expires_at" in frontend
     assert "canManage&&p.effectiveStatus" in frontend
@@ -169,7 +169,7 @@ def test_new_release_versions_are_synchronized():
     script=(ROOT/'frontend/scripts/stamp-build.mjs').read_text()
     worker=(ROOT/'app/static/react-service-worker.js').read_text()
     business=(ROOT/'business/main.py').read_text()
-    assert 'RELEASE = "7.1.61"' in reliability
-    assert "version:'7.1.61'" in script
-    assert 'pruvs-shell-v7.1.61' in worker
-    assert "version='0.6.17'" in business
+    assert 'RELEASE = "7.1.63"' in reliability
+    assert "version:'7.1.63'" in script
+    assert 'pruvs-shell-v7.1.63' in worker
+    assert "version='0.6.19'" in business

@@ -4,9 +4,13 @@ import {Link,useLocation} from 'react-router-dom';
 import {Compass, Gift, MapPin, RefreshCcw, ReceiptText, Ticket, CheckCircle2, X, Search} from 'lucide-react';
 import {Title, Panel, Message, Spinner, useApp} from './common';
 import {request, send, money} from './api';
+import {t} from './i18n';
 import './rewards.css';
 import './rewards-v05.css';
+import './rewards-package-v7162.css';
+import CampaignCarousel,{livePromotions} from './CampaignCarousel.jsx';
 import CampaignCreative,{hasCampaignCreative} from './CampaignCreative.jsx';
+import OfferLocation from './OfferLocation.jsx';
 import ReceiptSubmission from './ReceiptSubmission';
 import CustomerReceiptCode from './CustomerReceiptCode';
 
@@ -27,6 +31,7 @@ function AccountRewards(){
   const [offers,setOffers]=useState([]);
   const [promotions,setPromotions]=useState([]);
   const [claims,setClaims]=useState([]);
+  const [selectedReceiptByProgram,setSelectedReceiptByProgram]=useState({});
   const [claimsState,setClaimsState]=useState('loading');
   const [wallet,setWallet]=useState({memberships:[], rewards:[]});
   const [memberships,setMemberships]=useState([]);
@@ -35,7 +40,7 @@ function AccountRewards(){
   const [redemptionsState,setRedemptionsState]=useState('loading');
   const [campaignState,setCampaignState]=useState('loading');
   const [receipts,setReceipts]=useState([]);
-  const [tab,setTab]=useState(()=>typeof window!=='undefined'&&(window.location.hash.startsWith('#loyalty=')||new URLSearchParams(window.location.search).get('tab')==='receipts')?'receipts':'offers');
+  const [tab,setTab]=useState(()=>typeof window!=='undefined'&&(window.location.hash.startsWith('#loyalty=')||new URLSearchParams(window.location.search).get('tab')==='receipts')?'wallet':'offers');
   const [busy,setBusy]=useState('');
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState('');
@@ -47,7 +52,7 @@ function AccountRewards(){
 
   async function refresh(locationOverride=coordinates, activeTab=tab){
     setError('');setLoading(true);
-    if(activeTab==='wallet'){setWalletState('loading');setRedemptionsState('loading');}
+    if(activeTab==='wallet'){setWalletState('loading');setRedemptionsState('loading');setClaimsState('loading');}
     if(activeTab==='offers'||activeTab==='receipts')setMembershipsState('loading');
     if(activeTab==='receipts')setClaimsState('loading');
     try{
@@ -93,6 +98,27 @@ function AccountRewards(){
           // The b10 discount ledger might not be migrated even when Wallet works.
           setRedemptionsState('unavailable');
         }
+        // Saved receipts and merchant-verified claim status belong to My wallet.
+        // A partial failure never enables an unsafe receipt action.
+        try{
+          const r=await request('/loyalty/receipts');
+          setReceipts(Array.isArray(r.receipts)?r.receipts:[]);
+        }catch{setReceipts([]);setClaimsState('unavailable');}
+        try{
+          const o=await request('/loyalty/offers');
+          setOffers(Array.isArray(o)?o:[]);
+        }catch{setOffers([]);}
+        if(s.receipt_v06_enabled||s.customer_codes_v12_enabled||s.claims_read_enabled){
+          try{
+            const cl=await request('/loyalty/claims');
+            if(!Array.isArray(cl))throw Error('Invalid claim response');
+            setClaims(cl);setClaimsState('ready');
+          }catch{setClaimsState('unavailable');}
+        }else{setClaims([]);setClaimsState('disabled');}
+        try{
+          const pr=await request('/loyalty/promotions');
+          setPromotions(Array.isArray(pr)?pr:[]);
+        }catch{setPromotions([]);}
       }else if(activeTab==='receipts'){
         // The locally owned receipts must remain visible if Business is not ready.
         const r=await request('/loyalty/receipts');setReceipts(r.receipts||[]);
@@ -129,10 +155,10 @@ function AccountRewards(){
   }
   useEffect(()=>{refresh(null,tab);},[tab]);
   useEffect(()=>{
-    if(selectedReceiptCase && tab!=='receipts')setTab('receipts');
+    if(selectedReceiptCase && tab!=='wallet')setTab('wallet');
   },[selectedReceiptCase]);
   useEffect(()=>{
-    if(!loading && tab==='receipts' && selectedReceiptCase){
+    if(!loading && tab==='wallet' && selectedReceiptCase){
       document.getElementById('loyalty-receipt-'+selectedReceiptCase)?.scrollIntoView?.({block:'center'});
     }
   },[loading,tab,selectedReceiptCase]);
@@ -166,11 +192,17 @@ function AccountRewards(){
   const shownOffers=(cityFilter?offers.filter(o=>cityMatches(o.store?.address,cityFilter)||cityMatches(o.store?.name,cityFilter)||cityMatches(o.merchant_name,cityFilter)):offers)
     .slice().sort((a,b)=>Number(b.program.id===promotedProgram)-Number(a.program.id===promotedProgram));
   const byProgram=new Map(offers.map(o=>[o.program.id,o]));
+  const activePromotions=livePromotions(promotions);
   const activePromotionByProgram=new Map();
-  for(const promo of promotions){
-    if(promo.status!=='published'||(promo.expires_at&&Date.parse(promo.expires_at)<=Date.now()))continue;
-    if(!activePromotionByProgram.has(promo.program_id))activePromotionByProgram.set(promo.program_id,promo);
+  // The public feed is newest first. City and wallet show one preview per program.
+  for(const promotion of activePromotions){
+    if(!activePromotionByProgram.has(promotion.program_id))activePromotionByProgram.set(promotion.program_id,promotion);
   }
+  const featuredPromotions=cityFilter?[]:activePromotions
+    .filter(p=>!coordinates||byProgram.has(p.program_id));
+  const featuredPrograms=new Set(featuredPromotions.map(p=>p.program_id));
+  const remainingOffers=shownOffers.filter(o=>!featuredPrograms.has(o.program.id));
+  const selectedFeaturedCampaign=featuredPromotions.find(p=>p.program_id===promotedProgram);
   // Business is the authority for merchant eligibility. Old Business versions
   // without this flag fail closed for receipt claims, not for program discovery.
   const eligibleReceiptOffers=offers.filter(o=>o.receipt_pilot_allowed===true);
@@ -188,8 +220,7 @@ function AccountRewards(){
           ? 'Receipt claim verification is unavailable. Try again.'
           : null;
   const earnedPrograms=eligibleReceiptOffers.filter(o=>joined.has(o.program.id)).map(o=>{
-    const active=promotions.find(p=>p.program_id===o.program.id && p.status==='published' &&
-      (!p.expires_at || Date.parse(p.expires_at)>Date.now()));
+    const active=activePromotionByProgram.get(o.program.id);
     return active?{...o, promotionHeadline:active.headline}:o;
   });
   return <>
@@ -214,11 +245,30 @@ function AccountRewards(){
       </p>}
       <div className="row wrap rewards-actions"><button type="button" onClick={nearMe} disabled={!!busy}><MapPin size={17}/> Offers near me</button><button type="button" onClick={()=>{setCityFilter('');setCoordinates(null);refresh(null);}} disabled={!!busy}><Compass size={17}/> All offers</button><button type="button" onClick={()=>refresh()} disabled={!!busy}><RefreshCcw size={17}/> Refresh</button></div>
       {cityFilter&&<p className="pruvs-v7150-city-status">Showing Pruvs merchant programs matching <strong>{cityFilter}</strong>. <button type="button" onClick={()=>setCityOpen(true)}>Change city</button></p>}
-      {promotedProgram&&offers.some(o=>o.program.id===promotedProgram)&&<p role="status" className="pruvs-v7152-partial-warning">Your selected loyalty program is listed first below. Join it to start earning merchant-approved rewards.</p>}
-      {promotions.length>0 && !cityFilter && <section className="rewards-featured"><h2>Featured merchant promotions</h2><div className="rewards-cards">{promotions.map(p=><Panel key={p.id} className="rewards-card rewards-promotion">
-          {hasCampaignCreative(p)?<CampaignCreative promotion={p}/>:
-            <><small className="rewards-promo-tag">LOCAL PROMOTION · {p.merchant_name}</small><h3>{p.headline}</h3><p>{p.message}</p></>}<p><strong>{p.stamps_required} eligible receipts</strong> to earn {money(p.reward_minor/100,p.currency)} · Minimum purchase {money(p.min_purchase_minor/100,p.currency)}</p><small>{p.store_name}{p.expires_at?' · Ends '+new Date(p.expires_at).toLocaleDateString():''}</small><button className="primary" disabled={!!busy||!canJoin||joined.has(p.program_id)} onClick={()=>perform(p.program_id,()=>send('/loyalty/programs/'+p.program_id+'/join'),()=> 'Joined '+p.program_title+'.')}>{joined.has(p.program_id)?'Joined':'Join promoted program'}</button></Panel>)}</div></section>}
-      <div className="rewards-cards">{shownOffers.map(o=><Panel key={o.program.id} className="rewards-card"><div className="rewards-icon"><Gift size={22}/></div><small className="muted">{o.merchant_name} · {o.store.name}</small>
+      {promotedProgram&&remainingOffers.some(o=>o.program.id===promotedProgram)&&<p role="status" className="pruvs-v7152-partial-warning">Your selected loyalty program is listed first below. Join it to start earning merchant-approved rewards.</p>}
+      {featuredPromotions.length>0&&<section className="rewards-featured">
+        <h2>{t('Featured merchant promotions')}</h2>
+        <CampaignCarousel key={selectedFeaturedCampaign?.id||'featured'} campaigns={featuredPromotions}
+          label={t('Featured merchant promotions')} initialCampaignId={selectedFeaturedCampaign?.id} renderCampaign={p=>{
+            const offer=byProgram.get(p.program_id);
+            const member=joined.has(p.program_id);
+            const description=offer?.program.description;
+            return <Panel className="rewards-card rewards-promotion">
+              {hasCampaignCreative(p)?<CampaignCreative promotion={p}/>:
+                <><small className="rewards-promo-tag">LOCAL PROMOTION · {p.merchant_name}</small><h3>{p.headline}</h3><p>{p.message}</p></>}
+              {p.program_title&&p.program_title!==p.headline&&<strong>{p.program_title}</strong>}
+              {description&&description!==p.message&&<p>{description}</p>}
+              <p><strong>{p.stamps_required} eligible receipts</strong> to earn {money(p.reward_minor/100,p.currency)} · Minimum purchase {money(p.min_purchase_minor/100,p.currency)}</p>
+              <small>{p.store_name}{offer?.distance_km!=null?' · '+offer.distance_km+' km away':''}{p.expires_at?' · Ends '+new Date(p.expires_at).toLocaleDateString():''}</small>
+              <OfferLocation promotion={p} compact/>
+              <button type="button" className="primary" disabled={!!busy||!canJoin||member}
+                onClick={()=>perform(p.program_id,()=>send('/loyalty/programs/'+p.program_id+'/join'),()=> 'Joined '+p.program_title+'.')}>
+                {member?<><CheckCircle2 size={16}/> {t('Joined')}</>:t(busy===p.program_id?'Joining…':'Join promoted program')}
+              </button>
+            </Panel>;
+          }}/>
+      </section>}
+      <div className="rewards-cards">{remainingOffers.map(o=><Panel key={o.program.id} className="rewards-card"><div className="rewards-icon"><Gift size={22}/></div><small className="muted">{o.merchant_name} · {o.store.name}</small>
         {activePromotionByProgram.has(o.program.id)&&hasCampaignCreative(activePromotionByProgram.get(o.program.id))&&
           <CampaignCreative promotion={activePromotionByProgram.get(o.program.id)} compact/>}
         <h2>{o.program.title}</h2><p>{o.program.description}</p><p><strong>{o.program.stamps_required} qualifying receipts</strong> to earn {money(o.program.reward_minor/100,o.program.currency)}</p>
@@ -226,7 +276,7 @@ function AccountRewards(){
         <button type="button" className="primary" disabled={!!busy || !canJoin || joined.has(o.program.id)} onClick={()=>perform(o.program.id,()=>send('/loyalty/programs/'+o.program.id+'/join'),()=> 'Joined '+o.program.title+'.')}>{joined.has(o.program.id)?<><CheckCircle2 size={16}/> Joined</>:busy===o.program.id?'Joining…':'Join loyalty program'}</button>
       </Panel>)}
       </div>
-      {!shownOffers.length&&!error&&<Panel><p>{cityFilter?'No published Pruvs loyalty programs match this city. Try another city or choose All offers.':'No published merchant programs are available yet. Once merchants publish programs, they will appear here.'}</p></Panel>}
+      {!remainingOffers.length&&!featuredPromotions.length&&!error&&<Panel><p>{cityFilter?'No published Pruvs loyalty programs match this city. Try another city or choose All offers.':'No published merchant programs are available yet. Once merchants publish programs, they will appear here.'}</p></Panel>}
     </>}
     {!loading && status?.enabled && tab==='wallet' && walletState!=='ready' &&
       <Panel title="Wallet temporarily unavailable">
@@ -235,14 +285,77 @@ function AccountRewards(){
       </Panel>}
     {!loading && status?.enabled && tab==='wallet' && walletState==='ready' && <>
       <Panel title="Loyalty progress">
-        {wallet.memberships?.length ? wallet.memberships.map((m,i)=>{const p=byProgram.get(m.program_id)?.program;return <div className="rewards-wallet-row pruvs-v7151-membership" key={m.program_id}>
-        <div><strong>{m.title||p?.title||'Loyalty program'}</strong><small>{m.status==='published'?'Active loyalty program':m.status}</small>
-          <p>{m.stamps} / {m.stamps_required||p?.stamps_required||'?'} verified purchases</p>
-          <progress max={m.stamps_required||p?.stamps_required||1} value={m.stamps} aria-label="Loyalty stamp progress"/>
-        </div><button type="button" className="secondary" disabled={!!busy||m.stamps>0} title={m.stamps>0?'Redeem your stamps before leaving':''} onClick={()=>{
-          if(window.confirm('Leave this loyalty program? Only programs without pending rewards or stamps can be left.'))
-            perform(m.program_id,()=>send('/loyalty/programs/'+m.program_id+'/leave'),()=> 'You left '+m.title+'.');
-        }}>Leave program</button></div>;}):<p>No programs joined yet. Start in Discover.</p>}
+        {wallet.memberships?.length ? wallet.memberships.map(m=>{
+          const p=byProgram.get(m.program_id)?.program;
+          const linked=claims.filter(c=>c.program_id===m.program_id);
+          const pending=linked.filter(c=>c.status==='pending');
+          const target=m.stamps_required||p?.stamps_required||1;
+          const remaining=Math.max(0,target-(m.stamps||0)-pending.length);
+          const offer=earnedPrograms.find(o=>o.program.id===m.program_id);
+          // A submitted receipt is never selectable for another campaign,
+          // including when a claim was rejected or the enrollment was left.
+          const unused=receipts.filter(r=>!claims.some(c=>c.receipt_ref===r.receipt_ref));
+          const selected=selectedReceiptByProgram[m.program_id];
+          const receipt=unused.find(r=>String(r.case_id)===String(selected))||unused[0];
+          const rewardCount=(wallet.rewards||[]).filter(r=>r.program_id===m.program_id && ['available','reserved'].includes(r.status)).length;
+          return <div className="pruvs-package-program" key={m.program_id}>
+            <div className="rewards-wallet-row pruvs-v7151-membership">
+              <div><strong>{m.title||p?.title||'Loyalty program'}</strong>
+                <small>{m.status==='published'?'Active loyalty program':m.status}</small>
+                <p>{m.stamps} / {target} verified purchases</p>
+                <progress max={target} value={m.stamps} aria-label="Loyalty stamp progress"/>
+              </div>
+              <button type="button" className="secondary" disabled={!!busy || claimsState==='unavailable'}
+                onClick={()=>{
+                  const warning='Leave '+(m.title||'this program')+'?\n\n'+
+                    'This is permanent for the linked receipts: they cannot be reused in this or any other campaign, even if you join again.\n'+
+                    'You will lose '+(m.stamps||0)+' stamps, '+pending.length+' pending receipts and '+rewardCount+' unused rewards.\n'+
+                    'Saved receipt originals remain in your Pruvs account.\n\nContinue?';
+                  if(window.confirm(warning))
+                    perform('leave-'+m.program_id,()=>send('/loyalty/programs/'+m.program_id+'/leave',{confirm_forfeit:true}),()=> 'You left '+(m.title||'the program')+'. Its linked receipts cannot be reused.');
+                }}>Leave program</button>
+            </div>
+            <section className="pruvs-package-receipts" aria-label={'Receipts for '+(m.title||'loyalty program')}>
+              <div className="pruvs-package-head"><strong>Receipts linked to this campaign</strong>
+                <small>{pending.length} awaiting package review · {remaining} receipt slot{remaining===1?'':'s'} remaining</small>
+              </div>
+              {claimsState==='unavailable'&&<p role="status">Receipt status could not be loaded. QR creation is unavailable until verification is restored.</p>}
+              {claimsState==='ready'&&<>
+                {linked.length>0?<ol className="pruvs-package-list">
+                  {linked.map((c,i)=>{
+                    const original=receipts.find(r=>r.receipt_ref===c.receipt_ref);
+                    return <li key={c.claim_id}>
+                      <div><strong>Receipt {i+1}</strong>
+                        <small>{original?.merchant_name||'Previously linked receipt'} · {money(c.amount_minor/100,p?.currency||'RON')}</small>
+                        <small className={'pruvs-package-status '+c.status}>{c.status==='pending'?'Awaiting package review':c.status==='approved'?'Merchant verified':c.status==='cancelled'?'Forfeited on leaving':c.status==='rejected'?'Rejected':c.status}</small>
+                        {original&&<Link to={'/receipt/'+original.case_id}>View saved receipt</Link>}
+                      </div>
+                      {c.status==='pending' && original && offer && status?.customer_codes_v12_enabled &&
+                        <CustomerReceiptCode key={'qr-'+c.claim_id} caseId={original.case_id}
+                          userId={user?.id} storageMode={original.storage_mode}
+                          programs={[offer]} existingClaim={c} onFinished={()=>refresh(null,'wallet')}/>}
+                    </li>;
+                  })}
+                </ol>:<p className="muted">No receipts linked yet. Add one saved receipt per required purchase.</p>}
+                {remaining>0&&rewardCount===0&&offer&&status?.customer_codes_v12_enabled&&
+                  <div className="pruvs-package-add">
+                    <strong>Verify another receipt ({target-remaining+1} of {target})</strong>
+                    {unused.length?<><label>Select a saved receipt
+                      <select value={receipt?.case_id||''} onChange={e=>setSelectedReceiptByProgram(v=>({...v,[m.program_id]:e.target.value}))}>
+                        {unused.map(r=><option key={r.case_id} value={r.case_id}>{r.merchant_name||'Receipt'} · {money(r.receipt_total,r.currency||'RON')} · #{r.case_id}</option>)}
+                      </select>
+                    </label><CustomerReceiptCode key={'new-'+m.program_id+'-'+receipt.case_id}
+                      caseId={receipt.case_id} userId={user?.id} storageMode={receipt.storage_mode}
+                      programs={[offer]} onFinished={()=>refresh(null,'wallet')}/></>
+                    :<Link to="/upload">Scan a receipt to continue</Link>}
+                  </div>}
+                {rewardCount>0&&<p className="pruvs-package-ready">You have an unused reward. Redeem it before beginning another package of receipts.</p>}
+                {remaining===0&&pending.length>0&&<p className="pruvs-package-ready">All required receipts are linked. The merchant must unlock and review each QR before approving the entire package.</p>}
+                {m.status!=='published'&&<p className="muted">Program paused. Existing receipt records remain linked; new QR submissions require an active program.</p>}
+              </>}
+            </section>
+          </div>;
+        }):<p>No programs joined yet. Start in Discover.</p>}
       </Panel>
       <Panel title="Available rewards">
         {wallet.rewards?.length?wallet.rewards.map(r=><div className="rewards-wallet-row" key={r.id}><div><strong>{byProgram.get(r.program_id)?.program?.title||'Merchant reward'}</strong><p>Status: {r.status}</p>{r.code && <p>Checkout code: <strong className="rewards-code">{r.code}</strong></p>}</div>{r.status==='available'&&<button type="button" disabled={!!busy} onClick={()=>perform(r.id,()=>send('/loyalty/rewards/'+r.id+'/reserve'),data=>{setActiveVoucher({...data,program_id:r.program_id});return 'Voucher ready. Present the QR code to the merchant before checkout.';})}>Generate checkout QR</button>}
@@ -266,7 +379,7 @@ function AccountRewards(){
           <button type="button" className="secondary" onClick={()=>{setActiveVoucher(null);refresh(null,'wallet')}}>Close and refresh</button>
          </section></div>}
     </>}
-    {!loading && status?.enabled && tab==='receipts' && <Panel title="Earn stamps from saved receipts">
+    {!loading && status?.enabled && tab==='wallet' && walletState==='ready' && <Panel title="Earn a stamp">
       {membershipsState!=='ready'&&<p role="status" className="pruvs-v7152-partial-warning">
         Your saved receipts are available, but loyalty enrollment could not be verified. Receipt claiming is temporarily unavailable; retry when the merchant service is ready.
       </p>}
@@ -285,13 +398,22 @@ function AccountRewards(){
         </div>
         <Link to={'/receipt/'+r.case_id}>View receipt</Link>
         {!receiptActionReason&&earnedPrograms.length>0&&status?.customer_codes_v12_enabled
-          ?<CustomerReceiptCode caseId={r.case_id} userId={user?.id} storageMode={r.storage_mode} programs={earnedPrograms} existingClaim={claims.find(c=>c.receipt_ref===r.receipt_ref)} onFinished={()=>refresh(null,'receipts')}/>
+          ?<CustomerReceiptCode caseId={r.case_id} userId={user?.id} storageMode={r.storage_mode} programs={earnedPrograms} existingClaim={claims.find(c=>c.receipt_ref===r.receipt_ref)} onFinished={()=>refresh(null,'wallet')}/>
           :!receiptActionReason&&earnedPrograms.length>0&&status?.receipt_v06_enabled
-            ?<ReceiptSubmission caseId={r.case_id} receiptRef={r.receipt_ref} claims={claims} programs={earnedPrograms} onSuccess={msg=>{setMessage(msg);refresh(null,'receipts')}}/>
+            ?<ReceiptSubmission caseId={r.case_id} receiptRef={r.receipt_ref} claims={claims} programs={earnedPrograms} onSuccess={msg=>{setMessage(msg);refresh(null,'wallet')}}/>
             :<button type="button" className="secondary" disabled title={receiptActionReason||'Join an approved merchant loyalty program first.'}>Earn a stamp — unavailable</button>}
       </div>)}
       {!receipts.length&&!error&&<p>No receipts found. <Link to="/upload">Scan a receipt</Link> to begin.</p>}
       <div className="row"><Ticket size={18}/><small>A merchant must confirm the purchase before any stamp is credited. Receipt verification is not POS settlement confirmation.</small></div>
+    </Panel>}
+    {!loading && status?.enabled && tab==='receipts' && <Panel title="Saved receipts">
+      <p className="muted">Review your scans here. To submit a qualifying receipt for merchant verification, use Earn a stamp in My wallet.</p>
+      {receipts.map(r=><div className="rewards-wallet-row" key={r.case_id}>
+        <div><strong>{r.merchant_name||'Saved receipt'}</strong><small>{money(r.receipt_total,r.currency||'RON')}</small></div>
+        <Link to={'/receipt/'+r.case_id}>View receipt</Link>
+        <button type="button" className="secondary" onClick={()=>setTab('wallet')}>My wallet</button>
+      </div>)}
+      {!receipts.length&&<Link to="/upload">Scan your first receipt</Link>}
     </Panel>}
     {cityOpen&&<div className="pruvs-v7150-city-overlay" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setCityOpen(false)}}>
       <section role="dialog" aria-modal="true" aria-label="Find Pruvs merchants by city" className="pruvs-v7150-city-dialog">

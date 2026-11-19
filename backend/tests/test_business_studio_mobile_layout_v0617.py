@@ -12,7 +12,7 @@ UI = ROOT / 'business_frontend' / 'src'
 
 def test_header_is_concise_and_uncluttered():
     source = (UI / 'PromotionConsole.jsx').read_text(encoding='utf-8')
-    assert '<h3>Create a campaign</h3>' in source
+    assert "<h3>{t('Create a campaign')}</h3>" in source
     assert 'Use your photo, refine the message and preview the offer before publishing.' in source
     assert 'Approval required before publishing' in source
     assert 'CREATIVE WORKSPACE · PRUVS BUSINESS' not in source
@@ -43,6 +43,6 @@ def test_business_release_is_independent_of_core():
     api = (ROOT / 'business/main.py').read_text(encoding='utf-8')
     ui = (UI / 'main.jsx').read_text(encoding='utf-8')
     core = (ROOT / 'app/reliability.py').read_text(encoding='utf-8')
-    assert "version='0.6.17'" in api
-    assert 'Pruvs Business · v0.6.17' in ui
-    assert 'RELEASE = "7.1.61"' in core
+    assert "version='0.6.19'" in api
+    assert 'Pruvs Business · v0.6.19' in ui
+    assert 'RELEASE = "7.1.63"' in core
