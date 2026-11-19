@@ -55,7 +55,7 @@ function PreviewDialog({campaign,onClose}){
 
 export default function CampaignLibrary({
   campaigns=[],busy=false,canManage=true,onEdit,onCopy,onPublish,onUnpublish,
-  onReopen,onArchive,onRestore,onCreate,
+  onReopen,onRepublish,onArchive,onRestore,onCreate,
 }){
   const [filter,setFilter]=useState('unpublished');
   const [query,setQuery]=useState('');
@@ -132,7 +132,8 @@ export default function CampaignLibrary({
             <button type="button" disabled={busy} onClick={()=>onArchive?.(p)}><Archive size={16}/> Archive</button>
           </>}
           {canManage&&p.effectiveStatus==='paused'&&<>
-            <button type="button" className="is-primary" disabled={busy} onClick={()=>onReopen?.(p)}><RotateCcw size={16}/> Reopen draft</button>
+            <button type="button" className="is-publish" disabled={busy} onClick={()=>onRepublish?.(p)}><Globe2 size={16}/> Republish</button>
+            <button type="button" className="is-primary" disabled={busy} onClick={()=>onReopen?.(p)}><RotateCcw size={16}/> Edit before publishing</button>
             <button type="button" disabled={busy} onClick={()=>onCopy?.(p)}><Copy size={16}/> Duplicate</button>
             <button type="button" disabled={busy} onClick={()=>onArchive?.(p)}><Archive size={16}/> Archive</button>
           </>}
@@ -141,6 +142,7 @@ export default function CampaignLibrary({
             <button type="button" disabled={busy} onClick={()=>onUnpublish?.(p)}><PauseCircle size={16}/> Unpublish</button>
           </>}
           {canManage&&p.effectiveStatus==='expired'&&<>
+            <button type="button" className="is-publish" disabled={busy} onClick={()=>onRepublish?.(p)}><Globe2 size={16}/> Republish</button>
             <button type="button" disabled={busy} onClick={()=>onCopy?.(p)}><Copy size={16}/> New from this</button>
             <button type="button" disabled={busy} onClick={()=>onArchive?.(p)}><Archive size={16}/> Archive</button>
           </>}
