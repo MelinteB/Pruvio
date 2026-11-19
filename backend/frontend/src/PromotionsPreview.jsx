@@ -9,7 +9,9 @@ export default function PromotionsPreview(){
   const [items,setItems]=useState([]);
   const [state,setState]=useState('loading');
   async function refresh(){
-    setState('loading');
+    // Preserve existing content during background refresh. Never present a stale
+    // campaign as live after a completed API request.
+    setState(previous=>previous==='ready'?'refreshing':'loading');
     try{
       const data=await request('/loyalty/promotions?limit=1');
       if(!Array.isArray(data))throw new Error('Invalid promotion response');
@@ -19,7 +21,19 @@ export default function PromotionsPreview(){
       setState('unavailable');
     }
   }
-  useEffect(()=>{refresh();},[]);
+  useEffect(()=>{
+    refresh();
+    const update=()=>{if(document.visibilityState==='visible')refresh()};
+    const onFocus=()=>refresh();
+    document.addEventListener('visibilitychange',update);
+    window.addEventListener('focus',onFocus);
+    const timer=setInterval(()=>{if(document.visibilityState==='visible')refresh()},30000);
+    return()=>{
+      document.removeEventListener('visibilitychange',update);
+      window.removeEventListener('focus',onFocus);
+      clearInterval(timer);
+    };
+  },[]);
   if(state==='unavailable')return <section className="pruvs-promos" role="status">
     <p>Merchant campaigns are temporarily unavailable. Your rewards and receipts are unaffected.</p>
     <button type="button" onClick={refresh}>Retry campaigns</button>
