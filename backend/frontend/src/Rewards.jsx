@@ -353,7 +353,7 @@ function AccountRewards(){
           <button type="button" className="secondary" onClick={()=>{setActiveVoucher(null);refresh(null,'wallet')}}>Close and refresh</button>
          </section></div>}
     </>}
-    {!loading && status?.enabled && tab==='wallet' && walletState==='ready' && !status?.customer_codes_v12_enabled && <Panel title="Earn a stamp">
+    {!loading && status?.enabled && tab==='wallet' && walletState==='ready' && <Panel title="Earn a stamp">
       {membershipsState!=='ready'&&<p role="status" className="pruvs-v7152-partial-warning">
         Your saved receipts are available, but loyalty enrollment could not be verified. Receipt claiming is temporarily unavailable; retry when the merchant service is ready.
       </p>}
