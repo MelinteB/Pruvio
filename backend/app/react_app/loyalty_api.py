@@ -89,7 +89,7 @@ def place_details(place_id:str,identity=Depends(current)):
     import re
     if not re.fullmatch(r'[A-Za-z0-9_-]{8,260}',place_id):
         raise HTTPException(422,'Invalid place ID')
-    return call_business('/v1/places/'+place_id)
+    return call_business('/v1/places/'+place_id,user_id=identity[0].id)
 
 
 @router.get('/promotions')
