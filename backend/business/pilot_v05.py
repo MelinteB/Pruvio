@@ -10,7 +10,7 @@ import secrets
 from urllib.parse import urlsplit
 from datetime import timedelta, timezone
 from typing import Literal
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -132,9 +132,8 @@ def campaign_media(payload):
     return payload.media_url,payload.media_type,payload.media_alt or ''
 
 @router.get('/v1/merchant/promotions')
-def merchant_promotions(response:Response,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+def merchant_promotions(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     campaign_schema_ready(db)
-    response.headers['Cache-Control']='no-store, private'
     rows=db.scalars(select(Promotion).where(Promotion.merchant_id==staff.merchant_id)
                     .order_by(Promotion.created_at.desc()).limit(100)).all()
     return [promo_json(p,db) for p in rows]
@@ -290,9 +289,8 @@ def restore_archived_promotion(promotion_id:str,staff:Staff=Depends(merchant_act
 
 
 @router.get('/v1/promotions')
-def public_promotions(response:Response,limit:int=Query(12,ge=1,le=30),db:Session=Depends(get_db)):
+def public_promotions(limit:int=Query(12,ge=1,le=30),db:Session=Depends(get_db)):
     campaign_schema_ready(db)
-    response.headers['Cache-Control']='no-store, private, max-age=0'
     # Apply eligibility BEFORE limiting results; an expired 200-item backlog
     # must not hide valid published campaigns from the customer feed.
     now=utcnow()
