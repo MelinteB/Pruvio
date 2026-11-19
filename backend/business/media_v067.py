@@ -172,15 +172,25 @@ def frame(photo,idx,frames,text,headline):
     left=round(dx*(.15+.70*progress))
     top=round(dy*(.20+.60*progress))
     canvas=scaled.crop((left,top,left+w,top+h)).convert('RGB')
-    draw=ImageDraw.Draw(canvas)
-    draw.rectangle((0,755,720,900),fill='#092a24')
-    draw.rectangle((24,36,205,80),fill='#e5fff2')
-    try:font=ImageFont.truetype('DejaVuSans-Bold.ttf',22)
+    # The merchant's photograph remains the focal point. Export only a small
+    # brand watermark into PNG/GIF/MP4: the full editable headline/message is
+    # rendered in the identical accessible Core/Business campaign-card overlay.
+    # Do NOT paint a giant opaque footer or duplicate the headline in the media.
+    overlay=Image.new('RGBA',(w,h),(0,0,0,0))
+    draw=ImageDraw.Draw(overlay)
+    try:font=ImageFont.truetype('DejaVuSans-Bold.ttf',19)
     except OSError:font=ImageFont.load_default()
-    draw.text((36,43),'PRUVS BUSINESS',font=font,fill='#075f42')
-    draw.text((26,780),headline[:48],font=font,fill='#ffffff')
-    draw.text((26,844),text[:55],font=font,fill='#8bebc4')
-    return canvas
+    label=(text.strip() or 'PRUVS')[:55]
+    bounds=draw.textbbox((0,0),label,font=font)
+    tw=bounds[2]-bounds[0]
+    th=bounds[3]-bounds[1]
+    right=w-19
+    top=17
+    left=max(17,right-tw-32)
+    draw.rounded_rectangle((left,top,right,top+th+30),radius=17,
+                           fill=(7,30,29,168),outline=(224,255,243,105),width=1)
+    draw.text((left+16,top+13),label,font=font,fill=(244,255,250,245))
+    return Image.alpha_composite(canvas.convert('RGBA'),overlay).convert('RGB')
 
 @router.post('/v1/merchant/promotions/media/render')
 def render_campaign_artwork(payload:RenderArtworkIn,staff:Staff=Depends(merchant_actor)):
