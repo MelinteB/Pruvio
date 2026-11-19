@@ -32,7 +32,7 @@ async function call(path,token,body,method){
   if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:'Operation failed ('+response.status+')');
   return data;
 }
-export default function PromotionConsole({token,programs,merchantName='',mode='promotions',initialView='studio',canManage=true}){
+export default function PromotionConsole({token,programs,stores=[],merchantName='',mode='promotions',initialView='studio',canManage=true}){
   const {language,t}=useBusinessLocale();
   const [list,setList]=useState([]),[programId,setProgramId]=useState(''),[headline,setHeadline]=useState(''),[message,setMessage]=useState(''),[mediaUrl,setMediaUrl]=useState(''),[mediaType,setMediaType]=useState('image/jpeg'),[days,setDays]=useState(14),[amount,setAmount]=useState(''),[code,setCode]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
   const [goal,setGoal]=useState('Encourage loyal customers to return'),[audience,setAudience]=useState('Local regular customers'),
@@ -50,6 +50,7 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
   useEffect(()=>()=>{if(localMediaPreview)URL.revokeObjectURL(localMediaPreview)},[localMediaPreview]);
   const published=programs.filter(p=>p.status==='published');
   const currentProgram=programs.find(p=>p.id===programId);
+  const currentStore=stores.find(s=>s.id===currentProgram?.store_id);
   const displayedMediaUrl=mediaUrl&&!mediaPreviewError?mediaUrl:localMediaPreview;
   const mediaCannotSave=uploadPending||mediaPreviewError;
   const targetMediaType={png:'image/png',gif:'image/gif',mp4:'video/mp4'}[creativeFormat];
@@ -318,6 +319,7 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
             <CorePromotionPreview
               key={String(displayedMediaUrl||'empty')+'-'+String(mediaPreviewError)}
               program={currentProgram} merchantName={merchantName}
+              location={currentStore} loadPlaceDetails={id=>call('/v1/merchant/places/'+encodeURIComponent(id),token)}
               headline={headline} message={message}
               mediaUrl={displayedMediaUrl} mediaType={mediaType}
               mediaPending={uploadPending}
@@ -382,7 +384,8 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
         onReopen={canManage?reopenForEditing:undefined}
         onRepublish={canManage?republishCampaign:undefined}
         onArchive={canManage?archiveCampaign:undefined}
-        onRestore={canManage?restoreCampaign:undefined}/>}
+        onRestore={canManage?restoreCampaign:undefined}
+        onLoadPlace={id=>call('/v1/merchant/places/'+encodeURIComponent(id),token)}/>}
     </>:<>
       <p className="helper">After a completed sale, issue a one-time purchase code. Give it to the customer, who must select an owned receipt in Pruvs. The claim still requires your approval before any stamps are credited. This pilot does not verify the fiscal transaction with a POS.</p>
       <form className="promo-form" onSubmit={e=>{e.preventDefault();submit(async()=>{const value=Math.round(Number(amount)*100);if(!Number.isSafeInteger(value)||value<=0)throw new Error('Enter a valid amount.');const result=await call('/v1/merchant/pilot/purchases/issue',token,{program_id:programId,amount_minor:value});setCode({...result,program_id:programId});setNotice('Code created for completed checkout. It expires after 30 minutes.')})}}>
