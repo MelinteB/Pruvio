@@ -45,10 +45,11 @@ jobs:
         working-directory: backend/frontend
         run: |
           npm ci --no-audit --no-fund
-          # The pre-existing release-update.test.jsx contains contradictory
-          # v7.1.62 expectations. Keep the hotfix gate focused on the loyalty
-          # tests without changing unrelated release-banner behavior.
-          npx vitest run src/rewards-claims-v7154.test.jsx src/rewards-pilot-v7156.test.jsx src/rewards-resilience-v7152.test.jsx
+          # Older Rewards tests assert the pre-v7.1.59 Saved receipts flow;
+          # the current customer flow is My wallet -> campaign receipts.
+          # The current-version test covers QR grouping, leave warning and
+          # fail-closed receipt status without changing unrelated legacy tests.
+          npx vitest run src/rewards-package-v7162.test.jsx
           npm run build
       - name: Build Business merchant interface
         working-directory: backend/business_frontend
