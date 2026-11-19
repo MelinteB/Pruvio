@@ -56,7 +56,7 @@ def insert_receipts(db, merchant, staff, program, count=3):
         db.add(ReceiptEvidence(
             claim_id=claim.id, merchant_id=merchant.id, merchant_label='Coffee test merchant',
             receipt_date='2026-11-19',
-            image_jpeg=b'\\xff\\xd8\\xff'+b'x'*500+b'\\xff\\xd9',
+            image_jpeg=b'\xff\xd8\xff'+b'x'*500+b'\xff\xd9',
             image_sha256='a'*64
         ))
         unlocked_at=now-timedelta(minutes=2)
