@@ -7,12 +7,12 @@ import re
 from datetime import timedelta
 from fastapi import APIRouter,Depends,HTTPException
 from pydantic import BaseModel,Field
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from .db import get_db
 from .config import get_settings
-from .models import Program,Membership,ReceiptClaim,Store,Staff,utcnow
+from .models import Program,Membership,ReceiptClaim,Reward,Store,Staff,utcnow
 from .models_v06 import ReceiptEvidence
 from .models_v12 import CustomerClaimCode
 from .pilot_v05 import pilot_enabled,aware
@@ -91,6 +91,16 @@ def create_customer_code(payload:CustomerClaimIn,consumer_id:str=Depends(custome
         code.unlocked_by_staff=None;code.unlocked_at=None
         db.commit()
         return {'claim_id':existing.id,'status':'pending','expires_at':expiry.isoformat(),'rotated':True}
+    pending_count=db.scalar(select(func.count(ReceiptClaim.id)).where(
+        ReceiptClaim.consumer_id==consumer_id,ReceiptClaim.program_id==p.id,
+        ReceiptClaim.status=='pending')) or 0
+    if pending_count+member.stamps>=p.stamps_required:
+        raise HTTPException(409,'All required receipts are linked. Merchant package review must finish before adding more.')
+    awaiting_reward=db.scalar(select(Reward.id).where(
+        Reward.consumer_id==consumer_id,Reward.program_id==p.id,
+        Reward.status.in_(('available','reserved'))).limit(1))
+    if awaiting_reward:
+        raise HTTPException(409,'Redeem the existing voucher before beginning another receipt package')
     claim=ReceiptClaim(merchant_id=p.merchant_id,program_id=p.id,consumer_id=consumer_id,
                        external_receipt_id=rid,amount_minor=amount,source_system='pruvs',status='pending')
     try:
