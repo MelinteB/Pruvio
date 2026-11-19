@@ -4,10 +4,10 @@ Prepared November 19, 2026. The release is staging-only; production main is unch
 ## Implemented
 - Loyalty: redeemed voucher closes its membership only when no stamps, pending receipts or unredeemed rewards remain. The old voucher and reconciliation ledger remain immutable. Join starts a new cycle with zero stamps.
 - Historical stale memberships: one-time manual reconciliation script (dry-run default), requires staging backup, before customers rejoin; NEVER automatically delete other entitlements.
-- Campaigns: Direct republish paused/expired offers with new start and expiry, correct tenant/role guards, filtered public Core feed, no-store caching and focus refresh.
+- Campaigns: Direct republish of paused or expired offers, with matching Business and Core visibility rules. Core Home and Rewards show live promotions in carousels. Rewards displays one card per campaign and reserves the regular offer list for other loyalty programs.
 - Core: verified receipt stamp request moved into My wallet; Saved receipts remains browse-only, reward QR available after approvals and merchant checkout verification.
 - Places: authenticated merchant Google Places New text search, optional store-to-place ID link, Google review/rating lookup on demand with attribution and Google/Apple/Waze directions.
-- Language: EN/RO toggle and language-aware campaign briefs/output; currently primary merchant controls translated, full UI translation audit outstanding.
+- Language: EN/RO labels and helper text in campaign management, program setup, and location management. Campaign content keeps its authoring language.
 - Design: improved responsive photographic creative, editorial gradient/text and matched Core/Business card typography.
 
 ## Preconditions
@@ -20,10 +20,11 @@ Prepared November 19, 2026. The release is staging-only; production main is unch
 7. Keep existing R2 campaign media and provider AI settings; Google billing and AI generation may incur charges.
 
 ## Windows PowerShell verification and deployment review
+```powershell
 Set-Location 'C:\Users\bogdan.melinte\Personal\Project\Pruvs'
 git fetch origin
-git switch release/pruvs-core-v7159-scan-to-loyalty-demo-20261117
-git pull --ff-only origin release/pruvs-core-v7159-scan-to-loyalty-demo-20261117
+git switch fix/rejoin-after-redeemed-v7162-b0618-20261119
+git pull --ff-only origin fix/rejoin-after-redeemed-v7162-b0618-20261119
 git status --short
 Set-Location backend
 if (-not (Test-Path .pvenv\Scripts\python.exe)) { py -3 -m venv .pvenv }
@@ -50,7 +51,16 @@ Pop-Location
 Set-Location ..
 git diff --check
 git status --short
-Do not use git add . or stage backups/secrets. The verified GitHub PR already handles selective files. For any later patch, git add -- exact/path1 exact/path2; git diff --cached --check; git diff --cached; git commit -m 'fix(staging): ...'; git push origin branch.
+```
+
+## Test the campaign cycle on staging
+
+1. In Business, select RO and open **Locations** and **Campaign Library**. Check the form labels, descriptions, search, and status text in Romanian. Merchant-authored campaign copy uses the language in which it was saved.
+2. Add a test location. With Google Places enabled, search for a business, choose the result, confirm the store information, and save. Verify the linked result appears after refreshing. With Places unavailable, enter the store name, address, latitude, and longitude manually and save.
+3. Publish a loyalty program for the test location. Create a test campaign for that program and preview it. It should appear in Business as a draft until you select **Publish**.
+4. In Core, sign in as a separate test customer. Check Home and Rewards. The published campaign should appear once per view. To test carousel navigation, publish a second campaign for a different test program, move between cards with the controls, and check that every campaign remains reachable at a narrow viewport.
+5. Join the first campaign and check it in **My wallet**. Add the program's required number of eligible test receipts and generate each receipt's QR. In Business, open each QR, review the evidence, and approve the complete package. Check the voucher in Core, complete the merchant redemption, and verify the customer can start a fresh cycle with zero stamps.
+6. Unpublish the test campaign in Business. Return to Core and check that the campaign disappears after refresh. The underlying published program can still be available as a loyalty offer. In Business, republish the campaign and verify its new end date. Unpublish and archive the test campaign when finished. This preserves memberships and receipt and voucher history.
 
 ## Acceptance matrix
 - Campaign: draft invisible, publish visible, unpublish absent after Core tab focus, republish visible with new date. Paused/expired/private programs/locations and cross-merchant access blocked.

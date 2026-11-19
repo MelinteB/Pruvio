@@ -12,10 +12,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from .db import get_db
 from .config import get_settings
-from .models import Program,Membership,ReceiptClaim,Reward,Store,Staff,utcnow
+from .models import Merchant,Program,Membership,ReceiptClaim,Reward,Store,Staff,utcnow
 from .models_v06 import ReceiptEvidence
 from .models_v12 import CustomerClaimCode
-from .pilot_v05 import pilot_enabled,aware
+from .pilot_v05 import pilot_enabled,aware,program_is_discoverable
 from .pilot_v06 import EvidenceIn,safe_image
 from .security import merchant_actor,customer_actor,decode
 router=APIRouter(tags=['Pruvs v1.2 customer claim codes'])
@@ -36,6 +36,12 @@ class CustomerClaimIn(BaseModel):
 class CodeLookup(BaseModel):
     code:str=Field(min_length=24,max_length=40)
 
+def require_active_program_location(db, program):
+    merchant = db.get(Merchant, program.merchant_id)
+    store = db.get(Store, program.store_id)
+    if not program_is_discoverable(program, merchant, store):
+        raise HTTPException(409, 'Store or merchant unavailable')
+
 @router.get('/v1/customer/pilot/programs/{program_id}/receipt-eligibility-v12')
 def eligible(program_id:str,consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
     ready()
@@ -44,8 +50,7 @@ def eligible(program_id:str,consumer_id:str=Depends(customer_actor),db:Session=D
         raise HTTPException(404,'Program not available for receipt-code pilot')
     member=db.scalar(select(Membership).where(Membership.program_id==p.id,Membership.consumer_id==consumer_id))
     if not member:raise HTTPException(403,'Join the loyalty program before claiming')
-    store=db.get(Store,p.store_id)
-    if not store or not store.active:raise HTTPException(409,'Store unavailable')
+    require_active_program_location(db,p)
     return {'store_id':p.store_id,'currency':p.currency,'min_purchase_minor':p.min_purchase_minor}
 
 @router.post('/v1/customer/pilot/claims/v12/customer-code',status_code=201)
@@ -54,8 +59,10 @@ def create_customer_code(payload:CustomerClaimIn,consumer_id:str=Depends(custome
     p=db.get(Program,payload.program_id)
     if not p or p.status!='published' or not merchant_pilot_allowed(db,p.merchant_id):
         raise HTTPException(404,'Program unavailable')
-    member=db.scalar(select(Membership).where(Membership.program_id==p.id,Membership.consumer_id==consumer_id))
-    if not member:raise HTTPException(403,'Join the loyalty program first')
+    membership_id=db.scalar(select(Membership.id).where(
+        Membership.program_id==p.id,Membership.consumer_id==consumer_id))
+    if not membership_id:raise HTTPException(403,'Join the loyalty program first')
+    require_active_program_location(db,p)
     if payload.evidence.consent is not True:raise HTTPException(422,'Explicit receipt-sharing consent required')
     proof=decode(payload.receipt_proof,get_settings().pruvs_bridge_secret,
                  'pruvs-core','pruvs-business','receipt_proof_v06')
@@ -91,6 +98,11 @@ def create_customer_code(payload:CustomerClaimIn,consumer_id:str=Depends(custome
         code.unlocked_by_staff=None;code.unlocked_at=None
         db.commit()
         return {'claim_id':existing.id,'status':'pending','expires_at':expiry.isoformat(),'rotated':True}
+    # Serialize new receipts with other submissions, package approvals and
+    # leaving. Recheck the same membership so an in-flight request cannot add
+    # a receipt to a cycle the customer has already left or restarted.
+    member=db.scalar(select(Membership).where(Membership.id==membership_id).with_for_update())
+    if not member:raise HTTPException(409,'Loyalty membership changed. Refresh before submitting this receipt.')
     pending_count=db.scalar(select(func.count(ReceiptClaim.id)).where(
         ReceiptClaim.consumer_id==consumer_id,ReceiptClaim.program_id==p.id,
         ReceiptClaim.status=='pending')) or 0

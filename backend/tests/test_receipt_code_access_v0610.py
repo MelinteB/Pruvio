@@ -81,6 +81,7 @@ def test_changed_receipt_evidence_cannot_be_reissued(monkeypatch):
     code_row = SimpleNamespace(code_hash='oldhash',expires_at=NOW,
                                unlocked_by_staff='s1',unlocked_at=NOW)
     merchant = SimpleNamespace(id='m1', status='active')
+    store = SimpleNamespace(id='store1', merchant_id='m1', active=True)
     program = SimpleNamespace(id='p'*36, merchant_id='m1',status='published',
                               store_id='store1',currency='RON',min_purchase_minor=0)
     class FakeDB:
@@ -89,6 +90,8 @@ def test_changed_receipt_evidence_cannot_be_reissued(monkeypatch):
             self.commits=0
         def get(self, model, key):
             if model is pilot_v12.Program: return program
+            if model is pilot_v12.Merchant: return merchant
+            if model is pilot_v12.Store: return store
             if model is ReceiptEvidence: return old_evidence
             if model is CustomerClaimCode: return code_row
             raise AssertionError(f'unexpected table {model}')

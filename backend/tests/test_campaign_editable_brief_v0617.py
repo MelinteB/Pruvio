@@ -43,7 +43,8 @@ def test_studio_exposes_editable_predefined_text_before_generation():
     assert src.index('id="pruvs-campaign-brief"')<src.index('onClick={generateDraft}')
     assert src.index('Campaign copy · review')<src.index('onClick={generateAIArtwork}')
     assert 'Program conditions (locked)' in src
-    assert 'manual URL' in src or 'manual URL is needed' in src
+    assert '/v1/merchant/promotions/media/upload' in src
+    assert 'setMediaUrl(data.media_url)' in src
 
 
 def test_merchant_copy_validation_without_publishing_automatically():

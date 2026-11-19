@@ -11,8 +11,8 @@ from urllib.parse import urlsplit
 from datetime import timedelta, timezone
 from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
-from sqlalchemy import select
+from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from .config import get_settings
@@ -31,6 +31,14 @@ def owned_program(db, staff, program_id):
     p=db.get(Program,program_id)
     if not p or p.merchant_id != staff.merchant_id:raise HTTPException(404,'Program not found')
     return p
+
+def program_is_discoverable(program, merchant, store):
+    return bool(
+        program and program.status == 'published'
+        and merchant and merchant.status == 'active'
+        and store and store.active
+        and merchant.id == program.merchant_id == store.merchant_id
+    )
 
 def aware(dt):
     if dt is None:return None
@@ -61,13 +69,21 @@ def _promo_google_place_id(db,store):
     return linked_place_id(db,store.id)
 
 
-def promo_json(p,db):
+def promo_json(p,db,*,now=None):
+    now=now or utcnow()
     program=db.get(Program,p.program_id)
+    if program and program.merchant_id != p.merchant_id:
+        program=None
     store=db.get(Store,program.store_id) if program else None
+    if store and store.merchant_id != p.merchant_id:
+        store=None
     merchant=db.get(Merchant,p.merchant_id)
+    created=aware(p.created_at)
+    published=aware(p.published_at)
+    expires=aware(p.expires_at)
     return {'id':p.id,
-            'created_at':p.created_at.isoformat() if getattr(p,'created_at',None) else None,
-            'published_at':p.published_at.isoformat() if getattr(p,'published_at',None) else None,
+            'created_at':created.isoformat() if created else None,
+            'published_at':published.isoformat() if published else None,
             'merchant_name':merchant.name if merchant else '',
             'store_latitude':store.latitude if store else None,
             'store_longitude':store.longitude if store else None,
@@ -79,8 +95,11 @@ def promo_json(p,db):
             'reward_minor':program.reward_minor if program else 0,
             'currency':program.currency if program else 'RON',
             'headline':p.headline,'message':p.message,'status':p.status,
+            'is_live':bool(p.status=='published' and expires and expires>now
+                           and (published is None or published<=now)
+                           and program_is_discoverable(program,merchant,store)),
             'media_url':p.media_url,'media_type':p.media_type,'media_alt':p.media_alt,
-            'expires_at':p.expires_at.isoformat() if p.expires_at else None,
+            'expires_at':expires.isoformat() if expires else None,
             'duration_days':p.duration_days}
 
 class PromotionIn(BaseModel):
@@ -92,12 +111,21 @@ class PromotionIn(BaseModel):
     media_type: str|None = Field(default=None,max_length=40)
     media_alt: str|None = Field(default=None,max_length=160)
 
+    @field_validator('headline','message',mode='before')
+    @classmethod
+    def trim_campaign_copy(cls,value):
+        return value.strip() if isinstance(value,str) else value
+
 def campaign_media(payload):
     if not payload.media_url:return None,None,None
-    uri=urlsplit(payload.media_url)
+    try:
+        uri=urlsplit(payload.media_url)
+        port=uri.port
+    except ValueError:
+        raise HTTPException(422,'Campaign asset must use an approved HTTPS media host') from None
     allowed={h.strip().lower() for h in os.getenv('PRUVS_CAMPAIGN_MEDIA_HOSTS','').split(',') if h.strip()}
     if (uri.scheme!='https' or uri.hostname not in allowed or uri.username or uri.password
-            or uri.port not in (None,443) or not allowed or not uri.path or uri.fragment):
+            or port not in (None,443) or not allowed or not uri.path or uri.fragment):
         raise HTTPException(422,'Campaign asset must use an approved HTTPS media host')
     if payload.media_type not in ('image/jpeg','image/png','image/webp','image/gif','video/mp4','video/webm'):
         raise HTTPException(422,'Campaign image, GIF or video type is unsupported')
@@ -108,7 +136,8 @@ def merchant_promotions(staff:Staff=Depends(merchant_actor),db:Session=Depends(g
     campaign_schema_ready(db)
     rows=db.scalars(select(Promotion).where(Promotion.merchant_id==staff.merchant_id)
                     .order_by(Promotion.created_at.desc()).limit(100)).all()
-    return [promo_json(p,db) for p in rows]
+    now=utcnow()
+    return [promo_json(p,db,now=now) for p in rows]
 
 @router.post('/v1/merchant/promotions',status_code=201)
 def merchant_create_promo(payload:PromotionIn,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
@@ -118,7 +147,7 @@ def merchant_create_promo(payload:PromotionIn,staff:Staff=Depends(merchant_actor
     if program.status!='published':raise HTTPException(409,'Publish the loyalty program first.')
     media_url,media_type,media_alt=campaign_media(payload)
     promo=Promotion(merchant_id=staff.merchant_id,program_id=program.id,
-                    headline=payload.headline.strip(),message=payload.message.strip(),
+                    headline=payload.headline,message=payload.message,
                     media_url=media_url,media_type=media_type,media_alt=media_alt,
                     status='draft',duration_days=payload.duration_days)
     db.add(promo);db.commit();db.refresh(promo)
@@ -130,17 +159,15 @@ def update_promotion_draft(promotion_id:str,payload:PromotionIn,
     """Allow editing only merchant-owned, unpublished drafts."""
     campaign_schema_ready(db)
     can_manage(staff)
-    promo=db.get(Promotion,promotion_id)
-    if not promo or promo.merchant_id!=staff.merchant_id:
-        raise HTTPException(404,'Promotion not found')
+    promo=owned_campaign(db,staff,promotion_id)
     if promo.status!='draft':
         raise HTTPException(409,'Only unpublished drafts may be edited; copy the offer instead.')
     program=owned_program(db,staff,promo.program_id)
     if program.status!='published' or payload.program_id!=promo.program_id:
         raise HTTPException(409,'Keep the original published loyalty program for this draft.')
     media_url,media_type,media_alt=campaign_media(payload)
-    promo.headline=payload.headline.strip()
-    promo.message=payload.message.strip()
+    promo.headline=payload.headline
+    promo.message=payload.message
     promo.duration_days=payload.duration_days
     promo.media_url=media_url
     promo.media_type=media_type
@@ -153,13 +180,12 @@ def update_promotion_draft(promotion_id:str,payload:PromotionIn,
 def publish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     campaign_schema_ready(db)
     can_manage(staff)
-    p=db.get(Promotion,promotion_id)
-    if not p or p.merchant_id!=staff.merchant_id:raise HTTPException(404,'Promotion not found')
-    program=owned_program(db,staff,p.program_id)
-    if program.status!='published':raise HTTPException(409,'Program is not published')
+    p=owned_campaign(db,staff,promotion_id)
     if p.status!='draft':raise HTTPException(409,'Only drafts may be published')
-    p.status='published';p.published_at=utcnow()
-    p.expires_at=utcnow()+timedelta(days=p.duration_days)
+    require_publishable_campaign(db,staff,p)
+    now=utcnow()
+    p.status='published';p.published_at=now
+    p.expires_at=now+timedelta(days=p.duration_days)
     db.commit();return promo_json(p,db)
 
 @router.post('/v1/merchant/promotions/{promotion_id}/republish')
@@ -169,12 +195,11 @@ def republish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),
     campaign_schema_ready(db)
     can_manage(staff)
     p=owned_campaign(db,staff,promotion_id)
-    can_reopen_program(db,staff,p)
-    expired=(p.status=='published' and p.expires_at is not None
-             and aware(p.expires_at)<=utcnow())
-    if p.status!='paused' and not expired:
-        raise HTTPException(409,'Only paused or expired promotions may be republished.')
     now=utcnow()
+    ended=(p.status=='published' and (p.expires_at is None or aware(p.expires_at)<=now))
+    if p.status!='paused' and not ended:
+        raise HTTPException(409,'Only paused or expired promotions may be republished.')
+    require_publishable_campaign(db,staff,p)
     p.status='published'
     p.published_at=now
     p.expires_at=now+timedelta(days=p.duration_days)
@@ -186,22 +211,35 @@ def republish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),
 def unpublish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     campaign_schema_ready(db)
     can_manage(staff)
-    p=db.get(Promotion,promotion_id)
-    if not p or p.merchant_id!=staff.merchant_id:raise HTTPException(404,'Promotion not found')
+    p=owned_campaign(db,staff,promotion_id)
     if p.status!='published':raise HTTPException(409,'Only live promotions may be unpublished')
     p.status='paused';db.commit();return promo_json(p,db)
 
 def owned_campaign(db:Session,staff:Staff,promotion_id:str)->Promotion:
-    promotion=db.get(Promotion,promotion_id)
-    if not promotion or promotion.merchant_id!=staff.merchant_id:
+    promotion=db.scalar(
+        select(Promotion)
+        .where(Promotion.id==promotion_id, Promotion.merchant_id==staff.merchant_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if promotion is None:
         raise HTTPException(404,'Promotion not found')
     return promotion
 
 
-def can_reopen_program(db:Session,staff:Staff,promotion:Promotion)->None:
+def can_reopen_program(db:Session,staff:Staff,promotion:Promotion)->Program:
     program=owned_program(db,staff,promotion.program_id)
     if program.status!='published':
         raise HTTPException(409,'The linked loyalty program must be published first.')
+    return program
+
+
+def require_publishable_campaign(db:Session,staff:Staff,promotion:Promotion)->None:
+    program=can_reopen_program(db,staff,promotion)
+    merchant=db.get(Merchant,program.merchant_id)
+    store=db.get(Store,program.store_id)
+    if not program_is_discoverable(program,merchant,store):
+        raise HTTPException(409,'An active merchant and location are required to publish a campaign.')
 
 
 @router.post('/v1/merchant/promotions/{promotion_id}/reopen')
@@ -265,14 +303,17 @@ def public_promotions(limit:int=Query(12,ge=1,le=30),db:Session=Depends(get_db))
         .join(Merchant,Promotion.merchant_id==Merchant.id)
         .join(Store,Program.store_id==Store.id)
         .where(Promotion.status=='published',
+               or_(Promotion.published_at.is_(None),Promotion.published_at<=now),
                Promotion.expires_at.is_not(None),
                Promotion.expires_at>now,
                Program.status=='published',
-               Merchant.status=='active',Store.active.is_(True))
+               Program.merchant_id==Merchant.id,
+               Merchant.status=='active',
+               Store.merchant_id==Merchant.id,Store.active.is_(True))
         .order_by(Promotion.published_at.desc(),Promotion.id.desc())
         .limit(limit)
     ).all()
-    return [promo_json(p,db) for p in rows]
+    return [promo_json(p,db,now=now) for p in rows]
 
 class IssuePurchaseIn(BaseModel):
     program_id: str

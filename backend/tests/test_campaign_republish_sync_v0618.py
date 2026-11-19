@@ -1,13 +1,14 @@
 """Republish / customer-discovery synchronization regression suite."""
-from datetime import timedelta
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from business.db import Base
 from business.models import Merchant,Store,Program,Promotion
-from business import pilot_v05
+from business import main, pilot_v05
 
 @pytest.fixture
 def data():
@@ -46,7 +47,8 @@ def test_paused_campaign_is_removed_and_can_be_republished_without_copy(data):
     result=pilot_v05.republish_promotion(pid,staff=staff,db=db)
     assert result['status']=='published'
     assert result['expires_at'] is not None
-    assert pid in ids(db)
+    assert pilot_v05.aware(db.get(Promotion,pid).published_at)>pilot_v05.aware(before)
+    assert ids(db)==[pid]
     with pytest.raises(HTTPException) as e:
         pilot_v05.republish_promotion(pid,staff=staff,db=db)
     assert e.value.status_code==409
@@ -70,8 +72,88 @@ def test_inactive_store_merchant_and_program_not_discoverable(data):
         old=getattr(target,column)
         setattr(target,column,val);db.commit()
         assert pid not in ids(db)
+        assert pilot_v05.merchant_promotions(staff=staff,db=db)[0]['is_live'] is False
+        assert main.discover(latitude=None,longitude=None,radius_km=10,db=db)==[]
+        with pytest.raises(HTTPException) as exc:
+            main.join_program(program.id,consumer_id='old-link-user',db=db)
+        assert exc.value.status_code==404
         setattr(target,column,old);db.commit()
         assert pid in ids(db)
+        assert pilot_v05.merchant_promotions(staff=staff,db=db)[0]['is_live'] is True
+
+def test_unavailable_location_blocks_publish_and_republish(data):
+    db,staff,merchant,store,program=data
+    live=publish(db,staff,program)
+    pilot_v05.unpublish_promotion(live,staff=staff,db=db)
+    draft=pilot_v05.merchant_create_promo(pilot_v05.PromotionIn(
+        program_id=program.id,headline='New coffee offer',
+        message='Get a reward after three qualifying visits.'),staff=staff,db=db)
+    store.active=False
+    db.commit()
+    for transition, promotion_id in ((pilot_v05.publish_promotion,draft['id']),
+                                     (pilot_v05.republish_promotion,live)):
+        with pytest.raises(HTTPException) as exc:
+            transition(promotion_id,staff=staff,db=db)
+        assert exc.value.status_code==409
+        assert 'active merchant and location' in exc.value.detail
+    assert ids(db)==[]
+
+def test_legacy_cross_merchant_location_is_hidden_even_with_active_rows(data):
+    db,staff,merchant,store,program=data
+    live=publish(db,staff,program)
+    other=Merchant(name='Other cafe',status='active')
+    db.add(other)
+    db.flush()
+    foreign_store=Store(merchant_id=other.id,name='Other private location',address='Other street',
+                        latitude=44.4,longitude=26.1,active=True)
+    db.add(foreign_store)
+    db.flush()
+    program.store_id=foreign_store.id
+    db.commit()
+    assert live not in ids(db)
+    merchant_campaign=pilot_v05.merchant_promotions(staff=staff,db=db)[0]
+    assert merchant_campaign['is_live'] is False
+    assert merchant_campaign['store_name']==''
+    assert main.discover(latitude=None,longitude=None,radius_km=10,db=db)==[]
+    with pytest.raises(HTTPException) as exc:
+        main.join_program(program.id,consumer_id='old-link-user',db=db)
+    assert exc.value.status_code==404
+
+def test_legacy_published_campaign_without_expiry_can_republish(data):
+    db,staff,merchant,store,program=data
+    live=publish(db,staff,program)
+    db.get(Promotion,live).expires_at=None
+    db.commit()
+    assert ids(db)==[]
+    result=pilot_v05.republish_promotion(live,staff=staff,db=db)
+    assert result['id']==live
+    assert result['is_live'] is True
+    assert ids(db)==[live]
+
+def test_public_visibility_uses_dates_with_timezone_and_hides_future_starts(data):
+    db,staff,merchant,store,program=data
+    live=publish(db,staff,program)
+    result=pilot_v05.merchant_promotions(staff=staff,db=db)[0]
+    assert datetime.fromisoformat(result['published_at']).utcoffset()==timedelta(0)
+    assert datetime.fromisoformat(result['expires_at']).utcoffset()==timedelta(0)
+    db.get(Promotion,live).published_at=pilot_v05.utcnow()+timedelta(hours=1)
+    db.commit()
+    assert ids(db)==[]
+    assert pilot_v05.merchant_promotions(staff=staff,db=db)[0]['is_live'] is False
+
+def test_campaign_copy_and_media_validation_returns_controlled_errors(data,monkeypatch):
+    db,staff,merchant,store,program=data
+    with pytest.raises(ValidationError):
+        pilot_v05.PromotionIn(program_id=program.id,headline='     ',
+                              message='This is a valid campaign description.')
+    monkeypatch.setenv('PRUVS_CAMPAIGN_MEDIA_HOSTS','assets.example.com')
+    invalid=pilot_v05.PromotionIn(program_id=program.id,headline='Coffee loyalty offer',
+                                 message='This is a valid campaign description.',
+                                 media_url='https://assets.example.com:invalid/campaign.png',
+                                 media_type='image/png')
+    with pytest.raises(HTTPException) as exc:
+        pilot_v05.merchant_create_promo(invalid,staff=staff,db=db)
+    assert exc.value.status_code==422
 
 def test_republish_is_role_tenant_and_program_protected(data):
     db,staff,merchant,store,program=data
@@ -108,4 +190,4 @@ def test_business_ux_exposes_republish_to_merchant():
     editor=(root/'business_frontend/src/PromotionConsole.jsx').read_text()
     assert "onRepublish={canManage?republishCampaign:undefined}" in editor
     assert "manage('republish'" in editor
-    assert library.count('onRepublish?.(p)')==2
+    assert library.count('onRepublish?.(p)')>=2

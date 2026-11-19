@@ -1,6 +1,6 @@
 import React from 'react';
 import {afterEach,describe,expect,it,vi} from 'vitest';
-import {cleanup,fireEvent,render,screen} from '@testing-library/react';
+import {cleanup,fireEvent,render,screen,within} from '@testing-library/react';
 import {MemoryRouter} from 'react-router-dom';
 import Rewards from './Rewards';
 import {request} from './api';
@@ -14,11 +14,6 @@ vi.mock('./common',()=>({
   Message:({children})=><div role="alert">{children}</div>,
   Spinner:()=> <span>Loading</span>,
   useApp:()=>({user:{id:6}}),
-}));
-vi.mock('./CustomerReceiptCode',()=>({
-  default:({existingClaim})=><div data-testid="claim-flow">
-    Claim: {existingClaim?.status||'new'}
-  </div>,
 }));
 vi.mock('./ReceiptSubmission',()=>({default:()=>null}));
 afterEach(()=>{cleanup();vi.resetAllMocks();});
@@ -40,18 +35,18 @@ function configure(claimResponse){
       case_id:9,merchant_name:'Bistro Central',receipt_total:39.50,currency:'RON',
       receipt_ref:receipt,
     }]};
-    if(path==='/loyalty/memberships')return {memberships:[{
+    if(path==='/loyalty/memberships'||path==='/loyalty/wallet')return {rewards:[],memberships:[{
       program_id:program,stamps:2,title:'Coffee Club',stamps_required:5,status:'published',
     }]};
     if(path==='/loyalty/offers')return [offer];
-    if(path==='/loyalty/promotions')return [];
+    if(path==='/loyalty/promotions'||path==='/loyalty/redemptions')return [];
     if(path==='/loyalty/claims')return claimResponse();
     throw Error('Unexpected API call '+path);
   });
 }
 function mount(){
   render(<MemoryRouter><Rewards/></MemoryRouter>);
-  fireEvent.click(screen.getByRole('button',{name:'Saved receipts'}));
+  fireEvent.click(screen.getByRole('button',{name:'My wallet'}));
 }
 
 describe('Customer receipt verification v7.1.54',()=>{
@@ -60,15 +55,23 @@ describe('Customer receipt verification v7.1.54',()=>{
     mount();
     expect(await screen.findByText('Bistro Central')).toBeTruthy();
     expect(await screen.findByText(/Existing claims have not been confirmed as missing/)).toBeTruthy();
-    expect(screen.queryByTestId('claim-flow')).toBeNull();
+    expect(screen.getByRole('link',{name:'View receipt'}).getAttribute('href')).toBe('/receipt/9');
+    expect(screen.getByRole('button',{name:'Earn a stamp — unavailable'}).disabled).toBe(true);
+    const campaign=within(screen.getByRole('region',{name:'Receipts for Coffee Club'}));
+    expect(campaign.getByText(/QR creation is unavailable/)).toBeTruthy();
+    expect(campaign.queryByRole('button',{name:/Earn a stamp|verification QR/})).toBeNull();
   });
-  it('passes a pending claim to the code component, without pretending it is new',async()=>{
+  it('shows a pending receipt and offers QR replacement instead of a fresh submission',async()=>{
     configure(()=>[{
       claim_id:'claim1',receipt_ref:receipt,program_id:program,
       status:'pending',amount_minor:3950,
     }]);
     mount();
-    expect(await screen.findByTestId('claim-flow')).toBeTruthy();
-    expect(screen.getByTestId('claim-flow').textContent).toContain('pending');
+    const campaign=within(await screen.findByRole('region',{name:'Receipts for Coffee Club'}));
+    expect(campaign.getByText('Awaiting package review')).toBeTruthy();
+    expect(campaign.getByRole('link',{name:'View saved receipt'}).getAttribute('href')).toBe('/receipt/9');
+    expect(campaign.getByText(/invalidates the previous code/)).toBeTruthy();
+    expect(campaign.getByRole('button',{name:'Create new verification QR'})).toBeTruthy();
+    expect(campaign.queryByRole('button',{name:'Earn a stamp'})).toBeNull();
   });
 });

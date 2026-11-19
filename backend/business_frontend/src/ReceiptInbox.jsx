@@ -1,5 +1,6 @@
 import React,{useEffect,useState} from 'react';
 import {ReceiptText,ShieldCheck,Eye,CheckCircle2,X,RefreshCw,AlertCircle} from 'lucide-react';
+import {useBusinessLanguage} from './i18n.jsx';
 import './receipt-inbox.css';
 import './receipt-packages-v0618.css';
 const API=(import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
@@ -11,6 +12,7 @@ async function call(path,token,method='GET',body=null){
 }
 function cash(n){return (Number(n||0)/100).toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})+' RON'}
 export default function ReceiptInbox({token,onChange,onOpenLoyalty}){
+ const {t}=useBusinessLanguage();
  const [readiness,setReadiness]=useState(null);
  const [packages,setPackages]=useState([]);
  const [claims,setClaims]=useState([]),[review,setReview]=useState(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[reason,setReason]=useState(''),[code,setCode]=useState('');
@@ -59,7 +61,7 @@ export default function ReceiptInbox({token,onChange,onOpenLoyalty}){
      {(readiness.blocked_by||[]).includes('merchant_allowlisted')&&onOpenLoyalty&&
        <button className="btn outline" type="button" onClick={onOpenLoyalty}>Open Loyalty programs</button>}
    </div>}
-   <p className="helper">Ask the customer for their one-time receipt code. Enter it to unlock the purchase preview.</p>
+   <p className="helper">{t('Ask the customer to open their joined campaign in My Wallet and show the one-time code for each submitted receipt.')}</p>
    <form className="receipt-inbox-code-lookup" onSubmit={findCode}>
      <label>Customer verification code<input value={code} autoComplete="off" placeholder="PRV-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX" onChange={e=>setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g,''))}/></label>
      <button type="submit" className="btn primary" disabled={busy||readiness?.receipt_review_ready===false||code.replace(/-/g,'').length<24}>Find purchase</button>
@@ -96,7 +98,7 @@ export default function ReceiptInbox({token,onChange,onOpenLoyalty}){
          : c.status==='pending'
            ? <small role="status">This receipt is not available yet. Refresh and try again.</small>
            : null}
-   </div>)}</div>:<p className="helper">No purchases to verify yet. Customers can share a receipt from Rewards → Saved receipts.</p>}
+   </div>)}</div>:<p className="helper">{t('No purchases to verify yet. Customers can submit receipts from their joined campaign in My Wallet.')}</p>}
    {review&&<div className="receipt-inbox-overlay" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)setReview(null)}}>
       <div className="receipt-inbox-dialog" role="dialog" aria-modal="true" aria-label="Customer receipt review">
         <header><div><small>MERCHANT VERIFICATION · CONSENTED VIEW</small><h2>Review purchase</h2></div><button type="button" disabled={busy} aria-label="Close receipt" onClick={()=>setReview(null)}><X size={19}/></button></header>

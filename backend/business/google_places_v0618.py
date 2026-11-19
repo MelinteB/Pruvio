@@ -102,6 +102,11 @@ def linked_place_id(db,store_id):
     return db.scalar(select(MerchantStorePlace.place_id).where(
         MerchantStorePlace.store_id==store_id))
 
+def validate_store_place(db, place_id):
+    if not link_schema_ready(db):
+        raise HTTPException(503, 'Place-link database migration b12 is required.')
+    return lookup(place_id)
+
 @router.get('/v1/merchant/places/readiness')
 def places_readiness(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     return {'places_search_enabled':bool(os.getenv('PRUVS_GOOGLE_PLACES_API_KEY','').strip()),
@@ -112,8 +117,11 @@ def merchant_place_search(q:str=Query(min_length=3,max_length=120),
                           language:str=Query(default='en',pattern='^(en|ro)$'),
                           staff:Staff=Depends(merchant_actor)):
     can_manage(staff)
+    query = q.strip()
+    if len(query) < 3:
+        raise HTTPException(422, 'Enter at least three characters to search Google Maps.')
     data=_call('POST',GOOGLE_ORIGIN+'/places:searchText',
-       json_data={'textQuery':q.strip(),'languageCode':language,'pageSize':8},
+       json_data={'textQuery':query,'languageCode':language,'pageSize':8},
        mask=SEARCH_MASK)
     return JSONResponse(
        {'places':[row for p in data.get('places',[]) if (row:=normalized(p))]},
@@ -129,9 +137,7 @@ def link_merchant_place(store_id:str,payload:PlaceLinkRequest,
     store=db.get(Store,store_id)
     if not store or store.merchant_id!=staff.merchant_id:
         raise HTTPException(404,'Location not found.')
-    if not link_schema_ready(db):
-        raise HTTPException(503,'Place-link database migration b12 is required.')
-    item=lookup(payload.place_id)
+    item=validate_store_place(db, payload.place_id)
     row=db.get(MerchantStorePlace,store.id)
     if row:
         row.place_id=item['place_id']

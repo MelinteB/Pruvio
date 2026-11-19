@@ -139,7 +139,7 @@ def test_campaign_library_supports_status_filters_preview_and_inactive_actions()
     entry=(ROOT/'business_frontend/src/main.jsx').read_text()
     for word in ("Unpublished","Drafts","Paused","Live","Expired","Archived","All campaigns"):
         assert word in frontend
-    for action in ("Reopen draft","Restore draft","Unpublish","Publish","Archive","Preview"):
+    for action in ("Edit before publishing","Restore draft","Unpublish","Publish","Archive","Preview"):
         assert action in frontend
     assert "p.status==='published'&&p.expires_at" in frontend
     assert "canManage&&p.effectiveStatus" in frontend

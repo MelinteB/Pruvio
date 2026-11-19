@@ -5,6 +5,9 @@ import {CLIENT_RELEASE,isNewerRelease,shouldOfferUpdate,ReleaseUpdateBanner} fro
 
 const dismissedKey='pruvs:release-update:dismissed-v1';
 const reloadedKey='pruvs:release-update:reload-attempted-v1';
+const [major,minor,patch]=CLIENT_RELEASE.split('.').map(Number);
+const nextRelease=`${major}.${minor}.${patch+1}`;
+const laterRelease=`${major}.${minor}.${patch+2}`;
 function serve(version,status='ready'){
   globalThis.fetch=vi.fn(async()=>({ok:true,json:async()=>({version,status})}));
 }
@@ -20,7 +23,7 @@ describe('Core release update banner',()=>{
     expect(CLIENT_RELEASE).toBe('7.1.62');
     expect(isNewerRelease('7.1.62')).toBe(false);
     expect(isNewerRelease('7.1.58')).toBe(false);
-    expect(isNewerRelease('7.1.62')).toBe(true);
+    expect(isNewerRelease(nextRelease)).toBe(true);
     expect(isNewerRelease('7.2.0')).toBe(true);
     expect(isNewerRelease('7.1.invalid')).toBe(false);
   });
@@ -31,30 +34,30 @@ describe('Core release update banner',()=>{
     expect(screen.queryByRole('button',{name:'Reload'})).toBeNull();
   });
   it('allows dismissing a specific update across component remounts',async()=>{
-    serve('7.1.62');
+    serve(nextRelease);
     render(<ReleaseUpdateBanner/>);
     expect(await screen.findByText('A newer Pruvs version is ready.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button',{name:'Dismiss update notice'}));
     expect(screen.queryByRole('button',{name:'Reload'})).toBeNull();
-    expect(window.localStorage.getItem(dismissedKey)).toBe('7.1.62');
+    expect(window.localStorage.getItem(dismissedKey)).toBe(nextRelease);
     cleanup();
     render(<ReleaseUpdateBanner/>);
     await waitFor(()=>expect(fetch).toHaveBeenCalledTimes(2));
     expect(screen.queryByRole('button',{name:'Reload'})).toBeNull();
     cleanup();
     // Dismissal of one release must not hide a newer update.
-    serve('7.1.63');
+    serve(laterRelease);
     render(<ReleaseUpdateBanner/>);
     expect(await screen.findByText('A newer Pruvs version is ready.')).toBeTruthy();
   });
   it('does not repeat a reload prompt already attempted during this session',async()=>{
-    window.sessionStorage.setItem(reloadedKey,'7.1.62');
-    serve('7.1.62');
+    window.sessionStorage.setItem(reloadedKey,nextRelease);
+    serve(nextRelease);
     render(<ReleaseUpdateBanner/>);
     await waitFor(()=>expect(fetch).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole('button',{name:'Reload'})).toBeNull();
-    expect(shouldOfferUpdate({status:'ready',version:'7.1.62'},CLIENT_RELEASE,null,'7.1.62')).toBe(false);
-    expect(shouldOfferUpdate({status:'ready',version:'7.1.62'},CLIENT_RELEASE,null,'7.1.62')).toBe(true);
+    expect(shouldOfferUpdate({status:'ready',version:nextRelease},CLIENT_RELEASE,null,nextRelease)).toBe(false);
+    expect(shouldOfferUpdate({status:'ready',version:laterRelease},CLIENT_RELEASE,null,nextRelease)).toBe(true);
   });
   it('does not show a banner when server is not ready or version is invalid',()=>{
     expect(shouldOfferUpdate({status:'unavailable',version:'7.1.62'})).toBe(false);

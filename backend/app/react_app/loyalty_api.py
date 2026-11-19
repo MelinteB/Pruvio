@@ -35,12 +35,16 @@ def join(program_id:str,identity=Depends(current)):
     except (ValueError,AttributeError): raise HTTPException(422, 'Invalid program ID.') from None
     return call_business('/v1/customer/programs/'+program_id+'/join', method='POST', user_id=identity[0].id)
 
+class LeaveProgramIn(BaseModel):
+    confirm_forfeit: bool = False
+
 @router.post('/programs/{program_id}/leave')
-def leave(program_id:str,identity=Depends(current)):
+def leave(program_id:str,payload:LeaveProgramIn|None=None,identity=Depends(current)):
     from uuid import UUID
     try:program_id=str(UUID(program_id))
     except (ValueError,AttributeError):raise HTTPException(422,'Invalid program ID.') from None
-    return call_business('/v1/customer/programs/'+program_id+'/leave',method='POST',user_id=identity[0].id)
+    return call_business('/v1/customer/programs/'+program_id+'/leave',method='POST',
+                         user_id=identity[0].id,body=payload.model_dump() if payload else None)
 
 @router.get('/memberships')
 def memberships(identity=Depends(current)):

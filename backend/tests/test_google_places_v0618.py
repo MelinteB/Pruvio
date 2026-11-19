@@ -5,8 +5,10 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine,select
 from sqlalchemy.orm import Session
 from business.db import Base
+from business.main import add_store
 from business.models import Merchant,Store
 from business.models_v0618 import MerchantStorePlace
+from business.schemas import StoreIn
 from business import google_places_v0618 as places
 
 EXAMPLE_ID='ChIJxxxxxxxxxxxxxxx'
@@ -88,3 +90,36 @@ def test_pre_migration_link_is_controlled_503(monkeypatch,tenant_db):
         places.link_merchant_place(store.id,places.PlaceLinkRequest(place_id=EXAMPLE_ID),
           staff=SimpleNamespace(merchant_id=a.id,role='owner'),db=db)
     assert exc.value.status_code==503
+
+
+def test_new_location_and_google_link_save_together(monkeypatch, tenant_db):
+    db, merchant, _, _ = tenant_db
+    staff = SimpleNamespace(merchant_id=merchant.id, role='owner')
+
+    def unavailable(_place_id):
+        raise HTTPException(503, 'Google Places is not configured for this environment.')
+
+    payload = StoreIn(name=' New Cafe ', address=' Manual Address ', latitude=44.5,
+                      longitude=26.2, google_place_id=EXAMPLE_ID)
+    monkeypatch.setattr(places, 'lookup', unavailable)
+    with pytest.raises(HTTPException) as exc:
+        add_store(payload, staff, db)
+    assert exc.value.status_code == 503
+    assert db.scalar(select(Store).where(Store.name == 'New Cafe')) is None
+    assert db.scalar(select(MerchantStorePlace)) is None
+
+    monkeypatch.setattr(places, 'lookup', lambda place_id: {'place_id': place_id, 'address': 'Google Address'})
+    saved = add_store(payload, staff, db)
+    assert saved['address'] == 'Manual Address'
+    assert saved['google_place_id'] == EXAMPLE_ID
+    assert db.get(MerchantStorePlace, saved['id']).merchant_id == merchant.id
+
+
+def test_manual_location_can_save_without_google(monkeypatch, tenant_db):
+    db, merchant, _, _ = tenant_db
+    monkeypatch.delenv('PRUVS_GOOGLE_PLACES_API_KEY', raising=False)
+    monkeypatch.setattr(places, 'link_schema_ready', lambda _db: False)
+    saved = add_store(StoreIn(name='Manual Cafe', latitude=0, longitude=0),
+                      SimpleNamespace(merchant_id=merchant.id, role='owner'), db)
+    assert saved['google_place_id'] is None
+    assert db.get(Store, saved['id']).name == 'Manual Cafe'

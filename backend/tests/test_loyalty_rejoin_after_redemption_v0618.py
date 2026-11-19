@@ -5,10 +5,12 @@ after a fresh customer join, and only if no stamps, pending receipt review
 or unredeemed vouchers remain. All redemption ledger rows are retained.
 """
 from datetime import timedelta
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
@@ -113,3 +115,30 @@ def test_cycle_cleanup_requires_a_membership(scenario):
     db,staff,program,member,reward,customer=scenario
     db.delete(member);db.flush()
     assert close_completed_cycle(db,consumer_id=customer,program_id=program.id) is False
+
+
+def test_core_leave_forwards_explicit_forfeiture_confirmation(monkeypatch):
+    from app.react_app import loyalty_api
+
+    program_id=str(uuid4())
+    api=FastAPI()
+    api.include_router(loyalty_api.router)
+    api.dependency_overrides[loyalty_api.current]=lambda:(SimpleNamespace(id=71),None)
+    calls=[]
+
+    def bridge(path,*,method,user_id,body):
+        calls.append((path,method,user_id,body))
+        if not body or not body['confirm_forfeit']:
+            raise HTTPException(409,'Confirmation required')
+        return {'left':True}
+
+    monkeypatch.setattr(loyalty_api,'call_business',bridge)
+    with TestClient(api) as client:
+        endpoint='/api/v1/loyalty/programs/'+program_id+'/leave'
+        assert client.post(endpoint).status_code==409
+        response=client.post(endpoint,json={'confirm_forfeit':True})
+        assert response.status_code==200
+        assert response.json()=={'left':True}
+    business_path='/v1/customer/programs/'+program_id+'/leave'
+    assert calls==[(business_path,'POST',71,None),
+                   (business_path,'POST',71,{'confirm_forfeit':True})]

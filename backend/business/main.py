@@ -17,7 +17,8 @@ from .config import get_settings
 from .merchant_enrollment import router as merchant_enrollment_router
 from .models import Merchant, Staff, Store, Program, Membership, ReceiptClaim, Reward, Campaign, utcnow
 from .models_v067 import DiscountRedemption
-from .google_places_v0618 import router as google_places_router, linked_place_id
+from .google_places_v0618 import router as google_places_router, linked_place_id, validate_store_place
+from .models_v0618 import MerchantStorePlace
 from .security import merchant_actor, customer_actor, verify_password, encode_merchant_token, decode
 from .schemas import LoginIn, StoreIn, ProgramIn, CampaignGoal, CampaignIn, ReceiptProofIn, ConfirmIn, DemoReceiptIn
 
@@ -121,8 +122,14 @@ def get_stores(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
 @app.post('/v1/merchant/stores',status_code=201)
 def add_store(payload:StoreIn,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     merchant_check(staff)
-    s=Store(merchant_id=staff.merchant_id,**payload.model_dump())
-    db.add(s);db.commit();db.refresh(s)
+    place = validate_store_place(db, payload.google_place_id) if payload.google_place_id else None
+    s = Store(merchant_id=staff.merchant_id, **payload.model_dump(exclude={'google_place_id'}))
+    db.add(s)
+    if place:
+        db.flush()
+        db.add(MerchantStorePlace(store_id=s.id, merchant_id=staff.merchant_id, place_id=place['place_id']))
+    db.commit()
+    db.refresh(s)
     return store_json(s,db=db)
 
 @app.get('/v1/merchant/programs')
@@ -288,9 +295,8 @@ def discover(latitude:float|None=Query(default=None,ge=-90,le=90),longitude:floa
     eligibility={}
     for p in published:
         s=db.get(Store,p.store_id)
-        if not s or not s.active:continue
         m=db.get(Merchant,p.merchant_id)
-        if not m or m.status!='active':continue
+        if not program_is_discoverable(p,m,s):continue
         distance=dist_km(latitude,longitude,s.latitude,s.longitude) if latitude is not None else None
         if distance is not None and distance>radius_km:continue
         if p.merchant_id not in eligibility:
@@ -303,7 +309,10 @@ def discover(latitude:float|None=Query(default=None,ge=-90,le=90),longitude:floa
 @app.post('/v1/customer/programs/{program_id}/join')
 def join_program(program_id:str,consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
     p=db.get(Program,program_id)
-    if not p or p.status!='published':raise HTTPException(404,'Program not available')
+    merchant=db.get(Merchant,p.merchant_id) if p else None
+    store=db.get(Store,p.store_id) if p else None
+    if not program_is_discoverable(p,merchant,store):
+        raise HTTPException(404,'Program not available')
     existing=db.scalar(select(Membership).where(Membership.consumer_id==consumer_id,Membership.program_id==program_id))
     if existing:return {'membership_id':existing.id,'stamps':existing.stamps,'already_joined':True}
     membership=Membership(consumer_id=consumer_id,program_id=program_id)
@@ -540,7 +549,7 @@ def dev_receipt_proof(payload:DemoReceiptIn,request:Request,staff:Staff=Depends(
                 'demo-customer-'+staff.merchant_id,demo_receipt_id,p.store_id,payload.amount_minor,p.currency),
             'warning':'SIMULATED receipt: not a fiscal transaction or Pruvs Core scan'}
 
-from .pilot_v05 import router as pilot_v05_router
+from .pilot_v05 import program_is_discoverable, router as pilot_v05_router
 app.include_router(pilot_v05_router)
 
 from .pilot_v06 import router as pilot_v06_router
