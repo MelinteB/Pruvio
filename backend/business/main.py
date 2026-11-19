@@ -39,6 +39,8 @@ from .pilot_enrollment_v0612 import router as pilot_enrollment_router
 app.include_router(pilot_enrollment_router)
 from .customer_pilot_eligibility_v0614 import router as customer_eligibility_router
 app.include_router(customer_eligibility_router)
+from .receipt_packages_v0618 import router as receipt_package_router
+app.include_router(receipt_package_router)
 
 def owned(db, cls, object_id, merchant_id):
     item=db.get(cls,object_id)
@@ -211,6 +213,12 @@ def approve_claim(claim_id:str,staff:Staff=Depends(merchant_actor),db:Session=De
     if not c:raise HTTPException(404,'Claim not found')
     if c.status!='pending':raise HTTPException(409,'Claim already processed')
     from .pilot_v06 import approval_guard
+    # v1.2 customer-QR claims must be approved as one complete package.
+    # Keep the legacy single-claim route for older receipt pilots only.
+    from .models_v12 import CustomerClaimCode
+    from sqlalchemy import inspect
+    if inspect(db.get_bind()).has_table(CustomerClaimCode.__tablename__) and db.get(CustomerClaimCode,c.id):
+        raise HTTPException(409,'This receipt belongs to a package. Review all required receipts and approve the package together.')
     approval_guard(db,c,staff)
     p=owned(db,Program,c.program_id,staff.merchant_id)
     membership=db.scalar(select(Membership).where(Membership.consumer_id==c.consumer_id,Membership.program_id==p.id).with_for_update())
@@ -309,19 +317,44 @@ def join_program(program_id:str,consumer_id:str=Depends(customer_actor),db:Sessi
     return {'membership_id':membership.id,'stamps':0,'already_joined':False}
 
 
+class LeaveProgramIn(BaseModel):
+    # Explicit approval is mandatory when any receipt or reward value is forfeited.
+    confirm_forfeit: bool = False
+
+
 @app.post('/v1/customer/programs/{program_id}/leave')
-def leave_program(program_id:str,consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
-    membership=db.scalar(select(Membership).where(Membership.consumer_id==consumer_id,
-               Membership.program_id==program_id).with_for_update())
-    if not membership:return {'left':True,'already_left':True}
-    pending=db.scalar(select(func.count(ReceiptClaim.id)).where(ReceiptClaim.consumer_id==consumer_id,
-                      ReceiptClaim.program_id==program_id,ReceiptClaim.status=='pending'))
-    pending_rewards=db.scalar(select(func.count(Reward.id)).where(Reward.consumer_id==consumer_id,
-                Reward.program_id==program_id,Reward.status.in_(('available','reserved'))))
-    if membership.stamps or pending or pending_rewards:
-        raise HTTPException(409,'You have stamps, pending receipts or unredeemed rewards. Redeem or resolve them before leaving.')
-    db.delete(membership);db.commit()
-    return {'left':True,'already_left':False}
+def leave_program(program_id:str,body:LeaveProgramIn|None=None,
+                  consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
+    membership=db.scalar(select(Membership).where(
+        Membership.consumer_id==consumer_id,
+        Membership.program_id==program_id).with_for_update())
+    if not membership:
+        return {'left':True,'already_left':True}
+    # Preserve claim rows and their globally unique receipt identifiers forever
+    # for deduplication/audit. They cannot be transferred to another campaign.
+    pending=db.scalars(select(ReceiptClaim).where(
+        ReceiptClaim.consumer_id==consumer_id,
+        ReceiptClaim.program_id==program_id,
+        ReceiptClaim.status=='pending').with_for_update()).all()
+    active_rewards=db.scalars(select(Reward).where(
+        Reward.consumer_id==consumer_id,
+        Reward.program_id==program_id,
+        Reward.status.in_(('available','reserved'))).with_for_update()).all()
+    if (membership.stamps or pending or active_rewards) and not (body and body.confirm_forfeit is True):
+        raise HTTPException(409,'Leaving forfeits stamps, pending receipts and unused rewards. Confirm the warning to continue.')
+    for claim in pending:
+        claim.status='cancelled'
+    for reward in active_rewards:
+        reward.status='forfeited'
+        reward.redemption_code=None
+        reward.reserved_until=None
+    forfeited={'stamps':membership.stamps,'pending_receipts':len(pending),
+               'unused_rewards':len(active_rewards)}
+    db.delete(membership)
+    db.commit()
+    return {'left':True,'already_left':False,'forfeited':forfeited,
+            'message':'Receipt links remain permanently used and cannot be submitted to other programs.'}
+
 
 @app.post('/v1/customer/claims',status_code=201)
 def claim_receipt(payload:ReceiptProofIn,consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):

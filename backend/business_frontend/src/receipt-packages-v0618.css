@@ -1,0 +1,13 @@
+/* Consent-first merchant package review: no item credits until entire set is reviewed. */
+.pruvs-receipt-packages{display:grid;gap:.75rem;padding:1rem 0;border-top:1px solid #dbe5eb}
+.pruvs-receipt-packages h3{margin:0}
+.pruvs-receipt-packages>p{margin:0}
+.pruvs-receipt-package{display:grid;gap:.85rem;padding:1rem;border-radius:14px;border:1px solid #cbdce7;background:#f7fafd}
+.pruvs-receipt-package header{display:grid;gap:.2rem}
+.pruvs-receipt-package header small{color:#53677d}
+.pruvs-receipt-package ul{list-style:none;margin:0;padding:0;display:grid;gap:.55rem}
+.pruvs-receipt-package li{display:flex;justify-content:space-between;align-items:center;gap:.8rem;flex-wrap:wrap;padding:.7rem;border-radius:9px;background:#fff;border:1px solid #e0eaf1}
+.pruvs-receipt-package li span{display:grid;gap:.25rem}
+.pruvs-receipt-package li small{display:block;color:#60768a}
+.pruvs-receipt-package>.btn{justify-self:start}
+.pruvs-receipt-package>small{color:#64748b}

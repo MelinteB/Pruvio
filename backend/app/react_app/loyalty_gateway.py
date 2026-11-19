@@ -107,6 +107,10 @@ def call_business(path, *, method='GET', user_id=None, params=None, body=None):
                         403:'This loyalty action is not permitted.',404:'Loyalty record not available.',
                         409:'This loyalty action has already been completed or cannot proceed.',
                         422:'This loyalty request is not eligible.',429:'Too many loyalty requests. Try again later.'}
+            if exc.code == 409 and path.endswith('/leave'):
+                raise HTTPException(409, 'This program changed. Refresh Wallet and confirm leaving again.') from None
+            if exc.code == 409 and 'customer-code' in path:
+                raise HTTPException(409, 'This receipt is already linked, or your campaign package is full. Check the receipts under the campaign.') from None
             raise HTTPException(exc.code, messages[exc.code]) from None
         raise HTTPException(503, 'Loyalty service is temporarily unavailable.') from None
     except HTTPException:
