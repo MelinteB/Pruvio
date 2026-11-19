@@ -1,0 +1,18 @@
+/* Current-version loyalty package correction: scoped to the Wallet. */
+.pruvs-package-program{padding:0 0 1.3rem;border-bottom:1px solid #e3e9f2}
+.pruvs-package-program:last-child{border-bottom:0;padding-bottom:.35rem}
+.pruvs-package-receipts{margin:.2rem 0 .65rem;display:grid;gap:.75rem;padding:1rem;border:1px solid #e1e8f5;border-radius:14px;background:#f8faff}
+.pruvs-package-head{display:flex;justify-content:space-between;align-items:start;gap:.6rem;flex-wrap:wrap}
+.pruvs-package-head small{color:#557194}
+.pruvs-package-list{display:grid;gap:.4rem;list-style:decimal;padding-left:1.5rem;margin:0}
+.pruvs-package-list li{padding:.5rem .15rem;border-bottom:1px solid #e3e8f4;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.pruvs-package-list li>div{display:grid;gap:.25rem}
+.pruvs-package-list small{color:#62728a}
+.pruvs-package-status.pending{color:#9d6308}
+.pruvs-package-status.approved{color:#146644}
+.pruvs-package-status.cancelled,.pruvs-package-status.rejected{color:#b43343}
+.pruvs-package-add{display:grid;gap:.65rem;border-top:1px solid #dfe5ed;padding-top:.85rem}
+.pruvs-package-add label{display:grid;gap:.35rem;max-width:540px}
+.pruvs-package-add select{padding:.7rem;border:1px solid #bac9df;border-radius:9px;background:#fff;font:inherit;width:100%}
+.pruvs-package-ready{color:#17684b;font-weight:600;margin:0}
+@media(max-width:650px){.pruvs-package-receipts{padding:.7rem}.pruvs-package-list li{align-items:flex-start}}
