@@ -1,4 +1,5 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
+import {useBusinessLanguage} from './i18n.jsx';
 import {Megaphone, Ticket, CheckCircle2, AlertCircle, Sparkles, ImagePlus, Film, WandSparkles} from 'lucide-react';
 import './promotion-console.css';
 import './promo-v06.css';
@@ -7,8 +8,15 @@ import CorePromotionPreview from './CorePromotionPreview.jsx';
 import CampaignLibrary from './CampaignLibrary.jsx';
 import './studio-2027.css';
 const API = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
-export function predefinedCampaignBrief(program){
+export function predefinedCampaignBrief(program,language='en'){
   const title=String(program?.title||'this published loyalty program').trim();
+  if(language==='ro')return 'Prezintă programul de fidelitate „'+title+'” și invită clienții să participe. '+
+    'Scrie un titlu concis și un mesaj clar în limba română. '+
+    'Explică faptul că numai cumpărăturile eligibile confirmate de comerciant aduc ștampile. '+
+    'Când este încărcată o fotografie, produsul sau scena vizibilă trebuie să fie subiectul principal al textului și al materialului vizual. '+
+    'Păstrează fotografia originală în materialul final. '+
+    'Folosește un îndemn clar la acțiune și o animație discretă de 3 secunde pentru GIF/MP4. '+
+    'Respectă valoarea recompensei, numărul de cumpărături și suma minimă exact așa cum sunt configurate.';
   return 'Introduce "'+title+'" to customers and invite them to participate. '+
     'Write an appealing, concise campaign headline and a clear message. '+
     'Explain that only merchant-verified qualifying purchases count toward the reward. '+
@@ -25,7 +33,10 @@ async function call(path,token,body,method){
   if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:'Operation failed ('+response.status+')');
   return data;
 }
-export default function PromotionConsole({token,programs,merchantName='',mode='promotions',initialView='studio',canManage=true}){
+export default function PromotionConsole({token,programs,merchantName='',locale='en',mode='promotions',initialView='studio',canManage=true}){
+  const {t}=useBusinessLanguage();
+  const lastDefaultBrief=useRef('');
+  const lastBriefProgram=useRef('');
   const [list,setList]=useState([]),[programId,setProgramId]=useState(''),[headline,setHeadline]=useState(''),[message,setMessage]=useState(''),[mediaUrl,setMediaUrl]=useState(''),[mediaType,setMediaType]=useState('image/jpeg'),[days,setDays]=useState(14),[amount,setAmount]=useState(''),[code,setCode]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
   const [goal,setGoal]=useState('Encourage loyal customers to return'),[audience,setAudience]=useState('Local regular customers'),
     [tone,setTone]=useState('friendly'),[creativeFormat,setCreativeFormat]=useState('png'),
@@ -76,7 +87,7 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
         program_id:programId,goal:goal.trim(),audience:audience.trim(),tone,
         format:creativeFormat==='mp4'?'video':creativeFormat==='gif'?'gif':'image',
         duration_days:Number(days),watermark_text:watermark,
-        creative_instructions:creativeInstructions.trim(),
+        creative_instructions:creativeInstructions.trim(),language:locale,
         media_key:imageOrigin==='upload'?artworkKey:null
       });
       if(imageOrigin==='upload'&&!result.source_image_used)
@@ -173,8 +184,13 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
   // A changed program updates the starting brief; merchant edits remain intact otherwise.
   useEffect(()=>{
     const program=programs.find(p=>p.id===programId);
-    setCreativeInstructions(program?predefinedCampaignBrief(program):'');
-  },[programId]);
+    const next=program?predefinedCampaignBrief(program,locale):'';
+    setCreativeInstructions(previous=>
+      (!previous||previous===lastDefaultBrief.current||
+        lastBriefProgram.current!==programId)?next:previous);
+    lastDefaultBrief.current=next;
+    lastBriefProgram.current=programId;
+  },[programId,locale]);
   useEffect(()=>{
     if(mode!=='promotions')return;
     let mounted=true;
@@ -230,34 +246,34 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
     {notice&&<p className="promo-notice" role="status"><CheckCircle2 size={16}/>{notice}</p>}
     {mode==='promotions'?<>
       <div className="pruvs-campaign-workspace-tabs" role="group" aria-label="Campaign workspace views">
-        <button type="button" className={workspaceView==='studio'?'active':''} aria-pressed={workspaceView==='studio'} onClick={()=>setWorkspaceView('studio')}><Sparkles size={17}/> Campaign Studio</button>
-        <button type="button" className={workspaceView==='library'?'active':''} aria-pressed={workspaceView==='library'} onClick={()=>setWorkspaceView('library')}><Megaphone size={17}/> Campaign Library <span>{list.filter(p=>p.status==='draft'||p.status==='paused').length} unpublished</span></button>
+        <button type="button" className={workspaceView==='studio'?'active':''} aria-pressed={workspaceView==='studio'} onClick={()=>setWorkspaceView('studio')}><Sparkles size={17}/> {t('Campaign Studio')}</button>
+        <button type="button" className={workspaceView==='library'?'active':''} aria-pressed={workspaceView==='library'} onClick={()=>setWorkspaceView('library')}><Megaphone size={17}/> {t('Campaign Library')} <span>{list.filter(p=>p.status==='draft'||p.status==='paused').length} unpublished</span></button>
       </div>
       {workspaceView==='studio'&&canManage&&<>
       <section className="pruvs-ai-studio">
         <div className="pruvs-ai-studio-heading">
           <span className="pruvs-studio-2027-icon"><Sparkles size={23}/></span>
           <div className="pruvs-studio-2027-heading-copy">
-            <h3>Create a campaign</h3>
-            <p>Use your photo, refine the message and preview the offer before publishing.</p>
+            <h3>{t('Create a campaign')}</h3>
+            <p>{t('Use your photo, refine the message and preview the offer before publishing.')}</p>
           </div>
-          <span className="pruvs-studio-2027-privacy"><CheckCircle2 size={15}/> Approval required before publishing</span>
+          <span className="pruvs-studio-2027-privacy"><CheckCircle2 size={15}/> {t('Approval required before publishing')}</span>
         </div>
         <div className="pruvs-studio-2027-progress" aria-label="Campaign creation stages">
-          <span className={mediaUrl?'is-done':''}>01 <b>Photo</b><small>{mediaUrl?'Added':'Optional'}</small></span>
-          <span className={creativeInstructions.trim()?'is-done':''}>02 <b>Direction</b><small>Editable brief</small></span>
-          <span className={headline.trim().length>=5&&message.trim().length>=10?'is-done':''}>03 <b>Copy</b><small>Review required</small></span>
-          <span className={mediaUrl&&mediaType===targetMediaType&&!mediaNeedsRendering?'is-done':''}>04 <b>Creative</b><small>Draft then publish</small></span>
+          <span className={mediaUrl?'is-done':''}>01 <b>{t('Photo')}</b><small>{mediaUrl?'Added':'Optional'}</small></span>
+          <span className={creativeInstructions.trim()?'is-done':''}>02 <b>{t('Direction')}</b><small>Editable brief</small></span>
+          <span className={headline.trim().length>=5&&message.trim().length>=10?'is-done':''}>03 <b>{t('Copy')}</b><small>Review required</small></span>
+          <span className={mediaUrl&&mediaType===targetMediaType&&!mediaNeedsRendering?'is-done':''}>04 <b>{t('Creative')}</b><small>Draft then publish</small></span>
         </div>
         <div className="pruvs-studio-2027-workspace">
           <div className="pruvs-studio-2027-editor">
         <label className="pruvs-ai-program-select">Published loyalty program<select required value={programId} disabled={Boolean(editingPromotionId)} onChange={e=>changeProgram(e.target.value)}>{published.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></label>
         <div className="pruvs-ai-grid">
-          <label>Campaign goal<input value={goal} minLength={8} maxLength={300} onChange={e=>setGoal(e.target.value)}/></label>
-          <label>Target audience<input value={audience} maxLength={140} onChange={e=>setAudience(e.target.value)}/></label>
-          <label>Brand tone<select value={tone} onChange={e=>setTone(e.target.value)}><option value="friendly">Friendly</option><option value="premium">Premium</option><option value="playful">Playful</option><option value="professional">Professional</option></select></label>
-          <label>Creative format<select value={creativeFormat} onChange={e=>setCreativeFormat(e.target.value)}><option value="png">Branded image</option><option value="gif">Animated GIF (3 seconds)</option><option value="mp4">Short video MP4 (3 seconds)</option></select></label>
-          <label>Watermark text<input value={watermark} maxLength={70} onChange={e=>setWatermark(e.target.value)}/></label>
+          <label>{t('Campaign goal')}<input value={goal} minLength={8} maxLength={300} onChange={e=>setGoal(e.target.value)}/></label>
+          <label>{t('Target audience')}<input value={audience} maxLength={140} onChange={e=>setAudience(e.target.value)}/></label>
+          <label>{t('Brand tone')}<select value={tone} onChange={e=>setTone(e.target.value)}><option value="friendly">Friendly</option><option value="premium">Premium</option><option value="playful">Playful</option><option value="professional">Professional</option></select></label>
+          <label>{t('Creative format')}<select value={creativeFormat} onChange={e=>setCreativeFormat(e.target.value)}><option value="png">Branded image</option><option value="gif">Animated GIF (3 seconds)</option><option value="mp4">Short video MP4 (3 seconds)</option></select></label>
+          <label>{t('Watermark text')}<input value={watermark} maxLength={70} onChange={e=>setWatermark(e.target.value)}/></label>
         </div>
         {currentProgram&&<div className="pruvs-ai-criteria"><strong>Program conditions (locked)</strong><small>{currentProgram.title} · Minimum {(currentProgram.min_purchase_minor/100).toFixed(2)} RON · {currentProgram.stamps_required} verified purchases → {(currentProgram.reward_minor/100).toFixed(2)} RON reward</small></div>}
         <div className="pruvs-ai-image-source" aria-label="Main campaign picture">
@@ -269,9 +285,9 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
           {!mediaUrl&&!localMediaPreview&&<small>Optional for a text-only promotion. To make a photo-led campaign, upload the image before generating copy.</small>}
         </div>
         <div className="pruvs-ai-brief-editor" aria-label="Predefined campaign brief editor">
-          <div className="row between wrap"><h4>2. Predefined campaign text · edit before generating</h4>
-            <button type="button" className="btn subtle" disabled={!currentProgram||aiBusy||assetBusy} onClick={()=>setCreativeInstructions(predefinedCampaignBrief(currentProgram))}>Restore predefined text</button></div>
-          <label htmlFor="pruvs-campaign-brief">Your campaign instructions</label>
+          <div className="row between wrap"><h4>2. {t('Predefined campaign text · edit before generating')}</h4>
+            <button type="button" className="btn subtle" disabled={!currentProgram||aiBusy||assetBusy} onClick={()=>setCreativeInstructions(predefinedCampaignBrief(currentProgram,locale))}>{t('Restore predefined text')}</button></div>
+          <label htmlFor="pruvs-campaign-brief">{t('Your campaign instructions')}</label>
           <textarea id="pruvs-campaign-brief" value={creativeInstructions} rows={6} maxLength={1200}
             placeholder="Describe the promotion you want Pruvs AI to write."
             onChange={e=>setCreativeInstructions(e.target.value)}/>
@@ -356,9 +372,9 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
         });
       }}>
         <p className="helper">Review the editable campaign text above before saving. Publishing remains a separate merchant approval action.</p>
-        <label>Display period (days)<input type="number" min="1" max="90" value={days} onChange={e=>setDays(e.target.value)}/></label>
+        <label>{t('Display period (days)')}<input type="number" min="1" max="90" value={days} onChange={e=>setDays(e.target.value)}/></label>
         <div className="pruvs-ai-actions">
-          <button className="btn primary" disabled={busy||assetBusy||!programId||mediaCannotSave}>{editingPromotionId?'Update promotion draft':'Save promotion draft'}</button>
+          <button className="btn primary" disabled={busy||assetBusy||!programId||mediaCannotSave}>{t(editingPromotionId?'Update promotion draft':'Save promotion draft')}</button>
           {editingPromotionId&&<button type="button" className="btn subtle" onClick={()=>{setEditingPromotionId('');setHeadline('');setMessage('');resetMedia();setNotice('Draft editing canceled.')}}>Cancel editing</button>}
         </div>
       </form>
