@@ -310,7 +310,7 @@ function AccountRewards(){
                     </li>;
                   })}
                 </ol>:<p className="muted">No receipts linked yet. Add one saved receipt per required purchase.</p>}
-                {remaining>0&&offer&&status?.customer_codes_v12_enabled&&
+                {remaining>0&&rewardCount===0&&offer&&status?.customer_codes_v12_enabled&&
                   <div className="pruvs-package-add">
                     <strong>Verify another receipt ({target-remaining+1} of {target})</strong>
                     {unused.length?<><label>Select a saved receipt
@@ -322,6 +322,7 @@ function AccountRewards(){
                       programs={[offer]} onFinished={()=>refresh(null,'wallet')}/></>
                     :<Link to="/upload">Scan a receipt to continue</Link>}
                   </div>}
+                {rewardCount>0&&<p className="pruvs-package-ready">You have an unused reward. Redeem it before beginning another package of receipts.</p>}
                 {remaining===0&&pending.length>0&&<p className="pruvs-package-ready">All required receipts are linked. The merchant must unlock and review each QR before approving the entire package.</p>}
                 {m.status!=='published'&&<p className="muted">Program paused. Existing receipt records remain linked; new QR submissions require an active program.</p>}
               </>}
