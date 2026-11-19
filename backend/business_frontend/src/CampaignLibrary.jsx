@@ -10,7 +10,8 @@ import './campaign-library-v0615.css';
  * action; the server remains authoritative for ownership and allowed statuses.
  */
 export function effectiveCampaignStatus(p,now=Date.now()){
-  if(p.status==='published'&&p.expires_at&&new Date(p.expires_at).getTime()<=now)
+  if(p.effective_status)return p.effective_status;
+  if(p.status==='published'&&(!p.expires_at||new Date(p.expires_at).getTime()<=now))
     return 'expired';
   return p.status||'draft';
 }
@@ -55,7 +56,7 @@ function PreviewDialog({campaign,onClose}){
 
 export default function CampaignLibrary({
   campaigns=[],busy=false,canManage=true,onEdit,onCopy,onPublish,onUnpublish,
-  onReopen,onArchive,onRestore,onCreate,
+  onReopen,onRepublish,onArchive,onRestore,onCreate,
 }){
   const [filter,setFilter]=useState('unpublished');
   const [query,setQuery]=useState('');
@@ -132,7 +133,8 @@ export default function CampaignLibrary({
             <button type="button" disabled={busy} onClick={()=>onArchive?.(p)}><Archive size={16}/> Archive</button>
           </>}
           {canManage&&p.effectiveStatus==='paused'&&<>
-            <button type="button" className="is-primary" disabled={busy} onClick={()=>onReopen?.(p)}><RotateCcw size={16}/> Reopen draft</button>
+            <button type="button" className="is-publish" disabled={busy} onClick={()=>onRepublish?.(p)}><Globe2 size={16}/> Republish now</button>
+            <button type="button" className="is-primary" disabled={busy} onClick={()=>onReopen?.(p)}><RotateCcw size={16}/> Edit draft</button>
             <button type="button" disabled={busy} onClick={()=>onCopy?.(p)}><Copy size={16}/> Duplicate</button>
             <button type="button" disabled={busy} onClick={()=>onArchive?.(p)}><Archive size={16}/> Archive</button>
           </>}
@@ -141,6 +143,7 @@ export default function CampaignLibrary({
             <button type="button" disabled={busy} onClick={()=>onUnpublish?.(p)}><PauseCircle size={16}/> Unpublish</button>
           </>}
           {canManage&&p.effectiveStatus==='expired'&&<>
+            <button type="button" className="is-publish" disabled={busy} onClick={()=>onRepublish?.(p)}><Globe2 size={16}/> Republish now</button>
             <button type="button" disabled={busy} onClick={()=>onCopy?.(p)}><Copy size={16}/> New from this</button>
             <button type="button" disabled={busy} onClick={()=>onArchive?.(p)}><Archive size={16}/> Archive</button>
           </>}
