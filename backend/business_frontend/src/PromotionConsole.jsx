@@ -211,6 +211,10 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
   function unpublishCampaign(p){
     manage('unpublish',p,'Remove "'+p.headline+'" from customer discovery? The campaign will be paused.','Campaign paused and removed from customer discovery.');
   }
+  function republishCampaign(p){
+    manage('republish',p,'Republish "'+p.headline+'" to Pruvs Core for '+p.duration_days+' days? This will start a NEW display period.',
+      'Campaign republished. Customer discovery uses the new publication period.');
+  }
   function archiveCampaign(p){
     manage('archive',p,'Archive "'+p.headline+'"? It will remain private and can be restored later.','Campaign archived and hidden from customers.');
   }
@@ -367,6 +371,7 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
         onCopy={canManage?p=>editPromotion(p,true):undefined}
         onPublish={canManage?confirmPublish:undefined}
         onUnpublish={canManage?unpublishCampaign:undefined}
+        onRepublish={canManage?republishCampaign:undefined}
         onReopen={canManage?reopenForEditing:undefined}
         onArchive={canManage?archiveCampaign:undefined}
         onRestore={canManage?restoreCampaign:undefined}/>}
