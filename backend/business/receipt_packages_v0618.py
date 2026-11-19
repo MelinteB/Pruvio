@@ -49,7 +49,8 @@ def _reviewed(db, claim, staff, code, now):
         .order_by(ReceiptEvidenceAccess.at.desc())
         .limit(1)
     )
-    return bool(review and aware(now) - timedelta(minutes=15) <= aware(review.at) <= aware(now))
+    return bool(review and aware(now) - timedelta(minutes=15) <= aware(review.at) <= aware(now)
+                and aware(review.at) >= aware(code.unlocked_at))
 
 
 @router.get('/v1/merchant/claims/packages')
