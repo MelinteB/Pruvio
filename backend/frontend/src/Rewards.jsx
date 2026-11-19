@@ -302,6 +302,7 @@ function AccountRewards(){
                       <div><strong>Receipt {i+1}</strong>
                         <small>{original?.merchant_name||'Previously linked receipt'} · {money(c.amount_minor/100,p?.currency||'RON')}</small>
                         <small className={'pruvs-package-status '+c.status}>{c.status==='pending'?'Awaiting package review':c.status==='approved'?'Merchant verified':c.status==='cancelled'?'Forfeited on leaving':c.status==='rejected'?'Rejected':c.status}</small>
+                        {original&&<Link to={'/receipt/'+original.case_id}>View saved receipt</Link>}
                       </div>
                       {c.status==='pending' && original && offer && status?.customer_codes_v12_enabled &&
                         <CustomerReceiptCode key={'qr-'+c.claim_id} caseId={original.case_id}
