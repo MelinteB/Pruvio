@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 from datetime import timedelta, timezone
 from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -153,6 +154,26 @@ def publish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),db:Se
     p.expires_at=utcnow()+timedelta(days=p.duration_days)
     db.commit();return promo_json(p,db)
 
+@router.post('/v1/merchant/promotions/{promotion_id}/republish')
+def republish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),
+                        db:Session=Depends(get_db)):
+    """Explicitly republish a paused or expired offer without a duplicate draft."""
+    campaign_schema_ready(db)
+    can_manage(staff)
+    p=owned_campaign(db,staff,promotion_id)
+    can_reopen_program(db,staff,p)
+    expired=(p.status=='published' and p.expires_at is not None
+             and aware(p.expires_at)<=utcnow())
+    if p.status!='paused' and not expired:
+        raise HTTPException(409,'Only paused or expired promotions may be republished.')
+    now=utcnow()
+    p.status='published'
+    p.published_at=now
+    p.expires_at=now+timedelta(days=p.duration_days)
+    db.commit()
+    return promo_json(p,db)
+
+
 @router.post('/v1/merchant/promotions/{promotion_id}/unpublish')
 def unpublish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     campaign_schema_ready(db)
@@ -227,21 +248,24 @@ def restore_archived_promotion(promotion_id:str,staff:Staff=Depends(merchant_act
 @router.get('/v1/promotions')
 def public_promotions(limit:int=Query(12,ge=1,le=30),db:Session=Depends(get_db)):
     campaign_schema_ready(db)
-    # No draft, expired, inactive merchant, inactive store or unpublished-program exposure.
+    # Filter *before* limiting. A backlog of paused/expired rows must not
+    # crowd live campaigns out of the customer's feed.
     now=utcnow()
-    rows=db.scalars(select(Promotion).where(Promotion.status=='published')
-                    .order_by(Promotion.published_at.desc()).limit(200)).all()
-    data=[]
-    for p in rows:
-        if not p.expires_at or aware(p.expires_at)<=now:continue
-        program=db.get(Program,p.program_id)
-        if not program or program.status!='published':continue
-        merchant=db.get(Merchant,p.merchant_id)
-        store=db.get(Store,program.store_id)
-        if not merchant or merchant.status!='active' or not store or not store.active:continue
-        data.append(promo_json(p,db))
-        if len(data)>=limit:break
-    return data
+    rows=db.scalars(
+        select(Promotion)
+        .join(Program,Promotion.program_id==Program.id)
+        .join(Merchant,Promotion.merchant_id==Merchant.id)
+        .join(Store,Program.store_id==Store.id)
+        .where(Promotion.status=='published',
+               Promotion.expires_at.is_not(None),
+               Promotion.expires_at>now,
+               Program.status=='published',
+               Merchant.status=='active',Store.active.is_(True))
+        .order_by(Promotion.published_at.desc(),Promotion.id.desc())
+        .limit(limit)
+    ).all()
+    return JSONResponse(content=[promo_json(p,db) for p in rows],
+      headers={'Cache-Control':'private, no-store, max-age=0'})
 
 class IssuePurchaseIn(BaseModel):
     program_id: str
