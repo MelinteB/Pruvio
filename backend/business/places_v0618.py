@@ -22,7 +22,7 @@ from sqlalchemy.orm import Mapped, mapped_column, Session
 
 from .db import Base, get_db
 from .models import Merchant, Staff, Store, Program, Promotion
-from .security import merchant_actor
+from .security import merchant_actor, customer_actor
 
 router=APIRouter(tags=['Pruvs places v0.6.18'])
 TABLE='merchant_store_places_v0618'
