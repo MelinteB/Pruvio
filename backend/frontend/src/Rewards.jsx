@@ -45,11 +45,11 @@ function AccountRewards(){
   const [cityOpen,setCityOpen]=useState(false),[cityQuery,setCityQuery]=useState(''),[cityFilter,setCityFilter]=useState('');
   const mapKey=(import.meta.env.VITE_GOOGLE_MAPS_EMBED_KEY||'').trim();
 
-  async function refresh(locationOverride=coordinates, activeTab=tab){
-    setError('');setLoading(true);
-    if(activeTab==='wallet'){setWalletState('loading');setRedemptionsState('loading');}
-    if(activeTab==='offers'||activeTab==='receipts')setMembershipsState('loading');
-    if(activeTab==='receipts')setClaimsState('loading');
+  async function refresh(locationOverride=coordinates, activeTab=tab, silent=false){
+    if(!silent){setError('');setLoading(true);}
+    if(activeTab==='wallet'&&!silent){setWalletState('loading');setRedemptionsState('loading');}
+    if((activeTab==='offers'||activeTab==='receipts')&&!silent)setMembershipsState('loading');
+    if(activeTab==='receipts'&&!silent)setClaimsState('loading');
     try{
       const s=await request('/loyalty/status');setStatus(s);
       if(!s.enabled){
@@ -125,9 +125,19 @@ function AccountRewards(){
         : e?.status===503
           ? 'The Rewards service cannot load this information right now. Your memberships have not been confirmed as empty; please retry when service maintenance is complete.'
           : e?.message||'Could not load Rewards.');
-    }finally{setLoading(false);}
+    }finally{if(!silent)setLoading(false);}
   }
   useEffect(()=>{refresh(null,tab);},[tab]);
+  // Campaign publish/unpublish and merchant claim approvals can happen while the
+  // customer keeps Wallet or Discover open. Revalidate without a full-page spinner.
+  useEffect(()=>{
+    const poll=()=>{if(document.visibilityState==='visible')refresh(coordinates,tab,true)};
+    document.addEventListener('visibilitychange',poll);
+    window.addEventListener('focus',poll);
+    const timer=setInterval(poll,45000);
+    return()=>{document.removeEventListener('visibilitychange',poll);
+      window.removeEventListener('focus',poll);clearInterval(timer)};
+  },[tab,coordinates?.latitude,coordinates?.longitude]);
   useEffect(()=>{
     if(selectedReceiptCase && tab!=='receipts')setTab('receipts');
   },[selectedReceiptCase]);
@@ -168,7 +178,8 @@ function AccountRewards(){
   const byProgram=new Map(offers.map(o=>[o.program.id,o]));
   const activePromotionByProgram=new Map();
   for(const promo of promotions){
-    if(promo.status!=='published'||(promo.expires_at&&Date.parse(promo.expires_at)<=Date.now()))continue;
+    if(promo.status!=='published'||promo.is_public===false||
+       (promo.expires_at&&Date.parse(promo.expires_at)<=Date.now()))continue;
     if(!activePromotionByProgram.has(promo.program_id))activePromotionByProgram.set(promo.program_id,promo);
   }
   // Business is the authority for merchant eligibility. Old Business versions
@@ -215,7 +226,7 @@ function AccountRewards(){
       <div className="row wrap rewards-actions"><button type="button" onClick={nearMe} disabled={!!busy}><MapPin size={17}/> Offers near me</button><button type="button" onClick={()=>{setCityFilter('');setCoordinates(null);refresh(null);}} disabled={!!busy}><Compass size={17}/> All offers</button><button type="button" onClick={()=>refresh()} disabled={!!busy}><RefreshCcw size={17}/> Refresh</button></div>
       {cityFilter&&<p className="pruvs-v7150-city-status">Showing Pruvs merchant programs matching <strong>{cityFilter}</strong>. <button type="button" onClick={()=>setCityOpen(true)}>Change city</button></p>}
       {promotedProgram&&offers.some(o=>o.program.id===promotedProgram)&&<p role="status" className="pruvs-v7152-partial-warning">Your selected loyalty program is listed first below. Join it to start earning merchant-approved rewards.</p>}
-      {promotions.length>0 && !cityFilter && <section className="rewards-featured"><h2>Featured merchant promotions</h2><div className="rewards-cards">{promotions.map(p=><Panel key={p.id} className="rewards-card rewards-promotion">
+      {promotions.some(p=>p.status==='published'&&p.is_public!==false) && !cityFilter && <section className="rewards-featured"><h2>Featured offers</h2><div className="rewards-cards">{promotions.filter(p=>p.status==='published'&&p.is_public!==false).map(p=><Panel key={p.id} className="rewards-card rewards-promotion">
           {hasCampaignCreative(p)?<CampaignCreative promotion={p}/>:
             <><small className="rewards-promo-tag">LOCAL PROMOTION · {p.merchant_name}</small><h3>{p.headline}</h3><p>{p.message}</p></>}<p><strong>{p.stamps_required} eligible receipts</strong> to earn {money(p.reward_minor/100,p.currency)} · Minimum purchase {money(p.min_purchase_minor/100,p.currency)}</p><small>{p.store_name}{p.expires_at?' · Ends '+new Date(p.expires_at).toLocaleDateString():''}</small><button className="primary" disabled={!!busy||!canJoin||joined.has(p.program_id)} onClick={()=>perform(p.program_id,()=>send('/loyalty/programs/'+p.program_id+'/join'),()=> 'Joined '+p.program_title+'.')}>{joined.has(p.program_id)?'Joined':'Join promoted program'}</button></Panel>)}</div></section>}
       <div className="rewards-cards">{shownOffers.map(o=><Panel key={o.program.id} className="rewards-card"><div className="rewards-icon"><Gift size={22}/></div><small className="muted">{o.merchant_name} · {o.store.name}</small>
@@ -234,19 +245,21 @@ function AccountRewards(){
         <button type="button" onClick={()=>refresh(null,'wallet')}><RefreshCcw size={16}/> Retry Wallet</button>
       </Panel>}
     {!loading && status?.enabled && tab==='wallet' && walletState==='ready' && <>
-      <Panel title="Loyalty progress">
-        {wallet.memberships?.length ? wallet.memberships.map((m,i)=>{const p=byProgram.get(m.program_id)?.program;return <div className="rewards-wallet-row pruvs-v7151-membership" key={m.program_id}>
+      <Panel title="My loyalty cards">
+        {wallet.memberships?.length ? wallet.memberships.map((m,i)=>{const p=byProgram.get(m.program_id)?.program;const required=m.stamps_required||p?.stamps_required||1;const pending=claims.filter(c=>c.program_id===m.program_id&&c.status==='pending').length;return <div className="rewards-wallet-row pruvs-v7151-membership" key={m.program_id}>
         <div><strong>{m.title||p?.title||'Loyalty program'}</strong><small>{m.status==='published'?'Active loyalty program':m.status}</small>
-          <p>{m.stamps} / {m.stamps_required||p?.stamps_required||'?'} verified purchases</p>
-          <progress max={m.stamps_required||p?.stamps_required||1} value={m.stamps} aria-label="Loyalty stamp progress"/>
+          <p>{m.stamps} of {required} approved receipts</p>
+          <progress max={required} value={Math.min(m.stamps,required)} aria-label="Loyalty stamp progress"/>
+          {pending>0&&<small>{pending} receipt{pending===1?'':'s'} awaiting merchant review</small>}
+          <button type="button" className="secondary" onClick={()=>setTab('receipts')}>Scan / submit receipt</button>
         </div><button type="button" className="secondary" disabled={!!busy||m.stamps>0} title={m.stamps>0?'Redeem your stamps before leaving':''} onClick={()=>{
           if(window.confirm('Leave this loyalty program? Only programs without pending rewards or stamps can be left.'))
             perform(m.program_id,()=>send('/loyalty/programs/'+m.program_id+'/leave'),()=> 'You left '+m.title+'.');
         }}>Leave program</button></div>;}):<p>No programs joined yet. Start in Discover.</p>}
       </Panel>
-      <Panel title="Available rewards">
-        {wallet.rewards?.length?wallet.rewards.map(r=><div className="rewards-wallet-row" key={r.id}><div><strong>{byProgram.get(r.program_id)?.program?.title||'Merchant reward'}</strong><p>Status: {r.status}</p>{r.code && <p>Checkout code: <strong className="rewards-code">{r.code}</strong></p>}</div>{r.status==='available'&&<button type="button" disabled={!!busy} onClick={()=>perform(r.id,()=>send('/loyalty/rewards/'+r.id+'/reserve'),data=>{setActiveVoucher({...data,program_id:r.program_id});return 'Voucher ready. Present the QR code to the merchant before checkout.';})}>Generate checkout QR</button>}
-             {r.status==='reserved'&&r.code&&<button type="button" className="secondary" onClick={()=>setActiveVoucher({reward_id:r.id,code:r.code,expires_at:r.reserved_until,program_id:r.program_id})}>Show checkout QR</button>}</div>):<p>No rewards yet. Merchant-approved purchases count toward rewards.</p>}
+      <Panel title="Unlocked rewards">
+        {wallet.rewards?.length?wallet.rewards.map(r=><div className="rewards-wallet-row" key={r.id}><div><strong>{byProgram.get(r.program_id)?.program?.title||'Merchant reward'}</strong><p>Status: {r.status}</p>{r.code && <p>Checkout code: <strong className="rewards-code">{r.code}</strong></p>}</div>{r.status==='available'&&<button type="button" disabled={!!busy} onClick={()=>perform(r.id,()=>send('/loyalty/rewards/'+r.id+'/reserve'),data=>{setActiveVoucher({...data,program_id:r.program_id});return 'Voucher ready. Present the QR code to the merchant before checkout.';})}>Unlock reward QR</button>}
+             {r.status==='reserved'&&r.code&&<button type="button" className="secondary" onClick={()=>setActiveVoucher({reward_id:r.id,code:r.code,expires_at:r.reserved_until,program_id:r.program_id})}>Show reward QR</button>}</div>):<p>The reward QR appears here only after the required receipts are approved.</p>}
       </Panel>
       <Panel title="Discount reconciliation">
         <p className="muted">Only merchant-confirmed redemptions appear here. These records are not bank or POS settlement confirmation.</p>
