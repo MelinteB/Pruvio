@@ -177,7 +177,7 @@ def public_linked_place(db,place_id):
     if not row:raise HTTPException(404,'Place is not associated with a live campaign')
 
 @router.get('/v1/places/{place_id}')
-def public_place_summary(place_id:str,db:Session=Depends(get_db)):
+def public_place_summary(place_id:str,consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
     checked_id(place_id)
     enabled()
     public_linked_place(db,place_id)
