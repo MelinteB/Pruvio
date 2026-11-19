@@ -10,7 +10,7 @@ import secrets
 from urllib.parse import urlsplit
 from datetime import timedelta, timezone
 from typing import Literal
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -55,6 +55,24 @@ def pilot_enabled():
     if os.getenv('PRUVS_BUSINESS_RECEIPT_PILOT_ENABLED','false').lower() != 'true':
         raise HTTPException(503,'Receipt verification pilot is not enabled.')
 
+def effective_campaign_status(p,now=None):
+    now=now or utcnow()
+    if p.status=='published' and (not p.expires_at or aware(p.expires_at)<=now):
+        return 'expired'
+    return p.status
+
+
+def is_customer_visible(p,db,now=None):
+    now=now or utcnow()
+    if effective_campaign_status(p,now)!='published':
+        return False
+    program=db.get(Program,p.program_id)
+    merchant=db.get(Merchant,p.merchant_id)
+    store=db.get(Store,program.store_id) if program else None
+    return bool(program and program.status=='published' and merchant
+                and merchant.status=='active' and store and store.active)
+
+
 def promo_json(p,db):
     program=db.get(Program,p.program_id)
     store=db.get(Store,program.store_id) if program else None
@@ -69,6 +87,12 @@ def promo_json(p,db):
             'min_purchase_minor':program.min_purchase_minor if program else 0,
             'reward_minor':program.reward_minor if program else 0,
             'currency':program.currency if program else 'RON',
+            'store_id':store.id if store else None,
+            'store_latitude':store.latitude if store else None,
+            'store_longitude':store.longitude if store else None,
+            'store_place_id':getattr(store,'google_place_id',None) if store else None,
+            'effective_status':effective_campaign_status(p),
+            'is_public':is_customer_visible(p,db),
             'headline':p.headline,'message':p.message,'status':p.status,
             'media_url':p.media_url,'media_type':p.media_type,'media_alt':p.media_alt,
             'expires_at':p.expires_at.isoformat() if p.expires_at else None,
@@ -95,8 +119,9 @@ def campaign_media(payload):
     return payload.media_url,payload.media_type,payload.media_alt or ''
 
 @router.get('/v1/merchant/promotions')
-def merchant_promotions(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+def merchant_promotions(response:Response,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     campaign_schema_ready(db)
+    response.headers['Cache-Control']='no-store, private'
     rows=db.scalars(select(Promotion).where(Promotion.merchant_id==staff.merchant_id)
                     .order_by(Promotion.created_at.desc()).limit(100)).all()
     return [promo_json(p,db) for p in rows]
@@ -149,9 +174,36 @@ def publish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),db:Se
     program=owned_program(db,staff,p.program_id)
     if program.status!='published':raise HTTPException(409,'Program is not published')
     if p.status!='draft':raise HTTPException(409,'Only drafts may be published')
-    p.status='published';p.published_at=utcnow()
-    p.expires_at=utcnow()+timedelta(days=p.duration_days)
+    now=utcnow()
+    p.status='published';p.published_at=now
+    p.expires_at=now+timedelta(days=p.duration_days)
     db.commit();return promo_json(p,db)
+
+@router.post('/v1/merchant/promotions/{promotion_id}/republish')
+def republish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    """Atomically republish a paused or expired campaign; do not duplicate records.
+
+    The linked loyalty program must still be published. This extends only the
+    campaign display window; it never changes membership progress or rewards.
+    """
+    campaign_schema_ready(db)
+    can_manage(staff)
+    p=db.scalar(select(Promotion).where(
+        Promotion.id==promotion_id,Promotion.merchant_id==staff.merchant_id
+    ).with_for_update())
+    if not p:
+        raise HTTPException(404,'Promotion not found')
+    if effective_campaign_status(p) not in ('paused','expired'):
+        raise HTTPException(409,'Only paused or expired campaigns may be republished')
+    program=owned_program(db,staff,p.program_id)
+    if program.status!='published':
+        raise HTTPException(409,'Publish the linked loyalty program first')
+    now=utcnow()
+    p.status='published';p.published_at=now
+    p.expires_at=now+timedelta(days=p.duration_days)
+    db.commit()
+    return promo_json(p,db)
+
 
 @router.post('/v1/merchant/promotions/{promotion_id}/unpublish')
 def unpublish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
@@ -225,23 +277,26 @@ def restore_archived_promotion(promotion_id:str,staff:Staff=Depends(merchant_act
 
 
 @router.get('/v1/promotions')
-def public_promotions(limit:int=Query(12,ge=1,le=30),db:Session=Depends(get_db)):
+def public_promotions(response:Response,limit:int=Query(12,ge=1,le=30),db:Session=Depends(get_db)):
     campaign_schema_ready(db)
-    # No draft, expired, inactive merchant, inactive store or unpublished-program exposure.
+    response.headers['Cache-Control']='no-store, private, max-age=0'
+    # Apply eligibility BEFORE limiting results; an expired 200-item backlog
+    # must not hide valid published campaigns from the customer feed.
     now=utcnow()
-    rows=db.scalars(select(Promotion).where(Promotion.status=='published')
-                    .order_by(Promotion.published_at.desc()).limit(200)).all()
-    data=[]
-    for p in rows:
-        if not p.expires_at or aware(p.expires_at)<=now:continue
-        program=db.get(Program,p.program_id)
-        if not program or program.status!='published':continue
-        merchant=db.get(Merchant,p.merchant_id)
-        store=db.get(Store,program.store_id)
-        if not merchant or merchant.status!='active' or not store or not store.active:continue
-        data.append(promo_json(p,db))
-        if len(data)>=limit:break
-    return data
+    rows=db.scalars(
+        select(Promotion)
+        .join(Program,Promotion.program_id==Program.id)
+        .join(Store,Program.store_id==Store.id)
+        .join(Merchant,Promotion.merchant_id==Merchant.id)
+        .where(Promotion.status=='published',Promotion.expires_at>now,
+               Program.status=='published',Store.active.is_(True),
+               Merchant.status=='active',
+               Program.merchant_id==Promotion.merchant_id,
+               Store.merchant_id==Promotion.merchant_id)
+        .order_by(Promotion.published_at.desc(),Promotion.id.desc())
+        .limit(limit)
+    ).all()
+    return [promo_json(p,db) for p in rows]
 
 class IssuePurchaseIn(BaseModel):
     program_id: str
