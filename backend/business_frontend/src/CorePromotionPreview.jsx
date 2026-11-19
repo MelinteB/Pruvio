@@ -3,6 +3,7 @@ import {Gift,Smartphone,Monitor,ShieldCheck,ImageIcon} from 'lucide-react';
 // Share the *actual Core campaign card CSS*, rather than maintaining visual copies.
 import '../../frontend/src/promotions-preview.css';
 import '../../frontend/src/campaign-creative.css';
+import '../../frontend/src/campaign-creative-v7162.css';
 import '../../shared_ui/pruvs-campaign-card-2027.css';
 import './core-promotion-preview.css';
 
