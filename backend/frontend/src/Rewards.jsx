@@ -7,6 +7,7 @@ import {request, send, money} from './api';
 import './rewards.css';
 import './rewards-v05.css';
 import CampaignCreative,{hasCampaignCreative} from './CampaignCreative.jsx';
+import OfferLocation from './OfferLocation.jsx';
 import ReceiptSubmission from './ReceiptSubmission';
 import CustomerReceiptCode from './CustomerReceiptCode';
 
@@ -238,7 +239,7 @@ function AccountRewards(){
       {promotedProgram&&offers.some(o=>o.program.id===promotedProgram)&&<p role="status" className="pruvs-v7152-partial-warning">Your selected loyalty program is listed first below. Join it to start earning merchant-approved rewards.</p>}
       {promotions.length>0 && !cityFilter && <section className="rewards-featured"><h2>Featured merchant promotions</h2><div className="rewards-cards">{promotions.map(p=><Panel key={p.id} className="rewards-card rewards-promotion">
           {hasCampaignCreative(p)?<CampaignCreative promotion={p}/>:
-            <><small className="rewards-promo-tag">LOCAL PROMOTION · {p.merchant_name}</small><h3>{p.headline}</h3><p>{p.message}</p></>}<p><strong>{p.stamps_required} eligible receipts</strong> to earn {money(p.reward_minor/100,p.currency)} · Minimum purchase {money(p.min_purchase_minor/100,p.currency)}</p><small>{p.store_name}{p.expires_at?' · Ends '+new Date(p.expires_at).toLocaleDateString():''}</small><button className="primary" disabled={!!busy||!canJoin||joined.has(p.program_id)} onClick={()=>perform(p.program_id,()=>send('/loyalty/programs/'+p.program_id+'/join'),()=> 'Joined '+p.program_title+'.')}>{joined.has(p.program_id)?'Joined':'Join promoted program'}</button></Panel>)}</div></section>}
+            <><small className="rewards-promo-tag">LOCAL PROMOTION · {p.merchant_name}</small><h3>{p.headline}</h3><p>{p.message}</p></>}<p><strong>{p.stamps_required} eligible receipts</strong> to earn {money(p.reward_minor/100,p.currency)} · Minimum purchase {money(p.min_purchase_minor/100,p.currency)}</p><small>{p.store_name}{p.expires_at?' · Ends '+new Date(p.expires_at).toLocaleDateString():''}</small><OfferLocation promotion={p} compact/><button className="primary" disabled={!!busy||!canJoin||joined.has(p.program_id)} onClick={()=>perform(p.program_id,()=>send('/loyalty/programs/'+p.program_id+'/join'),()=> 'Joined '+p.program_title+'.')}>{joined.has(p.program_id)?'Joined':'Join promoted program'}</button></Panel>)}</div></section>}
       <div className="rewards-cards">{shownOffers.map(o=><Panel key={o.program.id} className="rewards-card"><div className="rewards-icon"><Gift size={22}/></div><small className="muted">{o.merchant_name} · {o.store.name}</small>
         {activePromotionByProgram.has(o.program.id)&&hasCampaignCreative(activePromotionByProgram.get(o.program.id))&&
           <CampaignCreative promotion={activePromotionByProgram.get(o.program.id)} compact/>}
