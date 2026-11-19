@@ -1,0 +1,20 @@
+.pruvs-offer-location{display:grid;gap:7px;padding:12px;margin:10px 0 7px;
+ border:1px solid #dce6f6;border-radius:13px;background:#f7faff;min-width:0;color:#233f6e}
+.pruvs-offer-location-primary{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:9px}
+.pruvs-offer-location-primary>div{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px;font-weight:750}
+.pruvs-offer-location-primary>div span{overflow-wrap:anywhere}
+.pruvs-offer-location-primary>a{display:inline-flex;align-items:center;gap:6px;padding:8px 11px;background:#1b5ee6;color:#fff!important;border-radius:10px;text-decoration:none;font-size:11px;font-weight:800;min-height:37px}
+.pruvs-offer-location-other{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.pruvs-offer-location-other a,.pruvs-offer-location-other button{display:inline-flex;align-items:center;gap:5px;color:#2457a9;font-size:11px;font-weight:750;background:#fff;border:1px solid #dce6f4;border-radius:9px;padding:7px 10px;min-height:35px;text-decoration:none}
+.pruvs-offer-location-other button:disabled{opacity:.5}
+.pruvs-offer-location-reviews{border-top:1px solid #d8e5f4;padding-top:9px;display:grid;gap:8px}
+.pruvs-offer-location-rating{display:flex;align-items:center;gap:6px;color:#ad7a16;font-size:12px;flex-wrap:wrap}
+.pruvs-offer-location-rating a{margin-left:auto;color:#1b5acb}
+.pruvs-offer-location-reviews blockquote{background:#fff;border-radius:10px;padding:11px;margin:0;border:1px solid #e0e8f5;display:grid;gap:6px}
+.pruvs-offer-location-reviews blockquote>span{font-size:11px;color:#63738d}
+.pruvs-offer-location-reviews blockquote p{font-size:12px;line-height:1.5;color:#344b71;margin:0;overflow-wrap:anywhere}
+.pruvs-offer-location-reviews>small{font-size:10px;line-height:1.5;color:#687a93}
+.pruvs-offer-location-error{color:#b34b35}
+@media(max-width:450px){.pruvs-offer-location{padding:10px}
+.pruvs-offer-location-primary>a{min-height:42px}
+.pruvs-offer-location-other a,.pruvs-offer-location-other button{min-height:40px}}
