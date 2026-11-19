@@ -7,6 +7,7 @@ import {request, send, money} from './api';
 import './rewards.css';
 import './rewards-v05.css';
 import CampaignCreative,{hasCampaignCreative} from './CampaignCreative.jsx';
+import CampaignLocation from './CampaignLocation.jsx';
 import ReceiptSubmission from './ReceiptSubmission';
 import CustomerReceiptCode from './CustomerReceiptCode';
 
@@ -228,11 +229,12 @@ function AccountRewards(){
       {promotedProgram&&offers.some(o=>o.program.id===promotedProgram)&&<p role="status" className="pruvs-v7152-partial-warning">Your selected loyalty program is listed first below. Join it to start earning merchant-approved rewards.</p>}
       {promotions.some(p=>p.status==='published'&&p.is_public!==false) && !cityFilter && <section className="rewards-featured"><h2>Featured offers</h2><div className="rewards-cards">{promotions.filter(p=>p.status==='published'&&p.is_public!==false).map(p=><Panel key={p.id} className="rewards-card rewards-promotion">
           {hasCampaignCreative(p)?<CampaignCreative promotion={p}/>:
-            <><small className="rewards-promo-tag">LOCAL PROMOTION · {p.merchant_name}</small><h3>{p.headline}</h3><p>{p.message}</p></>}<p><strong>{p.stamps_required} eligible receipts</strong> to earn {money(p.reward_minor/100,p.currency)} · Minimum purchase {money(p.min_purchase_minor/100,p.currency)}</p><small>{p.store_name}{p.expires_at?' · Ends '+new Date(p.expires_at).toLocaleDateString():''}</small><button className="primary" disabled={!!busy||!canJoin||joined.has(p.program_id)} onClick={()=>perform(p.program_id,()=>send('/loyalty/programs/'+p.program_id+'/join'),()=> 'Joined '+p.program_title+'.')}>{joined.has(p.program_id)?'Joined':'Join promoted program'}</button></Panel>)}</div></section>}
+            <><small className="rewards-promo-tag">LOCAL PROMOTION · {p.merchant_name}</small><h3>{p.headline}</h3><p>{p.message}</p></>}<p><strong>{p.stamps_required} eligible receipts</strong> to earn {money(p.reward_minor/100,p.currency)} · Minimum purchase {money(p.min_purchase_minor/100,p.currency)}</p><small>{p.store_name}{p.expires_at?' · Ends '+new Date(p.expires_at).toLocaleDateString():''}</small><CampaignLocation location={p} loadDetails={id=>request('/loyalty/places/'+encodeURIComponent(id))}/><button className="primary" disabled={!!busy||!canJoin||joined.has(p.program_id)} onClick={()=>perform(p.program_id,()=>send('/loyalty/programs/'+p.program_id+'/join'),()=> 'Joined '+p.program_title+'.')}>{joined.has(p.program_id)?'Joined':'Join promoted program'}</button></Panel>)}</div></section>}
       <div className="rewards-cards">{shownOffers.map(o=><Panel key={o.program.id} className="rewards-card"><div className="rewards-icon"><Gift size={22}/></div><small className="muted">{o.merchant_name} · {o.store.name}</small>
         {activePromotionByProgram.has(o.program.id)&&hasCampaignCreative(activePromotionByProgram.get(o.program.id))&&
           <CampaignCreative promotion={activePromotionByProgram.get(o.program.id)} compact/>}
-        <h2>{o.program.title}</h2><p>{o.program.description}</p><p><strong>{o.program.stamps_required} qualifying receipts</strong> to earn {money(o.program.reward_minor/100,o.program.currency)}</p>
+        <h2>{o.program.title}</h2><p>{o.program.description}</p>
+        <CampaignLocation location={activePromotionByProgram.get(o.program.id)||o.store} loadDetails={id=>request('/loyalty/places/'+encodeURIComponent(id))}/><p><strong>{o.program.stamps_required} qualifying receipts</strong> to earn {money(o.program.reward_minor/100,o.program.currency)}</p>
         {o.distance_km!=null && <small>{o.distance_km} km away</small>}
         <button type="button" className="primary" disabled={!!busy || !canJoin || joined.has(o.program.id)} onClick={()=>perform(o.program.id,()=>send('/loyalty/programs/'+o.program.id+'/join'),()=> 'Joined '+o.program.title+'.')}>{joined.has(o.program.id)?<><CheckCircle2 size={16}/> Joined</>:busy===o.program.id?'Joining…':'Join loyalty program'}</button>
       </Panel>)}
