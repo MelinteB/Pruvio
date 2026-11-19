@@ -208,6 +208,10 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
   function confirmPublish(p){
     manage('publish',p,'Publish "'+p.headline+'" to Pruvs Core? Customers will be able to discover it.','Campaign published to Pruvs Core.');
   }
+  function republishCampaign(p){
+    manage('republish',p,'Republish "'+p.headline+'" for '+p.duration_days+' days? Customers will see it again.',
+      'Campaign republished with a new display period.');
+  }
   function unpublishCampaign(p){
     manage('unpublish',p,'Remove "'+p.headline+'" from customer discovery? The campaign will be paused.','Campaign paused and removed from customer discovery.');
   }
@@ -368,6 +372,7 @@ export default function PromotionConsole({token,programs,merchantName='',mode='p
         onPublish={canManage?confirmPublish:undefined}
         onUnpublish={canManage?unpublishCampaign:undefined}
         onReopen={canManage?reopenForEditing:undefined}
+        onRepublish={canManage?republishCampaign:undefined}
         onArchive={canManage?archiveCampaign:undefined}
         onRestore={canManage?restoreCampaign:undefined}/>}
     </>:<>
