@@ -37,7 +37,7 @@ export default function PromotionConsole({token,programs,stores=[],merchantName=
   const [list,setList]=useState([]),[programId,setProgramId]=useState(''),[headline,setHeadline]=useState(''),[message,setMessage]=useState(''),[mediaUrl,setMediaUrl]=useState(''),[mediaType,setMediaType]=useState('image/jpeg'),[days,setDays]=useState(14),[amount,setAmount]=useState(''),[code,setCode]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
   const [goal,setGoal]=useState('Encourage loyal customers to return'),[audience,setAudience]=useState('Local regular customers'),
     [tone,setTone]=useState('friendly'),[creativeFormat,setCreativeFormat]=useState('png'),
-    [watermark,setWatermark]=useState('Pruvs Business'),[artworkKey,setArtworkKey]=useState(''),
+    [watermark,setWatermark]=useState((merchantName||'Your business').slice(0,45)+' · PRUVS'),[artworkKey,setArtworkKey]=useState(''),
     [draftPreview,setDraftPreview]=useState(null),[aiBusy,setAiBusy]=useState(false),[assetBusy,setAssetBusy]=useState(false),[aiReadiness,setAiReadiness]=useState(null);
   const [creativeInstructions,setCreativeInstructions]=useState('');
   const [imageOrigin,setImageOrigin]=useState(''); // upload | ai | empty
