@@ -1,0 +1,8 @@
+.pruvs-business-language{display:inline-flex;align-items:center;gap:3px;padding:4px;background:#e8f4ec;border:1px solid #d7e6dc;border-radius:11px;flex:none}
+.pruvs-business-language button{min-width:38px;min-height:33px;padding:7px 9px;border:0;border-radius:8px;color:#5a7866;background:transparent;font-size:11px;font-weight:850;letter-spacing:.04em}
+.pruvs-business-language button.selected{color:#0b6547;background:#fff;box-shadow:0 2px 7px #17392013}
+.pruvs-business-language button:focus-visible{outline:2px solid #0f7e5a;outline-offset:2px}
+.pruvs-login-language{display:flex;align-items:center;justify-content:flex-end;max-width:445px;margin:0 auto 12px;width:100%}
+@media(max-width:650px){.pruvs-business-2027 .topbar .pruvs-business-language{padding:2px;gap:1px}
+ .pruvs-business-2027 .topbar .pruvs-business-language button{min-width:29px;min-height:34px;padding:6px 4px}
+ .pruvs-business-2027 .topbar .top-right{gap:6px}}
