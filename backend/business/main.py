@@ -15,16 +15,18 @@ from fastapi.responses import Response
 from .db import get_db, engine
 from .config import get_settings
 from .merchant_enrollment import router as merchant_enrollment_router
+from .places_v0618 import router as google_places_router
 from .models import Merchant, Staff, Store, Program, Membership, ReceiptClaim, Reward, Campaign, utcnow
 from .models_v067 import DiscountRedemption
 from .security import merchant_actor, customer_actor, verify_password, encode_merchant_token, decode
 from .schemas import LoginIn, StoreIn, ProgramIn, CampaignGoal, CampaignIn, ReceiptProofIn, ConfirmIn, DemoReceiptIn
 
 settings=get_settings()
-app=FastAPI(title='Pruvs Business API',version='0.6.17',docs_url='/docs' if settings.app_env!='production' else None)
+app=FastAPI(title='Pruvs Business API',version='0.6.18',docs_url='/docs' if settings.app_env!='production' else None)
 app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=False,
-                   allow_methods=['GET','POST'],allow_headers=['Authorization','Content-Type'])
+                   allow_methods=['GET','POST','PATCH'],allow_headers=['Authorization','Content-Type'])
 app.include_router(merchant_enrollment_router)
+app.include_router(google_places_router)
 from .ai_campaign_v067 import router as ai_campaign_router
 app.include_router(ai_campaign_router)
 from .ai_campaign_artwork_v0611 import router as ai_artwork_router
@@ -73,7 +75,7 @@ def aware(dt):
 
 @app.get('/health')
 def health():
-    return {'service':'Pruvs Business','version':'0.6.17','status':'ok'}
+    return {'service':'Pruvs Business','version':'0.6.18','status':'ok'}
 
 @app.get('/ready', include_in_schema=False)
 def readiness():
@@ -82,10 +84,10 @@ def readiness():
     try:
         checks=check_schema(engine())
         if not all(checks.values()):
-            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.17'})
-        return {'status':'ready','version':'0.6.17'}
+            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.18'})
+        return {'status':'ready','version':'0.6.18'}
     except Exception:
-        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.17'})
+        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.18'})
 
 @app.post('/v1/merchant/login')
 def login(payload:LoginIn, db:Session=Depends(get_db)):
@@ -119,6 +121,27 @@ def add_store(payload:StoreIn,staff:Staff=Depends(merchant_actor),db:Session=Dep
     s=Store(merchant_id=staff.merchant_id,**payload.model_dump())
     db.add(s);db.commit();db.refresh(s)
     return store_json(s)
+
+class StoreUpdate(BaseModel):
+    name:str|None=Field(default=None,min_length=2,max_length=180)
+    address:str|None=Field(default=None,max_length=250)
+    latitude:float|None=Field(default=None,ge=-90,le=90)
+    longitude:float|None=Field(default=None,ge=-180,le=180)
+    active:bool|None=None
+
+@app.patch('/v1/merchant/stores/{store_id}')
+def update_store(store_id:str,payload:StoreUpdate,staff:Staff=Depends(merchant_actor),
+                 db:Session=Depends(get_db)):
+    merchant_check(staff)
+    store=owned(db,Store,store_id,staff.merchant_id)
+    changes=payload.model_dump(exclude_unset=True)
+    if not changes:
+        raise HTTPException(422,'No location changes submitted')
+    for field,value in changes.items():
+        if value is not None:setattr(store,field,value)
+    db.commit()
+    return store_json(store)
+
 
 @app.get('/v1/merchant/programs')
 def get_programs(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
