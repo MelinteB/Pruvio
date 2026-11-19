@@ -1,5 +1,5 @@
 """Pruvs customer-facing Rewards API; authenticated and same-origin only."""
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Response
 from pydantic import BaseModel, Field
 from decimal import Decimal, InvalidOperation
 import os
@@ -83,7 +83,10 @@ def receipt_candidates(identity=Depends(current),db=Depends(get_db)):
 
 
 @router.get('/promotions')
-def promotions(limit:int=Query(12,ge=1,le=30), identity=Depends(current)):
+def promotions(response:Response, limit:int=Query(12,ge=1,le=30), identity=Depends(current)):
+    # Explicit no-store: a paused merchant campaign must not remain visible
+    # from an intermediary or browser cache on the authenticated customer feed.
+    response.headers['Cache-Control']='private, no-store, max-age=0'
     return call_business('/v1/promotions',params={'limit':limit})
 
 class ReceiptClaimIn(BaseModel):
