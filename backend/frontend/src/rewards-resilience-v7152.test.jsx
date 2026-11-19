@@ -53,10 +53,10 @@ describe('Rewards campaign discovery',()=>{
     expect(screen.getAllByText('Two coffees')).toHaveLength(1);
     expect(screen.getByRole('button',{name:'Joined'}).disabled).toBe(true);
     expect(screen.getByRole('heading',{name:'Ordinary program'})).toBeTruthy();
-    expect(screen.queryByRole('button',{name:/next campaign|previous campaign|campaign rotation/i})).toBeNull();
-    expect(screen.getAllByAltText('Cafe campaign')).toHaveLength(1);
-    expect(screen.getByRole('button',{name:'Joined'}).disabled).toBe(true);
-    expect(screen.getByRole('heading',{name:'Central coffee rewards'})).toBeTruthy();
+    expect(screen.getByRole('button',{name:'Previous campaign'})).toBeTruthy();
+    fireEvent.click(screen.getByRole('button',{name:'Next campaign'}));
+    expect(screen.getByRole('heading',{name:'Weekend cafe rewards'})).toBeTruthy();
+    expect(screen.queryByRole('button',{name:/play|pause|campaign rotation/i})).toBeNull();
   });
 });
 

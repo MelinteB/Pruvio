@@ -46,6 +46,14 @@
   color:#8e392d;background:#fff0eb;
   border:1px solid #edc9b9;border-radius:11px;font-size:12px;
 }
+.pruvs-core-preview-media-kind{
+  position:absolute;z-index:4;top:13px;left:13px;
+  display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:5px 9px;
+  border:1px solid rgba(255,255,255,.48);border-radius:999px;
+  background:rgba(7,24,31,.62);backdrop-filter:blur(12px);
+  color:#fff;font-size:10px;font-weight:800;letter-spacing:.04em;
+  box-shadow:0 5px 16px rgba(0,0,0,.16);pointer-events:none;
+}
 @media(max-width:500px){
   .pruvs-core-preview-stage{padding:12px 6px}
   .pruvs-core-preview-stage .pruvs-promo{padding:10px;max-width:100%}

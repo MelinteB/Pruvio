@@ -1,4 +1,5 @@
 import React, {useEffect, useRef, useState} from 'react';
+import {ChevronLeft, ChevronRight} from 'lucide-react';
 import {t} from './i18n';
 import './campaign-carousel.css';
 
@@ -20,6 +21,7 @@ export function livePromotions(promotions) {
 export default function CampaignCarousel({campaigns, label, initialCampaignId, renderCampaign}) {
   const region = useRef(null);
   const remainingDelay = useRef(ROTATION_DELAY);
+  const pointerStartX = useRef(null);
   const [selectedId, setSelectedId] = useState(initialCampaignId);
   const [direction, setDirection] = useState('next');
   const [hovered, setHovered] = useState(false);
@@ -39,6 +41,13 @@ export default function CampaignCarousel({campaigns, label, initialCampaignId, r
   const pausedByInteraction = hovered || focused || touching;
   const rotationAvailable = count > shownCount && !reduceMotion && visible && inView;
   const rotating = rotationAvailable && !pausedByInteraction;
+
+  const move = offset => {
+    if (count <= shownCount) return;
+    remainingDelay.current = ROTATION_DELAY;
+    setDirection(offset > 0 ? 'next' : 'previous');
+    setSelectedId(campaigns[(index + offset + count) % count].id);
+  };
 
   useEffect(() => {
     const update = () => setVisible(!document.hidden);
@@ -103,9 +112,25 @@ export default function CampaignCarousel({campaigns, label, initialCampaignId, r
       if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
     }}
     onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
-    <div onPointerDown={event => { if (event.pointerType === 'touch') setTouching(true); }}
-      onPointerUp={event => { if (event.pointerType === 'touch') setTouching(false); }}
-      onPointerCancel={() => setTouching(false)}>
+    <div className="campaign-carousel-touch-area"
+      onPointerDown={event => {
+        if (event.pointerType !== 'touch') return;
+        pointerStartX.current = event.clientX;
+        setTouching(true);
+      }}
+      onPointerUp={event => {
+        if (event.pointerType !== 'touch') return;
+        const startX = pointerStartX.current;
+        pointerStartX.current = null;
+        setTouching(false);
+        if (startX === null) return;
+        const distance = event.clientX - startX;
+        if (Math.abs(distance) >= 40) move(distance < 0 ? 1 : -1);
+      }}
+      onPointerCancel={() => {
+        pointerStartX.current = null;
+        setTouching(false);
+      }}>
     <div className="campaign-carousel-viewport" aria-live="off"
       style={{'--campaigns-visible': shownCount}}>
       {visibleCampaigns.map((campaign, offset) => <div className="campaign-carousel-slide" key={campaign.id} data-direction={direction}
@@ -115,10 +140,22 @@ export default function CampaignCarousel({campaigns, label, initialCampaignId, r
       </div>)}
     </div>
     </div>
-    {count > 1 && <div className="campaign-carousel-status" aria-hidden="true">
-      <span>{index + 1} / {count}</span>
-      <div className="campaign-carousel-progress"><i key={current?.id} data-active={rotationAvailable}
-        data-paused={pausedByInteraction}/></div>
+    {count > 1 && <div className="campaign-carousel-status">
+      <div className="campaign-carousel-position" aria-hidden="true">
+        <span>{index + 1} / {count}</span>
+        <div className="campaign-carousel-progress"><i key={current?.id} data-active={rotationAvailable}
+          data-paused={pausedByInteraction}/></div>
+      </div>
+      {count > shownCount && <div className="campaign-carousel-navigation">
+        <button type="button" aria-label={t('Previous campaign')} onClick={event => {
+          move(-1);
+          if (event.detail) event.currentTarget.blur();
+        }}><ChevronLeft size={18} aria-hidden="true"/></button>
+        <button type="button" aria-label={t('Next campaign')} onClick={event => {
+          move(1);
+          if (event.detail) event.currentTarget.blur();
+        }}><ChevronRight size={18} aria-hidden="true"/></button>
+      </div>}
     </div>}
   </div>;
 }

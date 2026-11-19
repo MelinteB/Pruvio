@@ -23,20 +23,65 @@
   margin: 0;
 }
 
+.campaign-carousel-touch-area {
+  min-width: 0;
+  touch-action: pan-y;
+}
+
 .rewards-featured .campaign-carousel {
   width: min(100%, 1200px);
 }
 
 .campaign-carousel-status {
-  display: grid;
-  grid-template-columns: max-content minmax(80px, 1fr);
+  display: flex;
   align-items: center;
-  gap: 10px;
-  width: min(100%, 240px);
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
   color: #607286;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   letter-spacing: .04em;
+}
+
+.campaign-carousel-position {
+  display: grid;
+  grid-template-columns: max-content minmax(80px, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: min(62%, 240px);
+}
+
+.campaign-carousel-navigation {
+  display: flex;
+  gap: 7px;
+  margin-left: auto;
+}
+
+.campaign-carousel-navigation button {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid #cbdad5;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .9);
+  color: #176d59;
+  box-shadow: 0 4px 14px rgba(22, 72, 59, .08);
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.campaign-carousel-navigation button:hover {
+  border-color: #82b7a8;
+  background: #f3faf7;
+  transform: translateY(-1px);
+}
+
+.campaign-carousel-navigation button:focus-visible {
+  outline: 3px solid rgba(42, 126, 103, .24);
+  outline-offset: 2px;
 }
 
 .campaign-carousel-progress {
@@ -88,7 +133,8 @@
 @media (max-width: 700px) {
   .campaign-carousel { gap: 9px; }
   .campaign-carousel-viewport { border-radius: 14px; }
-  .campaign-carousel-status { width: min(72%, 220px); }
+  .campaign-carousel-position { width: min(66%, 220px); }
+  .campaign-carousel-navigation button { width: 36px; height: 36px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

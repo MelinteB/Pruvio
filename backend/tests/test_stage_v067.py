@@ -38,6 +38,11 @@ def test_campaign_frames_have_mobile_dimensions_and_watermark():
     assert result.size==(720,900)
     assert result.mode=='RGB'
 
+def test_campaign_watermark_contrast_adapts_to_picture():
+    dark=frame(Image.new('RGB',(500,600),'#07120f'),0,1,'My Cafe','Reward')
+    light=frame(Image.new('RGB',(500,600),'#f3eee2'),0,1,'My Cafe','Reward')
+    assert dark.getpixel((30,40)) != light.getpixel((30,40))
+
 def test_archived_and_removed_sources_are_filtered_before_project_import():
     p=(BASE/'app/react_app/bill_projects_v7141.py').read_text(encoding='utf-8')
     assert 'def active_for_project' in p

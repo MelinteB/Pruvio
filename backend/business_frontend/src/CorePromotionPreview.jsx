@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from 'react';
-import {Gift,Smartphone,Monitor,ShieldCheck,ImageIcon} from 'lucide-react';
+import {Gift,Smartphone,Monitor,ShieldCheck,ImageIcon,Film} from 'lucide-react';
 import {useBusinessLanguage} from './i18n.jsx';
 // Share the *actual Core campaign card CSS*, rather than maintaining visual copies.
 import '../../frontend/src/promotions-preview.css';
@@ -35,6 +35,7 @@ export default function CorePromotionPreview({
     (mediaType?.startsWith('image/')||mediaType?.startsWith('video/')||
      mediaUrl.startsWith('blob:')));
   const video=hasMedia&&mediaType?.startsWith('video/');
+  const mediaKind=video?t('Short video'):mediaType==='image/gif'?t('Animated GIF'):t('Image');
   const title=headline?.trim()||t('Your campaign headline');
   const copy=message?.trim()||t('Your approved campaign message will appear here, exactly as customers will read it.');
   const merchant=merchantName?.trim()||t('Your business');
@@ -58,6 +59,9 @@ export default function CorePromotionPreview({
     <div className={'pruvs-core-preview-stage is-'+viewport}>
       <article className="pruvs-promo">
         {hasMedia&&!imageBroken?<div className="pruvs-campaign-creative">
+          <span className="pruvs-core-preview-media-kind">
+            {video?<Film size={13}/>:<ImageIcon size={13}/>} {mediaKind}
+          </span>
           {video?
             <video key={reduceMotion?'manual':'auto'} className="pruvs-campaign-creative-media" src={mediaUrl}
               muted autoPlay={!reduceMotion} controls={reduceMotion} loop playsInline preload="metadata"

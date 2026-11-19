@@ -11,7 +11,7 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel, Field
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageStat
 from .models import Staff
 from .security import merchant_actor
 
@@ -174,12 +174,28 @@ def frame(photo,idx,frames,text,headline):
     canvas=scaled.crop((left,top,left+w,top+h)).convert('RGB')
     draw=ImageDraw.Draw(canvas)
     draw.rectangle((0,755,720,900),fill='#092a24')
-    draw.rectangle((24,36,205,80),fill='#e5fff2')
     try:font=ImageFont.truetype('DejaVuSans-Bold.ttf',22)
     except OSError:font=ImageFont.load_default()
-    draw.text((36,43),'PRUVS BUSINESS',font=font,fill='#075f42')
+    # Sample the picture behind the watermark and retain its dominant tint while
+    # selecting the light/dark treatment that provides the strongest contrast.
+    watermark=(text.strip() or 'Pruvs Business')[:55]
+    sample=ImageStat.Stat(canvas.crop((20,28,430,96)).resize((1,1))).mean[:3]
+    luminance=.2126*sample[0]+.7152*sample[1]+.0722*sample[2]
+    if luminance>=142:
+        watermark_bg=tuple(round(channel*.28) for channel in sample)
+        watermark_fg='#ffffff'
+        watermark_outline=(255,255,255)
+    else:
+        watermark_bg=tuple(round(channel*.18+255*.82) for channel in sample)
+        watermark_fg='#0a3128'
+        watermark_outline=(9,49,40)
+    bounds=draw.textbbox((0,0),watermark.upper(),font=font)
+    badge_width=min(660,max(178,bounds[2]-bounds[0]+32))
+    draw.rounded_rectangle((24,34,24+badge_width,84),radius=17,fill=watermark_bg,
+                           outline=watermark_outline,width=1)
+    draw.text((40,46),watermark.upper(),font=font,fill=watermark_fg)
     draw.text((26,780),headline[:48],font=font,fill='#ffffff')
-    draw.text((26,844),text[:55],font=font,fill='#8bebc4')
+    draw.text((26,844),'PRUVS',font=font,fill='#8bebc4')
     return canvas
 
 @router.post('/v1/merchant/promotions/media/render')

@@ -124,7 +124,9 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
         });
         setMediaUrl(branded.media_url);setMediaType(branded.media_type);
         setRenderedSignature(renderSignature);
-        setNotice('AI artwork generated and branded. Review the preview, save as draft and publish when approved.');
+        setNotice(creativeFormat==='png'?
+          'AI image generated and branded. Review the preview, save as draft and publish when approved.':
+          t('AI created the source image and Pruvs rendered the selected {format} animation. Review it before saving.',{format:creativeFormat.toUpperCase()}));
       }catch(renderError){
         setError(t('AI image was saved, but branding failed: {error}. Use Generate branded artwork to retry.',{error:t(renderError.message)}));
       }
@@ -318,11 +320,14 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
         </div>
         <div className="pruvs-ai-actions"><button type="button" className="btn primary" disabled={!programId||uploadPending||mediaPreviewError||aiBusy||assetBusy||busy||aiReadiness?.copy_ready===false} onClick={generateDraft}><WandSparkles size={17}/>{t(aiBusy?'Creating AI draft…':'Generate AI copy')}</button>
           {imageOrigin==='upload'?<p className="pruvs-ai-photo-note" role="status">{t('Select PNG, GIF or MP4, then generate branded artwork or save the draft to render it automatically.')}</p>:
-            <button type="button" className="btn primary" disabled={!programId||!draftPreview||!headline.trim()||assetBusy||aiBusy||busy||aiReadiness?.artwork_ready===false} onClick={generateAIArtwork}><Sparkles size={17}/>{t(assetBusy?'Creating artwork…':'Generate AI background (no photo)')}</button>}
+            <button type="button" className="btn primary" disabled={!programId||!draftPreview||!headline.trim()||assetBusy||aiBusy||busy||aiReadiness?.artwork_ready===false} onClick={generateAIArtwork}><Sparkles size={17}/>{t(assetBusy?'Creating artwork…':creativeFormat==='png'?'Generate AI image (no photo)':'Generate AI source + {format}',{format:creativeFormat.toUpperCase()})}</button>}
 
           <button type="button" className="btn outline" disabled={!artworkKey||assetBusy||!headline.trim()} onClick={renderArtwork}><Film size={17}/>{assetBusy?t('Processing artwork…'):t('Generate {format} artwork',{format:creativeFormat.toUpperCase()})}</button>
         </div>
         {draftPreview&&<div className="pruvs-ai-preview"><strong>{t('AI copy preview')}</strong><p><b>{draftPreview.cta}</b> · {draftPreview.visual_brief}</p><small>{t('Suggested motion: {motion}',{motion:draftPreview.motion_storyboard})}</small></div>}
+        <p className="helper">{t(creativeFormat==='png'?
+          'The selected output is a still image. Choose GIF or MP4 to create a short moving campaign.':
+          'AI creates the source picture; Pruvs then turns it into the selected three-second {format} with subtle motion.',{format:creativeFormat.toUpperCase()})}</p>
         {mediaNeedsRendering&&<p className="helper" role="status">{t('Saving this promotion will generate the {format} creative automatically.',{format:creativeFormat.toUpperCase()})}</p>}
         {mediaUrl&&!artworkKey&&mediaType!==targetMediaType&&<p className="helper">{t("To change this saved campaign's format, upload its original picture again.")}</p>}
         <p className="helper">{t('Review and approve the message and selected format before publishing.')}</p>
