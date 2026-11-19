@@ -1,6 +1,7 @@
 import React,{useState} from 'react';
 import {Gift, PencilLine, PauseCircle, PlayCircle, Check, X, ShieldCheck} from 'lucide-react';
 import ActivationPanel from './ActivationPanel.jsx';
+import {useBusinessLanguage} from './i18n.jsx';
 
 const API=(import.meta.env.VITE_API_BASE||'').replace(/\/$/,'');
 async function changeProgram(path,token,method='POST',body){
@@ -11,6 +12,7 @@ async function changeProgram(path,token,method='POST',body){
   return data;
 }
 export default function ProgramManager({programs=[],stores=[],token,onRefresh,notify,onAddStore,onCreateProgram,onVerifyPurchases}){
+  const {t}=useBusinessLanguage();
   const [editing,setEditing]=useState(null),[busy,setBusy]=useState(''),[error,setError]=useState('');
   const [draft,setDraft]=useState({});
   async function act(id,method,path,body){
@@ -22,15 +24,15 @@ export default function ProgramManager({programs=[],stores=[],token,onRefresh,no
   function open(p){setEditing(p.id);setDraft({title:p.title,description:p.description||'',
     stamps_required:p.stamps_required,min_purchase_minor:p.min_purchase_minor,reward_minor:p.reward_minor});setError('')}
   return <><ActivationPanel token={token} stores={stores} programs={programs} onAddStore={onAddStore} onCreateProgram={onCreateProgram} onViewPrograms={()=>document.getElementById('pruvs-programs-list')?.scrollIntoView({behavior:'smooth',block:'start'})} onVerifyPurchases={onVerifyPurchases}/><section className="panel" id="pruvs-programs-list">
-    <div className="panel-heading"><h2>Manage loyalty programs</h2><span>{programs.length} TOTAL</span></div>
+    <div className="panel-heading"><h2>{t('Manage loyalty programs')}</h2><span>{programs.length} TOTAL</span></div>
     <p className="helper">Publish, pause, resume and edit your programs. Reward criteria are locked after publication to protect existing customers.</p>
     {error&&<div className="error-text" role="alert">{error}</div>}
     {programs.length?<div className="pruvs-program-list">{programs.map(p=><div className="pruvs-program-row" key={p.id}>
       <span className="pruvs-program-icon"><Gift size={19}/></span>
       <div className="pruvs-program-meta"><strong>{p.title}</strong><small>{p.stamps_required} verified purchases → {(p.reward_minor/100).toFixed(2)} {p.currency||'RON'} discount · Minimum {(p.min_purchase_minor/100).toFixed(2)} {p.currency||'RON'}</small></div>
       <span className={'pill '+(p.status==='published'?'good':'')}>{p.status}</span>
-      <div className="pruvs-program-actions"><button type="button" className="btn subtle" onClick={()=>open(p)}><PencilLine size={15}/> Edit</button>
-      {p.status==='draft'&&<button type="button" className="btn primary" disabled={!!busy} onClick={()=>act(p.id,'POST','/v1/merchant/programs/'+p.id+'/publish')}><Check size={15}/> Publish</button>}
+      <div className="pruvs-program-actions"><button type="button" className="btn subtle" onClick={()=>open(p)}><PencilLine size={15}/> {t('Edit')}</button>
+      {p.status==='draft'&&<button type="button" className="btn primary" disabled={!!busy} onClick={()=>act(p.id,'POST','/v1/merchant/programs/'+p.id+'/publish')}><Check size={15}/> {t('Publish')}</button>}
       {p.status==='published'&&<button type="button" className="btn outline" disabled={!!busy} onClick={()=>{if(window.confirm('Pause this program for new purchases?'))act(p.id,'POST','/v1/merchant/programs/'+p.id+'/pause')}}><PauseCircle size={15}/> Pause</button>}
       {p.status==='paused'&&<button type="button" className="btn primary" disabled={!!busy} onClick={()=>act(p.id,'POST','/v1/merchant/programs/'+p.id+'/resume')}><PlayCircle size={15}/> Resume</button>}
       </div>
@@ -42,7 +44,7 @@ export default function ProgramManager({programs=[],stores=[],token,onRefresh,no
           <label>Minimum purchase (RON)<input type="number" min={0} step={0.01} disabled={p.status!=='draft'} value={draft.min_purchase_minor/100} onChange={e=>setDraft(x=>({...x,min_purchase_minor:Math.round(Number(e.target.value)*100)}))}/></label>
           <label>Reward value (RON)<input type="number" min={0.01} step={0.01} disabled={p.status!=='draft'} value={draft.reward_minor/100} onChange={e=>setDraft(x=>({...x,reward_minor:Math.round(Number(e.target.value)*100)}))}/></label>
         </div><p className="helper"><ShieldCheck size={13}/> Published criteria cannot be modified. Create a new program for different reward values.</p>
-        <div className="pruvs-program-actions"><button type="button" className="btn outline" onClick={()=>setEditing(null)}><X size={15}/> Cancel</button><button className="btn primary" disabled={!!busy}><Check size={15}/> Save changes</button></div>
+        <div className="pruvs-program-actions"><button type="button" className="btn outline" onClick={()=>setEditing(null)}><X size={15}/> {t('Cancel')}</button><button className="btn primary" disabled={!!busy}><Check size={15}/> {t('Save changes')}</button></div>
       </form>}
     </div>)}</div>:<p className="helper">No programs yet. Create your first program with the New program button.</p>}
   </section></>;
