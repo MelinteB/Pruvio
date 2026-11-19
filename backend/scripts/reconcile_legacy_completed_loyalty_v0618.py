@@ -15,6 +15,9 @@ Example after a verified staging backup:
     python scripts/reconcile_legacy_completed_loyalty_v0618.py --apply --backup-id VERIFIED_BACKUP_ID
 """
 import argparse
+import sys
+from pathlib import Path
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import select
 from business.db import SessionLocal
 from business.models import Membership, Reward
