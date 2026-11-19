@@ -5,6 +5,7 @@ import '../../frontend/src/promotions-preview.css';
 import '../../frontend/src/campaign-creative.css';
 import '../../shared_ui/pruvs-campaign-card-2027.css';
 import './core-promotion-preview.css';
+import CampaignLocation from '../../frontend/src/CampaignLocation.jsx';
 
 const amount=(minor,currency)=>`${(Number(minor||0)/100).toFixed(2)} ${currency||'RON'}`;
 
@@ -15,7 +16,7 @@ const amount=(minor,currency)=>`${(Number(minor||0)/100).toFixed(2)} ${currency|
  */
 export default function CorePromotionPreview({
   program,merchantName,headline,message,mediaUrl,mediaType,
-  onMediaError,onMediaReady,mediaPending=false,
+  onMediaError,onMediaReady,mediaPending=false,location=null,loadPlaceDetails=null,
 }){
   const [viewport,setViewport]=useState('phone');
   const [reduceMotion,setReduceMotion]=useState(false);
@@ -80,6 +81,7 @@ export default function CorePromotionPreview({
             {program.stamps_required} qualifying receipts → {amount(program.reward_minor,program.currency)} reward
           </>:'Verified purchases earn loyalty rewards'}
         </div>
+        <CampaignLocation location={location} loadDetails={loadPlaceDetails}/>
         <span className="pruvs-core-preview-cta">See loyalty program</span>
       </article>
     </div>
