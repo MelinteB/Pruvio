@@ -35,7 +35,7 @@ function AccountRewards(){
   const [redemptionsState,setRedemptionsState]=useState('loading');
   const [campaignState,setCampaignState]=useState('loading');
   const [receipts,setReceipts]=useState([]);
-  const [tab,setTab]=useState(()=>typeof window!=='undefined'&&(window.location.hash.startsWith('#loyalty=')||new URLSearchParams(window.location.search).get('tab')==='receipts')?'receipts':'offers');
+  const [tab,setTab]=useState(()=>typeof window!=='undefined'&&(window.location.hash.startsWith('#loyalty=')||new URLSearchParams(window.location.search).get('tab')==='receipts')?'wallet':'offers');
   const [busy,setBusy]=useState('');
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState('');
@@ -47,7 +47,7 @@ function AccountRewards(){
 
   async function refresh(locationOverride=coordinates, activeTab=tab){
     setError('');setLoading(true);
-    if(activeTab==='wallet'){setWalletState('loading');setRedemptionsState('loading');}
+    if(activeTab==='wallet'){setWalletState('loading');setRedemptionsState('loading');setClaimsState('loading');}
     if(activeTab==='offers'||activeTab==='receipts')setMembershipsState('loading');
     if(activeTab==='receipts')setClaimsState('loading');
     try{
@@ -93,6 +93,27 @@ function AccountRewards(){
           // The b10 discount ledger might not be migrated even when Wallet works.
           setRedemptionsState('unavailable');
         }
+        // Saved receipts and merchant-verified claim status belong to My wallet.
+        // A partial failure never enables an unsafe receipt action.
+        try{
+          const r=await request('/loyalty/receipts');
+          setReceipts(Array.isArray(r.receipts)?r.receipts:[]);
+        }catch{setReceipts([]);setClaimsState('unavailable');}
+        try{
+          const o=await request('/loyalty/offers');
+          setOffers(Array.isArray(o)?o:[]);
+        }catch{setOffers([]);}
+        if(s.receipt_v06_enabled||s.customer_codes_v12_enabled||s.claims_read_enabled){
+          try{
+            const cl=await request('/loyalty/claims');
+            if(!Array.isArray(cl))throw Error('Invalid claim response');
+            setClaims(cl);setClaimsState('ready');
+          }catch{setClaimsState('unavailable');}
+        }else{setClaims([]);setClaimsState('disabled');}
+        try{
+          const pr=await request('/loyalty/promotions');
+          setPromotions(Array.isArray(pr)?pr:[]);
+        }catch{setPromotions([]);}
       }else if(activeTab==='receipts'){
         // The locally owned receipts must remain visible if Business is not ready.
         const r=await request('/loyalty/receipts');setReceipts(r.receipts||[]);
@@ -129,10 +150,10 @@ function AccountRewards(){
   }
   useEffect(()=>{refresh(null,tab);},[tab]);
   useEffect(()=>{
-    if(selectedReceiptCase && tab!=='receipts')setTab('receipts');
+    if(selectedReceiptCase && tab!=='wallet')setTab('wallet');
   },[selectedReceiptCase]);
   useEffect(()=>{
-    if(!loading && tab==='receipts' && selectedReceiptCase){
+    if(!loading && tab==='wallet' && selectedReceiptCase){
       document.getElementById('loyalty-receipt-'+selectedReceiptCase)?.scrollIntoView?.({block:'center'});
     }
   },[loading,tab,selectedReceiptCase]);
@@ -266,7 +287,7 @@ function AccountRewards(){
           <button type="button" className="secondary" onClick={()=>{setActiveVoucher(null);refresh(null,'wallet')}}>Close and refresh</button>
          </section></div>}
     </>}
-    {!loading && status?.enabled && tab==='receipts' && <Panel title="Earn stamps from saved receipts">
+    {!loading && status?.enabled && tab==='wallet' && walletState==='ready' && <Panel title="Earn a stamp">
       {membershipsState!=='ready'&&<p role="status" className="pruvs-v7152-partial-warning">
         Your saved receipts are available, but loyalty enrollment could not be verified. Receipt claiming is temporarily unavailable; retry when the merchant service is ready.
       </p>}
@@ -285,13 +306,22 @@ function AccountRewards(){
         </div>
         <Link to={'/receipt/'+r.case_id}>View receipt</Link>
         {!receiptActionReason&&earnedPrograms.length>0&&status?.customer_codes_v12_enabled
-          ?<CustomerReceiptCode caseId={r.case_id} userId={user?.id} storageMode={r.storage_mode} programs={earnedPrograms} existingClaim={claims.find(c=>c.receipt_ref===r.receipt_ref)} onFinished={()=>refresh(null,'receipts')}/>
+          ?<CustomerReceiptCode caseId={r.case_id} userId={user?.id} storageMode={r.storage_mode} programs={earnedPrograms} existingClaim={claims.find(c=>c.receipt_ref===r.receipt_ref)} onFinished={()=>refresh(null,'wallet')}/>
           :!receiptActionReason&&earnedPrograms.length>0&&status?.receipt_v06_enabled
-            ?<ReceiptSubmission caseId={r.case_id} receiptRef={r.receipt_ref} claims={claims} programs={earnedPrograms} onSuccess={msg=>{setMessage(msg);refresh(null,'receipts')}}/>
+            ?<ReceiptSubmission caseId={r.case_id} receiptRef={r.receipt_ref} claims={claims} programs={earnedPrograms} onSuccess={msg=>{setMessage(msg);refresh(null,'wallet')}}/>
             :<button type="button" className="secondary" disabled title={receiptActionReason||'Join an approved merchant loyalty program first.'}>Earn a stamp — unavailable</button>}
       </div>)}
       {!receipts.length&&!error&&<p>No receipts found. <Link to="/upload">Scan a receipt</Link> to begin.</p>}
       <div className="row"><Ticket size={18}/><small>A merchant must confirm the purchase before any stamp is credited. Receipt verification is not POS settlement confirmation.</small></div>
+    </Panel>}
+    {!loading && status?.enabled && tab==='receipts' && <Panel title="Saved receipts">
+      <p className="muted">Review your scans here. To submit a qualifying receipt for merchant verification, use Earn a stamp in My wallet.</p>
+      {receipts.map(r=><div className="rewards-wallet-row" key={r.case_id}>
+        <div><strong>{r.merchant_name||'Saved receipt'}</strong><small>{money(r.receipt_total,r.currency||'RON')}</small></div>
+        <Link to={'/receipt/'+r.case_id}>View receipt</Link>
+        <button type="button" className="secondary" onClick={()=>setTab('wallet')}>My wallet</button>
+      </div>)}
+      {!receipts.length&&<Link to="/upload">Scan your first receipt</Link>}
     </Panel>}
     {cityOpen&&<div className="pruvs-v7150-city-overlay" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setCityOpen(false)}}>
       <section role="dialog" aria-modal="true" aria-label="Find Pruvs merchants by city" className="pruvs-v7150-city-dialog">
