@@ -30,7 +30,7 @@ const LABELS={
   draft:'Draft',paused:'Paused',published:'Live',expired:'Expired',archived:'Archived',
 };
 
-function PreviewDialog({campaign,onClose}){
+function PreviewDialog({campaign,onClose,onLoadPlace}){
   const closeRef=useRef(null);
   useEffect(()=>{
     const previous=document.activeElement;
@@ -48,6 +48,7 @@ function PreviewDialog({campaign,onClose}){
         merchantName={campaign.merchant_name}
         headline={campaign.headline} message={campaign.message}
         mediaUrl={campaign.media_url||''} mediaType={campaign.media_type||'image/jpeg'}
+        location={campaign} loadPlaceDetails={onLoadPlace}
       />
       <p><ShieldCheck size={16}/> Only published, unexpired offers from active programs appear in Pruvs Core. This preview does not publish the campaign.</p>
     </section>
@@ -56,7 +57,7 @@ function PreviewDialog({campaign,onClose}){
 
 export default function CampaignLibrary({
   campaigns=[],busy=false,canManage=true,onEdit,onCopy,onPublish,onUnpublish,
-  onReopen,onRepublish,onArchive,onRestore,onCreate,
+  onReopen,onRepublish,onArchive,onRestore,onCreate,onLoadPlace,
 }){
   const [filter,setFilter]=useState('unpublished');
   const [query,setQuery]=useState('');
@@ -164,6 +165,6 @@ export default function CampaignLibrary({
     <footer className="pruvs-campaign-library-foot"><ShieldCheck size={15}/>
       Archived or paused campaigns are not shown to customers. A promotion is only public after you explicitly publish it.
     </footer>
-    {preview&&<PreviewDialog campaign={preview} onClose={()=>setPreview(null)}/>}
+    {preview&&<PreviewDialog campaign={preview} onClose={()=>setPreview(null)} onLoadPlace={onLoadPlace}/>}
   </section>;
 }
