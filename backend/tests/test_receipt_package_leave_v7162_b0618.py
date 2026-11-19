@@ -37,7 +37,7 @@ def context(monkeypatch):
                           reward_minor=1500, currency='RON', status='published')
         db.add(program)
         db.flush()
-        member = Membership(consumer_id='consumer-A', program_id=program.id, stamps=0)
+        member = Membership(consumer_id='consumer-A-123456789abcdef01234567890', program_id=program.id, stamps=0)
         db.add(member)
         db.commit()
         yield db, merchant, staff, program, member
@@ -49,7 +49,7 @@ def insert_receipts(db, merchant, staff, program, count=3):
     now = utcnow()
     for n in range(count):
         claim = ReceiptClaim(merchant_id=merchant.id, program_id=program.id,
-                             consumer_id='consumer-A', external_receipt_id='signed-'+str(n),
+                             consumer_id='consumer-A-123456789abcdef01234567890', external_receipt_id='signed-'+str(n),
                              source_system='pruvs', amount_minor=2500, status='pending')
         db.add(claim)
         db.flush()
@@ -79,17 +79,17 @@ def test_leave_requires_consent_for_forfeiture_and_never_releases_receipt_identi
     claims=insert_receipts(db, merchant, staff, program, count=1)
     member.stamps=1
     voucher=Reward(merchant_id=merchant.id, program_id=program.id,
-                   consumer_id='consumer-A', status='reserved',
+                   consumer_id='consumer-A-123456789abcdef01234567890', status='reserved',
                    redemption_code='ABCD12345678', reserved_until=utcnow()+timedelta(minutes=5))
     db.add(voucher)
     db.commit()
     with pytest.raises(HTTPException) as exc:
         business_main.leave_program(program.id, body=business_main.LeaveProgramIn(),
-                                    consumer_id='consumer-A', db=db)
+                                    consumer_id='consumer-A-123456789abcdef01234567890', db=db)
     assert exc.value.status_code==409
     result=business_main.leave_program(
         program.id, body=business_main.LeaveProgramIn(confirm_forfeit=True),
-        consumer_id='consumer-A', db=db)
+        consumer_id='consumer-A-123456789abcdef01234567890', db=db)
     assert result['left']
     assert result['forfeited']=={'stamps':1,'pending_receipts':1,'unused_rewards':1}
     assert db.get(Membership,member.id) is None
@@ -98,13 +98,13 @@ def test_leave_requires_consent_for_forfeiture_and_never_releases_receipt_identi
     assert db.get(Reward,voucher.id).redemption_code is None
     # Leaving does not delete an old claim or make the same receipt eligible elsewhere.
     db.add(ReceiptClaim(merchant_id=merchant.id, program_id=program.id,
-                        consumer_id='consumer-A', source_system='pruvs',
+                        consumer_id='consumer-A-123456789abcdef01234567890', source_system='pruvs',
                         external_receipt_id=claims[0].external_receipt_id,
                         amount_minor=2500,status='pending'))
     with pytest.raises(IntegrityError):
         db.commit()
     db.rollback()
-    rejoined=business_main.join_program(program.id,consumer_id='consumer-A',db=db)
+    rejoined=business_main.join_program(program.id,consumer_id='consumer-A-123456789abcdef01234567890',db=db)
     assert rejoined['stamps']==0 and rejoined['already_joined'] is False
 
 
@@ -116,7 +116,7 @@ def test_merchant_approves_all_three_together_and_creates_single_reward(context)
     assert found[0]['ready_to_approve'] is True
     assert len(found[0]['items'])==3
     payload=packages.PackageApproval(program_id=program.id,
-                                      consumer_id='consumer-A',
+                                      consumer_id='consumer-A-123456789abcdef01234567890',
                                       claim_ids=[c.id for c in claims])
     result=packages.approve_receipt_package(payload,staff=staff,db=db)
     assert result['approved_receipts']==3
@@ -141,7 +141,7 @@ def test_one_unreviewed_or_rotated_qr_blocks_entire_package(context):
     result=packages.receipt_packages(staff=staff,db=db)
     assert result[0]['ready_to_approve'] is False
     payload=packages.PackageApproval(program_id=program.id,
-                                      consumer_id='consumer-A',
+                                      consumer_id='consumer-A-123456789abcdef01234567890',
                                       claim_ids=[c.id for c in claims])
     with pytest.raises(HTTPException) as exc:
         packages.approve_receipt_package(payload,staff=staff,db=db)
@@ -155,7 +155,7 @@ def test_no_partial_package_and_no_single_receipt_shortcut(context,monkeypatch):
     db, merchant, staff, program, member = context
     claims=insert_receipts(db, merchant, staff, program)
     payload=packages.PackageApproval(
-        program_id=program.id,consumer_id='consumer-A',
+        program_id=program.id,consumer_id='consumer-A-123456789abcdef01234567890',
         claim_ids=[claims[0].id,claims[1].id])
     with pytest.raises(HTTPException) as exc:
         packages.approve_receipt_package(payload,staff=staff,db=db)
