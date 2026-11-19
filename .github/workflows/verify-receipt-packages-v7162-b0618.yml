@@ -1,0 +1,53 @@
+name: Verify v7.1.62 / v0.6.18 receipt package hotfix
+
+on:
+  push:
+    branches:
+      - fix/receipt-package-review-v7162-b0618-20261119
+  pull_request:
+    branches:
+      - fix/rejoin-after-redeemed-v7162-b0618-20261119
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            backend/frontend/package-lock.json
+            backend/business_frontend/package-lock.json
+      - name: Compile and test loyalty package backend
+        working-directory: backend
+        run: |
+          python -m pip install -r business-requirements.txt 'Pillow>=10,<13' 'python-multipart>=0.0.9'
+          python -m compileall -q business app/react_app/loyalty_gateway.py
+          python -m pytest -q \
+            tests/test_receipt_package_leave_v7162_b0618.py \
+            tests/test_loyalty_rejoin_after_redemption_v0618.py \
+            tests/test_receipt_code_access_v0610.py \
+            tests/test_wallet_legacy_v068.py
+      - name: Build Core customer interface
+        working-directory: backend/frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+          npm run build
+      - name: Build Business merchant interface
+        working-directory: backend/business_frontend
+        env:
+          VITE_API_BASE: /business
+          VITE_PRUVS_CUSTOMER_URL: ''
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build -- --base=/business/
