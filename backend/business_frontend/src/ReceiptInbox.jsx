@@ -1,6 +1,7 @@
 import React,{useEffect,useState} from 'react';
 import {ReceiptText,ShieldCheck,Eye,CheckCircle2,X,RefreshCw,AlertCircle} from 'lucide-react';
 import './receipt-inbox.css';
+import './receipt-packages-v0618.css';
 const API=(import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
 async function call(path,token,method='GET',body=null){
   const res=await fetch(API+path,{method,headers:{Authorization:'Bearer '+token,Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),cache:'no-store'});
@@ -32,7 +33,7 @@ export default function ReceiptInbox({token,onChange,onOpenLoyalty}){
    setBusy(true);setError('');try{await (action==='reject'?fetch(API+'/v1/merchant/claims/'+encodeURIComponent(review.claim_id)+'/reject',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({reason:reason.trim()})}).then(async r=>{if(!r.ok){const x=await r.json().catch(()=>({}));throw new Error(x.detail||'Rejection failed')}}):call('/v1/merchant/claims/'+encodeURIComponent(review.claim_id)+'/approve',token,'POST'));setReview(null);setMessage(action==='approve'?'Purchase confirmed. One stamp added to the customer wallet.':'Purchase rejected. No stamp was added.');await refresh();onChange?.()}catch(ex){setError(ex.message)}finally{setBusy(false)}}
  async function approvePackage(pack){
    if(busy||!pack.ready_to_approve)return;
-   if(!window.confirm('Approve the entire package of '+pack.remaining+' reviewed receipts for '+pack.program_title+'?\\nEach receipt must have been verified against the merchant sale records. This is not independent payment confirmation.'))return;
+   if(!window.confirm('Approve the entire package of '+pack.remaining+' reviewed receipts for '+pack.program_title+'?\nEach receipt must have been verified against the merchant sale records. This is not independent payment confirmation.'))return;
    setBusy(true);setError('');
    try{
      const result=await call('/v1/merchant/claims/packages/approve',token,'POST',{
