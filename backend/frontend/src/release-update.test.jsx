@@ -17,15 +17,15 @@ afterEach(()=>{cleanup();vi.restoreAllMocks();});
 
 describe('Core release update banner',()=>{
   it('uses current compiled Core version, with semantic comparison',()=>{
-    expect(CLIENT_RELEASE).toBe('7.1.61');
-    expect(isNewerRelease('7.1.61')).toBe(false);
+    expect(CLIENT_RELEASE).toBe('7.1.62');
+    expect(isNewerRelease('7.1.62')).toBe(false);
     expect(isNewerRelease('7.1.58')).toBe(false);
     expect(isNewerRelease('7.1.62')).toBe(true);
     expect(isNewerRelease('7.2.0')).toBe(true);
     expect(isNewerRelease('7.1.invalid')).toBe(false);
   });
   it('does not offer a reload after browser already matches the server release',async()=>{
-    serve('7.1.61');
+    serve('7.1.62');
     render(<ReleaseUpdateBanner/>);
     await waitFor(()=>expect(fetch).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole('button',{name:'Reload'})).toBeNull();
@@ -48,16 +48,16 @@ describe('Core release update banner',()=>{
     expect(await screen.findByText('A newer Pruvs version is ready.')).toBeTruthy();
   });
   it('does not repeat a reload prompt already attempted during this session',async()=>{
-    window.sessionStorage.setItem(reloadedKey,'7.1.61');
-    serve('7.1.61');
+    window.sessionStorage.setItem(reloadedKey,'7.1.62');
+    serve('7.1.62');
     render(<ReleaseUpdateBanner/>);
     await waitFor(()=>expect(fetch).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole('button',{name:'Reload'})).toBeNull();
-    expect(shouldOfferUpdate({status:'ready',version:'7.1.61'},CLIENT_RELEASE,null,'7.1.61')).toBe(false);
-    expect(shouldOfferUpdate({status:'ready',version:'7.1.62'},CLIENT_RELEASE,null,'7.1.61')).toBe(true);
+    expect(shouldOfferUpdate({status:'ready',version:'7.1.62'},CLIENT_RELEASE,null,'7.1.62')).toBe(false);
+    expect(shouldOfferUpdate({status:'ready',version:'7.1.62'},CLIENT_RELEASE,null,'7.1.62')).toBe(true);
   });
   it('does not show a banner when server is not ready or version is invalid',()=>{
-    expect(shouldOfferUpdate({status:'unavailable',version:'7.1.61'})).toBe(false);
+    expect(shouldOfferUpdate({status:'unavailable',version:'7.1.62'})).toBe(false);
     expect(shouldOfferUpdate({status:'ready',version:'broken'})).toBe(false);
   });
 });
