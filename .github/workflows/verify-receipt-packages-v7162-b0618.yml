@@ -15,6 +15,10 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      APP_ENV: testing
+      BUSINESS_JWT_SECRET: github-actions-merchant-test-secret-20261119-only
+      PRUVS_BRIDGE_SECRET: github-actions-bridge-test-secret-20261119-only
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
