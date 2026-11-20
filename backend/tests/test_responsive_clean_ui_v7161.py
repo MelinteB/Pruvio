@@ -95,6 +95,18 @@ def test_location_aware_loyalty_release_guards_and_navigation():
     assert 'display:inline-flex' in badge
     assert 'display:none' not in badge
 
+def test_loyalty_programs_are_grouped_under_locations_in_an_accessible_tree():
+    manager=read('business_frontend/src/ProgramManager.jsx')
+    css=read('business_frontend/src/style.css')
+    assert 'pruvs-program-tree' in manager
+    assert '<details className="pruvs-program-branch"' in manager
+    assert '<summary>' in manager
+    assert 'p.store_id===store.id' in manager
+    assert 'No loyalty programs linked to this location.' in manager
+    assert 'pruvs-program-orphan' in manager
+    assert '@media(max-width:650px)' in css
+    assert '@media(prefers-reduced-motion:reduce)' in css
+
 def test_release_metadata_matches_across_bundles():
     assert 'RELEASE = "7.1.66"' in read('app/reliability.py')
     assert "version:'7.1.66'" in read('frontend/scripts/stamp-build.mjs')
