@@ -46,3 +46,24 @@ def test_business_release_is_independent_of_core():
     assert "version='0.6.21'" in api
     assert 'Pruvs Business · v0.6.21' in ui
     assert 'RELEASE = "7.1.65"' in core
+
+
+def test_campaign_library_is_contained_on_phone_widths():
+    responsive = (UI / 'business-v0616-responsive.css').read_text(encoding='utf-8')
+    library = (UI / 'campaign-library-v0615.css').read_text(encoding='utf-8')
+    assert '.pruvs-business-2027{width:100%;overflow-x:clip}' in responsive
+    assert 'display:grid;grid-template-columns:minmax(0,1fr);align-items:stretch' in responsive
+    assert 'position:static;width:100%;justify-content:center' in responsive
+    assert 'display:flex;flex-wrap:nowrap;width:100%;min-width:0;max-width:100%' in responsive
+    assert 'width:100%;min-width:0;max-width:100%' in library
+
+
+def test_romanian_campaign_and_overview_copy_is_complete():
+    translations = (UI / 'i18n.jsx').read_text(encoding='utf-8')
+    overview = (UI / 'MerchantOverview.jsx').read_text(encoding='utf-8')
+    for key in ('Short video', 'Animated GIF', 'Registered merchant locations',
+                'Open Campaign Studio', 'Your workspace at a glance',
+                'AI generation may incur provider charges. The merchant reviews every promotion.'):
+        assert key in translations
+        assert f"t('{key}')" in overview or key in ('Short video', 'Animated GIF')
+    assert 'const {t}=useBusinessLanguage();' in overview

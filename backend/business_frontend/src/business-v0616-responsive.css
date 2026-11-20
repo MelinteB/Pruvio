@@ -3,6 +3,15 @@
  * Sidebar is desktop navigation only: phones/tablets get an accessible drawer.
  */
 .pruvs-business-compact-brand,.pruvs-business-mobile-login-brand{display:none}
+.pruvs-business-2027,
+.pruvs-business-2027 :is(.main,.content,.promo-console,.pruvs-campaign-library,
+  .pruvs-campaign-library-heading,.pruvs-campaign-library-toolbar,
+  .pruvs-campaign-library-grid,.pruvs-campaign-library-card){
+  min-width:0;max-width:100%;
+}
+.pruvs-business-2027{width:100%;overflow-x:clip}
+.pruvs-business-2027 .main{overflow-x:clip}
+.pruvs-business-2027 .promo-console>*{min-width:0;max-width:100%}
 .pruvs-business-2027.shell{max-width:100%;min-width:0}
 .pruvs-business-2027 .main{flex:1 1 auto;width:100%;max-width:100%;min-width:0}
 .pruvs-business-2027 .content{min-width:0;width:100%}
@@ -118,7 +127,7 @@
   .pruvs-business-2027 .pruvs-studio-2027-preview{width:100%;max-width:100%}
   .pruvs-business-2027 .pruvs-core-preview{min-width:0}
   .pruvs-business-2027 .pruvs-campaign-library-filters{
-    display:flex;flex-wrap:nowrap;max-width:100%;
+    display:flex;flex-wrap:nowrap;width:100%;min-width:0;max-width:100%;
     overflow-x:auto;overscroll-behavior-inline:contain;
     scrollbar-width:thin;scroll-snap-type:x proximity;
     padding:5px;
@@ -126,7 +135,21 @@
   .pruvs-business-2027 .pruvs-campaign-library-filters button{
     flex:none;scroll-snap-align:start;white-space:nowrap
   }
+  .pruvs-business-2027 .pruvs-campaign-library-heading{
+    display:grid;grid-template-columns:minmax(0,1fr);align-items:stretch;gap:13px;
+  }
+  .pruvs-business-2027 .pruvs-campaign-library-heading>div{min-width:0}
+  .pruvs-business-2027 .pruvs-campaign-library-create{
+    position:static;width:100%;justify-content:center;box-sizing:border-box;
+  }
+  .pruvs-business-2027 .pruvs-campaign-library-toolbar{
+    display:grid;grid-template-columns:minmax(0,1fr);width:100%;min-width:0;
+  }
+  .pruvs-business-2027 .pruvs-campaign-library-search{width:100%;max-width:100%}
   .pruvs-business-2027 .pruvs-campaign-library-grid{grid-template-columns:minmax(0,1fr)}
+  .pruvs-business-2027 .pruvs-campaign-library-card{width:100%}
+  .pruvs-business-2027 .pruvs-campaign-library-art{height:auto;aspect-ratio:16/9}
+  .pruvs-business-2027 .pruvs-campaign-library-info{align-items:flex-start;flex-wrap:wrap}
   .pruvs-business-2027 .pruvs-campaign-library-actions button{min-height:44px}
   .pruvs-business-2027 .pruvs-campaign-library-dialog{
     padding:12px;border-radius:17px;max-height:calc(100dvh - 18px);
@@ -152,6 +175,7 @@
   .pruvs-business-2027 .pruvs-biz-command-metric{padding:12px}
   .pruvs-business-2027 .pruvs-biz-command-metric strong{font-size:clamp(22px,6vw,29px)}
   .pruvs-business-2027 .pruvs-campaign-library{padding:10px}
+  .pruvs-business-2027 .pruvs-campaign-library-actions{padding:10px;gap:6px}
   .pruvs-business-2027 .pruvs-studio-2027-progress{gap:4px;padding:5px}
   .pruvs-business-2027 .pruvs-studio-2027-progress>span{padding:8px 5px}
   .pruvs-business-2027 .pruvs-studio-2027-progress b{font-size:11px}
