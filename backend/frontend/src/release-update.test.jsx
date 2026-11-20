@@ -20,7 +20,7 @@ afterEach(()=>{cleanup();vi.restoreAllMocks();});
 
 describe('Core release update banner',()=>{
   it('uses current compiled Core version, with semantic comparison',()=>{
-    expect(CLIENT_RELEASE).toBe('7.1.64');
+    expect(CLIENT_RELEASE).toBe('7.1.65');
     expect(isNewerRelease(CLIENT_RELEASE)).toBe(false);
     expect(isNewerRelease('7.1.62')).toBe(false);
     expect(isNewerRelease('7.1.58')).toBe(false);

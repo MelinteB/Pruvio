@@ -6,7 +6,7 @@
 - Google Maps text search and details are chargeable; use explicit actions.
 - No unreviewed auto-import into Pruvs merchant-owned business records.
 """
-import os
+import logging, os
 import re
 from urllib.parse import urlencode
 import httpx
@@ -22,6 +22,7 @@ from .security import merchant_actor, customer_actor
 from .pilot_v05 import can_manage
 
 router=APIRouter(tags=['Google Maps location management'])
+logger=logging.getLogger(__name__)
 GOOGLE_ORIGIN='https://places.googleapis.com/v1'
 PLACE_ID=re.compile(r'^[A-Za-z0-9_-]{8,255}$')
 SEARCH_MASK='places.id,places.displayName,places.formattedAddress,places.location,places.googleMapsUri'
@@ -48,7 +49,14 @@ def _call(method,url,*,json_data=None,mask=DETAIL_MASK,language='en'):
                                   json=json_data)
         if result.status_code==429:
             raise HTTPException(503,'Google Places quota reached. Retry later.')
+        if result.status_code in (401,403):
+            logger.warning('Google Places rejected the configured key (status=%s)',result.status_code)
+            raise HTTPException(503,'Google Places rejected the configured key. Check Places API (New), billing and server-key restrictions.')
+        if result.status_code==400:
+            logger.warning('Google Places rejected the lookup request (status=400)')
+            raise HTTPException(502,'Google Places rejected the lookup request. Check the Places API configuration.')
         if result.status_code!=200:
+            logger.warning('Google Places lookup failed (status=%s)',result.status_code)
             raise HTTPException(502,'Google Places lookup is temporarily unavailable.')
         response=result.json()
         if not isinstance(response,dict):

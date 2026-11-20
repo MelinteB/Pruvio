@@ -17,6 +17,7 @@ export function useMerchantPlaces(token,language,enabled=true){
   const [query,setQuery]=useState('');
   const [places,setPlaces]=useState([]);
   const [status,setStatus]=useState('idle');
+  const [searchError,setSearchError]=useState('');
   const activeSearch=useRef(null);
 
   useEffect(()=>{
@@ -39,6 +40,7 @@ export function useMerchantPlaces(token,language,enabled=true){
   useEffect(()=>{
     setPlaces([]);
     setStatus('idle');
+    setSearchError('');
     return()=>activeSearch.current?.abort();
   },[language,token,enabled,readinessAttempt]);
   const unavailable=readiness?.places_search_enabled===false
@@ -53,6 +55,7 @@ export function useMerchantPlaces(token,language,enabled=true){
     setQuery(value);
     setPlaces([]);
     setStatus('idle');
+    setSearchError('');
   }
 
   async function search(){
@@ -62,17 +65,18 @@ export function useMerchantPlaces(token,language,enabled=true){
     activeSearch.current=controller;
     setPlaces([]);
     setStatus('searching');
+    setSearchError('');
     try{
       const params=new URLSearchParams({q:query.trim(),language});
       const data=await merchantPlacesRequest('/v1/merchant/places/search?'+params,token,{signal:controller.signal});
       if(controller.signal.aborted)return;
       setPlaces(data.places||[]);
       setStatus(data.places?.length?'results':'empty');
-    }catch{
-      if(!controller.signal.aborted)setStatus('error');
+    }catch(error){
+      if(!controller.signal.aborted){setSearchError(error.message);setStatus('error');}
     }
   }
 
-  return {query,changeQuery,places,status,search,unavailable,canLink,readiness,
+  return {query,changeQuery,places,status,search,searchError,unavailable,canLink,readiness,
     retryReadiness:()=>setReadinessAttempt(current=>current+1)};
 }

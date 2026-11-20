@@ -63,7 +63,7 @@ export default function StoreForm({onSave,busy,token}){
       {google.unavailable&&<p className="helper" role="status">{t(google.unavailable)} {t('Enter and save your location manually below.')}</p>}
       {google.readiness?.unreachable&&<p className="helper" role="status">{t('Google Maps availability could not be checked.')} {t('Enter and save your location manually below.')}
         {' '}<button type="button" className="btn subtle" onClick={google.retryReadiness}>{t('Retry')}</button></p>}
-      {google.status==='error'&&<p className="promo-error" role="alert">{t('Google Maps search failed. Try again or enter your location below.')}</p>}
+      {google.status==='error'&&<p className="promo-error" role="alert">{t(google.searchError||'Google Maps search failed. Try again or enter your location below.')}</p>}
       {google.status==='empty'&&<p className="helper" role="status">{t('No Google Maps listings found. Try a different search or enter your location below.')}</p>}
       {google.places.length>0&&<div className="pruvs-location-form-results">{google.places.map(place=>
         <button type="button" key={place.place_id} className={selected?.place_id===place.place_id?'selected':''} disabled={busy}

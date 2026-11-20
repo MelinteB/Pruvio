@@ -73,9 +73,9 @@ def test_business_mobile_drawer_covers_tablet_and_campaign_studio():
     assert 'aria-expanded={menu}' in main
 
 def test_release_metadata_matches_across_bundles():
-    assert 'RELEASE = "7.1.64"' in read('app/reliability.py')
-    assert "version:'7.1.64'" in read('frontend/scripts/stamp-build.mjs')
-    assert "pruvs-shell-v7.1.64" in read('app/static/react-service-worker.js')
-    assert "CLIENT_RELEASE = '7.1.64'" in read('frontend/src/professional/ReleaseUpdateBanner.jsx')
-    assert "version='0.6.20'" in read('business/main.py')
-    assert 'Pruvs Business · v0.6.20' in read('business_frontend/src/main.jsx')
+    assert 'RELEASE = "7.1.65"' in read('app/reliability.py')
+    assert "version:'7.1.65'" in read('frontend/scripts/stamp-build.mjs')
+    assert "pruvs-shell-v7.1.65" in read('app/static/react-service-worker.js')
+    assert "CLIENT_RELEASE = '7.1.65'" in read('frontend/src/professional/ReleaseUpdateBanner.jsx')
+    assert "version='0.6.21'" in read('business/main.py')
+    assert 'Pruvs Business · v0.6.21' in read('business_frontend/src/main.jsx')

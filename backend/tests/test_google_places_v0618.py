@@ -41,6 +41,21 @@ def test_places_not_enabled_without_server_key(monkeypatch):
         places.configured_key()
     assert exc.value.status_code==503
 
+def test_google_key_rejection_has_actionable_safe_error(monkeypatch):
+    monkeypatch.setenv('PRUVS_GOOGLE_PLACES_API_KEY','unit-test-secret')
+    response=SimpleNamespace(status_code=403)
+    class Client:
+        def __init__(self,**_kwargs):pass
+        def __enter__(self):return self
+        def __exit__(self,*_args):pass
+        def request(self,*_args,**_kwargs):return response
+    monkeypatch.setattr(places.httpx,'Client',Client)
+    with pytest.raises(HTTPException) as exc:
+        places._call('POST','https://places.googleapis.com/v1/places:searchText',json_data={})
+    assert exc.value.status_code==503
+    assert 'Places API (New)' in exc.value.detail
+    assert 'unit-test-secret' not in exc.value.detail
+
 @pytest.fixture
 def tenant_db():
     engine=create_engine('sqlite://')
