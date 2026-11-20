@@ -77,3 +77,9 @@ def test_expired_merchant_session_is_not_reported_as_google_maps_failure():
     assert "res.status===401" in shell
     assert "window.addEventListener('pruvs-business-auth-expired',expire)" in shell
     assert "setToken('');setMe(null);setModal('')" in shell
+
+
+def test_transient_readiness_failure_does_not_hide_google_search():
+    places = (UI / 'merchantPlaces.js').read_text(encoding='utf-8')
+    assert "const canLink=readiness?.unreachable===true||" in places
+    assert "readiness?.places_search_enabled===true&&readiness?.place_links_migrated===true" in places

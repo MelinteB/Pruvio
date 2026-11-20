@@ -49,7 +49,11 @@ export function useMerchantPlaces(token,language,enabled=true){
     :readiness?.place_links_migrated===false
       ?'Google Maps linking is unavailable here.'
       :'';
-  const canLink=readiness?.places_search_enabled===true&&readiness?.place_links_migrated===true;
+  // A failed preliminary readiness fetch must not hide the actual search action.
+  // The authenticated search/link endpoints remain the authority and return a
+  // precise, safe error when Google or the place-link schema is unavailable.
+  const canLink=readiness?.unreachable===true||
+    (readiness?.places_search_enabled===true&&readiness?.place_links_migrated===true);
 
   function changeQuery(value){
     activeSearch.current?.abort();
