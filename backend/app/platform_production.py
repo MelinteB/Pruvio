@@ -26,6 +26,7 @@ if make_url(core_url).render_as_string(hide_password=True) == make_url(business_
 # Business owns /business and its own assets. Disable its root UI mount before
 # import so it cannot shadow Core's routes.
 os.environ["PRUVS_BUSINESS_SERVE_UI"] = "false"
+os.environ["PRUVS_PLATFORM_COMBINED_PRODUCTION"] = "true"
 from app.react_main import app as core_app
 from business.main import app as business_app
 from business.ui_host import mount_business_ui
