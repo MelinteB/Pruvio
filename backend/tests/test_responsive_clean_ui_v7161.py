@@ -72,10 +72,33 @@ def test_business_mobile_drawer_covers_tablet_and_campaign_studio():
     assert 'min-height:44px' in css
     assert 'aria-expanded={menu}' in main
 
+def test_location_aware_loyalty_release_guards_and_navigation():
+    core=read('app/react_app/loyalty_v06.py')
+    business=read('business/pilot_v06.py')
+    api=read('business/main.py')
+    rewards=read('frontend/src/Rewards.jsx')
+    merchant=read('business_frontend/src/main.jsx')
+    location=read('business_frontend/src/LocationManager.jsx')
+    css=read('frontend/src/core-v7161-responsive.css')
+    assert "PRUVS_LOCATION_TEST_MODE" in core
+    assert "body['location']=location" in core
+    assert 'PRUVS_RECEIPT_LOCATION_CHECK_ENABLED' in business
+    assert 'PRUVS_RECEIPT_LOCATION_RADIUS_METERS' in business
+    assert "@app.put('/v1/merchant/stores/{store_id}')" in api
+    assert 'Pause or archive active loyalty programs' in api
+    assert "['Loyalty operations'" in merchant
+    assert "method:'PUT'" in location
+    assert 'Search area on map' in rewards
+    assert 'pruvs-v7166-map-offers' in rewards
+    assert '.core-experience .brand-membership .membership-plan-badge{' in css
+    badge=css[css.index('.core-experience .brand-membership .membership-plan-badge{'):][:260]
+    assert 'display:inline-flex' in badge
+    assert 'display:none' not in badge
+
 def test_release_metadata_matches_across_bundles():
-    assert 'RELEASE = "7.1.65"' in read('app/reliability.py')
-    assert "version:'7.1.65'" in read('frontend/scripts/stamp-build.mjs')
-    assert "pruvs-shell-v7.1.65" in read('app/static/react-service-worker.js')
-    assert "CLIENT_RELEASE = '7.1.65'" in read('frontend/src/professional/ReleaseUpdateBanner.jsx')
-    assert "version='0.6.21'" in read('business/main.py')
-    assert 'Pruvs Business · v0.6.21' in read('business_frontend/src/main.jsx')
+    assert 'RELEASE = "7.1.66"' in read('app/reliability.py')
+    assert "version:'7.1.66'" in read('frontend/scripts/stamp-build.mjs')
+    assert "pruvs-shell-v7.1.66" in read('app/static/react-service-worker.js')
+    assert "CLIENT_RELEASE = '7.1.66'" in read('frontend/src/professional/ReleaseUpdateBanner.jsx')
+    assert "version='0.6.22'" in read('business/main.py')
+    assert 'Pruvs Business · v0.6.22' in read('business_frontend/src/main.jsx')

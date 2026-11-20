@@ -50,3 +50,6 @@
 .pruvs-location-form-results>button span{font-size:10px;font-weight:800}
 .pruvs-location-selection{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
 .pruvs-location-selection small{color:#4a745e}
+.pruvs-location-edit{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:16px;border:1px solid #d7e4dc;border-radius:16px;background:#fbfefc}
+.pruvs-location-edit label{display:flex;flex-direction:column;gap:6px;font-weight:700}.pruvs-location-edit label:nth-child(2){grid-column:1/-1}.pruvs-location-edit .pruvs-location-active{flex-direction:row;align-items:center}.pruvs-location-edit button{align-self:end}
+@media(max-width:640px){.pruvs-location-edit{grid-template-columns:1fr}.pruvs-location-edit label:nth-child(2){grid-column:auto}}

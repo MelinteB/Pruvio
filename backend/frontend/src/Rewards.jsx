@@ -44,6 +44,7 @@ function AccountRewards(){
   const [coordinates,setCoordinates]=useState(null);
   const [redemptions,setRedemptions]=useState([]),[activeVoucher,setActiveVoucher]=useState(null);
   const [cityOpen,setCityOpen]=useState(false),[cityQuery,setCityQuery]=useState(''),[cityFilter,setCityFilter]=useState('');
+  const [mapProgram,setMapProgram]=useState('');
   const mapKey=(import.meta.env.VITE_GOOGLE_MAPS_EMBED_KEY||'').trim();
 
   async function refresh(locationOverride=coordinates, activeTab=tab){
@@ -179,6 +180,8 @@ function AccountRewards(){
   const cityMatches=(text,city)=>String(text||'').toLocaleLowerCase().includes(city.toLocaleLowerCase());
   const shownOffers=(cityFilter?offers.filter(o=>cityMatches(o.store?.address,cityFilter)||cityMatches(o.store?.name,cityFilter)||cityMatches(o.merchant_name,cityFilter)):offers)
     .slice().sort((a,b)=>Number(b.program.id===promotedProgram)-Number(a.program.id===promotedProgram));
+  const areaPreviewOffers=offers.filter(o=>!cityQuery.trim()||cityMatches(o.store?.address,cityQuery.trim())||cityMatches(o.store?.name,cityQuery.trim())||cityMatches(o.merchant_name,cityQuery.trim()));
+  const mappedOffer=areaPreviewOffers.find(o=>o.program.id===mapProgram)||areaPreviewOffers[0];
   const byProgram=new Map(offers.map(o=>[o.program.id,o]));
   const activePromotions=livePromotions(promotions);
   const activePromotionByProgram=new Map();
@@ -218,7 +221,7 @@ function AccountRewards(){
       {campaignState==='unavailable'&&<p role="status" className="pruvs-v7152-partial-warning">
         Featured campaigns are currently unavailable. Published loyalty programs are still available below.
       </p>}
-      <div className="row wrap rewards-actions"><button type="button" onClick={nearMe} disabled={!!busy}><MapPin size={17}/> Offers near me</button><button type="button" onClick={()=>{setCityFilter('');setCoordinates(null);refresh(null);}} disabled={!!busy}><Compass size={17}/> All offers</button><button type="button" onClick={()=>refresh()} disabled={!!busy}><RefreshCcw size={17}/> Refresh</button></div>
+      <div className="row wrap rewards-actions"><button type="button" onClick={nearMe} disabled={!!busy}><MapPin size={17}/> Offers near me</button><button type="button" onClick={()=>setCityOpen(true)} disabled={!!busy}><Search size={17}/> Search area on map</button><button type="button" onClick={()=>{setCityFilter('');setCoordinates(null);refresh(null);}} disabled={!!busy}><Compass size={17}/> All offers</button><button type="button" onClick={()=>refresh()} disabled={!!busy}><RefreshCcw size={17}/> Refresh</button></div>
       {cityFilter&&<p className="pruvs-v7150-city-status">Showing Pruvs merchant programs matching <strong>{cityFilter}</strong>. <button type="button" onClick={()=>setCityOpen(true)}>Change city</button></p>}
       {promotedProgram&&remainingOffers.some(o=>o.program.id===promotedProgram)&&<p role="status" className="pruvs-v7152-partial-warning">Your selected loyalty program is listed first below. Join it to start earning merchant-approved rewards.</p>}
       {featuredPromotions.length>0&&<section className="rewards-featured">
@@ -372,8 +375,10 @@ function AccountRewards(){
         <p>Location unavailable? Search for a city instead. Results include registered Pruvs merchants with published loyalty programs.</p>
         <form onSubmit={browseCity} className="pruvs-v7150-city-form"><label htmlFor="pruvs-city-query">City name</label><input id="pruvs-city-query" autoFocus value={cityQuery} maxLength={80} placeholder="e.g. Bucharest, Cluj-Napoca" onChange={e=>setCityQuery(e.target.value)}/><button className="primary" type="submit" disabled={cityQuery.trim().length<2}><Search size={16}/> Find offers</button></form>
         {cityQuery.trim().length>=2&&<div className="pruvs-v7150-map-box">
-          {mapKey?<iframe title={'Google Maps — '+cityQuery} loading="lazy" referrerPolicy="strict-origin-when-cross-origin" src={'https://www.google.com/maps/embed/v1/place?key='+encodeURIComponent(mapKey)+'&q='+encodeURIComponent(cityQuery)} />:<div className="pruvs-v7150-map-fallback"><MapPin size={26}/><strong>Map preview requires a Google Maps Embed API key</strong><small>City search still works for Pruvs merchants using their registered store address.</small></div>}
-          <a href={'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(cityQuery)} target="_blank" rel="noopener noreferrer">Open {cityQuery} in Google Maps</a>
+          {mapKey?<iframe title={'Google Maps — '+(mappedOffer?.store?.name||cityQuery)} loading="lazy" referrerPolicy="strict-origin-when-cross-origin" src={'https://www.google.com/maps/embed/v1/place?key='+encodeURIComponent(mapKey)+'&q='+encodeURIComponent(mappedOffer?mappedOffer.store.latitude+','+mappedOffer.store.longitude:cityQuery)} />:<div className="pruvs-v7150-map-fallback"><MapPin size={26}/><strong>Map preview requires a Google Maps Embed API key</strong><small>Area search and merchant map links remain available without device location.</small></div>}
+          {areaPreviewOffers.length>0&&<div className="pruvs-v7166-map-offers" aria-label="Rewards in selected area">{areaPreviewOffers.map(o=><button type="button" key={o.program.id} className={mappedOffer?.program.id===o.program.id?'selected':''} onClick={()=>setMapProgram(o.program.id)}><MapPin size={16}/><span><strong>{o.program.title}</strong><small>{o.store.name} · {o.store.address}</small></span></button>)}</div>}
+          {mappedOffer&&<a href={'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(mappedOffer.store.latitude+','+mappedOffer.store.longitude)} target="_blank" rel="noopener noreferrer">Open {mappedOffer.store.name} in Google Maps</a>}
+          {!mappedOffer&&<a href={'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(cityQuery)} target="_blank" rel="noopener noreferrer">Open {cityQuery} in Google Maps</a>}
         </div>}
       </section>
     </div>}

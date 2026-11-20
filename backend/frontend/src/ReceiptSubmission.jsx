@@ -4,6 +4,7 @@ import {request,send} from './api';
 import './receipt-submission.css';
 
 const KEY=/^[a-f\d]{24}$/i;
+const LOCATION_TEST_MODE=import.meta.env.VITE_PRUVS_LOCATION_TEST_MODE==='true';
 function codeFromQR(){
   if(typeof window==='undefined')return null;
   const match=window.location.hash.match(/^#loyalty=([a-f0-9-]{36})\.([a-f0-9]{24})$/i);
@@ -20,6 +21,7 @@ export default function ReceiptSubmission({caseId,programs,receiptRef,claims=[],
   const [consent,setConsent]=useState(false);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
+  const [latitude,setLatitude]=useState(''),[longitude,setLongitude]=useState('');
   const existing=claims.find(c=>c.receipt_ref===receiptRef);
   const chosen=program||programs[0]?.program?.id||'';
   useEffect(()=>{if(!open){setPhoto(null);setConsent(false);setError('');}},[open]);
@@ -42,7 +44,8 @@ export default function ReceiptSubmission({caseId,programs,receiptRef,claims=[],
         });
       }
       const result=await send('/loyalty/receipts/'+caseId+'/claim-v06',{
-        program_id:chosen,code:code.trim().toUpperCase(),share_consent:true,photo_base64
+        program_id:chosen,code:code.trim().toUpperCase(),share_consent:true,photo_base64,
+        ...(LOCATION_TEST_MODE?{latitude:Number(latitude),longitude:Number(longitude)}:{})
       });
       setOpen(false);setCode('');if(window.location.hash.startsWith('#loyalty='))window.history.replaceState(null,'',window.location.pathname+window.location.search);onSuccess?.(result.message||'Submitted to merchant for review.');
     }catch(ex){setError(ex.message||'Submission unsuccessful.')}finally{setBusy(false)}
@@ -59,9 +62,10 @@ export default function ReceiptSubmission({caseId,programs,receiptRef,claims=[],
           <div className="receipt-submit-photo"><ReceiptText size={20}/><div><strong>Receipt image for merchant review</strong><p>For cloud-stored image receipts, Pruvs can prepare a smaller copy automatically. For Free-plan receipts stored only on this device, or PDF receipts, select a clear receipt photo.</p></div></div>
           <label className="receipt-submit-upload"><UploadCloud size={18}/> {photo?photo.name:'Optionally choose a receipt photo (JPG/PNG/WebP)'}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>setPhoto(e.target.files?.[0]||null)}/></label>
           {photoPreview&&<img className="receipt-submit-preview" src={photoPreview} alt="Selected receipt to share"/>}
+          {LOCATION_TEST_MODE&&<fieldset><legend>Staging location check</legend><p>Enter the scan location coordinates to test campaign proximity.</p><label>Latitude<input type="number" min="-90" max="90" step="any" required value={latitude} onChange={e=>setLatitude(e.target.value)}/></label><label>Longitude<input type="number" min="-180" max="180" step="any" required value={longitude} onChange={e=>setLongitude(e.target.value)}/></label></fieldset>}
           <label className="receipt-submit-consent"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/><span>I agree to share a reduced-size image of this receipt, its merchant name, date and total only with the selected merchant for loyalty verification. I have reviewed the receipt for details I do not want to share.</span></label>
           {error&&<p className="receipt-submit-error" role="alert">{error}</p>}
-          <div className="receipt-submit-actions"><button type="button" disabled={busy} onClick={()=>setOpen(false)}>Cancel</button><button className="primary" disabled={busy||!consent||!KEY.test(code)||!chosen}><ShieldCheck size={17}/>{busy?'Submitting securely…':'Submit for merchant approval'}</button></div>
+          <div className="receipt-submit-actions"><button type="button" disabled={busy} onClick={()=>setOpen(false)}>Cancel</button><button className="primary" disabled={busy||!consent||!KEY.test(code)||!chosen||(LOCATION_TEST_MODE&&(latitude===''||longitude===''))}><ShieldCheck size={17}/>{busy?'Submitting securely…':'Submit for merchant approval'}</button></div>
         </form>
       </div>
     </div>}

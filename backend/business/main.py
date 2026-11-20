@@ -20,12 +20,12 @@ from .models_v067 import DiscountRedemption
 from .google_places_v0618 import router as google_places_router, linked_place_id, validate_store_place
 from .models_v0618 import MerchantStorePlace
 from .security import merchant_actor, customer_actor, verify_password, encode_merchant_token, decode
-from .schemas import LoginIn, StoreIn, ProgramIn, CampaignGoal, CampaignIn, ReceiptProofIn, ConfirmIn, DemoReceiptIn
+from .schemas import LoginIn, StoreIn, StoreUpdate, ProgramIn, CampaignGoal, CampaignIn, ReceiptProofIn, ConfirmIn, DemoReceiptIn
 
 settings=get_settings()
-app=FastAPI(title='Pruvs Business API',version='0.6.21',docs_url='/docs' if settings.app_env!='production' else None)
+app=FastAPI(title='Pruvs Business API',version='0.6.22',docs_url='/docs' if settings.app_env!='production' else None)
 app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=False,
-                   allow_methods=['GET','POST'],allow_headers=['Authorization','Content-Type'])
+                   allow_methods=['GET','POST','PUT','DELETE'],allow_headers=['Authorization','Content-Type'])
 app.include_router(merchant_enrollment_router)
 app.include_router(google_places_router)
 from .ai_campaign_v067 import router as ai_campaign_router
@@ -79,7 +79,7 @@ def aware(dt):
 
 @app.get('/health')
 def health():
-    return {'service':'Pruvs Business','version':'0.6.21','status':'ok'}
+    return {'service':'Pruvs Business','version':'0.6.22','status':'ok'}
 
 @app.get('/ready', include_in_schema=False)
 def readiness():
@@ -88,10 +88,10 @@ def readiness():
     try:
         checks=check_schema(engine())
         if not all(checks.values()):
-            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.21'})
-        return {'status':'ready','version':'0.6.21'}
+            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.22'})
+        return {'status':'ready','version':'0.6.22'}
     except Exception:
-        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.21'})
+        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.22'})
 
 @app.post('/v1/merchant/login')
 def login(payload:LoginIn, db:Session=Depends(get_db)):
@@ -131,6 +131,19 @@ def add_store(payload:StoreIn,staff:Staff=Depends(merchant_actor),db:Session=Dep
     db.commit()
     db.refresh(s)
     return store_json(s,db=db)
+
+@app.put('/v1/merchant/stores/{store_id}')
+def update_store(store_id:str,payload:StoreUpdate,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    merchant_check(staff)
+    store=db.scalar(select(Store).where(Store.id==store_id,Store.merchant_id==staff.merchant_id))
+    if not store:raise HTTPException(404,'Location not found')
+    if not payload.active:
+        linked=db.scalar(select(Program.id).where(Program.store_id==store.id,
+                         Program.status.in_(('published','paused'))).limit(1))
+        if linked:raise HTTPException(409,'Pause or archive active loyalty programs before deactivating this location')
+    for key,value in payload.model_dump().items():setattr(store,key,value)
+    db.commit();db.refresh(store)
+    return store_json(store,db=db)
 
 @app.get('/v1/merchant/programs')
 def get_programs(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):

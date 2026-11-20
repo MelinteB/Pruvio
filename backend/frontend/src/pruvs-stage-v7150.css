@@ -93,6 +93,7 @@
 .pruvs-v7150-receipt-loyalty>div:first-child{flex:1 1 180px}
 .pruvs-v7150-receipt-loyalty small{display:block;font-size:11px;color:#6c7e96;line-height:1.45}
 @media(max-width:620px){.pruvs-v7150-city-dialog{padding:16px}.pruvs-v7150-city-form{grid-template-columns:1fr}.pruvs-v7150-map-box iframe{height:260px}}
+.pruvs-v7166-map-offers{display:grid;gap:7px;margin:10px 0;max-height:220px;overflow:auto}.pruvs-v7166-map-offers button{display:flex;gap:9px;align-items:flex-start;text-align:left;width:100%;padding:10px;border:1px solid #d7e1ed;border-radius:11px;background:#fff}.pruvs-v7166-map-offers button.selected{border-color:#2468d8;background:#eef5ff}.pruvs-v7166-map-offers span{display:grid;gap:3px}.pruvs-v7166-map-offers small{font-size:11px;color:#60738b}
 
 
 /* v7.1.51: accessible swipe / long press selection on the entire receipt item */

@@ -9,6 +9,7 @@ import binascii
 import hashlib
 import os
 import re
+from math import asin,cos,radians,sin,sqrt
 from datetime import timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -25,6 +26,19 @@ from .security import merchant_actor, customer_actor, decode
 
 router = APIRouter(tags=['Pruvs v0.6 Receipt Review'])
 MAX_IMAGE = 180_000
+
+def require_receipt_location(proof,store):
+    if os.getenv('PRUVS_RECEIPT_LOCATION_CHECK_ENABLED','false').lower()!='true':return
+    location=proof.get('location')
+    if not isinstance(location,dict):raise HTTPException(422,'Receipt location is required for this loyalty program')
+    lat,lon=location.get('latitude'),location.get('longitude')
+    if type(lat) not in (int,float) or type(lon) not in (int,float):
+        raise HTTPException(422,'Receipt location is invalid')
+    radius=max(50,min(5000,int(os.getenv('PRUVS_RECEIPT_LOCATION_RADIUS_METERS','500'))))
+    lat1,lat2=radians(float(lat)),radians(float(store.latitude))
+    h=sin((lat2-lat1)/2)**2+cos(lat1)*cos(lat2)*sin(radians(float(store.longitude)-float(lon))/2)**2
+    distance=2*6371008.8*asin(min(1,sqrt(h)))
+    if distance>radius:raise HTTPException(422,f'Receipt must be scanned within {radius} metres of the campaign location')
 
 class EvidenceIn(BaseModel):
     consent: bool
@@ -65,6 +79,9 @@ def claim_v06(payload:ClaimV06In,consumer_id:str=Depends(customer_actor),db:Sess
                  'pruvs-core','pruvs-business','receipt_proof_v06')
     if proof.get('sub')!=consumer_id or proof.get('store_id')!=p.store_id or proof.get('currency')!=p.currency:
         raise HTTPException(403,'Receipt verification mismatch')
+    store=db.get(Store,p.store_id)
+    if not store or not store.active:raise HTTPException(409,'Campaign location is unavailable')
+    require_receipt_location(proof,store)
     amount=proof.get('amount_minor')
     if type(amount) is not int or amount!=row.amount_minor or amount<p.min_purchase_minor:
         raise HTTPException(422,'Receipt amount does not match merchant purchase code')

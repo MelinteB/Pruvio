@@ -27,6 +27,8 @@
 .pruvs-business-2027 .nav-link.active{
   color:#093c2c;background:#d1f3e1;box-shadow:inset 0 0 0 1px rgba(23,116,86,.10);
 }
+.pruvs-business-2027 .pruvs-nav-group{display:grid;gap:3px;margin-bottom:12px}
+.pruvs-business-2027 .pruvs-nav-group>small{padding:0 14px 5px;color:#7fa092;font-size:9px;font-weight:900;letter-spacing:.12em;text-transform:uppercase}
 .pruvs-business-2027 .sidebar-foot .pilot-chip{
   color:#bde6d0;background:#223e34;border-color:#35594a;border-radius:13px;
 }

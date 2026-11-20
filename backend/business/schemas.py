@@ -13,6 +13,13 @@ class StoreIn(BaseModel):
     longitude: float = Field(ge=-180,le=180)
     google_place_id: str | None = Field(default=None, min_length=8, max_length=255)
 
+class StoreUpdate(BaseModel):
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=180)]
+    address: Annotated[str, StringConstraints(strip_whitespace=True, max_length=250)] = ''
+    latitude: float = Field(ge=-90,le=90)
+    longitude: float = Field(ge=-180,le=180)
+    active: bool = True
+
 class ProgramIn(BaseModel):
     store_id: str
     title: str = Field(min_length=3,max_length=180)

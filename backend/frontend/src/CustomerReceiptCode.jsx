@@ -7,6 +7,7 @@ import './customer-code-v12.css';
 
 const MAX_SECURE_PHOTO=6_000_000;
 const IMAGE_TYPES=['image/jpeg','image/png','image/webp'];
+const LOCATION_TEST_MODE=import.meta.env.VITE_PRUVS_LOCATION_TEST_MODE==='true';
 
 /** Use the image saved during Scan; never ask the customer to upload it again. */
 export async function savedReceiptPhoto(userId,caseId,storageMode) {
@@ -46,6 +47,7 @@ export default function CustomerReceiptCode({
   const initialFocus=useRef(null);
   const [open,setOpen]=useState(false),[program,setProgram]=useState('');
   const [consent,setConsent]=useState(false);
+  const [latitude,setLatitude]=useState(''),[longitude,setLongitude]=useState('');
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[result,setResult]=useState(null);
   const chosen=programs.some(p=>p.program.id===program)?program:programs[0]?.program?.id||'';
   const pending=existingClaim?.status==='pending';
@@ -70,7 +72,8 @@ export default function CustomerReceiptCode({
       // the stored original instead. No second user-selected photo is needed.
       const photo_base64=await savedReceiptPhoto(userId,caseId,storageMode);
       const data=await send('/loyalty/receipts/'+encodeURIComponent(caseId)+'/customer-code-v12',{
-        program_id:chosen,share_consent:true,photo_base64
+        program_id:chosen,share_consent:true,photo_base64,
+        ...(LOCATION_TEST_MODE?{latitude:Number(latitude),longitude:Number(longitude)}:{})
       });
       setResult(data);
     }catch(ex){setError(ex.message||'Could not create the receipt verification code.');}
@@ -113,6 +116,7 @@ export default function CustomerReceiptCode({
             <strong>Receipt photo ready</strong>
             <p>We'll securely use the original image from your scan. No additional upload is needed.</p>
           </div><CheckCircle2 size={19} aria-hidden="true"/></div>
+          {LOCATION_TEST_MODE&&<div className="pruvs-v12-location-test"><strong>Staging location check</strong><p>Enter the coordinates where this receipt is being verified.</p><label>Latitude<input type="number" min="-90" max="90" step="any" required value={latitude} onChange={e=>setLatitude(e.target.value)}/></label><label>Longitude<input type="number" min="-180" max="180" step="any" required value={longitude} onChange={e=>setLongitude(e.target.value)}/></label></div>}
           <label className="pruvs-v12-consent">
             <input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/>
             <span><strong>I agree to share this receipt with the selected merchant.</strong>
@@ -122,7 +126,7 @@ export default function CustomerReceiptCode({
           {error&&<p role="alert" className="pruvs-v12-error">{error}</p>}
           <div className="pruvs-v12-actions">
             <button type="button" className="secondary" disabled={busy} onClick={close}>Cancel</button>
-            <button className="primary pruvs-v12-submit" type="submit" disabled={busy||!consent||!chosen}>
+            <button className="primary pruvs-v12-submit" type="submit" disabled={busy||!consent||!chosen||(LOCATION_TEST_MODE&&(latitude===''||longitude===''))}>
               <ShieldCheck size={17}/>{busy?'Preparing verification…':'Create verification QR'}
             </button>
           </div>

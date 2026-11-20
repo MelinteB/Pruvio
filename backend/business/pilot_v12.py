@@ -16,7 +16,7 @@ from .models import Merchant,Program,Membership,ReceiptClaim,Reward,Store,Staff,
 from .models_v06 import ReceiptEvidence
 from .models_v12 import CustomerClaimCode
 from .pilot_v05 import pilot_enabled,aware,program_is_discoverable
-from .pilot_v06 import EvidenceIn,safe_image
+from .pilot_v06 import EvidenceIn,safe_image,require_receipt_location
 from .security import merchant_actor,customer_actor,decode
 router=APIRouter(tags=['Pruvs v1.2 customer claim codes'])
 
@@ -69,6 +69,7 @@ def create_customer_code(payload:CustomerClaimIn,consumer_id:str=Depends(custome
     if (proof.get('sub')!=consumer_id or proof.get('store_id')!=p.store_id
         or proof.get('currency')!=p.currency or proof.get('consent') is not True):
         raise HTTPException(403,'Receipt verification mismatch')
+    require_receipt_location(proof,db.get(Store,p.store_id))
     amount=proof.get('amount_minor')
     if type(amount) is not int or amount<=0 or amount>10_000_000 or amount<p.min_purchase_minor:
         raise HTTPException(422,'Receipt amount not eligible')

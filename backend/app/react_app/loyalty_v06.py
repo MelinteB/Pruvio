@@ -39,6 +39,8 @@ class ClaimRequest(BaseModel):
     code:str=Field(min_length=24,max_length=24,pattern=r'^[A-Fa-f0-9]{24}$')
     share_consent:bool
     photo_base64:str|None=Field(default=None,max_length=MAX_UPLOAD_B64)
+    latitude:float|None=Field(default=None,ge=-90,le=90)
+    longitude:float|None=Field(default=None,ge=-180,le=180)
 
 
 def image_to_jpeg(raw):
@@ -75,7 +77,16 @@ def original_photo(db,case_id,uid):
     raise HTTPException(422,'Original is stored on your device. Choose the receipt photo to share.')
 
 
-def signed_proof(secret,uid,case_id,store_id,amount,currency,sha,merchant_label,receipt_date):
+def receipt_location(payload):
+    supplied=payload.latitude is not None or payload.longitude is not None
+    if supplied and (payload.latitude is None or payload.longitude is None):
+        raise HTTPException(422,'Both latitude and longitude are required')
+    if supplied and os.getenv('PRUVS_LOCATION_TEST_MODE','false').lower()!='true':
+        raise HTTPException(403,'Manual receipt coordinates are available only in the staging test environment')
+    return ({'latitude':payload.latitude,'longitude':payload.longitude,'source':'manual_test'}
+            if supplied else None)
+
+def signed_proof(secret,uid,case_id,store_id,amount,currency,sha,merchant_label,receipt_date,location=None):
     now=int(time.time())
     body={'iss':'pruvs-core','aud':'pruvs-business','typ':'receipt_proof_v06',
           'sub':pseudonym(secret,'customer-v1',uid),
@@ -84,6 +95,7 @@ def signed_proof(secret,uid,case_id,store_id,amount,currency,sha,merchant_label,
           'consent':True,'evidence_sha256':sha,'merchant_label':merchant_label,
           'receipt_date':receipt_date,
           'iat':now,'exp':now+300,'jti':secrets.token_hex(16)}
+    if location:body['location']=location
     a=_base64url(json.dumps({'alg':'HS256','typ':'JWT'},separators=(',',':')).encode())
     b=_base64url(json.dumps(body,separators=(',',':')).encode())
     sig=_base64url(hmac.new(secret.encode(),f'{a}.{b}'.encode(),hashlib.sha256).digest())
@@ -133,7 +145,7 @@ def claim_v06(case_id:int,payload:ClaimRequest,identity=Depends(current),db=Depe
     receipt_date=str(detail.get('receipt_date') or detail.get('scan_date') or detail.get('date') or '')[:32]
     sha=hashlib.sha256(image).hexdigest()
     _,secret=config()
-    proof=signed_proof(secret,uid,case_id,store_id,amount,currency,sha,merchant_label,receipt_date)
+    proof=signed_proof(secret,uid,case_id,store_id,amount,currency,sha,merchant_label,receipt_date,receipt_location(payload))
     return call_business('/v1/customer/pilot/claims/v06',method='POST',user_id=uid,
                 body={'program_id':program_id,'code':payload.code.upper(),'receipt_proof':proof,
                       'evidence':{'consent':True,'merchant_label':merchant_label,
@@ -152,6 +164,8 @@ class CustomerCodeRequest(BaseModel):
     program_id:str=Field(min_length=36,max_length=36)
     share_consent:bool
     photo_base64:str|None=Field(default=None,max_length=MAX_UPLOAD_B64)
+    latitude:float|None=Field(default=None,ge=-90,le=90)
+    longitude:float|None=Field(default=None,ge=-180,le=180)
 
 @router.post('/receipts/{case_id}/customer-code-v12',status_code=201)
 def customer_code_v12(case_id:int,payload:CustomerCodeRequest,identity=Depends(current),db=Depends(get_db)):
@@ -197,7 +211,7 @@ def customer_code_v12(case_id:int,payload:CustomerCodeRequest,identity=Depends(c
     date=str(detail.get('receipt_date') or detail.get('scan_date') or detail.get('date') or '')[:32]
     digest=hashlib.sha256(image).hexdigest()
     _,secret=config()
-    proof=signed_proof(secret,uid,case_id,store_id,amount,currency,digest,label,date)
+    proof=signed_proof(secret,uid,case_id,store_id,amount,currency,digest,label,date,receipt_location(payload))
     # The 96-bit random code is returned once to the authenticated customer.
     # Business sees only its digest, never the plaintext code via Core's bridge.
     code=secrets.token_hex(12).upper()

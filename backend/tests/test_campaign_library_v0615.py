@@ -169,7 +169,7 @@ def test_new_release_versions_are_synchronized():
     script=(ROOT/'frontend/scripts/stamp-build.mjs').read_text()
     worker=(ROOT/'app/static/react-service-worker.js').read_text()
     business=(ROOT/'business/main.py').read_text()
-    assert 'RELEASE = "7.1.65"' in reliability
-    assert "version:'7.1.65'" in script
-    assert 'pruvs-shell-v7.1.65' in worker
-    assert "version='0.6.21'" in business
+    assert 'RELEASE = "7.1.66"' in reliability
+    assert "version:'7.1.66'" in script
+    assert 'pruvs-shell-v7.1.66' in worker
+    assert "version='0.6.22'" in business

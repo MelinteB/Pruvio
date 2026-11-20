@@ -147,7 +147,10 @@
   }
   .core-experience .brand img{width:113px;max-height:40px}
   .core-experience .brand-membership{gap:6px}
-  .core-experience .brand-membership .membership-plan-badge{display:none}
+  .core-experience .brand-membership .membership-plan-badge{
+    display:inline-flex;max-width:72px;overflow:hidden;text-overflow:ellipsis;
+    font-size:10px;padding:3px 6px;line-height:1.15
+  }
   .core-experience .topbar>.row{gap:4px;margin:0}
   .core-experience .topbar .help-link{padding:6px;width:38px;min-width:38px}
   .core-experience .topbar .help-link span{display:none}

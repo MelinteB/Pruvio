@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from 'react';
-import {ExternalLink,MapPin,Search,Star,Navigation,Link2,Link2Off} from 'lucide-react';
+import {ExternalLink,MapPin,Search,Star,Navigation,Link2,Link2Off,Save} from 'lucide-react';
 import {useBusinessLanguage} from './i18n.jsx';
 import {merchantPlacesRequest,useMerchantPlaces} from './merchantPlaces.js';
 import './location-manager-v0618.css';
@@ -28,6 +28,7 @@ export default function LocationManager({stores=[],token,canManage=true,onChange
   const [place,setPlace]=useState(null),[detailsFailed,setDetailsFailed]=useState(false);
   const [busy,setBusy]=useState(false),[error,setError]=useState('');
   const store=stores.find(s=>s.id===selected)||stores[0];
+  const [draft,setDraft]=useState(null);
   const google=useMerchantPlaces(token,language,canManage);
   const canFetchDetails=!canManage||google.readiness?.places_search_enabled===true||google.readiness?.unreachable===true;
   useEffect(()=>{
@@ -41,6 +42,15 @@ export default function LocationManager({stores=[],token,canManage=true,onChange
       .catch(()=>{if(!controller.signal.aborted)setDetailsFailed(true)});
     return()=>controller.abort();
   },[store?.id,store?.google_place_id,token,language,canFetchDetails]);
+  useEffect(()=>{if(store)setDraft({name:store.name,address:store.address||'',latitude:store.latitude,longitude:store.longitude,active:store.active!==false});},[store?.id,store?.name,store?.address,store?.latitude,store?.longitude,store?.active]);
+
+  async function saveLocation(event){
+    event.preventDefault();setBusy(true);setError('');
+    try{
+      await merchantPlacesRequest('/v1/merchant/stores/'+encodeURIComponent(store.id),token,{method:'PUT',body:{...draft,latitude:Number(draft.latitude),longitude:Number(draft.longitude)}});
+      onNotice?.(t('Location updated.'));await onChange?.();
+    }catch(ex){setError(ex.message||t('Could not update this location.'));}finally{setBusy(false)}
+  }
 
   async function link(placeId){
     if(!window.confirm(t('Connect this Google Maps listing to {name}?',{name:store.name})))return;
@@ -63,6 +73,14 @@ export default function LocationManager({stores=[],token,canManage=true,onChange
     <div className="panel-heading"><h2><MapPin size={21}/> {t('Location management')}</h2><span>GOOGLE MAPS</span></div>
     <p>{t('Connect a Google Maps listing so customers can view live ratings and get directions.')}</p>
     <label>{t('Manage location')}<select value={store.id} disabled={busy} onChange={e=>{setSelected(e.target.value);google.changeQuery('');setError('');}}>{stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+    {canManage&&draft&&<form className="pruvs-location-edit" onSubmit={saveLocation}>
+      <label>{t('Location name')}<input required minLength="2" maxLength="180" value={draft.name} onChange={e=>setDraft({...draft,name:e.target.value})}/></label>
+      <label>{t('Address')}<input maxLength="250" value={draft.address} onChange={e=>setDraft({...draft,address:e.target.value})}/></label>
+      <label>{t('Latitude')}<input required type="number" min="-90" max="90" step="any" value={draft.latitude} onChange={e=>setDraft({...draft,latitude:e.target.value})}/></label>
+      <label>{t('Longitude')}<input required type="number" min="-180" max="180" step="any" value={draft.longitude} onChange={e=>setDraft({...draft,longitude:e.target.value})}/></label>
+      <label className="pruvs-location-active"><input type="checkbox" checked={draft.active} onChange={e=>setDraft({...draft,active:e.target.checked})}/> {t('Location active')}</label>
+      <button className="btn primary" disabled={busy} type="submit"><Save size={16}/> {t('Save location')}</button>
+    </form>}
     {canManage&&google.canLink&&<div className="pruvs-location-search">
       <input type="search" value={google.query} minLength={3} maxLength={120} placeholder={t('Search for your business on Google Maps')}
         aria-label={t('Search location name')} onChange={e=>google.changeQuery(e.target.value)}
