@@ -49,7 +49,7 @@ function PreviewDialog({campaign,onClose}){
         <button ref={closeRef} type="button" aria-label={t('Close campaign preview')} onClick={onClose}><X size={20}/></button></header>
       <CorePromotionPreview
         program={{stamps_required:campaign.stamps_required,reward_minor:campaign.reward_minor,currency:campaign.currency}}
-        merchantName={campaign.merchant_name}
+        merchantName={campaign.merchant_name} locationName={campaign.store_name}
         headline={campaign.headline} message={campaign.message}
         mediaUrl={campaign.media_url||''} mediaType={campaign.media_type||'image/jpeg'}
       />
@@ -78,7 +78,7 @@ export default function CampaignLibrary({
   const visible=current.filter(p=>{
     if(filter==='unpublished'&&!['draft','paused'].includes(p.effectiveStatus))return false;
     if(filter!=='unpublished'&&filter!=='all'&&p.effectiveStatus!==filter)return false;
-    return !q||[p.headline,p.message,p.program_title,p.merchant_name]
+    return !q||[p.headline,p.message,p.program_title,p.merchant_name,p.store_name,p.store_address]
       .some(value=>String(value||'').toLocaleLowerCase().includes(q));
   });
   const canCreate=canManage&&typeof onCreate==='function';
@@ -121,6 +121,7 @@ export default function CampaignLibrary({
         </div>
         <div className="pruvs-campaign-library-content">
           <span className="pruvs-campaign-library-overline">{p.program_title||t('Loyalty campaign')}</span>
+          {p.store_name&&<span className="pruvs-campaign-library-location">{p.store_name}{p.store_address?' · '+p.store_address:''}</span>}
           <h3>{p.headline}</h3><p>{p.message}</p>
           <div className="pruvs-campaign-library-info">
             <span><CalendarDays size={14}/> {p.expires_at&&p.effectiveStatus==='published'

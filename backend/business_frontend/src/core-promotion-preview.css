@@ -59,3 +59,4 @@
   .pruvs-core-preview-stage .pruvs-promo{padding:10px;max-width:100%}
   .pruvs-core-preview-head{flex-wrap:wrap}
 }
+.pruvs-core-preview-location{display:flex;align-items:center;gap:6px;margin-top:8px;color:#315f50;font-size:12px;font-weight:750}.pruvs-core-preview-location span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

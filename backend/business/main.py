@@ -58,11 +58,13 @@ def store_json(s, db=None):
                 latitude=s.latitude,longitude=s.longitude,active=s.active,
                 google_place_id=linked_place_id(db,s.id) if db is not None else None)
 
-def program_json(p):
+def program_json(p,db=None):
+    store=db.get(Store,p.store_id) if db is not None else None
     return dict(id=p.id,store_id=p.store_id,merchant_id=p.merchant_id,title=p.title,
                 description=p.description,stamps_required=p.stamps_required,
                 min_purchase_minor=p.min_purchase_minor,reward_minor=p.reward_minor,
-                currency=p.currency,status=p.status)
+                currency=p.currency,status=p.status,
+                store_name=store.name if store else '',store_address=store.address if store else '')
 
 def campaign_json(c):
     return dict(id=c.id,title=c.title,goal=c.goal,message=c.message,status=c.status,generator=c.generator)
@@ -147,7 +149,7 @@ def update_store(store_id:str,payload:StoreUpdate,staff:Staff=Depends(merchant_a
 
 @app.get('/v1/merchant/programs')
 def get_programs(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
-    return [program_json(p) for p in db.scalars(select(Program).where(Program.merchant_id==staff.merchant_id)).all()]
+    return [program_json(p,db) for p in db.scalars(select(Program).where(Program.merchant_id==staff.merchant_id)).all()]
 
 @app.post('/v1/merchant/programs',status_code=201)
 def add_program(payload:ProgramIn,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
@@ -155,14 +157,14 @@ def add_program(payload:ProgramIn,staff:Staff=Depends(merchant_actor),db:Session
     owned(db,Store,payload.store_id,staff.merchant_id)
     p=Program(merchant_id=staff.merchant_id,**payload.model_dump())
     db.add(p);db.commit();db.refresh(p)
-    return program_json(p)
+    return program_json(p,db)
 
 @app.post('/v1/merchant/programs/{program_id}/publish')
 def publish_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     merchant_check(staff)
     p=owned(db,Program,program_id,staff.merchant_id)
     p.status='published';db.commit()
-    return program_json(p)
+    return program_json(p,db)
 
 
 class ProgramEdit(BaseModel):
@@ -184,21 +186,21 @@ def edit_program(program_id:str,payload:ProgramEdit,staff:Staff=Depends(merchant
         raise HTTPException(409,'Active program criteria cannot change. Pause or create a new program instead.')
     for key,value in changes.items():setattr(program,key,value.strip() if isinstance(value,str) else value)
     db.commit()
-    return program_json(program)
+    return program_json(program,db)
 
 @app.post('/v1/merchant/programs/{program_id}/pause')
 def pause_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     merchant_check(staff)
     program=owned(db,Program,program_id,staff.merchant_id)
     if program.status!='published':raise HTTPException(409,'Only published programs may be paused.')
-    program.status='paused';db.commit();return program_json(program)
+    program.status='paused';db.commit();return program_json(program,db)
 
 @app.post('/v1/merchant/programs/{program_id}/resume')
 def resume_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     merchant_check(staff)
     program=owned(db,Program,program_id,staff.merchant_id)
     if program.status!='paused':raise HTTPException(409,'Only paused programs may be resumed.')
-    program.status='published';db.commit();return program_json(program)
+    program.status='published';db.commit();return program_json(program,db)
 
 @app.get('/v1/merchant/claims')
 def get_claims(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):

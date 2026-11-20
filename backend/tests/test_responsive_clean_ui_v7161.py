@@ -107,6 +107,19 @@ def test_loyalty_programs_are_grouped_under_locations_in_an_accessible_tree():
     assert '@media(max-width:650px)' in css
     assert '@media(prefers-reduced-motion:reduce)' in css
 
+def test_campaign_studio_and_library_show_the_linked_program_location():
+    api=read('business/main.py')
+    studio=read('business_frontend/src/PromotionConsole.jsx')
+    library=read('business_frontend/src/CampaignLibrary.jsx')
+    preview=read('business_frontend/src/CorePromotionPreview.jsx')
+    assert "store_name=store.name if store else ''" in api
+    assert 'Published loyalty program and location' in studio
+    assert 'currentProgram?.store_name' in studio
+    assert "p.store_name?' · '+p.store_name" in studio
+    assert 'p.store_name,p.store_address' in library
+    assert 'pruvs-campaign-library-location' in library
+    assert 'pruvs-core-preview-location' in preview
+
 def test_release_metadata_matches_across_bundles():
     assert 'RELEASE = "7.1.66"' in read('app/reliability.py')
     assert "version:'7.1.66'" in read('frontend/scripts/stamp-build.mjs')

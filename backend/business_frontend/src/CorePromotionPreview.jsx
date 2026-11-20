@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from 'react';
-import {Gift,Smartphone,Monitor,ShieldCheck,ImageIcon,Film} from 'lucide-react';
+import {Gift,Smartphone,Monitor,ShieldCheck,ImageIcon,Film,MapPin} from 'lucide-react';
 import {useBusinessLanguage} from './i18n.jsx';
 // Share the *actual Core campaign card CSS*, rather than maintaining visual copies.
 import '../../frontend/src/promotions-preview.css';
@@ -16,7 +16,7 @@ const amount=(minor,currency)=>`${(Number(minor||0)/100).toFixed(2)} ${currency|
  * frontend/src/CampaignCreative.jsx. No promotion is published here.
  */
 export default function CorePromotionPreview({
-  program,merchantName,headline,message,mediaUrl,mediaType,
+  program,merchantName,locationName,headline,message,mediaUrl,mediaType,
   onMediaError,onMediaReady,mediaPending=false,
 }){
   const {t}=useBusinessLanguage();
@@ -86,6 +86,7 @@ export default function CorePromotionPreview({
           {program?t('{count} qualifying receipts → {reward} reward',{count:program.stamps_required,reward:amount(program.reward_minor,program.currency)})
             :t('Verified purchases earn loyalty rewards')}
         </div>
+        {locationName&&<div className="pruvs-core-preview-location"><MapPin size={14}/><span>{locationName}</span></div>}
         <span className="pruvs-core-preview-cta">{t('See loyalty program')}</span>
       </article>
     </div>

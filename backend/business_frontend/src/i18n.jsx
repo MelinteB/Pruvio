@@ -52,6 +52,8 @@ const RO={
   'Copy':'Text',
   'Creative':'Material vizual',
   'Published loyalty program':'Program de fidelitate publicat',
+  'Published loyalty program and location':'Program de fidelitate și locație',
+  'Program conditions and location (locked)':'Condițiile programului și locația (blocate)',
   'Campaign goal':'Obiectivul campaniei',
   'Target audience':'Public-țintă',
   'Brand tone':'Tonul brandului',

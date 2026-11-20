@@ -68,3 +68,4 @@
 .pruvs-campaign-library-dialog>p{display:flex;align-items:flex-start;gap:8px;font-size:11px;color:#647d69;line-height:1.5;margin:14px 0 0}
 @media(max-width:760px){.pruvs-campaign-library-toolbar{align-items:stretch}.pruvs-campaign-library-search{flex:1 1 100%}.pruvs-campaign-library-grid{grid-template-columns:repeat(auto-fill,minmax(min(240px,100%),1fr))}}
 @media(prefers-reduced-motion:reduce){.pruvs-campaign-library-card{transition:none}.pruvs-campaign-library-card:hover{transform:none}}
+.pruvs-campaign-library-location{display:block;color:#356b58;font-size:11px;font-weight:750;overflow-wrap:anywhere}

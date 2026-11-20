@@ -10,14 +10,15 @@ import './studio-2027.css';
 const API = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
 export function predefinedCampaignBrief(program,language='en'){
   const title=String(program?.title||'this published loyalty program').trim();
-  if(language==='ro')return 'Prezintă programul de fidelitate „'+title+'” și invită clienții să participe. '+
+  const location=String(program?.store_name||'').trim();
+  if(language==='ro')return 'Prezintă programul de fidelitate „'+title+'”'+(location?' disponibil la locația „'+location+'”':'')+' și invită clienții să participe. '+
     'Scrie un titlu concis și un mesaj clar în limba română. '+
     'Explică faptul că numai cumpărăturile eligibile confirmate de comerciant aduc ștampile. '+
     'Când este încărcată o fotografie, produsul sau scena vizibilă trebuie să fie subiectul principal al textului și al materialului vizual. '+
     'Păstrează fotografia originală în materialul final. '+
     'Folosește un îndemn clar la acțiune și o animație discretă de 3 secunde pentru GIF/MP4. '+
     'Respectă valoarea recompensei, numărul de cumpărături și suma minimă exact așa cum sunt configurate.';
-  return 'Introduce "'+title+'" to customers and invite them to participate. '+
+  return 'Introduce "'+title+'"'+(location?' at the "'+location+'" location':'')+' to customers and invite them to participate. '+
     'Write an appealing, concise campaign headline and a clear message. '+
     'Explain that only merchant-verified qualifying purchases count toward the reward. '+
     'When an image is uploaded, make its visible product or scene the central subject '+
@@ -270,7 +271,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
         </div>
         <div className="pruvs-studio-2027-workspace">
           <div className="pruvs-studio-2027-editor">
-        <label className="pruvs-ai-program-select">{t('Published loyalty program')}<select required value={programId} disabled={Boolean(editingPromotionId)} onChange={e=>changeProgram(e.target.value)}>{published.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></label>
+        <label className="pruvs-ai-program-select">{t('Published loyalty program and location')}<select required value={programId} disabled={Boolean(editingPromotionId)} onChange={e=>changeProgram(e.target.value)}>{published.map(p=><option key={p.id} value={p.id}>{p.title}{p.store_name?' · '+p.store_name:''}</option>)}</select></label>
         <div className="pruvs-ai-grid">
           <label>{t('Campaign goal')}<input value={goal} minLength={8} maxLength={300} onChange={e=>setGoal(e.target.value)}/></label>
           <label>{t('Target audience')}<input value={audience} maxLength={140} onChange={e=>setAudience(e.target.value)}/></label>
@@ -278,7 +279,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
           <label>{t('Creative format')}<select value={creativeFormat} onChange={e=>setCreativeFormat(e.target.value)}><option value="png">{t('Branded image')}</option><option value="gif">{t('Animated GIF (3 seconds)')}</option><option value="mp4">{t('Short video MP4 (3 seconds)')}</option></select></label>
           <label>{t('Watermark text')}<input value={watermark} maxLength={70} onChange={e=>setWatermark(e.target.value)}/></label>
         </div>
-        {currentProgram&&<div className="pruvs-ai-criteria"><strong>{t('Program conditions (locked)')}</strong><small>{currentProgram.title} · {t('Minimum {minimum} RON · {count} verified purchases → {reward} RON reward',{minimum:(currentProgram.min_purchase_minor/100).toFixed(2),count:currentProgram.stamps_required,reward:(currentProgram.reward_minor/100).toFixed(2)})}</small></div>}
+        {currentProgram&&<div className="pruvs-ai-criteria"><strong>{t('Program conditions and location (locked)')}</strong><small>{currentProgram.title}{currentProgram.store_name?' · '+currentProgram.store_name:''} · {t('Minimum {minimum} RON · {count} verified purchases → {reward} RON reward',{minimum:(currentProgram.min_purchase_minor/100).toFixed(2),count:currentProgram.stamps_required,reward:(currentProgram.reward_minor/100).toFixed(2)})}</small>{currentProgram.store_address&&<small>{currentProgram.store_address}</small>}</div>}
         <div className="pruvs-ai-image-source" aria-label={t('Main campaign picture and subject')}>
           <div><h4>1. {t('Main campaign picture and subject')}</h4>
             <p>{t('Upload a product or scene photo first. Pruvs AI will describe what is visible in this image and use it as the main subject. PNG, GIF and MP4 will use the same photo.')}</p></div>
@@ -335,7 +336,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
           <div className="pruvs-studio-2027-preview">
             <CorePromotionPreview
               key={String(displayedMediaUrl||'empty')+'-'+String(mediaPreviewError)}
-              program={currentProgram} merchantName={merchantName}
+              program={currentProgram} merchantName={merchantName} locationName={currentProgram?.store_name}
               headline={headline} message={message}
               mediaUrl={displayedMediaUrl} mediaType={mediaType}
               mediaPending={uploadPending}
@@ -404,7 +405,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
     </>:<>
       <p className="helper">After a completed sale, issue a one-time purchase code. Give it to the customer, who must select an owned receipt in Pruvs. The claim still requires your approval before any stamps are credited. This pilot does not verify the fiscal transaction with a POS.</p>
       <form className="promo-form" onSubmit={e=>{e.preventDefault();submit(async()=>{const value=Math.round(Number(amount)*100);if(!Number.isSafeInteger(value)||value<=0)throw new Error('Enter a valid amount.');const result=await call('/v1/merchant/pilot/purchases/issue',token,{program_id:programId,amount_minor:value});setCode({...result,program_id:programId});setNotice('Code created for completed checkout. It expires after 30 minutes.')})}}>
-        <label>Published loyalty program<select required value={programId} onChange={e=>changeProgram(e.target.value)}>{published.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></label>
+        <label>Published loyalty program<select required value={programId} onChange={e=>changeProgram(e.target.value)}>{published.map(p=><option key={p.id} value={p.id}>{p.title}{p.store_name?' · '+p.store_name:''}</option>)}</select></label>
         <label>Actual completed receipt amount (RON)<input type="number" min="0.01" step="0.01" required value={amount} onChange={e=>setAmount(e.target.value)}/></label>
         <button className="btn primary" disabled={!programId||busy}><Ticket size={17}/> Issue one-time purchase code</button>
       </form>
