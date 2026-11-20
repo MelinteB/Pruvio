@@ -34,6 +34,8 @@ if core_url == business_url:
 os.environ["PRUVS_BUSINESS_SERVE_UI"] = "false"
 from app.react_main import app as core_app
 from business.main import app as business_app
+from business.db import engine as business_engine
+from business.models_v0618 import MerchantStorePlace
 from business.ui_host import mount_business_ui
 
 business_dist = Path(__file__).resolve().parents[1] / "business_frontend" / "dist"
@@ -42,6 +44,9 @@ mount_business_ui(business_app, dist_dir=business_dist, enabled=True)
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     # Mounted FastAPI sub-apps do not automatically run their own lifespans.
+    # This additive table is required by the Google Places location picker.
+    # The database-name guards above ensure it can run only on isolated staging.
+    MerchantStorePlace.__table__.create(bind=business_engine(), checkfirst=True)
     async with core_app.router.lifespan_context(core_app):
         yield
 
