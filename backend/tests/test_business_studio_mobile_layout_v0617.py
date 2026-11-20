@@ -67,3 +67,13 @@ def test_romanian_campaign_and_overview_copy_is_complete():
         assert key in translations
         assert f"t('{key}')" in overview or key in ('Short video', 'Animated GIF')
     assert 'const {t}=useBusinessLanguage();' in overview
+
+
+def test_expired_merchant_session_is_not_reported_as_google_maps_failure():
+    places = (UI / 'merchantPlaces.js').read_text(encoding='utf-8')
+    shell = (UI / 'main.jsx').read_text(encoding='utf-8')
+    assert "response.status===401" in places
+    assert "pruvs-business-auth-expired" in places
+    assert "res.status===401" in shell
+    assert "window.addEventListener('pruvs-business-auth-expired',expire)" in shell
+    assert "setToken('');setMe(null);setModal('')" in shell

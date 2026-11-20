@@ -7,6 +7,7 @@ export async function merchantPlacesRequest(path,token,{method='GET',body,signal
     ...(body?{'Content-Type':'application/json'}:{})
   },...(body?{body:JSON.stringify(body)}:{})});
   const data=await response.json().catch(()=>({}));
+  if(response.status===401)window.dispatchEvent(new Event('pruvs-business-auth-expired'));
   if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:'Google Places could not be reached.');
   return data;
 }

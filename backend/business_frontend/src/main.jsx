@@ -26,6 +26,7 @@ async function request(path, token, method='GET', body) {
  try {res=await fetch(`${API}${path}`,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})});}
  catch {throw new Error(`Cannot connect to Business API. Check service health and network access.`)}
  const data=await res.json().catch(()=>({detail:'Unexpected response'}));
+ if(res.status===401)window.dispatchEvent(new Event('pruvs-business-auth-expired'));
  if(!res.ok) throw new Error(typeof data.detail==='string'?data.detail:JSON.stringify(data.detail||'API failed'));
  return data;
 }
@@ -49,6 +50,11 @@ function App(){
    document.addEventListener('keydown',close);
    return()=>document.removeEventListener('keydown',close);
  },[menu]);
+ useEffect(()=>{
+   const expire=()=>{setToken('');setMe(null);setModal('');setNotice(null)};
+   window.addEventListener('pruvs-business-auth-expired',expire);
+   return()=>window.removeEventListener('pruvs-business-auth-expired',expire);
+ },[]);
  async function reload(t=token){
   if(!t)return;
   try{
