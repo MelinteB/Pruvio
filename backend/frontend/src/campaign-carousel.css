@@ -12,7 +12,13 @@
   overflow: hidden;
   width: 100%;
   border-radius: 18px;
+  margin-inline: auto;
 }
+
+/* Keep small campaign sets card-sized on wide screens. Without these caps a
+   single creative inherits the full dashboard width and reads like a banner. */
+.campaign-carousel-viewport[data-visible-campaigns='1'] { max-width: 440px; }
+.campaign-carousel-viewport[data-visible-campaigns='2'] { max-width: 898px; }
 
 .campaign-carousel-slide {
   width: 100%;

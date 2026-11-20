@@ -131,7 +131,7 @@ export default function CampaignCarousel({campaigns, label, initialCampaignId, r
         pointerStartX.current = null;
         setTouching(false);
       }}>
-    <div className="campaign-carousel-viewport" aria-live="off"
+    <div className="campaign-carousel-viewport" aria-live="off" data-visible-campaigns={shownCount}
       style={{'--campaigns-visible': shownCount}}>
       {visibleCampaigns.map((campaign, offset) => <div className="campaign-carousel-slide" key={campaign.id} data-direction={direction}
         role={count > 1 ? 'group' : undefined} aria-roledescription={count > 1 ? t('slide') : undefined}

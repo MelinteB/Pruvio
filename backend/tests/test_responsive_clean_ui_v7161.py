@@ -120,6 +120,15 @@ def test_campaign_studio_and_library_show_the_linked_program_location():
     assert 'pruvs-campaign-library-location' in library
     assert 'pruvs-core-preview-location' in preview
 
+
+def test_core_carousel_keeps_small_campaign_sets_at_card_width():
+    carousel = (ROOT / 'frontend/src/CampaignCarousel.jsx').read_text(encoding='utf-8')
+    styles = (ROOT / 'frontend/src/campaign-carousel.css').read_text(encoding='utf-8')
+
+    assert 'data-visible-campaigns={shownCount}' in carousel
+    assert ".campaign-carousel-viewport[data-visible-campaigns='1'] { max-width: 440px; }" in styles
+    assert ".campaign-carousel-viewport[data-visible-campaigns='2'] { max-width: 898px; }" in styles
+
 def test_release_metadata_matches_across_bundles():
     assert 'RELEASE = "7.1.66"' in read('app/reliability.py')
     assert "version:'7.1.66'" in read('frontend/scripts/stamp-build.mjs')
