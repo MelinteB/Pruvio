@@ -268,6 +268,12 @@ def delete_user_completely(db: Session, user: User) -> None:
 
     db.query(TrustedDevice).filter(TrustedDevice.user_id == user_id).delete(synchronize_session=False)
     db.query(VerificationCode).filter(VerificationCode.user_id == user_id).delete(synchronize_session=False)
+    # Remove verified external provider subjects before account deletion;
+    # provider tokens are never stored by Pruvs.
+    from app.models.social_identity import SocialAccount
+    from sqlalchemy import inspect
+    if inspect(db.get_bind()).has_table(SocialAccount.__tablename__):
+        db.query(SocialAccount).filter_by(user_id=user_id).delete(synchronize_session=False)
     db.query(PasskeyCredential).filter(PasskeyCredential.user_id == user_id).delete(synchronize_session=False)
     db.query(User).filter(User.id == user_id).delete(synchronize_session=False)
     try:
