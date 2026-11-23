@@ -110,7 +110,7 @@ function readableApiError(response, payload) {
   } else if (typeof payload.detail === 'string') {
     message = payload.detail;
   }
-  if (response.status === 404 && !message) message = 'Merchant enrollment is not enabled on this environment.';
+  if (response.status === 404 && (!message || message === 'Not found')) message = 'Merchant enrollment is not yet available. Contact Pruvs Business support.';
   if (response.status === 503 && !message) message = 'The verification email service is temporarily unavailable.';
   if (response.status === 409 && !message) message = 'An application already exists for this email. Resume in the original browser tab.';
   return {field, message: message || `Registration request failed (HTTP ${response.status}).`};
