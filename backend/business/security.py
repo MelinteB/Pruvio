@@ -4,6 +4,8 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from argon2 import PasswordHasher, exceptions
 import jwt
+import hashlib
+import secrets
 from sqlalchemy.orm import Session
 from .db import get_db
 from .models import Staff, uid
@@ -12,11 +14,16 @@ from .config import get_settings
 hasher = PasswordHasher()
 optional_bearer = HTTPBearer(auto_error=False)
 
+def password_version(password_hash: str) -> str:
+    """Fingerprint to revoke previously issued merchant tokens after password changes."""
+    return hashlib.sha256((password_hash or '').encode('utf-8')).hexdigest()
+
 def encode_merchant_token(staff: Staff):
     cfg=get_settings()
     now=datetime.now(timezone.utc)
     return jwt.encode({'sub':staff.id,'iss':'pruvs-business','aud':'pruvs-business-merchant',
-        'iat':now,'exp':now+timedelta(hours=2),'jti':uid()},cfg.business_jwt_secret,algorithm='HS256')
+        'iat':now,'exp':now+timedelta(hours=2),'jti':uid(),
+        'pv':password_version(staff.password_hash)},cfg.business_jwt_secret,algorithm='HS256')
 
 def decode(raw, key, issuer, audience, typ=None):
     try:
@@ -39,6 +46,8 @@ def merchant_actor(credentials: Annotated[HTTPAuthorizationCredentials | None,De
     staff=db.get(Staff,payload['sub'])
     if not staff or not staff.active:
         raise HTTPException(401,'Inactive merchant account')
+    if not secrets.compare_digest(str(payload.get('pv', '')), password_version(staff.password_hash)):
+        raise HTTPException(401,'Merchant password changed. Sign in again.')
     return staff
 
 def customer_actor(credentials: Annotated[HTTPAuthorizationCredentials | None,Depends(optional_bearer)]) -> str:

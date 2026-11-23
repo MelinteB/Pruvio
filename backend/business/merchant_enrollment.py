@@ -101,7 +101,7 @@ class SignupData(BaseModel):
     owner_email: str = Field(min_length=5, max_length=255)
     owner_phone: str = Field(min_length=6, max_length=30)
     owner_position: str = Field(min_length=2, max_length=100)
-    password: str = Field(min_length=20, max_length=256)
+    password: str = Field(min_length=15, max_length=128)
     accept_terms: bool
     acknowledge_privacy: bool
     marketing_opt_in: bool = False

@@ -71,7 +71,7 @@ function inputLabel(node) {
 }
 function validationReason(input) {
   if (input.name === 'password' && input.validity?.tooShort) {
-    return 'Use at least 20 characters for your password.';
+    return 'Use at least 15 characters for your password.';
   }
   if (input.validity?.valueMissing) return `${inputLabel(input)} is required.`;
   if (input.validity?.typeMismatch) return `Please enter a valid ${inputLabel(input).toLowerCase()}.`;
@@ -110,7 +110,7 @@ function readableApiError(response, payload) {
   } else if (typeof payload.detail === 'string') {
     message = payload.detail;
   }
-  if (response.status === 404 && !message) message = 'Merchant enrollment is not enabled on this environment.';
+  if (response.status === 404 && (!message || message === 'Not found')) message = 'Merchant enrollment is not yet available. Contact Pruvs Business support.';
   if (response.status === 503 && !message) message = 'The verification email service is temporarily unavailable.';
   if (response.status === 409 && !message) message = 'An application already exists for this email. Resume in the original browser tab.';
   return {field, message: message || `Registration request failed (HTTP ${response.status}).`};

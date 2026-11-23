@@ -19,6 +19,8 @@ PUBLIC_FILES = (
     "merchant-enroll.js",
     "merchant-login-entry.css",
     "merchant-login-entry.js",
+    "merchant-reset.html",
+    "merchant-reset.js",
     "business-favicon.svg",
 )
 RESERVED = {"v1", "api", "docs", "redoc", "health", "openapi.json", "assets", "_internal", ".well-known"}
