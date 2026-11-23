@@ -52,25 +52,41 @@ logging.getLogger("pruvs.staging.platform").warning(
 # root-level UI mounting before importing it and mount dist under the sub-app.
 os.environ["PRUVS_BUSINESS_SERVE_UI"] = "false"
 from app.react_main import app as core_app
-from app.db.database import engine as core_engine
+from app.db.database import engine as core_engine, Base as CoreBase
 from business.main import app as business_app
-from business.db import engine as business_engine
+from business.db import engine as business_engine, Base as BusinessBase
 from business.models_v0618 import MerchantStorePlace
 from business.ui_host import mount_business_ui
 
 business_dist = Path(__file__).resolve().parents[1] / "business_frontend" / "dist"
 mount_business_ui(business_app, dist_dir=business_dist, enabled=True)
 
-def _verify_schema(connection, expected_database, required_tables):
+def _verify_schema(connection, expected_database, mapped_tables, required_tables):
     if connection.scalar(text("SELECT current_database()")) != expected_database:
         raise RuntimeError("Staging database selection unexpectedly changed")
     if connection.scalar(text("SELECT to_regnamespace('public')")) is None:
         raise RuntimeError("Missing public schema in " + expected_database + "; verify staging migration")
-    existing = set(inspect(connection).get_table_names(schema="public"))
-    missing = required_tables - existing
+    inspector = inspect(connection)
+    existing = set(inspector.get_table_names(schema="public"))
+    missing = (set(mapped_tables) | required_tables) - existing
     if missing:
         raise RuntimeError("Staging schema mismatch in " + expected_database
                            + "; required tables missing: " + ", ".join(sorted(missing)))
+    for name in mapped_tables:
+        model = mapped_tables[name]
+        expected_columns = set(model.columns.keys())
+        actual_columns = {c["name"] for c in inspector.get_columns(name, schema="public")}
+        absent_columns = expected_columns - actual_columns
+        if absent_columns:
+            raise RuntimeError("Staging schema mismatch: missing " + name + " columns "
+                               + ", ".join(sorted(absent_columns)))
+    if expected_database == "pruvs_core_staging":
+        unique_username = any(
+            index["name"] == "ix_users_username_key" and bool(index["unique"])
+            for index in inspector.get_indexes("users", schema="public")
+        )
+        if not unique_username:
+            raise RuntimeError("Core staging missing unique username index; migrate before boot")
 
 
 @asynccontextmanager
@@ -79,14 +95,14 @@ async def lifespan(_app: FastAPI):
     # Validate the already-rebuilt Core and Business schemas before startup.
     # Nothing below ever wipes a table or touches the production DB names.
     with core_engine.connect() as conn:
-        _verify_schema(conn, "pruvs_core_staging", {"users", "pruvs_social_accounts"})
+        _verify_schema(conn, "pruvs_core_staging", CoreBase.metadata.tables,
+                       {"users", "pruvs_social_accounts"})
     with business_engine().begin() as conn:
-        _verify_schema(conn, "pruvs_business_staging",
+        _verify_schema(conn, "pruvs_business_staging", BusinessBase.metadata.tables,
                        {"merchants", "merchant_staff",
                         "merchant_staff_actions_v1", "merchant_signup_rates"})
-        # The 2026-11-23 reset already includes the Places table; checkfirst
-        # therefore performs no DDL on the freshly migrated staging schema.
-        MerchantStorePlace.__table__.create(bind=conn, checkfirst=True)
+        # The migration already created all tables. Runtime must never own or
+        # create tables, including Google Places links.
     async with core_app.router.lifespan_context(core_app):
         yield
 
