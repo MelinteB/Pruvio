@@ -5,6 +5,7 @@ import { Fingerprint, ArrowRight, ScanLine, Users, ShieldCheck } from 'lucide-re
 import { send, credential, safeNext } from './api';
 import { invitedBillDestination } from './join-return';
 import { Field, Check, Message, useApp } from './common';
+import LoginMethodGrid from './LoginMethodGrid';
 function usernameFromName(value){
   const parts=(value||'').trim().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().split(/\s+/).map(p=>p.replace(/[^a-z0-9-]/g,'')).filter(Boolean);
   const base=parts.length>1?parts[0]+'.'+parts[parts.length-1]:parts[0]||'';
@@ -68,6 +69,17 @@ export default function Auth({
     // safeNext refuses external and protocol-relative destinations.
     navigate(invitedBillDestination(returnTo) || safeNext(returnTo), { replace: true });
   }
+  function chooseLoginMethod(provider) {
+    if (provider === 'email') {
+      document.querySelector('.auth-card input')?.focus();
+      return;
+    }
+    // Only route to a provider once the server declares its verified OAuth flow ready.
+    // Do not enable flags for UI-only integrations; the backend must enforce that too.
+    if (config?.social_login_providers?.[provider] !== true) return;
+    window.location.assign('/api/v1/auth/social/' + encodeURIComponent(provider)
+      + '/start?next=' + encodeURIComponent(safeNext(returnTo)));
+  }
   async function submit(e) {
     e.preventDefault();
     await run(async () => {
@@ -110,6 +122,7 @@ export default function Auth({
   }
   return <div className="auth-layout"><div className="auth-story"><span className="eyebrow">{t("LESS MATH. MORE MOMENTS.")}</span><h1>{t("Good company.")} <br /> {t("Fair shares.")}</h1><p>{t("From the first scan to the last payment, keep every shared bill clear.")}</p><div className="story-card"><ScanLine /><div><strong>{t("Scan once")}</strong><p>{t("Keep the original receipt and review every item.")}</p></div></div><div className="story-card"><Users /><div><strong>{t("Split together")}</strong><p>{t("Everyone picks their items. Totals stay in sync.")}</p></div></div><div className="story-card"><ShieldCheck /><div><strong>{t("Stay in control")}</strong><p>{t("Your account, your history, your notification choices.")}</p></div></div></div>
  <section className="panel auth-card"><div className="eyebrow">{t("WELCOME TO PRUVS")}</div><h1>{mode === 'register' ? t("Create your account") : mode === 'reset' ? t("Reset your password") : t("Welcome back")}</h1><p className="muted">{challenge ? t("Enter the code sent to your email.") : mode === 'login' ? t("Your receipts and shared moments, in one place.") : t("Use an email address you can verify.")}</p>
+ {mode === 'login' && <LoginMethodGrid enabledProviders={config?.social_login_providers} disabled={busy} onChoose={chooseLoginMethod} />}
  {error && <Message error={error} />}{done ? <Message>{t("Password updated.")} <Link to="/login">{t("Sign in")}</Link></Message> : <form onSubmit={submit}>
  {!challenge && mode === 'login' && <>{input('identifier', t("Username or email"))}{input('password', t("Password"), 'password')}</>}
  {!challenge && mode === 'register' && <>{input('name', t("Full name"))}{input('username', t("Username"))}<p className="muted">{t('Suggested from your full name. You can change it. If already taken, Pruvs adds a number.')}</p>{input('email', t("Email"), 'email')}{input('phone_number', t("Phone number"), 'tel')}{input('password', t("Password"), 'password')}<Check label={<span>{t("I accept the")} <Link to="/terms" target="_blank">{t("Terms")}</Link></span>} required checked={!!form.accepted_terms} onChange={e => set('accepted_terms', e.target.checked)} /><Check label={<span>{t("I accept the")} <Link to="/privacy" target="_blank">{t("Privacy Notice")}</Link></span>} required checked={!!form.accepted_privacy} onChange={e => set('accepted_privacy', e.target.checked)} /><Check label={t('Receive bill and payment notifications (optional)')} checked={!!form.notifications_opt_in} onChange={e => set('notifications_opt_in', e.target.checked)} /><p className="muted">{t('You can read bill activity in Inbox. Enable device push alerts later in Account, if your browser supports them.')}</p></>}
