@@ -64,6 +64,7 @@ def country_dialing_options() -> tuple[dict, ...]:
         options.append({
             "country": region,
             "calling_code": f"+{calling_code}",
+            "national_prefix": metadata.national_prefix if metadata and metadata.national_prefix and metadata.national_prefix.isdigit() else "",
             "possible_lengths": possible_lengths,
         })
     return tuple(options)
