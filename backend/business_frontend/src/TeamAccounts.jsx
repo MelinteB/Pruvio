@@ -115,8 +115,12 @@ export default function TeamAccounts({token, api, currentEmail, onPasswordChange
             onChange={event=>update(row,{role:event.target.value})}>
             <option value="owner">Owner</option><option value="manager">Manager</option>
             <option value="staff">Staff</option></select></label>
-          <button className="btn outline" disabled={busy}
-            onClick={()=>update(row,{active:!row.active})}>{row.active?'Disable access':'Re-enable'}</button>
+          {row.active
+            ? <button className="btn outline" disabled={busy}
+                onClick={()=>update(row,{active:false})}>Disable access</button>
+            : <button className="btn outline" disabled={busy}
+                onClick={()=>perform(()=>api('/v1/merchant/staff/'+encodeURIComponent(row.id)+'/resend-invite',
+                  token,'POST',{}),'A fresh setup link was sent.')}>Send new access link</button>}
         </>}
       </div>)}
       <button type="button" className="btn outline" onClick={()=>perform(()=>reload(),'Team data refreshed.')} disabled={busy}>
