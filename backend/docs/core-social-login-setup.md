@@ -16,6 +16,16 @@
 
 The UI intentionally does **not** activate social methods based merely on the presence of environment variables. Once a real backend exists, `/api/v1/config` must return `social_login_providers` with `true` **only after** that provider's start and callback endpoints, identity checks, approved app settings, and database migrations are working.
 
+## Mandatory phone with country prefix (sharing)
+
+Core registration now uses a reusable `PhoneNumberField`: users choose a two-letter country, see its international dialing prefix, and enter the national number. The country list and expected full mobile national lengths are served from `GET /api/v1/phone/countries` using `python-phonenumbers` metadata. The React form gives immediate length feedback; `POST /api/v1/auth/register` independently validates the selected `phone_country` and phone number, normalizing to **E.164** before storing it in the existing unique `users.phone_number` column. No database migration is needed for the existing column.
+
+Example: Romania +40 and `722 123 456` (or `0722 123 456`) become `+40722123456`. Britain +44 and `07911 123456` become `+447911123456`. Both full E.164 pasted numbers and national numbers are supported if they match the selected country.
+
+The phone number is **required** (not optional) because Core uses it for sharing. However, length validation and format normalization **do not verify phone ownership**; the current signup keeps `is_phone_verified=False` and verifies email instead. Do not use the phone alone as a trusted authentication factor, recovery factor or identity proof. For SMS invitations, reassess verified phone ownership.
+
+**When social OAuth backend is built**, use this same `PhoneNumberField` in the *post-OAuth profile completion* step and require it before creating/activating a Core account. Provider-derived name/email can prefill the form only if verified by the OAuth provider; never skip the mandatory phone and Terms/Privacy acceptance. No such social onboarding route exists yet, and none should be implied.
+
 ## Provider dashboards and required credentials
 
 Create separate OAuth applications for staging and production, or register their redirect URIs separately. Do not commit secrets.
