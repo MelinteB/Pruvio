@@ -2,10 +2,27 @@ import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import LoginMethodGrid, { LOGIN_METHODS } from './LoginMethodGrid';
+import Auth from './Auth';
+import { MemoryRouter } from 'react-router-dom';
+import { Context } from './common';
 
 afterEach(() => cleanup());
 
 describe('Pruvs Core six-method sign-in grid', () => {
+  it('shows the login methods immediately below the main Sign in form', () => {
+    const { container } = render(<MemoryRouter>
+      <Context.Provider value={{ config: { passkeys: false }, accept: vi.fn() }}>
+        <Auth mode="login" />
+      </Context.Provider>
+    </MemoryRouter>);
+    const form = container.querySelector('.auth-card form');
+    const methodGrid = screen.getByRole('group', { name: 'Choose how to sign in' });
+    expect(form).toBeTruthy();
+    expect(form.querySelector('button.primary').textContent).toContain('Sign in');
+    expect(form.nextElementSibling).toBe(methodGrid.parentElement);
+    expect(container.querySelectorAll('.auth-method-tile')).toHaveLength(6);
+  });
+
   it('has exactly six unique methods in the agreed 3x2 order', () => {
     expect(LOGIN_METHODS.map(method => method.id)).toEqual([
       'email', 'google', 'yahoo', 'facebook', 'instagram', 'tiktok',
