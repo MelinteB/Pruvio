@@ -295,9 +295,10 @@ def _oauth_identity(provider, code, client_id, secret, redirect_uri, flow):
 def providers(db=Depends(get_db)):
     schema_ready = inspect(db.get_bind()).has_table(SocialAccount.__tablename__) if _globally_enabled() else False
     return {"providers": [{"id": p, "enabled": _configured(p) and schema_ready,
-             "signup": p != "instagram",
-             "note": "Professional Instagram accounts only" if p == "instagram" else
-                     ("Sign in after linking in Account" if p in LINK_ONLY else "")}
+             "signup": True,
+             "note": ("Business or Creator Instagram accounts only; Pruvs email OTP required"
+                      if p == "instagram" else
+                      "Pruvs email OTP required for new accounts" if p in LINK_ONLY else "")}
             for p in PROVIDERS]}
 
 
