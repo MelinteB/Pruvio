@@ -36,9 +36,22 @@ def normalize_signup_phone(phone_number: str, country: str = "RO") -> str:
         raise ValueError("The phone prefix does not match the selected country.")
     if parsed.extension:
         raise ValueError("Phone extensions cannot be used for sharing.")
-    # Possible-number checks are metadata-backed length checks, deliberately
-    # avoiding over-restricting new allocations with strict prefix lists.
-    if phonenumbers.is_possible_number_with_reason(parsed) != phonenumbers.ValidationResult.IS_POSSIBLE:
+    # A number suitable for sharing must be complete (not a short local-only
+    # dial string). Some countries treat six- or seven-digit local numbers as
+    # "possible"; require the country's full mobile national length as well.
+    metadata = PhoneMetadata.metadata_for_region(region)
+    mobile_lengths = {
+        n for n in (metadata.mobile.possible_length if metadata and metadata.mobile else ())
+        if n > 0
+    }
+    general_lengths = {
+        n for n in (metadata.general_desc.possible_length if metadata and metadata.general_desc else ())
+        if n > 0
+    }
+    permitted_lengths = mobile_lengths or general_lengths
+    national_length = len(phonenumbers.national_significant_number(parsed))
+    if (phonenumbers.is_possible_number_with_reason(parsed) != phonenumbers.ValidationResult.IS_POSSIBLE
+            or (permitted_lengths and national_length not in permitted_lengths)):
         raise ValueError("Phone number length is invalid for the selected country.")
     return phonenumbers.format_number(parsed, PhoneNumberFormat.E164)
 
@@ -51,16 +64,15 @@ def country_dialing_options() -> tuple[dict, ...]:
         if not calling_code:
             continue
         metadata = PhoneMetadata.metadata_for_region(region)
-        possible_lengths = sorted({
-            length
-            for desc in (
-                metadata.general_desc,
-                metadata.mobile,
-                metadata.fixed_line,
-            )
-            for length in (desc.possible_length if desc else ())
+        mobile_lengths = [
+            length for length in (metadata.mobile.possible_length if metadata and metadata.mobile else ())
             if length > 0
-        }) if metadata else []
+        ]
+        general_lengths = [
+            length for length in (metadata.general_desc.possible_length if metadata and metadata.general_desc else ())
+            if length > 0
+        ]
+        possible_lengths = sorted(set(mobile_lengths or general_lengths))
         options.append({
             "country": region,
             "calling_code": f"+{calling_code}",
