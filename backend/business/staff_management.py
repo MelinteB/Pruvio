@@ -103,6 +103,26 @@ def invite_staff(data: StaffInvitation, actor: Staff = Depends(merchant_actor),
     return {"staff": _staff_json(staff), "message": "Invitation sent. Member must set a password."}
 
 
+@router.post("/{staff_id}/resend-invite")
+def resend_invite(staff_id: str, actor: Staff = Depends(merchant_actor),
+                  db: Session = Depends(get_db)):
+    _owner(actor)
+    require_recovery(db)
+    _audit_ready(db)
+    target = db.scalar(select(Staff).where(
+        Staff.id == staff_id, Staff.merchant_id == actor.merchant_id).with_for_update())
+    if not target:
+        raise HTTPException(404, "Merchant team member not found")
+    if target.active or target.role not in ("manager", "staff"):
+        raise HTTPException(409, "Only inactive staff and managers can receive a setup link")
+    enforce_limit(db, "staff-resend-owner:" + actor.id, max_attempts=10)
+    enforce_limit(db, "staff-resend-email:" + target.email, max_attempts=3)
+    _send_reset(target, invite=True)
+    _log(db, actor, target, "resend_invite", target.role, target.active)
+    db.commit()
+    return {"message": "A new access link has been emailed."}
+
+
 @router.patch("/{staff_id}")
 def update_staff(staff_id: str, data: StaffUpdate,
                  actor: Staff = Depends(merchant_actor), db: Session = Depends(get_db)):
@@ -125,6 +145,8 @@ def update_staff(staff_id: str, data: StaffUpdate,
         ).with_for_update()).all()
         if len(owners) <= 1:
             raise HTTPException(409, "Cannot remove the last active merchant owner")
+    if not target.active and new_active:
+        raise HTTPException(409, "Send an account setup link to reactivate an inactive user")
     old_role, old_active = target.role, target.active
     target.role, target.active = new_role, new_active
     if old_active and not new_active:
