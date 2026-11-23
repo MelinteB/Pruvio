@@ -11,6 +11,7 @@ import CompanyProfiles from './CompanyProfiles';
 import {TripProfilesDialog} from './TripProfiles';
 import PaymentProfiles from './PaymentProfiles';
 import SupportDiagnostics from './professional/SupportDiagnostics';
+import SocialAuthOptions from './SocialAuthOptions.jsx';
 export function CompanySettings(){
   const companies=useLoad(()=>request('/expenses/companies'),[]);
   const [tripOpen,setTripOpen]=useState(false);
@@ -58,7 +59,6 @@ export default function Account() {
   const keys = useLoad(() => request('/account/passkeys'), []);
   const socials = useLoad(() => request('/auth/social/accounts'), []);
   const socialProviders = useLoad(() => request('/auth/social/providers'), []);
-  const enabledSocials = (socialProviders.data?.providers || []).filter(x => x.enabled);
   const linkedSocials = socials.data?.accounts || [];
   async function run(fn, msg = t("Saved."), scope = '') {
     setBusy(true);
@@ -94,11 +94,11 @@ export default function Account() {
             });
           }}>{field(form, setForm, 'name', t("Full name"))}{field(form, setForm, 'username', t("Username"))}<p><strong>{user.email}</strong> · {user.is_email_verified ? t("Verified") : t("Not verified")}</p><p className="muted">{user.phone_number}</p><button className="primary" disabled={busy}>{t("Save profile")}</button></form></Panel>
  </AccountSection>
-<AccountSection id="account-social" title="Connected social accounts" description="Link or disconnect Google, Yahoo, Facebook, Instagram and TikTok">
+<AccountSection id="account-social" title="Connected social accounts" description="Link or disconnect Google, Apple, Yahoo, Facebook, TikTok and Instagram Professional">
   <Panel title="Social sign-in and connected identities">
     <p className="muted">Only explicitly linked identities can sign in. Matching an email never connects accounts automatically.</p>
     {socials.error && <Message error={socials.error}/>}
-    {enabledSocials.length === 0 && <p>Social sign-in is not enabled for this environment yet.</p>}
+
     {linkedSocials.length > 0 && <div className="list">
       {linkedSocials.map(account => <div className="list-row" key={account.provider}>
         <div className="grow"><strong>{account.provider}</strong>
@@ -110,12 +110,9 @@ export default function Account() {
         }, 'Social account disconnected.', 'social')}>Disconnect</button>
       </div>)}
     </div>}
-    {enabledSocials.length > 0 && <div className="row wrap">
-      {enabledSocials.map(provider => <a key={provider.id} className="secondary"
-        href={'/api/v1/auth/social/' + encodeURIComponent(provider.id) + '/start?mode=link'}>
-        Connect {provider.id === 'instagram' ? 'Instagram Professional' : provider.id.charAt(0).toUpperCase() + provider.id.slice(1)}
-      </a>)}
-    </div>}
+    <SocialAuthOptions providers={socialProviders.data?.providers || []}
+      loading={!!socialProviders.loading} mode="link"
+      linked={linkedSocials.map(account=>account.provider)}/>
     <p className="muted">Instagram connection is limited to professional accounts. TikTok and Facebook may not supply a verified email; connect them while signed in.</p>
   </Panel>
 </AccountSection>
