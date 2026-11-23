@@ -107,7 +107,9 @@ export default function Auth({
           }), true);
           return;
         }
-        if (challenge) signed(await send('/auth/register/verify', {
+        if (challenge) signed(await send(
+          params.get('social') === 'pending' && socialPending?.requires_email_otp
+            ? '/auth/social/complete-email' : '/auth/register/verify', {
           email: challenge.email || form.email,
           code: form.code,
           challenge_id: challenge.challenge_id
@@ -142,7 +144,9 @@ export default function Auth({
  {socialNotice && <Message error={socialNotice}/>}
  {params.get('social_error') && <Message error="Social sign-in did not complete. Please try again."/>}
  {socialPending?.can_complete && <Message>Verified {socialPending.provider} email: {socialPending.email}. Complete your Pruvs profile below.</Message>}
- {socialPending && !socialPending.can_complete && <Message error="This provider cannot verify an email for Pruvs registration. Register with an email and then connect the social account in Account."/>}
+ {socialPending?.requires_email_otp && <Message>
+  {socialPending.provider} does not provide a verified email. Complete the usual email and password registration below, then verify the email code to link your social identity.
+ </Message>}
  {done ? <Message>{t("Password updated.")} <Link to="/login">{t("Sign in")}</Link></Message> : <form onSubmit={submit}>
  {!challenge && mode === 'login' && <>{input('identifier', t("Username or email"))}{input('password', t("Password"), 'password')}</>}
  {!challenge && mode === 'register' && <>{input('name', t("Full name"))}{input('username', t("Username"))}<p className="muted">{t('Suggested from your full name. You can change it. If already taken, Pruvs adds a number.')}</p>{!socialPending?.can_complete && input('email', t("Email"), 'email')}{input('phone_number', t("Phone number"), 'tel')}{!socialPending?.can_complete && input('password', t("Password"), 'password')}<Check label={<span>{t("I accept the")} <Link to="/terms" target="_blank">{t("Terms")}</Link></span>} required checked={!!form.accepted_terms} onChange={e => set('accepted_terms', e.target.checked)} /><Check label={<span>{t("I accept the")} <Link to="/privacy" target="_blank">{t("Privacy Notice")}</Link></span>} required checked={!!form.accepted_privacy} onChange={e => set('accepted_privacy', e.target.checked)} /><Check label={t('Receive bill and payment notifications (optional)')} checked={!!form.notifications_opt_in} onChange={e => set('notifications_opt_in', e.target.checked)} /><p className="muted">{t('You can read bill activity in Inbox. Enable device push alerts later in Account, if your browser supports them.')}</p></>}
