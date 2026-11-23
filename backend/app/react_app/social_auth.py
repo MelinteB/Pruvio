@@ -27,7 +27,7 @@ import jwt
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import func
+from sqlalchemy import func, inspect
 from sqlalchemy.exc import IntegrityError
 
 from app.db.database import get_db
@@ -118,6 +118,10 @@ def _ensure_provider(provider):
     if not _configured(provider):
         raise HTTPException(503, "This social sign-in provider is unavailable")
 
+def _schema_ready(db):
+    if not inspect(db.get_bind()).has_table(SocialAccount.__tablename__):
+        raise HTTPException(503, "Social identity database migration is not applied")
+
 
 def _origin():
     raw = os.getenv("PUBLIC_BASE_URL", "https://pruvs.io").strip().rstrip("/")
@@ -132,7 +136,7 @@ def _redirect_uri(provider):
 
 
 def _internal_next(value):
-    return value if value and value.startswith("/") and not value.startswith("//") and "\\" not in value else "/"
+    return value if value and value.startswith("/") and not value.startswith("//") and "\\" not in value and not any(ord(ch)<32 for ch in value) else "/"
 
 
 def _b64(raw: bytes):
@@ -196,7 +200,7 @@ def _oidc_identity(provider, tokens, client_id, nonce):
                             leeway=30)
         if not secrets.compare_digest(str(claims.get("nonce", "")), nonce):
             raise ValueError("OIDC nonce mismatch")
-    except (jwt.PyJWTError, ValueError, TypeError, jwt.PyJWKClientError):
+    except (jwt.PyJWTError, ValueError, TypeError, jwt.PyJWKClientError, OSError):
         raise HTTPException(502, "Identity provider token verification failed") from None
     subject = str(claims.get("sub", ""))
     if not subject or len(subject) > 255:
@@ -223,7 +227,8 @@ def _oauth_identity(provider, code, client_id, secret, redirect_uri, flow):
             raise HTTPException(502, "Facebook authorization unsuccessful")
         proof = hmac.new(secret.encode(), access.encode(), hashlib.sha256).hexdigest()
         profile = _fetch("https://graph.facebook.com/v24.0/me",
-            params={"fields": "id,name,email", "access_token": access, "appsecret_proof": proof})
+            params={"fields": "id,name,email", "appsecret_proof": proof},
+            headers={"Authorization": "Bearer " + access})
         return {"subject": str(profile.get("id") or ""), "name": str(profile.get("name") or "")[:255],
                 "email": "", "verified": False}
     if provider == "instagram":
@@ -253,6 +258,7 @@ def start(provider: str, request: Request,
           mode: str = Query("login", pattern="^(login|link)$"),
           next: str = "/", db=Depends(get_db)):
     _ensure_provider(provider)
+    _schema_ready(db)
     link_uid = None
     login_bind = ""
     if mode == "link":
@@ -288,6 +294,7 @@ def start(provider: str, request: Request,
 def callback(provider: str, request: Request, code: str = "", state: str = "",
              error: str = "", db=Depends(get_db)):
     _ensure_provider(provider)
+    _schema_ready(db)
     flow = _unseal(request.cookies.get(STATE_COOKIE, ""), max_age=600)
     if flow.get("provider") != provider or not secrets.compare_digest(
         str(flow.get("state", "")), state
@@ -363,6 +370,7 @@ def complete(data: CompleteSignup, request: Request, response: Response,
              db=Depends(get_db)):
     if not _globally_enabled():
         raise HTTPException(503, "Social registration is disabled")
+    _schema_ready(db)
     limit(db,request,"social-registration",10)
     if request.cookies.get(COOKIE):
         raise HTTPException(409, "Sign out first or connect this provider in Account")
@@ -407,6 +415,9 @@ def complete(data: CompleteSignup, request: Request, response: Response,
 
 @router.get("/accounts")
 def accounts(identity=Depends(current),db=Depends(get_db)):
+    if not _globally_enabled():
+        return {"accounts": [], "disabled": True}
+    _schema_ready(db)
     rows = db.query(SocialAccount).filter_by(user_id=identity[0].id).order_by(SocialAccount.provider).all()
     return {"accounts": [{"provider":r.provider,"name":r.display_name,
                           "connected_at":r.connected_at.isoformat()} for r in rows]}
@@ -414,6 +425,9 @@ def accounts(identity=Depends(current),db=Depends(get_db)):
 
 @router.delete("/accounts/{provider}")
 def unlink(provider: str, identity=Depends(current),db=Depends(get_db)):
+    if not _globally_enabled():
+        raise HTTPException(503, "Social account management is disabled")
+    _schema_ready(db)
     if provider not in PROVIDERS:
         raise HTTPException(404, "Provider not supported")
     user = identity[0]
