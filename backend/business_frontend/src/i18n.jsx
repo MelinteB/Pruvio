@@ -3,6 +3,17 @@ import React,{createContext,useContext,useEffect,useState} from 'react';
 // UI language is a presentation setting, not a source of merchant reward terms.
 // Add translations by key; never translate customer-entered content or financial rules.
 const RO={
+  'Account':'Cont',
+  'Team & security':'Echipă și securitate',
+  'Account security':'Securitatea contului',
+  'Invite team member':'Invită un membru al echipei',
+  'Team access':'Accesul echipei',
+  'Recent account changes':'Modificări recente ale conturilor',
+  'Change password':'Schimbă parola',
+  'Send invitation':'Trimite invitația',
+  'Disable access':'Dezactivează accesul',
+  'Send new access link':'Trimite un nou link de acces',
+  'Refresh team':'Actualizează echipa',
   'Overview':'Prezentare generală',
   'Locations':'Locații',
   'Loyalty programs':'Programe de fidelitate',
