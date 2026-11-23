@@ -16,6 +16,7 @@ from .db import get_db, engine
 from .config import get_settings
 from .merchant_enrollment import router as merchant_enrollment_router
 from .password_recovery import router as password_recovery_router
+from .staff_management import router as staff_management_router
 from .models import Merchant, Staff, Store, Program, Membership, ReceiptClaim, Reward, Campaign, utcnow
 from .models_v067 import DiscountRedemption
 from .google_places_v0618 import router as google_places_router, linked_place_id, validate_store_place
@@ -26,9 +27,10 @@ from .schemas import LoginIn, StoreIn, StoreUpdate, ProgramIn, CampaignGoal, Cam
 settings=get_settings()
 app=FastAPI(title='Pruvs Business API',version='0.6.22',docs_url='/docs' if settings.app_env!='production' else None)
 app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=False,
-                   allow_methods=['GET','POST','PUT','DELETE'],allow_headers=['Authorization','Content-Type'])
+                   allow_methods=['GET','POST','PUT','PATCH','DELETE'],allow_headers=['Authorization','Content-Type'])
 app.include_router(merchant_enrollment_router)
 app.include_router(password_recovery_router)
+app.include_router(staff_management_router)
 app.include_router(google_places_router)
 from .ai_campaign_v067 import router as ai_campaign_router
 app.include_router(ai_campaign_router)
