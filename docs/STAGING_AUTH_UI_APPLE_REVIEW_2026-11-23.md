@@ -11,7 +11,7 @@
 - A full-height, independently scrollable sidebar with a consistent dark background on desktop and mobile, footer within the sidebar, and readable account buttons.
 - More usable responsive `Team & security` forms and role controls; Romanian navigation/action translations.
 - Clearly visible provider choices at the **top** of Core login and signup, plus the Account connection section, with a true `Setup required / Unavailable` status rather than a dead link.
-- Core provider choices: Google, Apple, Facebook, Yahoo, TikTok; Instagram Professional can be linked from Account and used to sign into a previously linked profile (not personal Instagram).
+- Core provider choices: Google, Apple, Facebook, Yahoo, TikTok, and Instagram Professional are visible on sign-in and registration; Instagram Business/Creator account holders can finish new-user registration via Pruvs email OTP (not personal Instagram).
 - Apple web OAuth/OIDC: Services ID, signed ES256 developer client-secret JWT derived from an encrypted Render env secret, Apple JWKS token verification, issuer/audience/nonce checks, browser-bound HMAC state, secure form POST callback and same-origin GET bridge before account linking.
 - Privacy: no Apple/Google/Facebook refresh or access tokens stored; provider subjects remain internal. No automatic account linking by email.
 - Existing email, password, passkeys, administrator controls, account linking and staged social SQL migration retained.
