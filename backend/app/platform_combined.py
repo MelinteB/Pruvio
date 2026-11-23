@@ -31,23 +31,21 @@ if business_db.database != "pruvs_business_staging":
 if core_url == business_url:
     raise RuntimeError("Core and Business may not share the same logical database")
 
-# After the isolated staging reset both logical databases exist on the same
-# explicitly verified pruvs-db PostgreSQL instance. Stale staging environment
-# URLs must not silently route Core or Business to the recovery-test instance.
-# Derive both logical names from an existing correct Render secret; never log it.
+# Both logical staging DBs live on the same verified Render PostgreSQL
+# instance but use DIFFERENT dedicated roles. Never reuse Core credentials
+# to access Business; PostgreSQL correctly denies cross-database CONNECT.
 EXPECTED_STAGE_HOST = "dpg-dacoe2rm8hqs73binaq0-a"
 if os.getenv("PRUVS_PLATFORM_COMBINED_PRODUCTION", "").lower() == "true":
-    raise RuntimeError("Combined staging cannot run with the production flag enabled")
-primary = next((url for url in (core_db, business_db)
-                if EXPECTED_STAGE_HOST in (url.host or "")), None)
-if primary is None:
-    raise RuntimeError("Refusing staging: both database URLs miss the verified pruvs-db host")
-if primary.drivername not in ("postgres", "postgresql", "postgresql+psycopg"):
-    raise RuntimeError("Staging requires PostgreSQL")
-os.environ["DATABASE_URL"] = primary.set(database="pruvs_core_staging").render_as_string(hide_password=False)
-os.environ["BUSINESS_DATABASE_URL"] = primary.set(database="pruvs_business_staging").render_as_string(hide_password=False)
+    raise RuntimeError("Combined staging cannot run with production mode enabled")
+for name, url in (("Core", core_db), ("Business", business_db)):
+    if EXPECTED_STAGE_HOST not in (url.host or ""):
+        raise RuntimeError(name + " staging URL points to the wrong database server")
+    if url.drivername not in ("postgres", "postgresql", "postgresql+psycopg"):
+        raise RuntimeError(name + " staging requires PostgreSQL")
+if core_db.username == business_db.username:
+    raise RuntimeError("Combined staging requires separate Core and Business database roles")
 logging.getLogger("pruvs.staging.platform").warning(
-    "Combined staging: using verified pruvs-db instance for both staging logical databases"
+    "Combined staging: verified isolated Core and Business DB connections configured"
 )
 
 # The Business ASGI app is mounted under /business. Disable its standalone
