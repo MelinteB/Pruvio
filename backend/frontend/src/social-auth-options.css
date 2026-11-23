@@ -78,3 +78,10 @@ a.pruvs-social-method:focus-visible{
   .pruvs-social-auth-grid{grid-template-columns:minmax(0,1fr)}
   .pruvs-social-method{min-height:58px}
 }
+.pruvs-social-email-divider{
+  font-size:12px;
+  color:#64796e;
+  text-align:center;
+  font-weight:700;
+  margin:12px 0 16px!important;
+}
