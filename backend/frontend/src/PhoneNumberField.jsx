@@ -94,7 +94,7 @@ export default function PhoneNumberField({ phone = '', country = 'RO', onPhoneCh
           name="phone_number"
           inputMode="tel"
           autoComplete="tel-national"
-          placeholder={country === 'RO' ? '0722 123 456' : 'National number'}
+          placeholder={country === 'RO' ? '722 123 456' : 'National number'}
           value={phone}
           required={required}
           maxLength={34}
