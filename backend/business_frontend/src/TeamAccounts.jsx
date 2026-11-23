@@ -1,10 +1,12 @@
 import React, {useCallback, useEffect, useState} from 'react';
 import {ShieldCheck, UserPlus, RefreshCw, KeyRound} from 'lucide-react';
+import {useBusinessLanguage} from './i18n.jsx';
 
 /** Owner-scoped team controls and individual password change.
  * Server owns the permission checks; this UI never persists credentials.
  */
 export default function TeamAccounts({token, api, currentEmail, onPasswordChanged}) {
+  const {t} = useBusinessLanguage();
   const [staff, setStaff] = useState([]);
   const [audit, setAudit] = useState([]);
   const [me, setMe] = useState('');
@@ -77,7 +79,7 @@ export default function TeamAccounts({token, api, currentEmail, onPasswordChange
     {error&&<div className="error-text" role="alert">{error}</div>}
     {notice&&<div className="notice" role="status">{notice}</div>}
     <section className="panel">
-      <h2><KeyRound size={20} style={{verticalAlign:'middle',marginRight:8}}/>Account security</h2>
+      <h2><KeyRound size={20} style={{verticalAlign:'middle',marginRight:8}}/>{t('Account security')}</h2>
       <p>Change the password for {currentEmail}. All existing merchant sessions will be revoked after the change.</p>
       <form onSubmit={changePassword} style={{display:'grid',gap:10,maxWidth:440}}>
         <label>Current password<input required type="password" autoComplete="current-password"
@@ -88,11 +90,11 @@ export default function TeamAccounts({token, api, currentEmail, onPasswordChange
         <label>Confirm new password<input required type="password"
           autoComplete="new-password" minLength={15} maxLength={128}
           value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)}/></label>
-        <button className="btn primary" disabled={busy}>Change password</button>
+        <button className="btn primary" disabled={busy}>{t('Change password')}</button>
       </form>
     </section>
     {canManage&&<section className="panel">
-      <h2><UserPlus size={20} style={{verticalAlign:'middle',marginRight:8}}/>Invite team member</h2>
+      <h2><UserPlus size={20} style={{verticalAlign:'middle',marginRight:8}}/>{t('Invite team member')}</h2>
       <p>Invited users receive a one-time link. They cannot access the merchant workspace until they set a password.</p>
       <form onSubmit={invite} style={{display:'grid',gap:10,maxWidth:440}}>
         <label>Email<input required type="email" maxLength={255}
@@ -101,11 +103,11 @@ export default function TeamAccounts({token, api, currentEmail, onPasswordChange
           <option value="staff">Staff · read only</option>
           <option value="manager">Manager · loyalty operations</option>
         </select></label>
-        <button className="btn primary" disabled={busy}>Send invitation</button>
+        <button className="btn primary" disabled={busy}>{t('Send invitation')}</button>
       </form>
     </section>}
     <section className="panel">
-      <h2><ShieldCheck size={20} style={{verticalAlign:'middle',marginRight:8}}/>Team access</h2>
+      <h2><ShieldCheck size={20} style={{verticalAlign:'middle',marginRight:8}}/>{t('Team access')}</h2>
       <p>Only merchant owners can change access. The last active owner cannot be removed.</p>
       {staff.map(row=><div className="list-row" key={row.id} style={{flexWrap:'wrap',gap:12}}>
         <div style={{flex:1,minWidth:165}}><b>{row.email}</b><small style={{display:'block'}}>
@@ -117,10 +119,10 @@ export default function TeamAccounts({token, api, currentEmail, onPasswordChange
             <option value="staff">Staff</option></select></label>
           {row.active
             ? <button className="btn outline" disabled={busy}
-                onClick={()=>update(row,{active:false})}>Disable access</button>
+                onClick={()=>update(row,{active:false})}>{t('Disable access')}</button>
             : <button className="btn outline" disabled={busy}
                 onClick={()=>perform(()=>api('/v1/merchant/staff/'+encodeURIComponent(row.id)+'/resend-invite',
-                  token,'POST',{}),'A fresh setup link was sent.')}>Send new access link</button>}
+                  token,'POST',{}),'A fresh setup link was sent.')}>{t('Send new access link')}</button>}
         </>}
       </div>)}
       <button type="button" className="btn outline" onClick={()=>perform(()=>reload(),'Team data refreshed.')} disabled={busy}>
@@ -128,7 +130,7 @@ export default function TeamAccounts({token, api, currentEmail, onPasswordChange
       </button>
     </section>
     {canManage&&audit.length>0&&<section className="panel">
-      <h2>Recent account changes</h2>
+      <h2>{t('Recent account changes')}</h2>
       {audit.slice(0,20).map(row=><p key={row.target_id+row.created_at} style={{fontSize:13}}>
         {new Date(row.created_at).toLocaleString()} · {row.action} · {row.target_id.slice(0,8)}
       </p>)}
