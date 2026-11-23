@@ -98,9 +98,12 @@ def test_core_social_login_has_visible_disabled_provider_options_and_apple_flow(
     core_account = (BACKEND/"frontend"/"src"/"Account.jsx").read_text(encoding="utf-8")
     social = (BACKEND/"app"/"react_app"/"social_auth.py").read_text(encoding="utf-8")
     ast.parse(social)
-    for provider in ("google", "yahoo", "facebook", "tiktok", "apple"):
+    for provider in ("google", "yahoo", "facebook", "tiktok", "apple", "instagram"):
         assert "id:'" + provider + "'" in source
     assert "Setup required" in source
+    assert "p.id!=='instagram'" not in source
+    assert "Personal Instagram accounts cannot use this method" in source
+    assert '"signup": True' in social
     assert "SocialAuthOptions" in core_auth
     assert "SocialAuthOptions" in core_account
     assert 'APPLE_BRIDGE_COOKIE' in social
