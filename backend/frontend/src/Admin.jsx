@@ -13,6 +13,41 @@ function Table({
   const keys = Object.keys(rows[0]);
   return <div className="table-scroll"><table><thead><tr>{keys.map(k => <th key={k}>{k.replaceAll('_', ' ')}</th>)}{actions && <th>{t("Actions")}</th>}</tr></thead><tbody>{rows.map((r, i) => <tr key={r[pk] ?? i} onClick={() => onSelect?.(r)} className={onSelect ? 'clickable' : ''} tabIndex={onSelect ? 0 : undefined} onKeyDown={e => e.key === 'Enter' && onSelect?.(r)}>{keys.map(k => <td key={k} title={String(r[k] ?? '')}>{typeof r[k] === 'boolean' ? r[k] ? t("Yes") : t("No") : typeof r[k] === 'object' && r[k] !== null ? JSON.stringify(r[k]) : String(r[k] ?? '—')}</td>)}{actions && <td onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>{actions(r)}</td>}</tr>)}</tbody></table></div>;
 }
+function AdminSocialAccounts({userId}) {
+  const {data,reload,error,loading} = useLoad(
+    () => request('/admin/users/' + userId + '/social'), [userId]);
+  const [notice,setNotice] = useState('');
+  const [busy,setBusy] = useState(false);
+  async function revoke(provider) {
+    if (!window.confirm('Disconnect the '+provider+' account from user #'+userId+'? Their active sessions will be revoked.')) return;
+    const confirmId=window.prompt('Enter user ID '+userId+' to confirm');
+    if(confirmId!==String(userId))return;
+    setBusy(true);setNotice('');
+    try {
+      await request('/admin/users/'+userId+'/social/'+encodeURIComponent(provider), {
+        method:'DELETE',body:JSON.stringify({confirm:confirmId,
+          reason:'Administrator revoked social sign-in connection'})
+      });
+      setNotice('Social connection removed. User sessions revoked.');
+      await reload();
+    }catch(ex){setNotice(ex.message||'Cannot disconnect provider.');}
+    finally{setBusy(false);}
+  }
+  return <section className="admin-social-accounts">
+    <h3>Connected social identities</h3>
+    <p className="muted">Review or revoke sign-in providers. Provider subject identifiers remain private.</p>
+    {error&&<Message error={error}/>}
+    {notice&&<p role="status">{notice}</p>}
+    {!loading && !(data?.accounts||[]).length&&<p>No linked social accounts.</p>}
+    {(data?.accounts||[]).map(row=><div className="row wrap" key={row.provider}>
+      <strong>{row.provider}</strong>
+      <small>{row.last_used_at?'Last used '+new Date(row.last_used_at).toLocaleDateString():'Not used yet'}</small>
+      <button className="secondary" disabled={busy}
+        onClick={()=>revoke(row.provider)}>Disconnect</button>
+    </div>)}
+  </section>;
+}
+
 function AdminMembership({userId}) {
   const {data,reload,error,loading} = useLoad(() => request('/commerce/admin/users/'+userId+'/membership'), [userId]);
   const [plan,setPlan] = useState('free');
@@ -273,7 +308,7 @@ export default function Admin() {
             await records.reload();
             setNotice(t("Record updated."));
           })}>{t("Save changes")}</button>}
- {entity === 'users' && <><AdminMembership userId={record.record.id}/><hr /><h3>{t("User account controls")}</h3><p className="muted">{t("Removing an account anonymizes it and disables sign-in. Shared bill history remains.")}</p><div className="row wrap"><button onClick={() => run(async () => {
+ {entity === 'users' && <><AdminMembership userId={record.record.id}/><AdminSocialAccounts userId={record.record.id}/><hr /><h3>{t("User account controls")}</h3><p className="muted">{t("Removing an account anonymizes it and disables sign-in. Shared bill history remains.")}</p><div className="row wrap"><button onClick={() => run(async () => {
                 setBillOffset(0);
                 setBills(await request('/admin/users/' + record.record.id + '/bills'));
               })}>{t("View saved bills")}</button>{['block', 'unblock', 'delete'].map(action => <button key={action} className={action === 'delete' ? 'danger' : ''} disabled={busy || record.record.id === user.id || record.record.status === 'deleted' || action === 'unblock' && record.record.status !== 'blocked' || action === 'block' && record.record.status === 'blocked'} onClick={() => act(record.record, action)}>{action === 'delete' ? t("Remove account") : action === 'block' ? t("Block") : t("Unblock")}</button>)}</div></>}
