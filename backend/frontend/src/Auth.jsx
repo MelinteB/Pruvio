@@ -5,6 +5,7 @@ import { Fingerprint, ArrowRight, ScanLine, Users, ShieldCheck } from 'lucide-re
 import { request, send, credential, safeNext } from './api';
 import { invitedBillDestination } from './join-return';
 import { Field, Check, Message, useApp, useLoad } from './common';
+import SocialAuthOptions from './SocialAuthOptions.jsx';
 function usernameFromName(value){
   const parts=(value||'').trim().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().split(/\s+/).map(p=>p.replace(/[^a-z0-9-]/g,'')).filter(Boolean);
   const base=parts.length>1?parts[0]+'.'+parts[parts.length-1]:parts[0]||'';
@@ -43,10 +44,7 @@ export default function Auth({
     }).catch(() => {if(active)setSocialNotice('Social registration expired. Start again or register with email.');});
     return () => {active = false;};
   }, [mode, params.get('social')]);
-  const enabledProviders = (socialProviders.data?.providers || []).filter(x => x.enabled);
-  const socialDestination = (provider, loginMode='login') =>
-    '/api/v1/auth/social/' + encodeURIComponent(provider) + '/start?mode=' + loginMode +
-      '&next=' + encodeURIComponent(safeNext(returnTo));
+
   useEffect(()=>{if(mode==='login')return;if(challenge&&!done)sessionStorage.setItem(storageKey,JSON.stringify({email:challenge.email||form.email,challenge,next:safeNext(returnTo),expires:Date.now()+15*60*1000}));else sessionStorage.removeItem(storageKey)},[challenge,done,returnTo]);
   const set = (k, v) => {
     if(k==='username')setUsernameEdited(true);
@@ -154,17 +152,10 @@ export default function Auth({
  {challenge && <>{input('code', t("Email verification code"))}{mode === 'reset' && input('password', t("New password"), 'password')}</>}
  <button className="primary full" disabled={busy}>{busy ? t("Please wait…") : challenge ? t("Confirm") : mode === 'login' ? t("Sign in") : mode === 'register' ? t("Create account") : t("Send reset code")}<ArrowRight size={17} /></button>
  </form>}
- {!challenge && (mode === 'login' || mode === 'register') && enabledProviders.filter(p => mode === 'login' || p.signup).length>0 &&
-  <div className="pruvs-social-login" aria-label="Social account sign-in">
-    <p className="muted">{mode === 'register' ? 'Or register with a verified provider' : 'Or continue using a linked account'}</p>
-    <div className="row wrap">
-      {enabledProviders.filter(p => mode === 'login' || p.signup).map(p =>
-        <a key={p.id} className="secondary" href={socialDestination(p.id)}>
-          Continue with {p.id === 'instagram' ? 'Instagram Professional' : p.id.charAt(0).toUpperCase()+p.id.slice(1)}
-        </a>)}
-    </div>
-    <p className="muted">Social providers never automatically connect to existing Pruvs accounts. Connect them in Account first.</p>
-  </div>}
+ {!challenge && (mode === 'login' || mode === 'register') &&
+  <SocialAuthOptions providers={socialProviders.data?.providers || []}
+    loading={!!socialProviders.loading} mode={mode} next={returnTo}/>}
+ 
  {challenge && <button className="text-button" disabled={busy} onClick={() => run(async () => {
         const r = await send(mode === 'register' ? '/auth/register/resend' : '/auth/reset', {
           email: form.email
