@@ -1,7 +1,7 @@
 """Staging-only Core social identity foundation.
 
 Supported authorization methods:
-- Google / Yahoo: verified OIDC identity; new signup allowed only with verified email.
+- Google / Yahoo / Apple: verified OIDC identity; sign-up uses verified email.
 - Facebook: OAuth subject. Link to an already authenticated Pruvs account.
 - TikTok: Login Kit open_id. Link to an already authenticated Pruvs account.
 - Instagram: API with Instagram Login for professional accounts only; link-only.
@@ -44,12 +44,14 @@ from app.usernames import username_key
 
 router = APIRouter(prefix="/api/v1/auth/social", tags=["Social sign-in"])
 STATE_COOKIE = "pruvs_social_flow"
+APPLE_BRIDGE_COOKIE = "pruvs_apple_oauth_bridge"
 SIGNUP_COOKIE = "pruvs_social_pending"
 COOKIE_PATH = "/api/v1/auth/social"
-PROVIDERS = ("google", "yahoo", "facebook", "instagram", "tiktok")
+PROVIDERS = ("google", "yahoo", "facebook", "instagram", "tiktok", "apple")
 LINK_ONLY = frozenset(("facebook", "instagram", "tiktok"))
 AUTHORIZE = {
     "google": "https://accounts.google.com/o/oauth2/v2/auth",
+    "apple": "https://appleid.apple.com/auth/authorize",
     "yahoo": "https://api.login.yahoo.com/oauth2/request_auth",
     "facebook": "https://www.facebook.com/v24.0/dialog/oauth",
     "instagram": "https://www.instagram.com/oauth/authorize",
@@ -57,6 +59,7 @@ AUTHORIZE = {
 }
 TOKEN = {
     "google": "https://oauth2.googleapis.com/token",
+    "apple": "https://appleid.apple.com/auth/token",
     "yahoo": "https://api.login.yahoo.com/oauth2/get_token",
     "facebook": "https://graph.facebook.com/v24.0/oauth/access_token",
     "instagram": "https://api.instagram.com/oauth/access_token",
@@ -64,6 +67,7 @@ TOKEN = {
 }
 SCOPES = {
     "google": "openid email profile",
+    "apple": "name email",
     "yahoo": "openid email profile",
     "facebook": "public_profile,email",
     "instagram": "instagram_business_basic",
@@ -71,10 +75,12 @@ SCOPES = {
 }
 JWKS = {
     "google": "https://www.googleapis.com/oauth2/v3/certs",
+    "apple": "https://appleid.apple.com/auth/keys",
     "yahoo": "https://api.login.yahoo.com/openid/v1/certs",
 }
 ISSUER = {
     "google": ("https://accounts.google.com", "accounts.google.com"),
+    "apple": ("https://appleid.apple.com",),
     "yahoo": ("https://api.login.yahoo.com",),
 }
 
@@ -117,8 +123,13 @@ def _client(provider):
 
 def _configured(provider):
     client_id, secret, enabled = _client(provider)
-    return bool(_globally_enabled() and enabled and client_id and secret
-                and len(os.getenv("PRUVS_SOCIAL_AUTH_STATE_SECRET", "")) >= 32)
+    common = (_globally_enabled() and enabled and client_id and
+              len(os.getenv("PRUVS_SOCIAL_AUTH_STATE_SECRET", "")) >= 32)
+    if provider == "apple":
+        return bool(common and os.getenv("PRUVS_SOCIAL_APPLE_TEAM_ID") and
+                    os.getenv("PRUVS_SOCIAL_APPLE_KEY_ID") and
+                    os.getenv("PRUVS_SOCIAL_APPLE_PRIVATE_KEY_BASE64"))
+    return bool(common and secret)
 
 
 def _ensure_provider(provider):
@@ -175,9 +186,28 @@ def _clear(response, cookie):
     response.delete_cookie(cookie, path=COOKIE_PATH, secure=secure(), samesite="lax", httponly=True)
 
 
-def _cookie(response, name, value, seconds):
+def _cookie(response, name, value, seconds, *, apple_post=False):
+    # Apple's cross-site form POST needs SameSite=None for the transient state
+    # cookie only; the primary login session remains SameSite=Lax.
     response.set_cookie(name, value, max_age=seconds, httponly=True,
-                        secure=secure(), samesite="lax", path=COOKIE_PATH)
+                        secure=True if apple_post else secure(),
+                        samesite="none" if apple_post else "lax", path=COOKIE_PATH)
+
+
+def _apple_client_secret(client_id: str) -> str:
+    encoded = os.getenv("PRUVS_SOCIAL_APPLE_PRIVATE_KEY_BASE64", "")
+    team_id = os.getenv("PRUVS_SOCIAL_APPLE_TEAM_ID", "")
+    key_id = os.getenv("PRUVS_SOCIAL_APPLE_KEY_ID", "")
+    if not encoded or not team_id or not key_id:
+        raise HTTPException(503, "Apple sign-in is not configured")
+    try:
+        private_key = base64.b64decode(encoded, validate=True).decode("utf-8")
+        now = int(time.time())
+        return jwt.encode({"iss":team_id, "iat":now, "exp":now+86400*7,
+                           "aud":"https://appleid.apple.com", "sub":client_id},
+                          private_key, algorithm="ES256", headers={"kid":key_id})
+    except (ValueError, TypeError, UnicodeDecodeError, binascii.Error, jwt.PyJWTError):
+        raise HTTPException(503, "Apple private-key configuration is invalid") from None
 
 
 def _fetch(url, *, method="GET", params=None, data=None, headers=None, auth=None):
@@ -214,13 +244,14 @@ def _oidc_identity(provider, tokens, client_id, nonce):
         raise HTTPException(502, "Identity provider subject is invalid")
     return {"subject": subject, "name": str(claims.get("name") or "")[:255],
             "email": str(claims.get("email") or "").lower()[:255],
-            "verified": claims.get("email_verified") is True}
+            "verified": claims.get("email_verified") is True or claims.get("email_verified") == "true"}
 
 
 def _oauth_identity(provider, code, client_id, secret, redirect_uri, flow):
     data = {"code": code, "redirect_uri": redirect_uri, "grant_type": "authorization_code"}
-    if provider in ("google", "yahoo"):
-        data.update(client_id=client_id, client_secret=secret)
+    if provider in ("google", "yahoo", "apple"):
+        data.update(client_id=client_id,
+                    client_secret=_apple_client_secret(client_id) if provider == "apple" else secret)
         if provider == "google":
             data["code_verifier"] = flow["verifier"]
         tokens = _fetch(TOKEN[provider], method="POST", data=data)
@@ -264,7 +295,7 @@ def _oauth_identity(provider, code, client_id, secret, redirect_uri, flow):
 def providers(db=Depends(get_db)):
     schema_ready = inspect(db.get_bind()).has_table(SocialAccount.__tablename__) if _globally_enabled() else False
     return {"providers": [{"id": p, "enabled": _configured(p) and schema_ready,
-             "signup": p not in LINK_ONLY,
+             "signup": p != "instagram",
              "note": "Professional Instagram accounts only" if p == "instagram" else
                      ("Sign in after linking in Account" if p in LINK_ONLY else "")}
             for p in PROVIDERS]}
@@ -292,25 +323,54 @@ def start(provider: str, request: Request,
     client_id, _secret, _ = _client(provider)
     params = {"client_id": client_id, "redirect_uri": _redirect_uri(provider),
               "response_type": "code", "state": state, "scope": SCOPES[provider]}
-    if provider in ("google", "yahoo"):
+    if provider in ("google", "yahoo", "apple"):
         params["nonce"] = nonce
     if provider == "google":
         params["code_challenge"] = _b64(hashlib.sha256(verifier.encode()).digest())
         params["code_challenge_method"] = "S256"
         params["prompt"] = "select_account"
+    if provider == "apple":
+        params["response_type"] = "code id_token"
+        params["response_mode"] = "form_post"
     if provider == "tiktok":
         params["client_key"] = params.pop("client_id")
     if provider == "instagram":
         params["enable_fb_login"] = "0"
     response = RedirectResponse(AUTHORIZE[provider] + "?" + urlencode(params),
                                 status_code=302)
-    _cookie(response, STATE_COOKIE, _seal(body), 600)
+    _cookie(response, STATE_COOKIE, _seal(body), 600, apple_post=(provider=="apple"))
+    return response
+
+
+@router.post("/{provider}/callback")
+async def apple_callback(provider: str, request: Request, db=Depends(get_db)):
+    if provider != "apple":
+        raise HTTPException(405, "Only Apple uses an OAuth form POST callback")
+    if int(request.headers.get("content-length") or 0) > 8192:
+        raise HTTPException(413, "Apple callback is too large")
+    form = await request.form()
+    return callback(provider, request, code=str(form.get("code") or ""),
+                    state=str(form.get("state") or ""),
+                    error=str(form.get("error") or ""), db=db)
+
+
+@router.get("/apple/finish")
+def apple_finish(request: Request, db=Depends(get_db)):
+    _ensure_provider("apple")
+    _schema_ready(db)
+    ticket = _unseal(request.cookies.get(APPLE_BRIDGE_COOKIE, ""), max_age=90)
+    if ticket.get("provider") != "apple":
+        raise HTTPException(400, "Apple sign-in session invalid")
+    response = _finish_verified_identity("apple", ticket["identity"], ticket["flow"], request, db)
+    _clear(response, APPLE_BRIDGE_COOKIE)
     return response
 
 
 @router.get("/{provider}/callback")
 def callback(provider: str, request: Request, code: str = "", state: str = "",
              error: str = "", db=Depends(get_db)):
+    if provider == "apple" and request.method != "POST":
+        raise HTTPException(405, "Sign in with Apple requires a POST callback")
     _ensure_provider(provider)
     _schema_ready(db)
     flow = _unseal(request.cookies.get(STATE_COOKIE, ""), max_age=600)
@@ -327,6 +387,19 @@ def callback(provider: str, request: Request, code: str = "", state: str = "",
                                _redirect_uri(provider), flow)
     if not identity["subject"] or len(identity["subject"]) > 255:
         raise HTTPException(502, "Provider identity unavailable")
+    if provider == "apple":
+        # Finish from a same-origin GET: the Pruvs session cookie (Lax) isn't
+        # sent on Apple's cross-site POST callback.
+        response = RedirectResponse("/api/v1/auth/social/apple/finish", status_code=303)
+        _cookie(response, APPLE_BRIDGE_COOKIE,
+                _seal({"iat":int(time.time()),"provider":"apple",
+                       "flow":flow,"identity":identity}),90)
+        _clear(response, STATE_COOKIE)
+        return response
+    return _finish_verified_identity(provider, identity, flow, request, db)
+
+
+def _finish_verified_identity(provider, identity, flow, request, db):
     existing = db.query(SocialAccount).filter_by(provider=provider,subject=identity["subject"]).first()
     if flow.get("mode") == "link":
         user, _session = current(request, db)
@@ -394,7 +467,7 @@ def complete(data: CompleteSignup, request: Request, response: Response,
     if request.cookies.get(COOKIE):
         raise HTTPException(409, "Sign out first or connect this provider in Account")
     ticket = _unseal(request.cookies.get(SIGNUP_COOKIE, ""),max_age=900)
-    if not ticket.get("verified") or not ticket.get("email") or ticket.get("provider") not in ("google","yahoo"):
+    if not ticket.get("verified") or not ticket.get("email") or ticket.get("provider") not in ("google","yahoo","apple"):
         raise HTTPException(409, "Use verified email registration, then link your social account in Account")
     if not data.accepted_terms or not data.accepted_privacy:
         raise HTTPException(422, "Accept the Terms and Privacy Notice")
