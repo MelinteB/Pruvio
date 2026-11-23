@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from sqlalchemy import cast,String,or_,inspect,Column,Integer,DateTime,Text,Float,Boolean
 from app.db.database import get_db,Base
 from app.models.user import User
+from app.models.social_identity import SocialAccount
 from app.models.document import Document
 from app.services import admin_dashboard_service as d
 from app.react_app.auth import admin,revoke_user
@@ -37,6 +38,7 @@ d.SECURITY_FIELDS.update({
  'pruvs_react_rate_limits':{'count','reset_at'},
  'pruvs_push_grants':{'user_id','expires_at','active'},
  'pruvs_push_devices':{'id','user_id','label','active','confirmed_at','last_test_at','updated_at'},
+ 'pruvs_social_accounts': {'id','user_id','provider','display_name','connected_at','last_used_at'},
 })
 
 
@@ -106,6 +108,44 @@ def update(entity:str,record_id:int,body:dict,identity=Depends(admin),db=Depends
         if u and u.status!='active':revoke_user(db,u.id);db.commit()
     return {'ok':True}
 
+@router.get('/users/{uid}/social')
+def user_social_accounts(uid:int,identity=Depends(admin),db=Depends(get_db)):
+    if not inspect(db.get_bind()).has_table(SocialAccount.__tablename__):
+        return {'accounts': [], 'not_migrated': True}
+    if not db.get(User,uid):
+        raise HTTPException(404,'User not found.')
+    rows=db.query(SocialAccount).filter_by(user_id=uid).order_by(SocialAccount.provider).all()
+    # Provider subjects are never exposed to the admin UI.
+    return {'accounts':[{'provider':r.provider,'display_name':r.display_name,
+       'connected_at':r.connected_at.isoformat(),
+       'last_used_at':r.last_used_at.isoformat() if r.last_used_at else None}
+       for r in rows]}
+
+@router.delete('/users/{uid}/social/{provider}')
+def revoke_user_social(uid:int,provider:str,body:dict,identity=Depends(admin),db=Depends(get_db)):
+    if str(body.get('confirm','')) != str(uid):
+        raise HTTPException(422,'Type the user ID to confirm.')
+    if not inspect(db.get_bind()).has_table(SocialAccount.__tablename__):
+        raise HTTPException(503,'Social identity schema is not ready')
+    target=db.query(User).filter_by(id=uid).with_for_update().first()
+    if not target:
+        raise HTTPException(404,'User not found.')
+    row=db.query(SocialAccount).filter_by(user_id=uid,provider=provider).with_for_update().first()
+    if not row:
+        raise HTTPException(404,'Social identity not connected.')
+    remaining=db.query(SocialAccount.id).filter(
+        SocialAccount.user_id==uid,SocialAccount.id!=row.id).count()
+    if target.status=='active' and not target.password_hash and remaining==0:
+        raise HTTPException(409,'Block account first or set an alternative login before removing its last sign-in method.')
+    db.delete(row)
+    revoke_user(db,uid)
+    d.add_audit(db,identity[0].id,'react','unlink_social','users',uid,['social:'+provider])
+    db.add(AdminUserAction(actor_id=identity[0].id,user_id=uid,action='unlink_social',
+      before_status=target.status,after_status=target.status,
+      reason=str(body.get('reason',''))[:500]))
+    db.commit()
+    return {'ok':True,'provider':provider,'sessions_revoked':True}
+
 @router.get('/users/{uid}/bills')
 def user_bills(uid:int,offset:int=Query(0,ge=0),identity=Depends(admin),db=Depends(get_db)):
     total,rows=d.list_user_bills(db,identity[0].id,uid,offset=offset);return {'total':total,'rows':rows}
@@ -132,6 +172,10 @@ def change_user(db,uid,action,actor_id=None,reason=''):
     previous=target.status
     target.status={'block':'blocked','unblock':'active','delete':'deleted'}[action]
     if action=='delete':
+        # Erase external provider subject identifiers when anonymizing the user.
+        # This lets the social account register again without retaining deleted identity links.
+        if inspect(db.get_bind()).has_table(SocialAccount.__tablename__):
+            db.query(SocialAccount).filter_by(user_id=uid).delete(synchronize_session=False)
         target.name='Deleted user';target.email=f'deleted-{uid}@pruvs.invalid';target.username=f'deleted-{uid}'
         target.username_key=f'deleted-{uid}';target.phone_number=f'deleted-{uid}';target.password_hash=None
         target.is_email_verified=False;target.is_phone_verified=False
