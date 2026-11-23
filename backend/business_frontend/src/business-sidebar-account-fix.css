@@ -1,0 +1,104 @@
+/* Staging UI repair: keep account actions and environment status inside the
+   same scrollable green navigation surface on short laptops and mobile. */
+.pruvs-business-2027.shell > .sidebar {
+  box-sizing: border-box;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #568571 #102f24;
+  background: linear-gradient(180deg,#092b22 0%,#103e31 55%,#0c3329 100%);
+}
+.pruvs-business-2027.shell > .sidebar nav {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: max-content;
+}
+.pruvs-business-2027.shell > .sidebar .pruvs-nav-group {
+  flex: 0 0 auto;
+  min-height: min-content;
+  margin: 0 0 12px;
+}
+.pruvs-business-2027.shell > .sidebar .pruvs-nav-group > small {
+  display: block;
+  line-height: 1.4;
+  padding: 10px 12px 6px;
+  color: #a4c9b3;
+}
+.pruvs-business-2027.shell > .sidebar .nav-link {
+  flex: none;
+  min-height: 44px;
+  color: #cae5d6;
+}
+.pruvs-business-2027.shell > .sidebar .nav-link.active {
+  color: #0a5135;
+}
+.pruvs-business-2027.shell > .sidebar .sidebar-foot {
+  flex: 0 0 auto;
+  margin-top: auto;
+  padding-bottom: max(12px,env(safe-area-inset-bottom));
+}
+.pruvs-business-2027.shell > .sidebar .logout {
+  color: #ffd6d1;
+  font-weight: 700;
+}
+.pruvs-business-2027.shell > .sidebar .logout:hover {
+  color: #fff;
+  background: rgba(225,104,83,.20);
+}
+.pruvs-business-2027 .pruvs-team-accounts label {
+  display: grid;
+  gap: 8px;
+  color: #224b38;
+  font-size: 13px;
+  font-weight: 700;
+}
+.pruvs-business-2027 .pruvs-team-accounts input,
+.pruvs-business-2027 .pruvs-team-accounts select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 11px 12px;
+  border: 1px solid #b9d5c6;
+  border-radius: 10px;
+  background: #fff;
+  color: #183b2e;
+}
+.pruvs-business-2027 .pruvs-team-accounts .panel {
+  min-height: auto;
+}
+.pruvs-business-2027 .pruvs-team-accounts h2 {
+  font-size: clamp(17px, 2vw, 21px);
+  margin-bottom: 10px;
+}
+.pruvs-business-2027 .pruvs-team-accounts .panel > p {
+  margin-bottom: 16px;
+  line-height: 1.55;
+  color: #5d7868;
+  font-size: 13px;
+}
+.pruvs-business-2027 .pruvs-team-accounts .list-row {
+  align-items: center;
+}
+.pruvs-business-2027 .pruvs-team-accounts .list-row > label {
+  flex: 0 1 160px;
+}
+@media (max-width: 700px) {
+  .pruvs-business-2027.shell > .sidebar {
+    height: 100dvh;
+    max-height: 100dvh;
+    padding-bottom: 16px;
+  }
+  .pruvs-business-2027 .pruvs-team-accounts .list-row > label {
+    flex: 1 1 100%;
+  }
+  .pruvs-business-2027 .pruvs-team-accounts .list-row > button {
+    width: 100%;
+  }
+}
