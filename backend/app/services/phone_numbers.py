@@ -38,7 +38,7 @@ def normalize_signup_phone(phone_number: str, country: str = "RO") -> str:
         raise ValueError("Phone extensions cannot be used for sharing.")
     # Possible-number checks are metadata-backed length checks, deliberately
     # avoiding over-restricting new allocations with strict prefix lists.
-    if not phonenumbers.is_possible_number(parsed):
+    if phonenumbers.is_possible_number_with_reason(parsed) != phonenumbers.ValidationResult.IS_POSSIBLE:
         raise ValueError("Phone number length is invalid for the selected country.")
     return phonenumbers.format_number(parsed, PhoneNumberFormat.E164)
 
