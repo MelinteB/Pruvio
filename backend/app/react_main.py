@@ -18,6 +18,7 @@ from app.db.database import Base,engine,ensure_compatibility_schema,SessionLocal
 import app.models
 for module in pkgutil.iter_modules(app.models.__path__):importlib.import_module('app.models.'+module.name)
 from app.react_app.api import router,member,summary
+from app.react_app.phone_api import router as phone_router
 from app.react_app.loyalty_api import router as loyalty_router
 from app.react_app.admin_api import router as admin_router,legacy_router
 from app.react_app.auth import COOKIE,digest,origin_allowed,current,push_identity
@@ -68,7 +69,7 @@ async def lifespan(app):
         except asyncio.TimeoutError:worker.cancel()
 
 app=FastAPI(title='Pruvs Core',version=RELEASE,lifespan=lifespan)
-app.include_router(inbox_router);app.include_router(router);app.include_router(receipt_groups_router);app.include_router(bill_projects_router);app.include_router(loyalty_router);app.include_router(expense_router);app.include_router(history_manage_router);app.include_router(admin_router);app.include_router(legacy_router)
+app.include_router(phone_router);app.include_router(inbox_router);app.include_router(router);app.include_router(receipt_groups_router);app.include_router(bill_projects_router);app.include_router(loyalty_router);app.include_router(expense_router);app.include_router(history_manage_router);app.include_router(admin_router);app.include_router(legacy_router)
 app.include_router(commerce_router);app.include_router(billing_router);app.include_router(stripe_webhook_router)
 app.include_router(push_router);app.dependency_overrides[push_authenticate]=push_identity
 app.include_router(users_router,prefix='/users',tags=['Admin - Users'])

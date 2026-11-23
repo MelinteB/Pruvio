@@ -5,6 +5,8 @@ import { Fingerprint, ArrowRight, ScanLine, Users, ShieldCheck } from 'lucide-re
 import { send, credential, safeNext } from './api';
 import { invitedBillDestination } from './join-return';
 import { Field, Check, Message, useApp } from './common';
+import LoginMethodGrid from './LoginMethodGrid';
+import PhoneNumberField from './PhoneNumberField';
 function usernameFromName(value){
   const parts=(value||'').trim().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().split(/\s+/).map(p=>p.replace(/[^a-z0-9-]/g,'')).filter(Boolean);
   const base=parts.length>1?parts[0]+'.'+parts[parts.length-1]:parts[0]||'';
@@ -24,7 +26,7 @@ export default function Auth({
   // The email verification screen may reload before registration is complete.
   // A pending invitation must survive that reload without leaving this browser tab.
   const returnTo = params.get('next') || pending?.next || '';
-  const [form, setForm] = useState(pending?{email:pending.email}:{}),
+  const [form, setForm] = useState(pending?{email:pending.email,phone_country:'RO'}:{phone_country:'RO'}),
     [usernameEdited,setUsernameEdited]=useState(false),
     [challenge, setChallenge] = useState(pending?.challenge||null),
     [error, setError] = useState(''),
@@ -67,6 +69,17 @@ export default function Auth({
     // Keep the original invitation route rather than taking the user Home.
     // safeNext refuses external and protocol-relative destinations.
     navigate(invitedBillDestination(returnTo) || safeNext(returnTo), { replace: true });
+  }
+  function chooseLoginMethod(provider) {
+    if (provider === 'email') {
+      document.querySelector('.auth-card input')?.focus();
+      return;
+    }
+    // Only route to a provider once the server declares its verified OAuth flow ready.
+    // Do not enable flags for UI-only integrations; the backend must enforce that too.
+    if (config?.social_login_providers?.[provider] !== true) return;
+    window.location.assign('/api/v1/auth/social/' + encodeURIComponent(provider)
+      + '/start?next=' + encodeURIComponent(safeNext(returnTo)));
   }
   async function submit(e) {
     e.preventDefault();
@@ -112,11 +125,12 @@ export default function Auth({
  <section className="panel auth-card"><div className="eyebrow">{t("WELCOME TO PRUVS")}</div><h1>{mode === 'register' ? t("Create your account") : mode === 'reset' ? t("Reset your password") : t("Welcome back")}</h1><p className="muted">{challenge ? t("Enter the code sent to your email.") : mode === 'login' ? t("Your receipts and shared moments, in one place.") : t("Use an email address you can verify.")}</p>
  {error && <Message error={error} />}{done ? <Message>{t("Password updated.")} <Link to="/login">{t("Sign in")}</Link></Message> : <form onSubmit={submit}>
  {!challenge && mode === 'login' && <>{input('identifier', t("Username or email"))}{input('password', t("Password"), 'password')}</>}
- {!challenge && mode === 'register' && <>{input('name', t("Full name"))}{input('username', t("Username"))}<p className="muted">{t('Suggested from your full name. You can change it. If already taken, Pruvs adds a number.')}</p>{input('email', t("Email"), 'email')}{input('phone_number', t("Phone number"), 'tel')}{input('password', t("Password"), 'password')}<Check label={<span>{t("I accept the")} <Link to="/terms" target="_blank">{t("Terms")}</Link></span>} required checked={!!form.accepted_terms} onChange={e => set('accepted_terms', e.target.checked)} /><Check label={<span>{t("I accept the")} <Link to="/privacy" target="_blank">{t("Privacy Notice")}</Link></span>} required checked={!!form.accepted_privacy} onChange={e => set('accepted_privacy', e.target.checked)} /><Check label={t('Receive bill and payment notifications (optional)')} checked={!!form.notifications_opt_in} onChange={e => set('notifications_opt_in', e.target.checked)} /><p className="muted">{t('You can read bill activity in Inbox. Enable device push alerts later in Account, if your browser supports them.')}</p></>}
+ {!challenge && mode === 'register' && <>{input('name', t("Full name"))}{input('username', t("Username"))}<p className="muted">{t('Suggested from your full name. You can change it. If already taken, Pruvs adds a number.')}</p>{input('email', t("Email"), 'email')}{<PhoneNumberField phone={form.phone_number || ''} country={form.phone_country || 'RO'} onPhoneChange={value => set('phone_number', value)} onCountryChange={value => set('phone_country', value)} />}{input('password', t("Password"), 'password')}<Check label={<span>{t("I accept the")} <Link to="/terms" target="_blank">{t("Terms")}</Link></span>} required checked={!!form.accepted_terms} onChange={e => set('accepted_terms', e.target.checked)} /><Check label={<span>{t("I accept the")} <Link to="/privacy" target="_blank">{t("Privacy Notice")}</Link></span>} required checked={!!form.accepted_privacy} onChange={e => set('accepted_privacy', e.target.checked)} /><Check label={t('Receive bill and payment notifications (optional)')} checked={!!form.notifications_opt_in} onChange={e => set('notifications_opt_in', e.target.checked)} /><p className="muted">{t('You can read bill activity in Inbox. Enable device push alerts later in Account, if your browser supports them.')}</p></>}
  {!challenge && mode === 'reset' && input('email', t("Verified email"), 'email')}
  {challenge && <>{input('code', t("Email verification code"))}{mode === 'reset' && input('password', t("New password"), 'password')}</>}
  <button className="primary full" disabled={busy}>{busy ? t("Please wait…") : challenge ? t("Confirm") : mode === 'login' ? t("Sign in") : mode === 'register' ? t("Create account") : t("Send reset code")}<ArrowRight size={17} /></button>
  </form>}
+ {mode === 'login' && <LoginMethodGrid enabledProviders={config?.social_login_providers} disabled={busy} onChoose={chooseLoginMethod} />}
  {challenge && <button className="text-button" disabled={busy} onClick={() => run(async () => {
         const r = await send(mode === 'register' ? '/auth/register/resend' : '/auth/reset', {
           email: form.email
