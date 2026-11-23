@@ -55,11 +55,17 @@ def test_platform_entrypoint_hard_gates_staging_databases():
     assert source.index('app.mount("/business"') < source.index('app.mount("/", core_app')
 
 
-def test_combined_staging_bootstraps_only_google_place_link_table():
+def test_combined_staging_validates_full_schema_without_runtime_ddl():
     source = (BACKEND / "app" / "platform_combined.py").read_text(encoding="utf-8")
-    assert "MerchantStorePlace.__table__.create" in source
-    assert "checkfirst=True" in source
-    assert source.index("pruvs_business_staging") < source.index("MerchantStorePlace.__table__.create")
+    core = (BACKEND / "app" / "react_main.py").read_text(encoding="utf-8")
+    assert "pruvs_business_staging" in source
+    assert "pruvs_core_staging" in source
+    assert "CoreBase.metadata.tables" in source
+    assert "BusinessBase.metadata.tables" in source
+    assert "ix_users_username_key" in source
+    assert "MerchantStorePlace.__table__.create(" not in source
+    assert 'if os.getenv("PRUVS_PLATFORM_COMBINED_STAGING", "").strip().lower() != "true":' in core
+    assert core.index('if os.getenv("PRUVS_PLATFORM_COMBINED_STAGING"') < core.index("Base.metadata.create_all(bind=engine)")
 
 
 def test_loyalty_bridge_uses_fixed_loopback_only_on_combined_staging():
