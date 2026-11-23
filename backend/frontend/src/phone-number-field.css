@@ -2,6 +2,7 @@
 .core-experience .phone-enrollment-field{margin:0 0 17px;min-width:0}
 .core-experience .phone-enrollment-label{display:block;font-size:12px;font-weight:700;color:#5b6780;margin:0 0 8px}
 .core-experience .phone-enrollment-label small{font-weight:400;margin-top:3px}
+.core-experience .phone-enrollment-reason{display:block;margin:-5px 0 9px;color:#6a7e98;font-size:11px;line-height:1.5}
 .core-experience .phone-enrollment-controls{display:grid;grid-template-columns:minmax(120px,.95fr) minmax(0,1.1fr);gap:8px;align-items:stretch}
 .core-experience .phone-enrollment-controls select{min-width:0;width:100%;padding:10px 5px;min-height:45px;font-size:12px}
 .core-experience .phone-enrollment-national{display:flex;min-width:0;align-items:center;border:1px solid #dce3f0;border-radius:10px;background:#fff;overflow:hidden}
