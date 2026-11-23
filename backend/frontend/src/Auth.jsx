@@ -145,6 +145,12 @@ export default function Auth({
  {socialPending?.requires_email_otp && <Message>
   {socialPending.provider} does not provide a verified email. Complete the usual email and password registration below, then verify the email code to link your social identity.
  </Message>}
+ {!challenge && (mode === 'login' || mode === 'register') &&
+  <SocialAuthOptions providers={socialProviders.data?.providers || []}
+    loading={!!socialProviders.loading} mode={mode} next={returnTo}/>}
+ 
+ {!challenge && (mode === 'login' || mode === 'register') &&
+  <p className="pruvs-social-email-divider">Or use your Pruvs email and password</p>}
  {done ? <Message>{t("Password updated.")} <Link to="/login">{t("Sign in")}</Link></Message> : <form onSubmit={submit}>
  {!challenge && mode === 'login' && <>{input('identifier', t("Username or email"))}{input('password', t("Password"), 'password')}</>}
  {!challenge && mode === 'register' && <>{input('name', t("Full name"))}{input('username', t("Username"))}<p className="muted">{t('Suggested from your full name. You can change it. If already taken, Pruvs adds a number.')}</p>{!socialPending?.can_complete && input('email', t("Email"), 'email')}{input('phone_number', t("Phone number"), 'tel')}{!socialPending?.can_complete && input('password', t("Password"), 'password')}<Check label={<span>{t("I accept the")} <Link to="/terms" target="_blank">{t("Terms")}</Link></span>} required checked={!!form.accepted_terms} onChange={e => set('accepted_terms', e.target.checked)} /><Check label={<span>{t("I accept the")} <Link to="/privacy" target="_blank">{t("Privacy Notice")}</Link></span>} required checked={!!form.accepted_privacy} onChange={e => set('accepted_privacy', e.target.checked)} /><Check label={t('Receive bill and payment notifications (optional)')} checked={!!form.notifications_opt_in} onChange={e => set('notifications_opt_in', e.target.checked)} /><p className="muted">{t('You can read bill activity in Inbox. Enable device push alerts later in Account, if your browser supports them.')}</p></>}
@@ -152,10 +158,7 @@ export default function Auth({
  {challenge && <>{input('code', t("Email verification code"))}{mode === 'reset' && input('password', t("New password"), 'password')}</>}
  <button className="primary full" disabled={busy}>{busy ? t("Please wait…") : challenge ? t("Confirm") : mode === 'login' ? t("Sign in") : mode === 'register' ? t("Create account") : t("Send reset code")}<ArrowRight size={17} /></button>
  </form>}
- {!challenge && (mode === 'login' || mode === 'register') &&
-  <SocialAuthOptions providers={socialProviders.data?.providers || []}
-    loading={!!socialProviders.loading} mode={mode} next={returnTo}/>}
- 
+
  {challenge && <button className="text-button" disabled={busy} onClick={() => run(async () => {
         const r = await send(mode === 'register' ? '/auth/register/resend' : '/auth/reset', {
           email: form.email
