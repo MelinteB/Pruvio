@@ -80,3 +80,30 @@ def test_business_frontend_sources_present():
                  "public/merchant-enroll.html", "public/merchant-enroll.js",
                  "public/merchant-login-entry.js"]:
         assert (BACKEND / "business_frontend" / part).is_file(), part
+
+
+def test_business_sidebar_contains_footer_on_short_screens():
+    source = (BACKEND/"business_frontend"/"src"/"business-sidebar-account-fix.css").read_text(encoding="utf-8")
+    entry = (BACKEND/"business_frontend"/"src"/"main.jsx").read_text(encoding="utf-8")
+    assert ".sidebar nav" in source
+    assert "overflow-y: auto" in source
+    assert "height: 100dvh" in source
+    assert ".sidebar-foot" in source
+    assert "business-sidebar-account-fix.css" in entry
+
+
+def test_core_social_login_has_visible_disabled_provider_options_and_apple_flow():
+    source = (BACKEND/"frontend"/"src"/"SocialAuthOptions.jsx").read_text(encoding="utf-8")
+    core_auth = (BACKEND/"frontend"/"src"/"Auth.jsx").read_text(encoding="utf-8")
+    core_account = (BACKEND/"frontend"/"src"/"Account.jsx").read_text(encoding="utf-8")
+    social = (BACKEND/"app"/"react_app"/"social_auth.py").read_text(encoding="utf-8")
+    ast.parse(social)
+    for provider in ("google", "yahoo", "facebook", "tiktok", "apple"):
+        assert "id:'" + provider + "'" in source
+    assert "Setup required" in source
+    assert "SocialAuthOptions" in core_auth
+    assert "SocialAuthOptions" in core_account
+    assert 'APPLE_BRIDGE_COOKIE' in social
+    assert 'response_mode"] = "form_post"' in social
+    assert '@router.post("/{provider}/callback")' in social
+    assert "pruvs_social_accounts" not in source  # UI never sees provider subjects
