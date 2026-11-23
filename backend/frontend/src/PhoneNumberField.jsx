@@ -74,10 +74,8 @@ export default function PhoneNumberField({ phone = '', country = 'RO', onPhoneCh
   const selected = countries.find(entry => entry.country === country);
   const error = touched ? phoneLengthError(phone,country,countries) : '';
   return <div className="phone-enrollment-field">
-    <label className="phone-enrollment-label" htmlFor="pruvs-phone-national">
-      Phone number {required && <span aria-label="required">*</span>}
-      <small>Required for sharing receipts and bills</small>
-    </label>
+    <label className="phone-enrollment-label" htmlFor="pruvs-phone-national">Phone number</label>
+    <small className="phone-enrollment-reason">Required for sharing receipts and bills</small>
     <div className="phone-enrollment-controls">
       <select
         aria-label="Phone country and dialing prefix"
