@@ -50,7 +50,12 @@ _domain._PAGE_PATTERNS += (r"/bill/[^/]+",r"/join/[^/]+",r"/notifications/open/[
 @asynccontextmanager
 async def lifespan(app):
     require_postgres_if_enabled()
-    Base.metadata.create_all(bind=engine);ensure_compatibility_schema()
+    # The combined staging schema is provisioned by a dedicated migration
+    # operator. Its runtime role must not own tables or create indexes.
+    # Production/standalone services retain their original compatibility path.
+    if os.getenv("PRUVS_PLATFORM_COMBINED_STAGING", "").strip().lower() != "true":
+        Base.metadata.create_all(bind=engine)
+        ensure_compatibility_schema()
     if not (FRONTEND/'index.html').is_file():raise RuntimeError('React build missing. Run npm ci and npm run build in backend/frontend.')
     require_build_match_if_enabled(FRONTEND)
     # Retire legacy browser grants and expired sessions before serving React.
