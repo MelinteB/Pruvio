@@ -1,0 +1,102 @@
+name: Keep only the latest three release branches
+
+# Installed on the default branch. Creating a new release/* branch triggers
+# retention; nightly fallback covers branches created by automation.
+on:
+  create:
+  schedule:
+    - cron: "23 03 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Preview deletions without removing branches"
+        type: boolean
+        required: true
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: release-branch-retention
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    if: github.event_name != 'create' || (github.event.ref_type == 'branch' && startsWith(github.event.ref, 'release/'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Retain three newest versioned release branches
+        uses: actions/github-script@v7
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true }}
+          # Optional repository variable: comma-separated branch refs used
+          # by deployments that must never be deleted.
+          RELEASE_BRANCH_PROTECT: ${{ vars.RELEASE_BRANCH_PROTECT }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const {owner, repo} = context.repo;
+            const dryRun = process.env.DRY_RUN === 'true';
+            const explicitlyProtected = new Set(
+              (process.env.RELEASE_BRANCH_PROTECT || '')
+                .split(',').map(s => s.trim()).filter(Boolean)
+            );
+            const branches = await github.paginate(
+              github.rest.repos.listBranches, {owner, repo, per_page: 100}
+            );
+            const openPRs = await github.paginate(
+              github.rest.pulls.list, {owner, repo, state: 'open', per_page: 100}
+            );
+            const prBranches = new Set(
+              openPRs.filter(p => p.head.repo && p.head.repo.full_name === context.repo.owner + '/' + repo)
+                     .map(p => p.head.ref)
+            );
+            function version(name) {
+              const dotted = name.match(/(?:^|[-/])v(\d+)\.(\d+)\.(\d+)(?=$|[-/])/i);
+              if (dotted) return dotted.slice(1, 4).map(Number);
+              const compact = repo === 'Pruvio'
+                ? name.match(/(?:^|[-/])v(7)(1)(\d{2,})(?=$|[-/])/i)
+                : name.match(/(?:^|[-/])v(0)(6)(\d{1,2})(?=$|[-/])/i);
+              return compact ? compact.slice(1, 4).map(Number) : null;
+            }
+            const candidates = branches.filter(b => b.name.startsWith('release/'))
+              .map(b => ({...b, parsed: version(b.name)}));
+            const recognized = candidates.filter(b => b.parsed !== null)
+              .sort((a,b) => {
+                for (let i=0;i<3;i++) {
+                  if (a.parsed[i] !== b.parsed[i]) return b.parsed[i] - a.parsed[i];
+                }
+                const priority = n => /(?:^|[-/])prod(?:[-/]|$)/.test(n) ? 2 :
+                                        /(?:^|[-/])stage(?:[-/]|$)/.test(n) ? 1 : 0;
+                return priority(b.name) - priority(a.name) || b.name.localeCompare(a.name);
+              });
+            const keep = new Set(recognized.slice(0, 3).map(b => b.name));
+            core.info('Repo: ' + owner + '/' + repo + ' | dry run: ' + dryRun);
+            core.info('Retained versions: ' + JSON.stringify([...keep]));
+            for (const b of candidates.filter(b => b.parsed === null)) {
+              core.warning('Unrecognized release version; keeping: ' + b.name);
+            }
+            let removed = 0, protectedCount = 0;
+            for (const branch of recognized.slice(3)) {
+              const name = branch.name;
+              if (branch.protected || explicitlyProtected.has(name) || prBranches.has(name)) {
+                protectedCount++;
+                core.warning('Keeping protected / active PR / deployment branch: ' + name);
+                continue;
+              }
+              if (dryRun) {
+                core.info('[DRY RUN] Would delete ' + name);
+                continue;
+              }
+              await github.rest.git.deleteRef({owner, repo, ref: 'heads/' + name});
+              removed++;
+              core.info('Deleted ' + name);
+            }
+            await core.summary
+              .addHeading('Release branch retention')
+              .addRaw('Repository: ' + owner + '/' + repo + '\n\n')
+              .addRaw('Latest 3 retained: ' + [...keep].join(', ') + '\n\n')
+              .addRaw('Deleted: ' + removed + '; additionally protected: ' + protectedCount + '\n')
+              .write();
