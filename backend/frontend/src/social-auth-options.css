@@ -1,0 +1,80 @@
+.pruvs-social-auth{
+  margin:22px 0 16px;
+  padding-top:18px;
+  border-top:1px solid #dce8e2;
+  width:100%;
+}
+.pruvs-social-auth-title{
+  display:flex;align-items:center;gap:12px;
+  margin-bottom:13px;
+  color:#335d51;
+  font-size:13px;
+  font-weight:800;
+}
+.pruvs-social-auth-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+  width:100%;
+}
+.pruvs-social-method{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  border:1px solid #cbded4;
+  border-radius:13px;
+  background:#fff;
+  color:#1c4033;
+  padding:12px 13px;
+  width:100%;
+  min-width:0;
+  min-height:64px;
+  text-align:left;
+  text-decoration:none;
+  box-sizing:border-box;
+}
+a.pruvs-social-method:hover{
+  border-color:#23845a;
+  box-shadow:0 3px 16px rgba(4,95,58,.10);
+  background:#f6fcf8;
+}
+a.pruvs-social-method:focus-visible{
+  outline:3px solid #209268;
+  outline-offset:2px;
+}
+.pruvs-social-method.is-disabled{
+  background:#f5f7f6;
+  border-color:#e0e7e3;
+  color:#58675f;
+}
+.pruvs-social-symbol{
+  width:34px;height:34px;
+  display:grid;place-items:center;
+  flex:none;
+  border-radius:10px;
+  background:#ecf1ef;
+  color:#163c31;
+  font-size:16px;
+  font-weight:900;
+}
+.pruvs-social-symbol.provider-google{color:#2962af;background:#eef4ff}
+.pruvs-social-symbol.provider-apple{color:#151c19;background:#e8eceb}
+.pruvs-social-symbol.provider-facebook{color:#2468be;background:#eaf2ff}
+.pruvs-social-symbol.provider-yahoo{color:#663bb4;background:#f1ecfa}
+.pruvs-social-symbol.provider-tiktok{color:#172327;background:#e4edf0}
+.pruvs-social-symbol.provider-instagram{color:#974174;background:#f8eaf3;font-size:12px}
+.pruvs-social-method-label{flex:1;min-width:0;display:grid;gap:3px}
+.pruvs-social-method-label strong{font-size:12px;line-height:1.25;overflow-wrap:anywhere}
+.pruvs-social-method-label small{font-size:10px;line-height:1.35;color:#597268}
+.pruvs-social-state{
+  flex:none;font-size:10px;line-height:1.3;font-weight:800;
+  border-radius:100px;padding:4px 7px;
+}
+.pruvs-social-state.ready{color:#116b46;background:#def4e6}
+.pruvs-social-state.pending{color:#60716a;background:#e9eeeb}
+.pruvs-social-explainer{font-size:11px!important;line-height:1.55!important;
+  color:#648075!important;margin:10px 0 0!important}
+@media(max-width:680px){
+  .pruvs-social-auth-grid{grid-template-columns:minmax(0,1fr)}
+  .pruvs-social-method{min-height:58px}
+}
