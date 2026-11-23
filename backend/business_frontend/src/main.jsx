@@ -17,6 +17,7 @@ import LocationManager from './LocationManager.jsx';
 import StoreForm from './StoreForm.jsx';
 import {BusinessLanguageProvider,useBusinessLanguage,LanguageSwitcher} from './i18n.jsx';
 import './i18n.css';
+import './business-sidebar-account-fix.css';
 
 const API = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
 const money = (v) => `${(v/100).toFixed(2)} RON`;
