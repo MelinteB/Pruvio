@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'">
+<title>Pruvs Business · Password recovery</title>
+<style>
+:root{font-family:Inter,system-ui,sans-serif;color:#142a36;background:#f5f8fa}
+*{box-sizing:border-box}body{margin:0;padding:24px 12px}
+main{width:min(100%,480px);margin:10vh auto;background:white;border-radius:18px;padding:28px;box-shadow:0 12px 38px #15303d12}
+h1{font-size:26px;margin:0 0 10px}p{color:#526873;line-height:1.5}
+label{font-weight:600;display:block;margin:20px 0 6px}
+input{width:100%;padding:13px;border:1px solid #afc0c8;border-radius:9px;font:inherit}
+button{padding:13px 20px;background:#0d756a;color:#fff;border:0;border-radius:9px;font-weight:700;cursor:pointer;margin-top:20px;width:100%}
+button:disabled{opacity:.65;cursor:wait}
+a{color:#0a675d}#message{margin:15px 0;padding:10px;border-radius:9px;background:#e8f7ef;display:none}
+#message.error{background:#ffe9e9}small{color:#637984}
+</style>
+<script src="merchant-reset.js" defer></script>
+</head>
+<body>
+<main>
+<p><b>Pruvs Business</b></p>
+<h1>Password recovery</h1>
+<p id="explanation">Enter your merchant login email. If your account is active, we will send a secure password recovery link.</p>
+<div id="message" role="status" aria-live="polite"></div>
+<form id="request-form">
+<label for="email">Merchant login email</label>
+<input id="email" type="email" autocomplete="email" required maxlength="255">
+<button type="submit">Send password reset link</button>
+</form>
+<form id="confirm-form" hidden>
+<label for="password">New password</label>
+<input id="password" type="password" autocomplete="new-password" minlength="15" maxlength="128" required>
+<small>15–128 characters. Existing passwords remain valid until changed.</small>
+<label for="confirm">Confirm new password</label>
+<input id="confirm" type="password" autocomplete="new-password" minlength="15" maxlength="128" required>
+<button type="submit">Update password</button>
+</form>
+<p><a href="/business/">Back to merchant login</a></p>
+</main>
+</body></html>
