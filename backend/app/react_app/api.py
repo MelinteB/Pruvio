@@ -74,6 +74,7 @@ def register(body:dict,request:Request,db=Depends(get_db)):
     notifications_opt_in = body.get('notifications_opt_in') is True
     result=onboarding.start_registration(db,phone_number=body.get('phone_number',''),display_name=body.get('name',''),
         email=body.get('email',''),username=body.get('username',''),password=body.get('password'),
+        phone_country=body.get('phone_country','RO'),
         accepted_terms=body.get('accepted_terms') is True,accepted_privacy=body.get('accepted_privacy') is True,
         marketing_opt_in=body.get('marketing_opt_in') is True)
     result['user'].notifications_opt_in=notifications_opt_in
