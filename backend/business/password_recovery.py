@@ -66,24 +66,24 @@ def _reset_url(token: str) -> str:
     return origin + "/business/merchant-reset.html#token=" + token
 
 
-def _token(staff: Staff) -> str:
+def _token(staff: Staff, *, invite: bool = False) -> str:
     now = datetime.now(timezone.utc)
     return jwt.encode(
         {"iss": "pruvs-business", "aud": "pruvs-business-password-reset",
-         "sub": staff.id, "typ": "merchant_password_reset",
+         "sub": staff.id, "typ": "merchant_staff_invite" if invite else "merchant_password_reset",
          "pv": password_version(staff.password_hash),
          "iat": now, "exp": now + RESET_TTL, "jti": secrets.token_hex(16)},
         get_settings().business_jwt_secret, algorithm="HS256",
     )
 
 
-def _send_reset(staff: Staff) -> None:
-    url = _reset_url(_token(staff))
+def _send_reset(staff: Staff, *, invite: bool = False) -> None:
+    url = _reset_url(_token(staff, invite=invite))
     body = {
         "from": os.environ["RESEND_FROM_EMAIL"],
         "to": [staff.email],
-        "subject": "Reset your Pruvs Business password",
-        "text": "Use this single-use Pruvs Business password reset link within 20 minutes: " + url
+        "subject": "Invitation to Pruvs Business" if invite else "Reset your Pruvs Business password",
+        "text": "Use this single-use Pruvs Business password setup link within 20 minutes: " + url
                 + "\nIf you did not request this, ignore it.",
         "html": '<p>Reset your Pruvs Business password using the link below (expires in 20 minutes):</p>'
                 '<p><a href="' + html.escape(url, quote=True) + '">Reset password</a></p>'
@@ -134,30 +134,34 @@ def confirm(payload: RecoveryConfirm, db: Session = Depends(get_db)):
                           leeway=5)
     except jwt.PyJWTError:
         raise HTTPException(400, "Invalid or expired reset link") from None
-    if data.get("typ") != "merchant_password_reset":
+    if data.get("typ") not in ("merchant_password_reset", "merchant_staff_invite"):
         raise HTTPException(400, "Invalid or expired reset link")
     with db.begin():
         staff = db.scalar(select(Staff).where(Staff.id == data["sub"]).with_for_update())
-        if not staff or not staff.active or not secrets.compare_digest(
-            str(data.get("pv", "")), password_version(staff.password_hash)
-        ):
+        if (not staff or (not staff.active and data.get('typ') != 'merchant_staff_invite')
+            or (staff.active and data.get('typ') == 'merchant_staff_invite')
+            or not secrets.compare_digest(str(data.get('pv', '')), password_version(staff.password_hash))):
             raise HTTPException(400, "Invalid or already-used reset link")
         if verify_password(payload.new_password, staff.password_hash):
             raise HTTPException(422, "Choose a different password")
         staff.password_hash = hasher.hash(payload.new_password)
+        if data.get('typ') == 'merchant_staff_invite':
+            staff.active = True
     return {"ok": True, "message": "Password updated. Sign in again."}
 
 
 @router.post("/change")
 def change(payload: PasswordChange, staff: Staff = Depends(merchant_actor),
            db: Session = Depends(get_db)):
-    with db.begin():
-        locked = db.scalar(select(Staff).where(Staff.id == staff.id).with_for_update())
-        if not locked or not locked.active or not verify_password(
-            payload.current_password, locked.password_hash
-        ):
-            raise HTTPException(403, "Current password is incorrect")
-        if verify_password(payload.new_password, locked.password_hash):
-            raise HTTPException(422, "Choose a different password")
-        locked.password_hash = hasher.hash(payload.new_password)
+    # merchant_actor already queried using this same session, so a transaction
+    # is active; do not nest db.begin() here.
+    locked = db.scalar(select(Staff).where(Staff.id == staff.id).with_for_update())
+    if not locked or not locked.active or not verify_password(
+        payload.current_password, locked.password_hash
+    ):
+        raise HTTPException(403, "Current password is incorrect")
+    if verify_password(payload.new_password, locked.password_hash):
+        raise HTTPException(422, "Choose a different password")
+    locked.password_hash = hasher.hash(payload.new_password)
+    db.commit()
     return {"ok": True, "message": "Password updated. Sign in again."}
