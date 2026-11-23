@@ -71,7 +71,7 @@ function inputLabel(node) {
 }
 function validationReason(input) {
   if (input.name === 'password' && input.validity?.tooShort) {
-    return 'Use at least 20 characters for your password.';
+    return 'Use at least 15 characters for your password.';
   }
   if (input.validity?.valueMissing) return `${inputLabel(input)} is required.`;
   if (input.validity?.typeMismatch) return `Please enter a valid ${inputLabel(input).toLowerCase()}.`;
