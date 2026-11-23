@@ -241,6 +241,15 @@ def _oauth_identity(provider, code, client_id, secret, redirect_uri, flow):
     if provider == "instagram":
         tokens = _fetch(TOKEN[provider], method="POST", data={
             **data, "client_id": client_id, "client_secret": secret})
+        # Provider responses may be flat or wrapped in a single data entry.
+        # Refuse ambiguous data rather than associating the wrong identity.
+        if "data" in tokens:
+            entries = tokens.get("data")
+            if not isinstance(entries, list) or len(entries) != 1 or tokens.get("user_id") or tokens.get("access_token"):
+                raise HTTPException(502, "Unexpected Instagram identity response")
+            tokens = entries[0]
+            if not isinstance(tokens, dict):
+                raise HTTPException(502, "Unexpected Instagram identity response")
         return {"subject": str(tokens.get("user_id") or ""), "name": "Instagram professional account",
                 "email": "", "verified": False}
     if provider == "tiktok":
@@ -253,7 +262,7 @@ def _oauth_identity(provider, code, client_id, secret, redirect_uri, flow):
 
 @router.get("/providers")
 def providers(db=Depends(get_db)):
-    schema_ready = inspect(db.get_bind()).has_table(SocialAccount.__tablename__)
+    schema_ready = inspect(db.get_bind()).has_table(SocialAccount.__tablename__) if _globally_enabled() else False
     return {"providers": [{"id": p, "enabled": _configured(p) and schema_ready,
              "signup": p not in LINK_ONLY,
              "note": "Professional Instagram accounts only" if p == "instagram" else
@@ -439,7 +448,7 @@ def complete_email(data: CompleteEmailSignup, request: Request, response: Respon
         raise HTTPException(409, "Sign out before completing social registration")
     ticket = _unseal(request.cookies.get(SIGNUP_COOKIE, ""), max_age=900)
     provider = str(ticket.get("provider") or "")
-    if provider not in LINK_ONLY or not _configured(provider):
+    if provider not in PROVIDERS or not _configured(provider) or (ticket.get('verified') and ticket.get('email')):
         raise HTTPException(409, "This provider requires a different registration flow")
     subject = str(ticket.get("subject") or "")
     if not subject or len(subject) > 255:
