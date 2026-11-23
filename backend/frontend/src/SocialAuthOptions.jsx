@@ -19,8 +19,7 @@ export default function SocialAuthOptions({
 }) {
   const byId=new Map((providers||[]).map(p=>[p.id,p]));
   const existing=new Set(linked);
-  const available=METHODS.filter(p=>!existing.has(p.id) &&
-    (mode!=='register'||p.id!=='instagram'));
+  const available=METHODS.filter(p=>!existing.has(p.id));
   if(!available.length) return null;
   return <section className="pruvs-social-auth" aria-label="Additional sign-in methods">
     <div className="pruvs-social-auth-title">
@@ -56,7 +55,7 @@ export default function SocialAuthOptions({
       {mode!=='link'&&' Existing accounts must link a provider in Account before using it to sign in.'}
     </p>
     {mode==='register'&&<p className="pruvs-social-explainer">
-      Instagram Professional is available from Account settings for Business or Creator accounts, not ordinary personal Instagram profiles.
+      Instagram Professional signup is available for Business or Creator accounts only and requires Pruvs email verification. Personal Instagram accounts cannot use this method.
     </p>}
   </section>;
 }
