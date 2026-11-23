@@ -1,0 +1,35 @@
+name: Verify Pruvs Core login method grid
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/frontend/src/Auth.jsx'
+      - 'backend/frontend/src/LoginMethodGrid.jsx'
+      - 'backend/frontend/src/login-method-grid.css'
+      - 'backend/frontend/src/login_method_grid.test.jsx'
+      - '.github/workflows/verify-core-login-method-picker.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  login-picker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/frontend/package-lock.json
+      - name: Install Core dependencies
+        working-directory: backend/frontend
+        run: npm ci --no-audit --no-fund
+      - name: Test safe login methods
+        working-directory: backend/frontend
+        run: npx vitest run src/login_method_grid.test.jsx src/optional_registration.test.jsx
+      - name: Build Core frontend
+        working-directory: backend/frontend
+        run: npm run build
