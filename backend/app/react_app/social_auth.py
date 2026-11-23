@@ -13,6 +13,7 @@ Disable globally until provider compliance, staging verification and legal revie
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import hmac
 import json
@@ -37,7 +38,7 @@ from app.models.user import User
 from app.react_app.auth import (
     COOKIE, current, digest, issue, limit, secure,
 )
-from app.services.onboarding_otp_service import normalize_phone_number
+from app.services.onboarding_otp_service import normalize_phone_number, verify_registration_email
 from app.services.username_service import derive_available_username, check_username_available
 from app.usernames import username_key
 
@@ -76,6 +77,12 @@ ISSUER = {
     "google": ("https://accounts.google.com", "accounts.google.com"),
     "yahoo": ("https://api.login.yahoo.com",),
 }
+
+
+class CompleteEmailSignup(BaseModel):
+    email: str = Field(min_length=5, max_length=255)
+    code: str = Field(min_length=6, max_length=6)
+    challenge_id: str = Field(min_length=1, max_length=128)
 
 
 class CompleteSignup(BaseModel):
@@ -160,7 +167,7 @@ def _unseal(raw: str, *, max_age: int):
         if age < -30 or age > max_age:
             raise ValueError("expired")
         return data
-    except (ValueError, KeyError, TypeError, OverflowError, UnicodeDecodeError, json.JSONDecodeError):
+    except (ValueError, KeyError, TypeError, OverflowError, UnicodeDecodeError, binascii.Error):
         raise HTTPException(400, "Social authentication session expired. Start again.") from None
 
 
@@ -245,8 +252,9 @@ def _oauth_identity(provider, code, client_id, secret, redirect_uri, flow):
 
 
 @router.get("/providers")
-def providers():
-    return {"providers": [{"id": p, "enabled": _configured(p),
+def providers(db=Depends(get_db)):
+    schema_ready = inspect(db.get_bind()).has_table(SocialAccount.__tablename__)
+    return {"providers": [{"id": p, "enabled": _configured(p) and schema_ready,
              "signup": p not in LINK_ONLY,
              "note": "Professional Instagram accounts only" if p == "instagram" else
                      ("Sign in after linking in Account" if p in LINK_ONLY else "")}
@@ -362,7 +370,8 @@ def pending(request: Request, db=Depends(get_db)):
     return {"provider":ticket["provider"],"name":ticket.get("name") or "",
             "email":ticket.get("email") if can_complete else "",
             "can_complete":can_complete,
-            "note": "Complete verified email registration and link this provider in Account" if not can_complete else ""}
+            "requires_email_otp":not can_complete,
+            "note": "Verify your email to finish social registration. Existing Pruvs users should sign in and link their provider in Account." if not can_complete else ""}
 
 
 @router.post("/complete")
@@ -410,6 +419,53 @@ def complete(data: CompleteSignup, request: Request, response: Response,
         db.rollback()
         raise HTTPException(409, "Another account uses this identity, email or phone number") from None
     _clear(response,SIGNUP_COOKIE)
+    return result
+
+
+@router.post("/complete-email")
+def complete_email(data: CompleteEmailSignup, request: Request, response: Response,
+                   db=Depends(get_db)):
+    """Complete OAuth-assisted signup for a provider lacking verified email.
+
+    The existing Pruvs registration endpoint first collects Terms/Privacy consent,
+    a unique email, phone and password and issues an email OTP. Only the Pruvs
+    registration OTP (not provider supplied email) can activate the new user.
+    """
+    if not _globally_enabled():
+        raise HTTPException(503, "Social registration is disabled")
+    _schema_ready(db)
+    limit(db, request, "social-registration-otp", 15)
+    if request.cookies.get(COOKIE):
+        raise HTTPException(409, "Sign out before completing social registration")
+    ticket = _unseal(request.cookies.get(SIGNUP_COOKIE, ""), max_age=900)
+    provider = str(ticket.get("provider") or "")
+    if provider not in LINK_ONLY or not _configured(provider):
+        raise HTTPException(409, "This provider requires a different registration flow")
+    subject = str(ticket.get("subject") or "")
+    if not subject or len(subject) > 255:
+        raise HTTPException(400, "Social provider identity is invalid")
+    if db.query(SocialAccount.id).filter_by(provider=provider, subject=subject).first():
+        raise HTTPException(409, "This provider identity is already connected")
+    # This method only activates a pending registration with a valid OTP
+    # matching the email on its Pruvs User record.
+    user = verify_registration_email(db, data.email, data.code, challenge_id=data.challenge_id)
+    if user.status != "active" or not user.is_email_verified:
+        raise HTTPException(403, "Email verification is incomplete")
+    # Only a freshly created account may inherit an unlinked external identity.
+    # Prevent stale browser tickets being used to link unrelated existing users.
+    if not user.created_at or (datetime.utcnow() - user.created_at).total_seconds() > 3600:
+        raise HTTPException(409, "Please connect this account in Account after signing in")
+    if db.query(SocialAccount.id).filter_by(provider=provider,subject=subject).first():
+        raise HTTPException(409, "Social identity has already been linked")
+    db.add(SocialAccount(user_id=user.id,provider=provider,
+                         subject=subject,display_name=str(ticket.get("name") or "")[:255]))
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "Social identity is already associated with another account") from None
+    result = issue(db,user,request,response)
+    _clear(response, SIGNUP_COOKIE)
     return result
 
 
