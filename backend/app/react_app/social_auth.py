@@ -276,6 +276,7 @@ def start(provider: str, request: Request,
           next: str = "/", db=Depends(get_db)):
     _ensure_provider(provider)
     _schema_ready(db)
+    limit(db, request, "social-start", 25)
     link_uid = None
     login_bind = ""
     if mode == "link":
