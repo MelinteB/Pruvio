@@ -33,11 +33,9 @@ def database(tmp_path, monkeypatch):
     engine = create_engine("sqlite:///" + str(tmp_path/"google_auth.sqlite"))
     Base.metadata.create_all(engine)
     db = sessionmaker(bind=engine)()
-    monkeypatch.setenv("PRUVS_SOCIAL_AUTH_STATE_SECRET", "test-standalone-google-oauth-secret-min-32-characters")
-    monkeypatch.setenv("PRUVS_SOCIAL_LOGIN_ENABLED", "true")
-    monkeypatch.setenv("PRUVS_SOCIAL_GOOGLE_ENABLED", "true")
-    monkeypatch.setenv("PRUVS_SOCIAL_GOOGLE_CLIENT_ID", "fake-web-id.apps.googleusercontent.com")
-    monkeypatch.setenv("PRUVS_SOCIAL_GOOGLE_CLIENT_SECRET", "unit-test-only")
+    monkeypatch.setenv("GOOGLE_ENABLED", "true")
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "fake-web-id.apps.googleusercontent.com")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "unit-test-only")
     monkeypatch.setenv("PUBLIC_BASE_URL", "https://pruvs.io")
     yield db
     db.close()
@@ -58,10 +56,26 @@ def form(**overrides):
     return oauth.GoogleSignup(**payload)
 
 
+def test_only_three_short_google_environment_keys_are_required(database, monkeypatch):
+    for legacy in ("PRUVS_SOCIAL_LOGIN_ENABLED", "PRUVS_SOCIAL_GOOGLE_ENABLED",
+                   "PRUVS_SOCIAL_GOOGLE_CLIENT_ID", "PRUVS_SOCIAL_GOOGLE_CLIENT_SECRET",
+                   "PRUVS_SOCIAL_AUTH_STATE_SECRET"):
+        monkeypatch.delenv(legacy, raising=False)
+    assert oauth._configured()
+    assert len(oauth._state_secret()) == 32
+    monkeypatch.setenv("GOOGLE_ENABLED", "false")
+    assert not oauth._configured()
+    monkeypatch.setenv("GOOGLE_ENABLED", "true")
+    original = oauth._seal({"iat":int(time.time()), "provider":"google"})
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "another-google-client-secret")
+    with pytest.raises(HTTPException):
+        oauth._unseal(original, 600)
+
+
 def test_provider_order_and_google_only_if_explicitly_configured(database, monkeypatch):
     assert [p["id"] for p in oauth.providers(db=database)["providers"]][:3] == ["google","linkedin","yahoo"]
     assert [p["enabled"] for p in oauth.providers(db=database)["providers"]] == [True,False,False,False,False,False]
-    monkeypatch.delenv("PRUVS_SOCIAL_GOOGLE_CLIENT_SECRET")
+    monkeypatch.delenv("GOOGLE_CLIENT_SECRET")
     assert not any(p["enabled"] for p in oauth.providers(db=database)["providers"])
     with pytest.raises(HTTPException) as exc:
         oauth._require_google(database)

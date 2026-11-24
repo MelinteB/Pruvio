@@ -53,19 +53,22 @@ class GoogleSignup(BaseModel):
 
 
 def _state_secret() -> bytes:
-    secret = os.getenv("PRUVS_SOCIAL_AUTH_STATE_SECRET", "")
-    if len(secret) < 32:
-        raise HTTPException(503, "Google sign-in state secret is not configured")
-    return secret.encode("utf-8")
+    # Derive an OAuth-only HMAC key from the confidential Google client secret.
+    # Domain separation avoids reusing the raw client secret as a cookie key.
+    # Rotating the Google secret invalidates only in-progress OAuth tickets.
+    secret = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
+    if not secret:
+        raise HTTPException(503, "Google OAuth client secret is not configured")
+    return hmac.new(secret.encode("utf-8"),
+                    b"pruvs/google/oauth-state/v1", hashlib.sha256).digest()
 
 
 def _configured() -> bool:
+    # GOOGLE_ENABLED is the sole Google feature switch; fail closed by default.
     return all((
-        os.getenv("PRUVS_SOCIAL_LOGIN_ENABLED", "false").lower() == "true",
-        os.getenv("PRUVS_SOCIAL_GOOGLE_ENABLED", "false").lower() == "true",
-        bool(os.getenv("PRUVS_SOCIAL_GOOGLE_CLIENT_ID", "").strip()),
-        bool(os.getenv("PRUVS_SOCIAL_GOOGLE_CLIENT_SECRET", "").strip()),
-        len(os.getenv("PRUVS_SOCIAL_AUTH_STATE_SECRET", "")) >= 32,
+        os.getenv("GOOGLE_ENABLED", "false").strip().lower() == "true",
+        bool(os.getenv("GOOGLE_CLIENT_ID", "").strip()),
+        bool(os.getenv("GOOGLE_CLIENT_SECRET", "").strip()),
     ))
 
 
@@ -165,8 +168,8 @@ def _exchange_code(code: str, verifier: str, nonce: str) -> dict:
         response = httpx.post(
             "https://oauth2.googleapis.com/token",
             data={
-                "client_id":os.environ["PRUVS_SOCIAL_GOOGLE_CLIENT_ID"],
-                "client_secret":os.environ["PRUVS_SOCIAL_GOOGLE_CLIENT_SECRET"],
+                "client_id":os.environ["GOOGLE_CLIENT_ID"],
+                "client_secret":os.environ["GOOGLE_CLIENT_SECRET"],
                 "code":code,
                 "code_verifier":verifier,
                 "redirect_uri":_callback_url(),
@@ -181,7 +184,7 @@ def _exchange_code(code: str, verifier: str, nonce: str) -> dict:
     except (httpx.HTTPError, ValueError, KeyError, TypeError):
         raise HTTPException(502, "Google authentication is temporarily unavailable") from None
     return _verify_google_id_token(
-        data.get("id_token"), os.environ["PRUVS_SOCIAL_GOOGLE_CLIENT_ID"], nonce,
+        data.get("id_token"), os.environ["GOOGLE_CLIENT_ID"], nonce,
     )
 
 
@@ -209,7 +212,7 @@ def start(request: Request, mode: str = Query("login", pattern="^(login|link)$")
             "verifier":verifier, "mode":mode, "next":_next(next),
             "uid":link_user_id, "session_hash":link_session_hash}
     params = {
-        "client_id":os.environ["PRUVS_SOCIAL_GOOGLE_CLIENT_ID"],
+        "client_id":os.environ["GOOGLE_CLIENT_ID"],
         "redirect_uri":_callback_url(),
         "response_type":"code",
         "state":state,
