@@ -92,17 +92,19 @@ def test_business_sidebar_contains_footer_on_short_screens():
     assert "business-sidebar-account-fix.css" in entry
 
 
-def test_core_social_login_has_visible_disabled_provider_options_and_apple_flow():
+def test_core_social_login_has_supported_provider_options_and_preserves_apple_callback_code():
     source = (BACKEND/"frontend"/"src"/"SocialAuthOptions.jsx").read_text(encoding="utf-8")
     core_auth = (BACKEND/"frontend"/"src"/"Auth.jsx").read_text(encoding="utf-8")
     core_account = (BACKEND/"frontend"/"src"/"Account.jsx").read_text(encoding="utf-8")
     social = (BACKEND/"app"/"react_app"/"social_auth.py").read_text(encoding="utf-8")
     ast.parse(social)
-    for provider in ("google", "yahoo", "facebook", "tiktok", "apple", "instagram"):
+    for provider in ("google", "linkedin", "yahoo", "facebook", "tiktok"):
         assert "id:'" + provider + "'" in source
+    for provider in ("apple", "instagram"):
+        assert "id:'" + provider + "'" not in source
     assert "Setup required" in source
-    assert "p.id!=='instagram'" not in source
-    assert "Personal Instagram accounts cannot use this method" in source
+    assert "p.enabled===true" in core_auth
+    assert "encodeURIComponent(provider)" in core_auth
     assert '"signup": True' in social
     assert "LoginMethodGrid" in core_auth
     assert "PhoneNumberField" in core_auth
