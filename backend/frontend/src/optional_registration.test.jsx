@@ -8,6 +8,7 @@ import { send } from './api';
 
 vi.mock('./api', () => ({
   send: vi.fn(),
+  request: vi.fn().mockResolvedValue({providers:[]}),
   safeNext: p => typeof p === 'string' && p.startsWith('/') && !p.startsWith('//') ? p : '/',
   credential: vi.fn(),
 }));
