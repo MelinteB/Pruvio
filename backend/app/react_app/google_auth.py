@@ -14,7 +14,7 @@ import os
 import secrets
 import time
 from datetime import datetime
-from urllib.parse import urlencode, urlparse
+from urllib.parse import quote, urlencode, urlparse
 
 import httpx
 import jwt
@@ -272,7 +272,7 @@ def callback(request: Request, code: str = "", state: str = "", error: str = "",
         "iat":int(time.time()),"provider":GOOGLE,"subject":identity["subject"],
         "name":identity["name"],"email":identity["email"],"next":_next(flow.get("next")),
     }
-    response = RedirectResponse("/register?social=pending", status_code=303)
+    response = RedirectResponse("/register?social=pending&next=" + quote(_next(flow.get("next")), safe=""), status_code=303)
     _cookie(response, PENDING_COOKIE, _seal(pending), 900)
     _clear(response, STATE_COOKIE)
     return response
