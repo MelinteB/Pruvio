@@ -17,6 +17,7 @@ import binascii
 import hashlib
 import hmac
 import json
+import logging
 import os
 import secrets
 import time
@@ -44,6 +45,7 @@ from app.services.phone_numbers import normalize_signup_phone
 from app.services.username_service import derive_available_username, check_username_available
 from app.usernames import username_key
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/auth/social", tags=["Social sign-in"])
 STATE_COOKIE = "pruvs_social_flow"
 APPLE_BRIDGE_COOKIE = "pruvs_apple_oauth_bridge"
@@ -251,28 +253,77 @@ class OAuthCodeRejected(Exception):
     """Internal signal: Google rejected a one-time OAuth authorization code."""
 
 
+# Log only fixed endpoint labels and allowlisted error identifiers. Provider
+# descriptions, request URLs, codes, credentials, tokens and payloads are private.
+_SAFE_PROVIDER_ERRORS = frozenset({
+    "invalid_client", "invalid_grant", "invalid_request", "invalid_scope",
+    "unauthorized_client", "access_denied", "unsupported_grant_type",
+    "unsupported_response_type", "server_error", "temporarily_unavailable",
+    "redirect_uri_mismatch", "invalid_token", "insufficient_scope",
+    "scope_not_authorized", "rate_limit_exceeded", "invalid_authorization_code",
+    "invalid_input", "invalid_client_secret", "invalid_client_id", "internal_error",
+    "invalid_redirect_uri", "invalid_credentials", "invalid_access_token",
+    "access_token_invalid", "scope_not_authorized", "rate_limit_exceeded",
+})
+
+
+def _endpoint_label(url):
+    for provider, endpoint in TOKEN.items():
+        if url == endpoint:
+            return provider + ":token"
+    return {
+        "https://api.linkedin.com/v2/userinfo": "linkedin:userinfo",
+        "https://api.login.yahoo.com/openid/v1/userinfo": "yahoo:userinfo",
+        "https://graph.facebook.com/v24.0/debug_token": "facebook:debug_token",
+        "https://graph.facebook.com/v24.0/me": "facebook:userinfo",
+        "https://open.tiktokapis.com/v2/user/info/": "tiktok:userinfo",
+    }.get(url, "unknown")
+
+
+def _provider_error(payload):
+    if not isinstance(payload, dict):
+        return None
+    raw = payload.get("error")
+    if isinstance(raw, dict):
+        raw = raw.get("code") or raw.get("type")
+    if raw is None or raw == "" or raw == 0 or raw == "0" or raw == "ok":
+        return None
+    if isinstance(raw, str) and raw.lower() in _SAFE_PROVIDER_ERRORS:
+        return raw.lower()
+    if type(raw) is int and 0 < raw <= 999999:
+        return str(raw)
+    return "unclassified_provider_error"
+
+
 def _fetch(url, *, method="GET", params=None, data=None, headers=None, auth=None):
+    endpoint = _endpoint_label(url)
     try:
         with httpx.Client(timeout=8, follow_redirects=False) as client:
             r = client.request(method, url, params=params, data=data, headers=headers, auth=auth)
-        if method == "POST" and url == TOKEN["google"] and r.status_code == 400:
-            # Google authorization codes are one-use; browsers can re-request
-            # the same callback after the first exchange succeeded. Never log
-            # authorization codes or the upstream body.
-            try:
-                provider_error = r.json()
-            except ValueError:
-                provider_error = {}
-            if isinstance(provider_error, dict) and provider_error.get("error") == "invalid_grant":
-                raise OAuthCodeRejected()
-        if r.status_code < 200 or r.status_code >= 300 or len(r.content) > 65536:
-            raise ValueError("Provider refused request")
-        result = r.json()
-        if not isinstance(result, dict):
-            raise ValueError("Invalid provider response")
-        return result
-    except (httpx.HTTPError, ValueError):
+    except httpx.HTTPError as exc:
+        logger.warning("social_oauth_request_failed endpoint=%s reason=%s", endpoint,
+                       "timeout" if isinstance(exc, httpx.TimeoutException) else "transport_error")
         raise HTTPException(502, "Social provider verification is temporarily unavailable") from None
+
+    payload = None
+    reason = None
+    if len(r.content) > 65536:
+        reason = "response_too_large"
+    else:
+        try:
+            payload = r.json()
+        except ValueError:
+            reason = "invalid_json"
+    provider_error = _provider_error(payload)
+    if method == "POST" and url == TOKEN["google"] and r.status_code == 400 and provider_error == "invalid_grant":
+        logger.info("social_oauth_code_rejected endpoint=google:token status=400 reason=invalid_grant")
+        raise OAuthCodeRejected()
+    if not 200 <= r.status_code < 300 or reason or not isinstance(payload, dict) or provider_error:
+        logger.warning("social_oauth_request_failed endpoint=%s status=%s reason=%s",
+                       endpoint, r.status_code,
+                       provider_error or reason or ("http_error" if not 200 <= r.status_code < 300 else "invalid_response"))
+        raise HTTPException(502, "Social provider verification is temporarily unavailable") from None
+    return payload
 
 
 def _oidc_identity(provider, tokens, client_id, nonce):
@@ -305,7 +356,13 @@ def _oauth_identity(provider, code, client_id, secret, redirect_uri, flow):
                     client_secret=_apple_client_secret(client_id) if provider == "apple" else secret)
         if provider == "google":
             data["code_verifier"] = flow["verifier"]
-        tokens = _fetch(TOKEN[provider], method="POST", data=data)
+        if provider == "yahoo":
+            # Yahoo documents HTTP Basic authentication for confidential web clients.
+            data.pop("client_id")
+            data.pop("client_secret")
+            tokens = _fetch(TOKEN[provider], method="POST", data=data, auth=(client_id, secret))
+        else:
+            tokens = _fetch(TOKEN[provider], method="POST", data=data)
         identity = _oidc_identity(provider, tokens, client_id, flow["nonce"])
         if provider in ("linkedin", "yahoo"):
             access = tokens.get("access_token")
@@ -371,8 +428,9 @@ def _oauth_identity(provider, code, client_id, secret, redirect_uri, flow):
         result = _fetch("https://open.tiktokapis.com/v2/user/info/",
             params={"fields": "open_id,display_name"},
             headers={"Authorization": "Bearer " + access})
-        profile = (result.get("data") or {}).get("user") or {}
-        if str(profile.get("open_id") or "") != subject:
+        envelope = result.get("data")
+        profile = envelope.get("user") if isinstance(envelope, dict) else None
+        if not isinstance(profile, dict) or str(profile.get("open_id") or "") != subject:
             raise HTTPException(502, "TikTok identity mismatch")
         return {"subject": subject, "name": str(profile.get("display_name") or "")[:255],
                 "email": "", "verified": False}
@@ -483,6 +541,19 @@ def _rejected_google_code_response(provider, request, flow, db):
     return response
 
 
+def _callback_failure(provider, request, flow, db, reason="retry"):
+    # Only a verified flow can carry a next URL or select the account page.
+    if flow.get("mode") == "link" and _has_live_pruvs_session(request, db):
+        destination = "/account?social_error=" + reason + "#account-social"
+    else:
+        destination = "/login?social_error=" + reason + "&next=" + quote(
+            _internal_next(flow.get("next")), safe="")
+    response = RedirectResponse(destination, status_code=303,
+                                headers={"Cache-Control": "no-store"})
+    _clear(response, STATE_COOKIE)
+    return response
+
+
 @router.get("/{provider}/callback")
 def callback(provider: str, request: Request, code: str = "", state: str = "",
              error: str = "", db=Depends(get_db)):
@@ -496,17 +567,22 @@ def callback(provider: str, request: Request, code: str = "", state: str = "",
     ):
         raise HTTPException(400, "Social login state mismatch")
     if error or not code or len(code) > 2048:
-        response = RedirectResponse("/login?social_error=cancelled", status_code=303)
-        _clear(response, STATE_COOKIE)
-        return response
+        return _callback_failure(provider, request, flow, db, "cancelled")
     client_id, client_secret, _ = _client(provider)
     try:
         identity = _oauth_identity(provider, code, client_id, client_secret,
                                    _redirect_uri(provider), flow)
     except OAuthCodeRejected:
         return _rejected_google_code_response(provider, request, flow, db)
+    except HTTPException as exc:
+        if exc.status_code not in (502, 503):
+            raise
+        logger.warning("social_oauth_callback_failed provider=%s status=%s",
+                       provider, exc.status_code)
+        return _callback_failure(provider, request, flow, db)
     if not identity["subject"] or len(identity["subject"]) > 255:
-        raise HTTPException(502, "Provider identity unavailable")
+        logger.warning("social_oauth_callback_failed provider=%s reason=invalid_subject", provider)
+        return _callback_failure(provider, request, flow, db)
     if provider == "apple":
         # Finish from a same-origin GET: the Pruvs session cookie (Lax) isn't
         # sent on Apple's cross-site POST callback.
