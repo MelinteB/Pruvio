@@ -21,7 +21,7 @@ import os
 import secrets
 import time
 from datetime import datetime
-from urllib.parse import urlencode, urlparse
+from urllib.parse import quote, urlencode, urlparse
 
 import httpx
 import jwt
@@ -38,7 +38,8 @@ from app.models.user import User
 from app.react_app.auth import (
     COOKIE, current, digest, issue, limit, secure,
 )
-from app.services.onboarding_otp_service import normalize_phone_number, verify_registration_email
+from app.services.onboarding_otp_service import verify_registration_email
+from app.services.phone_numbers import normalize_signup_phone
 from app.services.username_service import derive_available_username, check_username_available
 from app.usernames import username_key
 
@@ -95,6 +96,7 @@ class CompleteSignup(BaseModel):
     name: str = Field(min_length=2, max_length=255)
     username: str | None = Field(default=None, max_length=80)
     phone_number: str = Field(min_length=6, max_length=50)
+    phone_country: str = Field(default='RO',min_length=2,max_length=2)
     accepted_terms: bool
     accepted_privacy: bool
     marketing_opt_in: bool = False
@@ -294,7 +296,7 @@ def _oauth_identity(provider, code, client_id, secret, redirect_uri, flow):
 @router.get("/providers")
 def providers(db=Depends(get_db)):
     schema_ready = inspect(db.get_bind()).has_table(SocialAccount.__tablename__) if _globally_enabled() else False
-    return {"providers": [{"id": p, "enabled": _configured(p) and schema_ready,
+    return {"providers": [{"id": p, "enabled": p == 'google' and _configured(p) and schema_ready,
              "signup": True,
              "note": ("Business or Creator Instagram accounts only; Pruvs email OTP required"
                       if p == "instagram" else
@@ -437,7 +439,7 @@ def _finish_verified_identity(provider, identity, flow, request, db):
                "subject":identity["subject"],"name":identity["name"],
                "email":identity["email"] if identity["verified"] else "",
                "verified":bool(identity["verified"]),"next":_internal_next(flow.get("next"))}
-    response = RedirectResponse("/register?social=pending",status_code=303)
+    response = RedirectResponse("/register?social=pending&next=" + quote(_internal_next(flow.get("next")),safe=""),status_code=303)
     _cookie(response,SIGNUP_COOKIE,_seal(pending),900)
     _clear(response,STATE_COOKIE)
     return response
@@ -478,7 +480,7 @@ def complete(data: CompleteSignup, request: Request, response: Response,
     if db.query(SocialAccount.id).filter_by(
         provider=ticket["provider"],subject=ticket["subject"]).first():
         raise HTTPException(409, "This provider identity is already connected")
-    phone = normalize_phone_number(data.phone_number)
+    phone = normalize_signup_phone(data.phone_number,data.phone_country)
     if db.query(User.id).filter_by(phone_number=phone).first():
         raise HTTPException(409, "Phone number already registered")
     name = " ".join(data.name.split()).strip()

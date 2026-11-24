@@ -1,0 +1,64 @@
+/* Core social sign-in chooser: exactly three columns and two rows, including mobile. */
+.core-experience .auth-methods { margin: 22px 0 12px; }
+.core-experience .auth-method-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+.core-experience .auth-method-grid .auth-method-tile {
+  width: 100%;
+  min-width: 0;
+  min-height: 77px;
+  padding: 10px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: #fff;
+  border: 1px solid #dce5f5;
+  border-radius: 12px;
+  color: #183457;
+  font-size: 12px;
+  line-height: 1.1;
+  font-weight: 730;
+  box-shadow: none;
+}
+.core-experience .auth-method-grid .auth-method-tile:hover:not(:disabled) {
+  background: #f1f6ff;
+  border-color: #a8c4f8;
+}
+.core-experience .auth-method-grid .auth-method-tile:focus-visible {
+  outline: 3px solid #8fb1ff;
+  outline-offset: 2px;
+}
+.core-experience .auth-method-grid .auth-method-tile--selected {
+  background: #eef4ff;
+  border-color: #1d5cda;
+}
+.core-experience .auth-method-grid .auth-method-tile:disabled {
+  opacity: .53;
+  cursor: not-allowed;
+}
+.core-experience .auth-method-grid .auth-method-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+}
+.core-experience .auth-method-grid .auth-method-icon svg {
+  display: block;
+  width: 27px;
+  height: 27px;
+}
+.core-experience .auth-method-grid .auth-method-label { white-space: nowrap; }
+.core-experience .auth-methods-note {
+  margin: 10px 0 14px;
+  color: #64758f;
+  font-size: 11px;
+  line-height: 1.5;
+}
+@media (max-width: 360px) {
+  .core-experience .auth-method-grid { gap: 6px; }
+  .core-experience .auth-method-grid .auth-method-tile { font-size: 11px; min-height: 72px; }
+}

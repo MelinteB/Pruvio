@@ -1,0 +1,15 @@
+/* Country prefix is a distinct control; national input stores no duplicated dial code. */
+.core-experience .phone-enrollment-field{margin:0 0 17px;min-width:0}
+.core-experience .phone-enrollment-label{display:block;font-size:12px;font-weight:700;color:#5b6780;margin:0 0 8px}
+.core-experience .phone-enrollment-label small{font-weight:400;margin-top:3px}
+.core-experience .phone-enrollment-reason{display:block;margin:-5px 0 9px;color:#6a7e98;font-size:11px;line-height:1.5}
+.core-experience .phone-enrollment-controls{display:grid;grid-template-columns:minmax(120px,.95fr) minmax(0,1.1fr);gap:8px;align-items:stretch}
+.core-experience .phone-enrollment-controls select{min-width:0;width:100%;padding:10px 5px;min-height:45px;font-size:12px}
+.core-experience .phone-enrollment-national{display:flex;min-width:0;align-items:center;border:1px solid #dce3f0;border-radius:10px;background:#fff;overflow:hidden}
+.core-experience .phone-enrollment-national:focus-within{outline:2px solid #8aaffc;outline-offset:1px}
+.core-experience .phone-enrollment-prefix{font-size:12px;font-weight:700;color:#2153a0;padding:0 7px;white-space:nowrap;border-right:1px solid #e3e8f1}
+.core-experience .phone-enrollment-national input{min-width:0;flex:1;width:100%;border:0;padding:10px 6px;min-height:43px;background:transparent;outline:0;font-size:13px}
+.core-experience .phone-enrollment-hint{display:block;margin:6px 0 0;font-size:11px;color:#667995;line-height:1.5}
+.core-experience .phone-enrollment-error{color:#bd2c45}
+.core-experience .phone-enrollment-national:has(input[aria-invalid="true"]){border-color:#bd2c45}
+@media(max-width:380px){.core-experience .phone-enrollment-controls{grid-template-columns:minmax(116px,.85fr) minmax(0,1fr);gap:5px}.core-experience .phone-enrollment-prefix{padding:0 5px}}

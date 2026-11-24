@@ -5,7 +5,8 @@ import { Fingerprint, ArrowRight, ScanLine, Users, ShieldCheck } from 'lucide-re
 import { request, send, credential, safeNext } from './api';
 import { invitedBillDestination } from './join-return';
 import { Field, Check, Message, useApp, useLoad } from './common';
-import SocialAuthOptions from './SocialAuthOptions.jsx';
+import LoginMethodGrid from './LoginMethodGrid';
+import PhoneNumberField from './PhoneNumberField';
 function usernameFromName(value){
   const parts=(value||'').trim().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().split(/\s+/).map(p=>p.replace(/[^a-z0-9-]/g,'')).filter(Boolean);
   const base=parts.length>1?parts[0]+'.'+parts[parts.length-1]:parts[0]||'';
@@ -25,7 +26,7 @@ export default function Auth({
   // The email verification screen may reload before registration is complete.
   // A pending invitation must survive that reload without leaving this browser tab.
   const returnTo = params.get('next') || pending?.next || '';
-  const [form, setForm] = useState(pending?{email:pending.email}:{}),
+  const [form, setForm] = useState(pending?{email:pending.email,phone_country:'RO'}:{phone_country:'RO'}),
     [usernameEdited,setUsernameEdited]=useState(false),
     [challenge, setChallenge] = useState(pending?.challenge||null),
     [error, setError] = useState(''),
@@ -40,7 +41,8 @@ export default function Auth({
     request('/auth/social/pending').then(data => {
       if (!active) return;
       setSocialPending(data);
-      if (data.name) setForm(current => ({...current, name: current.name || data.name}));
+      setForm(current => ({...current, name: current.name || data.name || '',
+        email: data.email || current.email || '',phone_country:current.phone_country || 'RO'}));
     }).catch(() => {if(active)setSocialNotice('Social registration expired. Start again or register with email.');});
     return () => {active = false;};
   }, [mode, params.get('social')]);
@@ -83,6 +85,11 @@ export default function Auth({
     // safeNext refuses external and protocol-relative destinations.
     navigate(invitedBillDestination(returnTo) || safeNext(returnTo), { replace: true });
   }
+  function chooseLoginMethod(provider) {
+    if (provider !== 'google' || !socialProviders.data?.providers?.some(p => p.id === 'google' && p.enabled === true)) return;
+    window.location.assign('/api/v1/auth/social/google/start?mode=login&next='+
+      encodeURIComponent(safeNext(returnTo)));
+  }
   async function submit(e) {
     e.preventDefault();
     await run(async () => {
@@ -98,6 +105,7 @@ export default function Auth({
           signed(await send('/auth/social/complete', {
             name:form.name,username:usernameEdited?form.username:undefined,
             phone_number:form.phone_number,
+            phone_country:form.phone_country || 'RO',
             accepted_terms:form.accepted_terms===true,
             accepted_privacy:form.accepted_privacy===true,
             marketing_opt_in:form.marketing_opt_in===true,
@@ -145,19 +153,16 @@ export default function Auth({
  {socialPending?.requires_email_otp && <Message>
   {socialPending.provider} does not provide a verified email. Complete the usual email and password registration below, then verify the email code to link your social identity.
  </Message>}
- {!challenge && (mode === 'login' || mode === 'register') &&
-  <SocialAuthOptions providers={socialProviders.data?.providers || []}
-    loading={!!socialProviders.loading} mode={mode} next={returnTo}/>}
- 
- {!challenge && (mode === 'login' || mode === 'register') &&
-  <p className="pruvs-social-email-divider">Or use your Pruvs email and password</p>}
  {done ? <Message>{t("Password updated.")} <Link to="/login">{t("Sign in")}</Link></Message> : <form onSubmit={submit}>
  {!challenge && mode === 'login' && <>{input('identifier', t("Username or email"))}{input('password', t("Password"), 'password')}</>}
- {!challenge && mode === 'register' && <>{input('name', t("Full name"))}{input('username', t("Username"))}<p className="muted">{t('Suggested from your full name. You can change it. If already taken, Pruvs adds a number.')}</p>{!socialPending?.can_complete && input('email', t("Email"), 'email')}{input('phone_number', t("Phone number"), 'tel')}{!socialPending?.can_complete && input('password', t("Password"), 'password')}<Check label={<span>{t("I accept the")} <Link to="/terms" target="_blank">{t("Terms")}</Link></span>} required checked={!!form.accepted_terms} onChange={e => set('accepted_terms', e.target.checked)} /><Check label={<span>{t("I accept the")} <Link to="/privacy" target="_blank">{t("Privacy Notice")}</Link></span>} required checked={!!form.accepted_privacy} onChange={e => set('accepted_privacy', e.target.checked)} /><Check label={t('Receive bill and payment notifications (optional)')} checked={!!form.notifications_opt_in} onChange={e => set('notifications_opt_in', e.target.checked)} /><p className="muted">{t('You can read bill activity in Inbox. Enable device push alerts later in Account, if your browser supports them.')}</p></>}
+ {!challenge && mode === 'register' && <>{input('name', t("Full name"))}{input('username', t("Username"))}<p className="muted">{t('Suggested from your full name. You can change it. If already taken, Pruvs adds a number.')}</p>{!socialPending?.can_complete && input('email', t("Email"), 'email')}{<PhoneNumberField phone={form.phone_number || ''} country={form.phone_country || 'RO'} onPhoneChange={value=>set('phone_number',value)} onCountryChange={value=>set('phone_country',value)} />}{!socialPending?.can_complete && input('password', t("Password"), 'password')}<Check label={<span>{t("I accept the")} <Link to="/terms" target="_blank">{t("Terms")}</Link></span>} required checked={!!form.accepted_terms} onChange={e => set('accepted_terms', e.target.checked)} /><Check label={<span>{t("I accept the")} <Link to="/privacy" target="_blank">{t("Privacy Notice")}</Link></span>} required checked={!!form.accepted_privacy} onChange={e => set('accepted_privacy', e.target.checked)} /><Check label={t('Receive bill and payment notifications (optional)')} checked={!!form.notifications_opt_in} onChange={e => set('notifications_opt_in', e.target.checked)} /><p className="muted">{t('You can read bill activity in Inbox. Enable device push alerts later in Account, if your browser supports them.')}</p></>}
  {!challenge && mode === 'reset' && input('email', t("Verified email"), 'email')}
  {challenge && <>{input('code', t("Email verification code"))}{mode === 'reset' && input('password', t("New password"), 'password')}</>}
  <button className="primary full" disabled={busy}>{busy ? t("Please wait…") : challenge ? t("Confirm") : mode === 'login' ? t("Sign in") : mode === 'register' ? t("Create account") : t("Send reset code")}<ArrowRight size={17} /></button>
  </form>}
+ {(mode==='login' || (mode==='register' && params.get('social') !== 'pending')) &&
+    <LoginMethodGrid enabledProviders={Object.fromEntries((socialProviders.data?.providers||[]).map(p=>[p.id,p.id==='google' && p.enabled===true]))}
+      disabled={busy} onChoose={chooseLoginMethod} />}
 
  {challenge && <button className="text-button" disabled={busy} onClick={() => run(async () => {
         const r = await send(mode === 'register' ? '/auth/register/resend' : '/auth/reset', {

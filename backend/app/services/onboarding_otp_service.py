@@ -18,6 +18,7 @@ from app.services.username_service import check_username_available, derive_avail
 from app.usernames import username_key
 from app.services.trusted_device_service import is_trusted_device
 from app.services.password_service import hash_password
+from app.services.phone_numbers import normalize_signup_phone
 
 
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
@@ -201,8 +202,9 @@ def create_or_update_registration_user(
     db: Session, *, phone_number: str, display_name: str, email: str,
     accepted_terms: bool, accepted_privacy: bool,
     username: str | None = None, marketing_opt_in: bool = False, password: str | None = None,
+    phone_country: str = 'RO',
 ) -> User:
-    phone = normalize_phone_number(phone_number)
+    phone = normalize_signup_phone(phone_number,phone_country)
     normalized_email = normalize_email(email)
     name = " ".join((display_name or "").split())
     if not name:
@@ -265,9 +267,11 @@ def start_registration(
     db: Session, *, phone_number: str, display_name: str, email: str,
     accepted_terms: bool, accepted_privacy: bool,
     username: str | None = None, marketing_opt_in: bool = False, password: str | None = None,
+    phone_country: str = 'RO',
 ) -> dict:
     user = create_or_update_registration_user(
         db, phone_number=phone_number, display_name=display_name, email=email,
+        phone_country=phone_country,
         username=username, accepted_terms=accepted_terms, accepted_privacy=accepted_privacy,
         marketing_opt_in=marketing_opt_in, password=password,
     )
