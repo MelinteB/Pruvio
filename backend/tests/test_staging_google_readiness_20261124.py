@@ -7,6 +7,7 @@ import importlib
 import os
 import pkgutil
 import time
+from datetime import datetime, timedelta
 
 import app.models
 import pytest
@@ -19,13 +20,19 @@ for module in pkgutil.iter_modules(app.models.__path__):
     importlib.import_module("app.models." + module.name)
 
 from app.db.database import Base
+from app.models.react_session import ReactSession
 from app.models.social_identity import SocialAccount
 from app.models.user import User
 from app.react_app import social_auth as social
 
 
-def _request(token=None):
-    headers = [(b"cookie", (social.SIGNUP_COOKIE + "=" + token).encode())] if token else []
+def _request(token=None, session_cookie=None):
+    cookies = []
+    if token:
+        cookies.append(social.SIGNUP_COOKIE + "=" + token)
+    if session_cookie:
+        cookies.append(social.COOKIE + "=" + session_cookie)
+    headers = [(b"cookie", "; ".join(cookies).encode())] if cookies else []
     return Request({"type": "http", "method": "POST",
                     "path": "/api/v1/auth/social/complete",
                     "query_string": b"", "headers": headers,
@@ -99,3 +106,65 @@ def test_other_provider_stays_disabled_even_when_google_enabled(ready_db):
     with pytest.raises(HTTPException) as err:
         social._ensure_provider("yahoo")
     assert err.value.status_code == 503
+
+
+def _signup_payload(phone="0722 123 456"):
+    return social.CompleteSignup(
+        name="Google Test Guest", phone_number=phone, phone_country="RO",
+        accepted_terms=True, accepted_privacy=True,
+    )
+
+
+def test_google_signup_allows_revoked_session_cookie(ready_db):
+    # A browser can keep its HttpOnly cookie after the server revokes the session.
+    request = _request(_pending("revoked-google@example.org"), session_cookie="revoked-token")
+    result = social.complete(_signup_payload(), request, Response(), db=ready_db)
+    assert result["user"]["email"] == "revoked-google@example.org"
+    assert ready_db.query(SocialAccount).count() == 1
+
+
+def test_google_signup_allows_expired_session_cookie(ready_db):
+    existing = User(
+        name="Expired User", email="expired@example.org", phone_number="+40720111111",
+        username="expired.user", username_key="expired.user", status="active",
+        is_email_verified=True,
+    )
+    ready_db.add(existing)
+    ready_db.flush()
+    ready_db.add(ReactSession(
+        token_hash=social.digest("expired-token"), user_id=existing.id,
+        csrf_hash=social.digest("test-csrf"),
+        expires_at=datetime.utcnow() - timedelta(minutes=1),
+    ))
+    ready_db.commit()
+    result = social.complete(
+        _signup_payload("0722 123 456"),
+        _request(_pending("new-after-expiry@example.org"), session_cookie="expired-token"),
+        Response(), db=ready_db,
+    )
+    assert result["user"]["email"] == "new-after-expiry@example.org"
+    assert ready_db.query(User).count() == 2
+
+
+def test_google_signup_rejects_genuinely_signed_in_user(ready_db):
+    existing = User(
+        name="Active User", email="active@example.org", phone_number="+40720222222",
+        username="active.user", username_key="active.user", status="active",
+        is_email_verified=True,
+    )
+    ready_db.add(existing)
+    ready_db.flush()
+    ready_db.add(ReactSession(
+        token_hash=social.digest("active-token"), user_id=existing.id,
+        csrf_hash=social.digest("test-csrf"),
+        expires_at=datetime.utcnow() + timedelta(hours=1),
+    ))
+    ready_db.commit()
+    with pytest.raises(HTTPException) as exc:
+        social.complete(
+            _signup_payload(),
+            _request(_pending("blocked@example.org"), session_cookie="active-token"),
+            Response(), db=ready_db,
+        )
+    assert exc.value.status_code == 409
+    assert ready_db.query(User).count() == 1
