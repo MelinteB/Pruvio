@@ -9,6 +9,14 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+import importlib
+import pkgutil
+import app.models
+
+# Populate SQLAlchemy's complete registry before Base.metadata.create_all.
+for _model in pkgutil.iter_modules(app.models.__path__):
+    importlib.import_module("app.models." + _model.name)
+
 from app.db.database import Base
 from app.models.social_identity import SocialAccount
 from app.models.user import User
