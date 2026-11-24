@@ -45,35 +45,45 @@ Before activation, `GET /api/v1/auth/social/providers` should report
 `google.enabled=false` unless the feature flags, credentials and schema
 are all ready.
 
-## 3. Set environment secrets in Render
+## 3. Link the Google environment group and configure three keys
 
-On the **Pruvs** combined production web service:
+Create / keep the Render environment group `PRUVS-PROD-OAUTH-GOOGLE` and
+**link it** to the production **Pruvs** web service in Environment settings.
+Use **exactly these names**; do not put credentials in source code:
 
 ```dotenv
-PUBLIC_BASE_URL=https://pruvs.io
-PRUVS_SOCIAL_AUTH_STATE_SECRET=<random secret, minimum 32 characters>
-PRUVS_SOCIAL_GOOGLE_CLIENT_ID=<client ID from Google Cloud>
-PRUVS_SOCIAL_GOOGLE_CLIENT_SECRET=<client secret from Google Cloud>
-PRUVS_SOCIAL_LOGIN_ENABLED=true
-PRUVS_SOCIAL_GOOGLE_ENABLED=true
+GOOGLE_CLIENT_ID=<Google Web OAuth client ID>
+GOOGLE_CLIENT_SECRET=<Google Web OAuth client secret>
+GOOGLE_ENABLED=false
 ```
 
-Generate a secure state secret from PowerShell locally and copy into Render
-without pasting it into chat:
+The Google code now reads these keys directly, matching the environment group.
+Google is **disabled by default** until you explicitly change
+`GOOGLE_ENABLED=true`. Previous `PRUVS_SOCIAL_*` Google names are not used.
+`PRUVS_SOCIAL_LOGIN_ENABLED` is not required for Google.
 
-```powershell
-$r = [byte[]]::new(48)
-$g = [Security.Cryptography.RandomNumberGenerator]::Create()
-try { $g.GetBytes($r) } finally { $g.Dispose() }
-[Convert]::ToBase64String($r) | Set-Clipboard
-```
+**No fourth Google secret is needed:** the backend derives a domain-separated
+OAuth state-cookie signing key from `GOOGLE_CLIENT_SECRET` with HMAC-SHA256.
+Rotating the client secret invalidates unexpired OAuth state tickets and
+onboarding cookies. Keep the secret private and never paste it into chat.
 
-Use the staging service's hostname and the **staging Google OAuth client**
-credentials for staging. Keep the feature flags `false` until its schema
-migration and callback tests succeed.
+Keep `PUBLIC_BASE_URL=https://pruvs.io` on production (or use the documented
+production default). The exact Google Cloud callback remains:
+`https://pruvs.io/api/v1/auth/social/google/callback`.
 
-**Do not rotate** unrelated `RESEND_API_KEY`, `RESEND_FROM_EMAIL`,
-`DATABASE_URL`, `BUSINESS_DATABASE_URL` or Pruvs Business settings.
+For staging, use a **separate Google OAuth client**, and the same three short
+names in the staging service (prefer a distinct `PRUVS-STAGE-OAUTH-GOOGLE`
+environment group), with `PUBLIC_BASE_URL` set to the staging hostname.
+Never attach production credentials to staging.
+
+Keep `GOOGLE_ENABLED=false` until Google Cloud redirect setup,
+the social-account table, and staging callback tests have succeeded. Avoid
+rotating unrelated Resend, Core DB, or Business credentials.
+
+**Future provider naming:** use concise provider prefixes such as
+`LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET`, `LINKEDIN_ENABLED`,
+and `YAHOO_CLIENT_ID`, `YAHOO_CLIENT_SECRET`, `YAHOO_ENABLED`.
+These **are conventions, not implemented provider configurations**.
 
 ## 4. Acceptance tests before production activation
 
