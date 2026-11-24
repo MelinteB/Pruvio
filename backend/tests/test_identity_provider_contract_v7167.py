@@ -24,7 +24,7 @@ def test_excluded_providers_fail_closed(monkeypatch, provider):
     assert not social._configured(provider)
 
 def test_linkedin_oidc_metadata():
-    assert social.ISSUER["linkedin"] == ("https://www.linkedin.com",)
+    assert social.ISSUER["linkedin"] == ("https://www.linkedin.com/oauth", "https://www.linkedin.com")
     assert social.JWKS["linkedin"] == "https://www.linkedin.com/oauth/openid/jwks"
     assert set(social.SCOPES["linkedin"].split()) == {"openid", "profile", "email"}
 
@@ -115,3 +115,39 @@ def test_callback_provider_failure_redirects_without_authenticating(monkeypatch,
         social.callback(provider, request, code="test-code", state="wrong", db=None)
     assert invalid_state.value.status_code == 400
 
+
+
+@pytest.mark.parametrize("provider,issuer,algorithm", [
+    ("yahoo", "https://api.login.yahoo.com", "ES256"),
+    ("yahoo", "https://api.login.yahoo.com", "RS256"),
+    ("linkedin", "https://www.linkedin.com/oauth", "RS256"),
+    ("linkedin", "https://www.linkedin.com", "RS256"),
+])
+def test_oidc_provider_published_metadata_and_nonce(monkeypatch, caplog, provider, issuer, algorithm):
+    import time
+    from types import SimpleNamespace
+    from cryptography.hazmat.primitives.asymmetric import ec, rsa
+    from fastapi import HTTPException
+    key = (ec.generate_private_key(ec.SECP256R1()) if algorithm == "ES256"
+           else rsa.generate_private_key(public_exponent=65537, key_size=2048))
+    monkeypatch.setattr(social.jwt, "PyJWKClient", lambda url: SimpleNamespace(
+        get_signing_key_from_jwt=lambda token: SimpleNamespace(key=key.public_key())))
+    now = int(time.time())
+    claims = {"iss": issuer, "aud": "client", "sub": "subject",
+              "iat": now, "exp": now + 300, "nonce": "expected"}
+    def token(data):
+        return {"id_token": social.jwt.encode(data, key, algorithm=algorithm)}
+    assert social._oidc_identity(provider, token(claims), "client", "expected")["subject"] == "subject"
+    with pytest.raises(HTTPException):
+        social._oidc_identity(provider, token({**claims, "nonce": "private-nonce"}), "client", "expected")
+    assert "reason=nonce_mismatch" in caplog.text
+    assert "private-nonce" not in caplog.text
+    with pytest.raises(HTTPException):
+        social._oidc_identity(provider, token({k:v for k,v in claims.items() if k != "nonce"}), "client", "expected")
+    assert "reason=nonce_missing" in caplog.text
+    with pytest.raises(HTTPException):
+        social._oidc_identity(provider, token({**claims, "iss": "https://wrong.example"}), "client", "expected")
+    assert "reason=issuer" in caplog.text
+    with pytest.raises(HTTPException):
+        social._oidc_identity(provider, token({**claims, "aud": "wrong-client"}), "client", "expected")
+    assert "reason=audience" in caplog.text

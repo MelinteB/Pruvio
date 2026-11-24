@@ -89,7 +89,8 @@ JWKS = {
 }
 ISSUER = {
     "google": ("https://accounts.google.com", "accounts.google.com"),
-    "linkedin": ("https://www.linkedin.com",),
+    # Live discovery and the provider documentation publish these exact issuers.
+    "linkedin": ("https://www.linkedin.com/oauth", "https://www.linkedin.com"),
     "apple": ("https://appleid.apple.com",),
     "yahoo": ("https://api.login.yahoo.com",),
 }
@@ -328,21 +329,41 @@ def _fetch(url, *, method="GET", params=None, data=None, headers=None, auth=None
 
 def _oidc_identity(provider, tokens, client_id, nonce):
     raw = tokens.get("id_token")
-    if not isinstance(raw, str) or len(raw) > 12000:
+    if not isinstance(raw, str) or not raw or len(raw) > 12000:
+        logger.warning("social_oidc_failed provider=%s reason=missing_or_invalid_id_token", provider)
         raise HTTPException(502, "Identity provider did not return an ID token")
     try:
         jwks = jwt.PyJWKClient(JWKS[provider])
         signing_key = jwks.get_signing_key_from_jwt(raw)
-        claims = jwt.decode(raw, signing_key.key, algorithms=["RS256"],
+        # Allow only provider-published asymmetric signing algorithms.
+        algorithms = ["ES256", "RS256"] if provider == "yahoo" else ["RS256"]
+        claims = jwt.decode(raw, signing_key.key, algorithms=algorithms,
                             issuer=list(ISSUER[provider]), audience=client_id,
                             options={"require": ["iss", "aud", "sub", "exp", "iat"]},
                             leeway=30)
-        if not secrets.compare_digest(str(claims.get("nonce", "")), nonce):
-            raise ValueError("OIDC nonce mismatch")
-    except (jwt.PyJWTError, ValueError, TypeError, jwt.PyJWKClientError, OSError):
+    except (jwt.PyJWTError, ValueError, TypeError, jwt.PyJWKClientError, OSError) as exc:
+        # Only fixed reason labels are logged, never token contents or exception messages.
+        reason = "jwt_verification_failed"
+        for error_type, label in ((jwt.InvalidIssuerError, "issuer"),
+                                  (jwt.InvalidAudienceError, "audience"),
+                                  (jwt.InvalidAlgorithmError, "algorithm"),
+                                  (jwt.InvalidSignatureError, "signature"),
+                                  (jwt.ExpiredSignatureError, "expired"),
+                                  (jwt.MissingRequiredClaimError, "missing_claim"),
+                                  (jwt.PyJWKClientError, "jwks")):
+            if isinstance(exc, error_type):
+                reason = label
+                break
+        logger.warning("social_oidc_failed provider=%s reason=%s", provider, reason)
         raise HTTPException(502, "Identity provider token verification failed") from None
+    actual_nonce = claims.get("nonce")
+    if not isinstance(actual_nonce, str) or not secrets.compare_digest(actual_nonce, nonce):
+        logger.warning("social_oidc_failed provider=%s reason=%s", provider,
+                       "nonce_missing" if actual_nonce is None else "nonce_mismatch")
+        raise HTTPException(502, "Identity provider token verification failed")
     subject = str(claims.get("sub", ""))
     if not subject or len(subject) > 255:
+        logger.warning("social_oidc_failed provider=%s reason=invalid_subject", provider)
         raise HTTPException(502, "Identity provider subject is invalid")
     return {"subject": subject, "name": str(claims.get("name") or "")[:255],
             "email": str(claims.get("email") or "").lower()[:255],
@@ -372,6 +393,7 @@ def _oauth_identity(provider, code, client_id, secret, redirect_uri, flow):
                         else "https://api.login.yahoo.com/openid/v1/userinfo")
             profile = _fetch(endpoint, headers={"Authorization": "Bearer " + access})
             if str(profile.get("sub") or "") != identity["subject"]:
+                logger.warning("social_oidc_failed provider=%s reason=userinfo_subject_mismatch", provider)
                 raise HTTPException(502, "Identity provider subject mismatch")
             if profile.get("name"):
                 identity["name"] = str(profile["name"])[:255]
