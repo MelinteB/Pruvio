@@ -2,7 +2,7 @@ import { t } from "./i18n";
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Fingerprint, ArrowRight, ScanLine, Users, ShieldCheck } from 'lucide-react';
-import { send, credential, safeNext } from './api';
+import { request, send, credential, safeNext } from './api';
 import { invitedBillDestination } from './join-return';
 import { Field, Check, Message, useApp } from './common';
 import LoginMethodGrid from './LoginMethodGrid';
@@ -31,7 +31,37 @@ export default function Auth({
     [challenge, setChallenge] = useState(pending?.challenge||null),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
-    [done, setDone] = useState(false);
+    [done, setDone] = useState(false),
+    [socialProviders, setSocialProviders] = useState({}),
+    [socialPending, setSocialPending] = useState(null),
+    [socialNotice, setSocialNotice] = useState('');
+  useEffect(() => {
+    if (mode !== 'login' && mode !== 'register') return;
+    let alive = true;
+    request('/auth/social/providers').then(data => {
+      if (alive) setSocialProviders(Object.fromEntries(
+        (data.providers || []).map(provider => [provider.id, provider.enabled === true])
+      ));
+    }).catch(() => { if (alive) setSocialProviders({}); });
+    return () => { alive = false; };
+  }, [mode]);
+
+  useEffect(() => {
+    if (mode !== 'register' || params.get('social') !== 'pending') return;
+    let alive = true;
+    request('/auth/social/pending').then(data => {
+      if (!alive) return;
+      setSocialPending(data);
+      setForm(previous => ({
+        ...previous, name: previous.name || data.name || '',
+        email: data.email || previous.email || '',
+        phone_country: previous.phone_country || 'RO'
+      }));
+    }).catch(() => {
+      if (alive) setSocialNotice('Google registration expired. Please start again from Sign in.');
+    });
+    return () => { alive = false; };
+  }, [mode, params.get('social')]);
   useEffect(()=>{if(mode==='login')return;if(challenge&&!done)sessionStorage.setItem(storageKey,JSON.stringify({email:challenge.email||form.email,challenge,next:safeNext(returnTo),expires:Date.now()+15*60*1000}));else sessionStorage.removeItem(storageKey)},[challenge,done,returnTo]);
   const set = (k, v) => {
     if(k==='username')setUsernameEdited(true);
@@ -71,15 +101,9 @@ export default function Auth({
     navigate(invitedBillDestination(returnTo) || safeNext(returnTo), { replace: true });
   }
   function chooseLoginMethod(provider) {
-    if (provider === 'email') {
-      document.querySelector('.auth-card input')?.focus();
-      return;
-    }
-    // Only route to a provider once the server declares its verified OAuth flow ready.
-    // Do not enable flags for UI-only integrations; the backend must enforce that too.
-    if (config?.social_login_providers?.[provider] !== true) return;
+    if (socialProviders[provider] !== true) return;
     window.location.assign('/api/v1/auth/social/' + encodeURIComponent(provider)
-      + '/start?next=' + encodeURIComponent(safeNext(returnTo)));
+      + '/start?mode=login&next=' + encodeURIComponent(safeNext(returnTo)));
   }
   async function submit(e) {
     e.preventDefault();
@@ -92,6 +116,19 @@ export default function Auth({
         return;
       }
       if (mode === 'register') {
+        if (socialPending?.can_complete) {
+          signed(await send('/auth/social/complete', {
+            name: form.name,
+            username: usernameEdited ? form.username : undefined,
+            phone_number: form.phone_number,
+            phone_country: form.phone_country || 'RO',
+            accepted_terms: form.accepted_terms === true,
+            accepted_privacy: form.accepted_privacy === true,
+            marketing_opt_in: form.marketing_opt_in === true,
+            notifications_opt_in: form.notifications_opt_in === true,
+          }), true);
+          return;
+        }
         if (challenge) signed(await send('/auth/register/verify', {
           email: challenge.email || form.email,
           code: form.code,
@@ -123,14 +160,19 @@ export default function Auth({
   }
   return <div className="auth-layout"><div className="auth-story"><span className="eyebrow">{t("LESS MATH. MORE MOMENTS.")}</span><h1>{t("Good company.")} <br /> {t("Fair shares.")}</h1><p>{t("From the first scan to the last payment, keep every shared bill clear.")}</p><div className="story-card"><ScanLine /><div><strong>{t("Scan once")}</strong><p>{t("Keep the original receipt and review every item.")}</p></div></div><div className="story-card"><Users /><div><strong>{t("Split together")}</strong><p>{t("Everyone picks their items. Totals stay in sync.")}</p></div></div><div className="story-card"><ShieldCheck /><div><strong>{t("Stay in control")}</strong><p>{t("Your account, your history, your notification choices.")}</p></div></div></div>
  <section className="panel auth-card"><div className="eyebrow">{t("WELCOME TO PRUVS")}</div><h1>{mode === 'register' ? t("Create your account") : mode === 'reset' ? t("Reset your password") : t("Welcome back")}</h1><p className="muted">{challenge ? t("Enter the code sent to your email.") : mode === 'login' ? t("Your receipts and shared moments, in one place.") : t("Use an email address you can verify.")}</p>
- {error && <Message error={error} />}{done ? <Message>{t("Password updated.")} <Link to="/login">{t("Sign in")}</Link></Message> : <form onSubmit={submit}>
+ {error && <Message error={error} />}
+ {socialNotice && <Message error={socialNotice}/>}
+ {params.get('social_error') && <Message error="Google sign-in did not complete. Please try again."/>}
+ {socialPending?.can_complete && <Message>Google verified your email: {socialPending.email}. Add a phone number for sharing and complete your profile.</Message>}
+ {done ? <Message>{t("Password updated.")} <Link to="/login">{t("Sign in")}</Link></Message> : <form onSubmit={submit}>
  {!challenge && mode === 'login' && <>{input('identifier', t("Username or email"))}{input('password', t("Password"), 'password')}</>}
- {!challenge && mode === 'register' && <>{input('name', t("Full name"))}{input('username', t("Username"))}<p className="muted">{t('Suggested from your full name. You can change it. If already taken, Pruvs adds a number.')}</p>{input('email', t("Email"), 'email')}{<PhoneNumberField phone={form.phone_number || ''} country={form.phone_country || 'RO'} onPhoneChange={value => set('phone_number', value)} onCountryChange={value => set('phone_country', value)} />}{input('password', t("Password"), 'password')}<Check label={<span>{t("I accept the")} <Link to="/terms" target="_blank">{t("Terms")}</Link></span>} required checked={!!form.accepted_terms} onChange={e => set('accepted_terms', e.target.checked)} /><Check label={<span>{t("I accept the")} <Link to="/privacy" target="_blank">{t("Privacy Notice")}</Link></span>} required checked={!!form.accepted_privacy} onChange={e => set('accepted_privacy', e.target.checked)} /><Check label={t('Receive bill and payment notifications (optional)')} checked={!!form.notifications_opt_in} onChange={e => set('notifications_opt_in', e.target.checked)} /><p className="muted">{t('You can read bill activity in Inbox. Enable device push alerts later in Account, if your browser supports them.')}</p></>}
+ {!challenge && mode === 'register' && <>{input('name', t("Full name"))}{input('username', t("Username"))}<p className="muted">{t('Suggested from your full name. You can change it. If already taken, Pruvs adds a number.')}</p>{!socialPending?.can_complete && input('email', t("Email"), 'email')}{<PhoneNumberField phone={form.phone_number || ''} country={form.phone_country || 'RO'} onPhoneChange={value => set('phone_number', value)} onCountryChange={value => set('phone_country', value)} />}{!socialPending?.can_complete && input('password', t("Password"), 'password')}<Check label={<span>{t("I accept the")} <Link to="/terms" target="_blank">{t("Terms")}</Link></span>} required checked={!!form.accepted_terms} onChange={e => set('accepted_terms', e.target.checked)} /><Check label={<span>{t("I accept the")} <Link to="/privacy" target="_blank">{t("Privacy Notice")}</Link></span>} required checked={!!form.accepted_privacy} onChange={e => set('accepted_privacy', e.target.checked)} /><Check label={t('Receive bill and payment notifications (optional)')} checked={!!form.notifications_opt_in} onChange={e => set('notifications_opt_in', e.target.checked)} /><p className="muted">{t('You can read bill activity in Inbox. Enable device push alerts later in Account, if your browser supports them.')}</p></>}
  {!challenge && mode === 'reset' && input('email', t("Verified email"), 'email')}
  {challenge && <>{input('code', t("Email verification code"))}{mode === 'reset' && input('password', t("New password"), 'password')}</>}
  <button className="primary full" disabled={busy}>{busy ? t("Please wait…") : challenge ? t("Confirm") : mode === 'login' ? t("Sign in") : mode === 'register' ? t("Create account") : t("Send reset code")}<ArrowRight size={17} /></button>
  </form>}
- {mode === 'login' && <LoginMethodGrid enabledProviders={config?.social_login_providers} disabled={busy} onChoose={chooseLoginMethod} />}
+ {(mode === 'login' || (mode === 'register' && params.get('social') !== 'pending')) &&
+   <LoginMethodGrid enabledProviders={socialProviders} disabled={busy} onChoose={chooseLoginMethod} />}
  {challenge && <button className="text-button" disabled={busy} onClick={() => run(async () => {
         const r = await send(mode === 'register' ? '/auth/register/resend' : '/auth/reset', {
           email: form.email

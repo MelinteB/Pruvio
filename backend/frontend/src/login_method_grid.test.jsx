@@ -25,24 +25,22 @@ describe('Pruvs Core six-method sign-in grid', () => {
 
   it('has exactly six unique methods in the agreed 3x2 order', () => {
     expect(LOGIN_METHODS.map(method => method.id)).toEqual([
-      'email', 'google', 'yahoo', 'facebook', 'instagram', 'tiktok',
+      'google', 'linkedin', 'yahoo', 'facebook', 'instagram', 'tiktok',
     ]);
     render(<LoginMethodGrid onChoose={vi.fn()} />);
     expect(screen.getAllByRole('button')).toHaveLength(6);
     expect(screen.getByRole('group', {name:'Choose how to sign in'})).toBeTruthy();
   });
 
-  it('keeps email working but blocks every unconfigured OAuth provider', () => {
+  it('leaves all social providers unavailable until the backend enables one', () => {
     const onChoose = vi.fn();
     render(<LoginMethodGrid onChoose={onChoose} />);
-    fireEvent.click(screen.getByRole('button', {name:'Email'}));
-    expect(onChoose).toHaveBeenCalledExactlyOnceWith('email');
-    for (const name of ['Google', 'Yahoo', 'Facebook', 'Instagram', 'TikTok']) {
+    for (const name of ['Google', 'LinkedIn', 'Yahoo', 'Facebook', 'Instagram', 'TikTok']) {
       const button = screen.getByRole('button', {name: name+' — setup required'});
       expect(button.disabled).toBe(true);
       fireEvent.click(button);
     }
-    expect(onChoose).toHaveBeenCalledTimes(1);
+    expect(onChoose).not.toHaveBeenCalled();
   });
 
   it('enables a social method only when the server explicitly reports readiness', () => {
