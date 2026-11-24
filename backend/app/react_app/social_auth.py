@@ -33,6 +33,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db.database import get_db
 from app.legal_content import TERMS_VERSION, PRIVACY_VERSION
+from app.models.react_session import ReactSession
 from app.models.social_identity import SocialAccount
 from app.models.user import User
 from app.react_app.auth import (
@@ -159,6 +160,22 @@ def _ensure_provider(provider):
 def _schema_ready(db):
     if not inspect(db.get_bind()).has_table(SocialAccount.__tablename__):
         raise HTTPException(503, "Social identity database migration is not applied")
+
+
+def _has_live_pruvs_session(request: Request, db) -> bool:
+    """Only an active authenticated Pruvs session blocks new social registration.
+
+    A stale, revoked or expired session cookie is not a signed-in user. Requiring
+    the browser to manually clear such cookies incorrectly rejects new Google users.
+    """
+    raw_token = request.cookies.get(COOKIE, "")
+    if not raw_token:
+        return False
+    session = db.get(ReactSession, digest(raw_token))
+    if not session or session.expires_at <= datetime.utcnow():
+        return False
+    user = db.get(User, session.user_id, populate_existing=True)
+    return bool(user and user.status == "active")
 
 
 def _origin():
@@ -486,7 +503,7 @@ def complete(data: CompleteSignup, request: Request, response: Response,
         raise HTTPException(503, "Social registration is disabled")
     _schema_ready(db)
     limit(db,request,"social-registration",10)
-    if request.cookies.get(COOKIE):
+    if _has_live_pruvs_session(request, db):
         raise HTTPException(409, "Sign out first or connect this provider in Account")
     ticket = _unseal(request.cookies.get(SIGNUP_COOKIE, ""),max_age=900)
     if not ticket.get("verified") or not ticket.get("email") or ticket.get("provider") not in ("google","yahoo","apple"):
@@ -541,7 +558,7 @@ def complete_email(data: CompleteEmailSignup, request: Request, response: Respon
         raise HTTPException(503, "Social registration is disabled")
     _schema_ready(db)
     limit(db, request, "social-registration-otp", 15)
-    if request.cookies.get(COOKIE):
+    if _has_live_pruvs_session(request, db):
         raise HTTPException(409, "Sign out before completing social registration")
     ticket = _unseal(request.cookies.get(SIGNUP_COOKIE, ""), max_age=900)
     provider = str(ticket.get("provider") or "")
