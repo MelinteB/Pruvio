@@ -104,10 +104,17 @@ class CompleteSignup(BaseModel):
 
 
 def _state_secret():
+    # Preserve the staging-only shared secret for other experimental providers.
     key = os.getenv("PRUVS_SOCIAL_AUTH_STATE_SECRET", "")
-    if len(key) < 32:
-        raise HTTPException(503, "Social authentication is not configured")
-    return key.encode("utf-8")
+    if len(key) >= 32:
+        return key.encode("utf-8")
+    # Google works with the same three short names as production. Derive a
+    # domain-separated signing key; no fourth Google env variable is required.
+    secret = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
+    if secret:
+        return hmac.new(secret.encode("utf-8"),
+                        b"pruvs/google/oauth-state/v1", hashlib.sha256).digest()
+    raise HTTPException(503, "Social authentication is not configured")
 
 
 def _globally_enabled():
@@ -117,14 +124,19 @@ def _globally_enabled():
 def _client(provider):
     if provider not in PROVIDERS:
         raise HTTPException(404, "Provider not supported")
-    prefix = "PRUVS_SOCIAL_" + provider.upper()
+    # Match the production Google group exactly; other staging providers
+    # retain their original opt-in settings and remain disabled in the UI.
+    prefix = "GOOGLE" if provider == "google" else "PRUVS_SOCIAL_" + provider.upper()
     return (os.getenv(prefix + "_CLIENT_ID", "").strip(),
             os.getenv(prefix + "_CLIENT_SECRET", "").strip(),
-            os.getenv(prefix + "_ENABLED", "false").lower() == "true")
+            os.getenv(prefix + "_ENABLED", "false").strip().lower() == "true")
 
 
 def _configured(provider):
     client_id, secret, enabled = _client(provider)
+    if provider == "google":
+        # No legacy PRUVS_SOCIAL_* switch or separate state secret needed.
+        return bool(enabled and client_id and secret)
     common = (_globally_enabled() and enabled and client_id and
               len(os.getenv("PRUVS_SOCIAL_AUTH_STATE_SECRET", "")) >= 32)
     if provider == "apple":

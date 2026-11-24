@@ -24,12 +24,28 @@ from app.react_app import social_auth as social
 
 
 def test_social_disabled_by_default(monkeypatch):
-    monkeypatch.delenv("PRUVS_SOCIAL_LOGIN_ENABLED", raising=False)
-    monkeypatch.setenv("PRUVS_SOCIAL_GOOGLE_CLIENT_ID","test-client")
-    monkeypatch.setenv("PRUVS_SOCIAL_GOOGLE_CLIENT_SECRET","test-secret")
-    monkeypatch.setenv("PRUVS_SOCIAL_GOOGLE_ENABLED","true")
-    monkeypatch.setenv("PRUVS_SOCIAL_AUTH_STATE_SECRET","x"*40)
+    monkeypatch.delenv("GOOGLE_ENABLED", raising=False)
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "test-secret")
     assert not social._configured("google")
+
+
+def test_google_needs_only_short_environment_names(monkeypatch):
+    for old in ("PRUVS_SOCIAL_GOOGLE_CLIENT_ID", "PRUVS_SOCIAL_GOOGLE_CLIENT_SECRET",
+                "PRUVS_SOCIAL_GOOGLE_ENABLED", "PRUVS_SOCIAL_LOGIN_ENABLED",
+                "PRUVS_SOCIAL_AUTH_STATE_SECRET"):
+        monkeypatch.delenv(old, raising=False)
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "unit-test-google-secret")
+    monkeypatch.setenv("GOOGLE_ENABLED", "true")
+    assert social._configured("google")
+    assert social._client("google") == ("test-client", "unit-test-google-secret", True)
+    assert not social._configured("yahoo")
+    ticket = social._seal({"iat":int(time.time()), "provider":"google"})
+    assert social._unseal(ticket, max_age=600)["provider"] == "google"
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "rotated-google-secret")
+    with pytest.raises(HTTPException):
+        social._unseal(ticket, max_age=600)
 
 
 def test_signed_state_rejects_tamper_and_expiry(monkeypatch):
