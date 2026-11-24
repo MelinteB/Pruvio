@@ -60,6 +60,7 @@ export default function Account() {
   const socials = useLoad(() => request('/auth/social/accounts'), []);
   const socialProviders = useLoad(() => request('/auth/social/providers'), []);
   const linkedSocials = socials.data?.accounts || [];
+  const socialCallbackError = new URLSearchParams(useLocation().search).has('social_error');
   async function run(fn, msg = t("Saved."), scope = '') {
     setBusy(true);
     setError('');
@@ -98,6 +99,7 @@ export default function Account() {
   <Panel title="Social sign-in and connected identities">
     <p className="muted">Only explicitly linked identities can sign in. Matching an email never connects accounts automatically.</p>
     {socials.error && <Message error={socials.error}/>}
+    {socialCallbackError && <Message error={t("Social sign-in did not complete. Please try again.")}/>}
 
     {linkedSocials.length > 0 && <div className="list">
       {linkedSocials.map(account => <div className="list-row" key={account.provider}>
