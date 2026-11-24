@@ -8,7 +8,7 @@ import { Context } from './common';
 
 afterEach(() => cleanup());
 
-describe('Pruvs Core six-method sign-in grid', () => {
+describe('Pruvs Core social sign-in grid', () => {
   it('shows the login methods immediately below the main Sign in form', () => {
     const { container } = render(<MemoryRouter>
       <Context.Provider value={{ config: { passkeys: false }, accept: vi.fn() }}>
@@ -20,22 +20,22 @@ describe('Pruvs Core six-method sign-in grid', () => {
     expect(form).toBeTruthy();
     expect(form.querySelector('button.primary').textContent).toContain('Sign in');
     expect(form.nextElementSibling).toBe(methodGrid.parentElement);
-    expect(container.querySelectorAll('.auth-method-tile')).toHaveLength(6);
+    expect(container.querySelectorAll('.auth-method-tile')).toHaveLength(5);
   });
 
-  it('has exactly six unique methods in the agreed 3x2 order', () => {
+  it('has exactly five supported social methods in the agreed order', () => {
     expect(LOGIN_METHODS.map(method => method.id)).toEqual([
-      'google', 'linkedin', 'yahoo', 'facebook', 'instagram', 'tiktok',
+      'google', 'linkedin', 'yahoo', 'facebook', 'tiktok',
     ]);
     render(<LoginMethodGrid onChoose={vi.fn()} />);
-    expect(screen.getAllByRole('button')).toHaveLength(6);
+    expect(screen.getAllByRole('button')).toHaveLength(5);
     expect(screen.getByRole('group', {name:'Choose how to sign in'})).toBeTruthy();
   });
 
   it('leaves all social providers unavailable until the backend enables one', () => {
     const onChoose = vi.fn();
     render(<LoginMethodGrid onChoose={onChoose} />);
-    for (const name of ['Google', 'LinkedIn', 'Yahoo', 'Facebook', 'Instagram', 'TikTok']) {
+    for (const name of ['Google', 'LinkedIn', 'Yahoo', 'Facebook', 'TikTok']) {
       const button = screen.getByRole('button', {name: name+' — setup required'});
       expect(button.disabled).toBe(true);
       fireEvent.click(button);
@@ -45,9 +45,12 @@ describe('Pruvs Core six-method sign-in grid', () => {
 
   it('enables a social method only when the server explicitly reports readiness', () => {
     const onChoose = vi.fn();
-    render(<LoginMethodGrid enabledProviders={{google:true,yahoo:false}} onChoose={onChoose}/>);
+    render(<LoginMethodGrid enabledProviders={{google:true,linkedin:true,yahoo:false}} onChoose={onChoose}/>);
     fireEvent.click(screen.getByRole('button',{name:'Google'}));
     expect(onChoose).toHaveBeenCalledExactlyOnceWith('google');
+    fireEvent.click(screen.getByRole('button',{name:'LinkedIn'}));
+    expect(onChoose).toHaveBeenLastCalledWith('linkedin');
+    expect(screen.queryByRole('button',{name:/Instagram|Apple/})).toBeNull();
     expect(screen.getByRole('button',{name:'Yahoo — setup required'}).disabled).toBe(true);
   });
 
