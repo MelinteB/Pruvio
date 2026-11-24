@@ -159,3 +159,19 @@ def test_google_linking_other_users_identity_is_forbidden(database,monkeypatch):
     with pytest.raises(HTTPException) as exc:
         oauth.start(req(method="GET"),mode="link",db=database)
     assert exc.value.status_code == 401
+
+
+def test_new_google_customer_keeps_bill_invite_until_phone_enrollment(database, monkeypatch):
+    monkeypatch.setattr(oauth, "_exchange_code", lambda *_args: {
+        "subject":"new-google-sub", "name":"Invited Guest", "email":"invited@example.org",
+    })
+    flow = {"iat":int(time.time()),"mode":"login","state":"invite-state",
+            "verifier":"invite-verifier","nonce":"invite-nonce",
+            "next":"/join/bill-token?source=share","uid":None,"session_hash":""}
+    response = oauth.callback(
+        req("pruvs_google_flow=" + oauth._seal(flow), method="GET"),
+        code="valid-code", state="invite-state", db=database)
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/register?social=pending&next=%2Fjoin%2Fbill-token%3Fsource%3Dshare")
+    assert database.query(User).count() == 0
