@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 
 import app.models
 import pytest
+import httpx
 from fastapi import HTTPException, Response
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -168,3 +169,113 @@ def test_google_signup_rejects_genuinely_signed_in_user(ready_db):
         )
     assert exc.value.status_code == 409
     assert ready_db.query(User).count() == 1
+
+
+def _google_callback_request(*, session_cookie=None, pending_ticket=None, mode="login", next_path="/rewards"):
+    flow = {
+        "iat":int(time.time()), "provider":"google", "state":"unit-test-oauth-state",
+        "mode":mode, "next":next_path,
+    }
+    cookies = [social.STATE_COOKIE + "=" + social._seal(flow)]
+    if session_cookie:
+        cookies.append(social.COOKIE + "=" + session_cookie)
+    if pending_ticket:
+        cookies.append(social.SIGNUP_COOKIE + "=" + pending_ticket)
+    request = Request({
+        "type":"http", "method":"GET", "path":"/api/v1/auth/social/google/callback",
+        "query_string":b"", "headers":[(b"cookie", "; ".join(cookies).encode())],
+        "client":("127.0.0.1", 54321), "scheme":"https",
+        "server":("pruvs-core-staging.onrender.com",443),
+    })
+    return request
+
+
+def _simulated_duplicate_google_code(monkeypatch):
+    def _raise_reused_code(*args, **kwargs):
+        raise social.OAuthCodeRejected()
+    monkeypatch.setattr(social, "_oauth_identity", _raise_reused_code)
+
+
+def test_google_invalid_grant_is_distinguished_from_provider_outage(ready_db, monkeypatch):
+    class StubClient:
+        def __init__(self, *args, **kwargs):
+            pass
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def request(self, *args, **kwargs):
+            return httpx.Response(400, json={"error":"invalid_grant"})
+    monkeypatch.setattr(social.httpx, "Client", StubClient)
+    with pytest.raises(social.OAuthCodeRejected):
+        social._fetch(social.TOKEN["google"], method="POST", data={"code":"test-code"})
+    with pytest.raises(HTTPException) as exc:
+        social._fetch(social.TOKEN["yahoo"], method="POST", data={"code":"test-code"})
+    assert exc.value.status_code == 502
+
+
+def test_google_duplicate_callback_without_session_redirects_to_login(ready_db, monkeypatch):
+    _simulated_duplicate_google_code(monkeypatch)
+    response = social.callback(
+        "google", _google_callback_request(), code="single-use-code",
+        state="unit-test-oauth-state", db=ready_db,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login?social_error=retry"
+    assert ready_db.query(ReactSession).count() == 0
+
+
+def test_google_duplicate_callback_retains_valid_existing_session(ready_db, monkeypatch):
+    _simulated_duplicate_google_code(monkeypatch)
+    user = User(
+        name="Google Existing User", email="linked@example.org",
+        phone_number="+40720987654", username="linked.user",
+        username_key="linked.user", status="active", is_email_verified=True,
+    )
+    ready_db.add(user)
+    ready_db.flush()
+    ready_db.add(ReactSession(
+        token_hash=social.digest("already-issued-session"), user_id=user.id,
+        csrf_hash=social.digest("test-csrf"),
+        expires_at=datetime.utcnow() + timedelta(minutes=20),
+    ))
+    ready_db.commit()
+    response = social.callback(
+        "google", _google_callback_request(session_cookie="already-issued-session"),
+        code="single-use-code", state="unit-test-oauth-state", db=ready_db,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/rewards"
+    assert ready_db.query(ReactSession).count() == 1
+
+
+def test_google_duplicate_callback_resumes_only_matching_signed_pending_registration(ready_db, monkeypatch):
+    _simulated_duplicate_google_code(monkeypatch)
+    ticket = social._seal({
+        "iat":int(time.time()), "provider":"google", "subject":"provider-sub-123",
+        "verified":True, "email":"new@example.org", "next":"/rewards",
+        "oauth_flow_state":"unit-test-oauth-state",
+    })
+    response = social.callback(
+        "google", _google_callback_request(pending_ticket=ticket),
+        code="single-use-code", state="unit-test-oauth-state", db=ready_db,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/register?social=pending&next=%2Frewards"
+    assert ready_db.query(User).count() == 0
+
+
+def test_google_duplicate_callback_rejects_unrelated_pending_ticket(ready_db, monkeypatch):
+    _simulated_duplicate_google_code(monkeypatch)
+    ticket = social._seal({
+        "iat":int(time.time()), "provider":"google", "subject":"some-other-identity",
+        "verified":True, "email":"stranger@example.org", "next":"/rewards",
+        "oauth_flow_state":"another-oauth-state",
+    })
+    response = social.callback(
+        "google", _google_callback_request(pending_ticket=ticket),
+        code="single-use-code", state="unit-test-oauth-state", db=ready_db,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login?social_error=retry"
+    assert ready_db.query(User).count() == 0
