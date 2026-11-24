@@ -1,17 +1,19 @@
 import React from 'react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import Auth from './Auth';
 import { Context } from './common';
-import { send } from './api';
+import { send, request } from './api';
 
 vi.mock('./api', () => ({
   send: vi.fn(),
+  request: vi.fn().mockResolvedValue({providers:[]}),
   safeNext: p => typeof p === 'string' && p.startsWith('/') && !p.startsWith('//') ? p : '/',
   credential: vi.fn(),
 }));
 
+beforeEach(() => { request.mockResolvedValue({providers:[]}); });
 afterEach(() => { cleanup(); vi.resetAllMocks(); sessionStorage.clear(); });
 function Location() { const l=useLocation(); return <output data-testid="route">{l.pathname}</output>; }
 function signup(path = '/register') {
