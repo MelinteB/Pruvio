@@ -94,7 +94,7 @@ export default function Account() {
             });
           }}>{field(form, setForm, 'name', t("Full name"))}{field(form, setForm, 'username', t("Username"))}<p><strong>{user.email}</strong> · {user.is_email_verified ? t("Verified") : t("Not verified")}</p><p className="muted">{user.phone_number}</p><button className="primary" disabled={busy}>{t("Save profile")}</button></form></Panel>
  </AccountSection>
-<AccountSection id="account-social" title="Connected social accounts" description="Link or disconnect Google, Apple, Yahoo, Facebook, TikTok and Instagram Professional">
+<AccountSection id="account-social" title="Connected social accounts" description="Link or disconnect Google, LinkedIn, Yahoo, Facebook and TikTok">
   <Panel title="Social sign-in and connected identities">
     <p className="muted">Only explicitly linked identities can sign in. Matching an email never connects accounts automatically.</p>
     {socials.error && <Message error={socials.error}/>}

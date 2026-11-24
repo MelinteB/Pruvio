@@ -3,11 +3,11 @@ import './social-auth-options.css';
 
 const METHODS = [
   {id:'google',name:'Google',mark:'G',hint:'Google Account'},
-  {id:'apple',name:'Apple',mark:'A',hint:'Apple Account (iPhone, iPad, Mac)'},
+  {id:'linkedin',name:'LinkedIn',mark:'in',hint:'LinkedIn account'},
   {id:'facebook',name:'Facebook',mark:'f',hint:'Facebook account'},
   {id:'yahoo',name:'Yahoo',mark:'Y',hint:'Yahoo account'},
   {id:'tiktok',name:'TikTok',mark:'T',hint:'TikTok account'},
-  {id:'instagram',name:'Instagram Professional',mark:'IG',hint:'Business and Creator accounts only'}
+
 ];
 const MODE_TEXT = {login:'Continue with',register:'Sign up with',link:'Connect'};
 function internalPath(value) {
@@ -54,8 +54,6 @@ export default function SocialAuthOptions({
         'These providers require developer credentials and approval before they can be activated. You can still use email and password.'}
       {mode!=='link'&&' Existing accounts must link a provider in Account before using it to sign in.'}
     </p>
-    {mode==='register'&&<p className="pruvs-social-explainer">
-      Instagram Professional signup is available for Business or Creator accounts only and requires Pruvs email verification. Personal Instagram accounts cannot use this method.
-    </p>}
+
   </section>;
 }

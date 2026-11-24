@@ -8,7 +8,6 @@ export const LOGIN_METHODS = Object.freeze([
   { id: 'linkedin', label: 'LinkedIn' },
   { id: 'yahoo', label: 'Yahoo' },
   { id: 'facebook', label: 'Facebook' },
-  { id: 'instagram', label: 'Instagram' },
   { id: 'tiktok', label: 'TikTok' },
 ]);
 
@@ -44,6 +43,6 @@ export default function LoginMethodGrid({ enabledProviders = {}, onChoose, disab
         ><span className="auth-method-icon"><BrandMark provider={method.id}/></span><span className="auth-method-label">{method.label}</span></button>;
       })}
     </div>
-    <p className="auth-methods-note">Google sign-in becomes available once configured. Other providers remain unavailable until their secure integrations are ready. Email/password and passkey sign-in remain available.</p>
+    <p className="auth-methods-note">Social sign-in methods are available when configured. Email/password and passkey sign-in remain available.</p>
   </div>;
 }

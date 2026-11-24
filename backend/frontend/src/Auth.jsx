@@ -86,8 +86,8 @@ export default function Auth({
     navigate(invitedBillDestination(returnTo) || safeNext(returnTo), { replace: true });
   }
   function chooseLoginMethod(provider) {
-    if (provider !== 'google' || !socialProviders.data?.providers?.some(p => p.id === 'google' && p.enabled === true)) return;
-    window.location.assign('/api/v1/auth/social/google/start?mode=login&next='+
+    if (!socialProviders.data?.providers?.some(p => p.id === provider && p.enabled === true)) return;
+    window.location.assign('/api/v1/auth/social/'+encodeURIComponent(provider)+'/start?mode=login&next='+
       encodeURIComponent(safeNext(returnTo)));
   }
   async function submit(e) {
@@ -161,7 +161,7 @@ export default function Auth({
  <button className="primary full" disabled={busy}>{busy ? t("Please wait…") : challenge ? t("Confirm") : mode === 'login' ? t("Sign in") : mode === 'register' ? t("Create account") : t("Send reset code")}<ArrowRight size={17} /></button>
  </form>}
  {(mode==='login' || (mode==='register' && params.get('social') !== 'pending')) &&
-    <LoginMethodGrid enabledProviders={Object.fromEntries((socialProviders.data?.providers||[]).map(p=>[p.id,p.id==='google' && p.enabled===true]))}
+    <LoginMethodGrid enabledProviders={Object.fromEntries((socialProviders.data?.providers||[]).map(p=>[p.id,p.enabled===true]))}
       disabled={busy} onChoose={chooseLoginMethod} />}
 
  {challenge && <button className="text-button" disabled={busy} onClick={() => run(async () => {

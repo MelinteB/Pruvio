@@ -49,10 +49,12 @@ STATE_COOKIE = "pruvs_social_flow"
 APPLE_BRIDGE_COOKIE = "pruvs_apple_oauth_bridge"
 SIGNUP_COOKIE = "pruvs_social_pending"
 COOKIE_PATH = "/api/v1/auth/social"
-PROVIDERS = ("google", "yahoo", "facebook", "instagram", "tiktok", "apple")
+PROVIDERS = ("google", "linkedin", "yahoo", "facebook", "instagram", "tiktok", "apple")
+CONSUMER_PROVIDERS = ("google", "linkedin", "yahoo", "facebook", "tiktok")
 LINK_ONLY = frozenset(("facebook", "instagram", "tiktok"))
 AUTHORIZE = {
     "google": "https://accounts.google.com/o/oauth2/v2/auth",
+    "linkedin": "https://www.linkedin.com/oauth/v2/authorization",
     "apple": "https://appleid.apple.com/auth/authorize",
     "yahoo": "https://api.login.yahoo.com/oauth2/request_auth",
     "facebook": "https://www.facebook.com/v24.0/dialog/oauth",
@@ -61,6 +63,7 @@ AUTHORIZE = {
 }
 TOKEN = {
     "google": "https://oauth2.googleapis.com/token",
+    "linkedin": "https://www.linkedin.com/oauth/v2/accessToken",
     "apple": "https://appleid.apple.com/auth/token",
     "yahoo": "https://api.login.yahoo.com/oauth2/get_token",
     "facebook": "https://graph.facebook.com/v24.0/oauth/access_token",
@@ -69,6 +72,7 @@ TOKEN = {
 }
 SCOPES = {
     "google": "openid email profile",
+    "linkedin": "openid profile email",
     "apple": "name email",
     "yahoo": "openid email profile",
     "facebook": "public_profile,email",
@@ -77,11 +81,13 @@ SCOPES = {
 }
 JWKS = {
     "google": "https://www.googleapis.com/oauth2/v3/certs",
+    "linkedin": "https://www.linkedin.com/oauth/openid/jwks",
     "apple": "https://appleid.apple.com/auth/keys",
     "yahoo": "https://api.login.yahoo.com/openid/v1/certs",
 }
 ISSUER = {
     "google": ("https://accounts.google.com", "accounts.google.com"),
+    "linkedin": ("https://www.linkedin.com",),
     "apple": ("https://appleid.apple.com",),
     "yahoo": ("https://api.login.yahoo.com",),
 }
@@ -115,6 +121,10 @@ def _state_secret():
     if secret:
         return hmac.new(secret.encode("utf-8"),
                         b"pruvs/google/oauth-state/v1", hashlib.sha256).digest()
+    for provider in CONSUMER_PROVIDERS:
+        candidate = os.getenv(provider.upper() + "_CLIENT_SECRET", "").strip()
+        if candidate:
+            return hmac.new(candidate.encode("utf-8"), b"pruvs/social/oauth-state/v2", hashlib.sha256).digest()
     raise HTTPException(503, "Social authentication is not configured")
 
 
@@ -125,32 +135,22 @@ def _globally_enabled():
 def _client(provider):
     if provider not in PROVIDERS:
         raise HTTPException(404, "Provider not supported")
-    # Match the production Google group exactly; other staging providers
-    # retain their original opt-in settings and remain disabled in the UI.
-    prefix = "GOOGLE" if provider == "google" else "PRUVS_SOCIAL_" + provider.upper()
-    return (os.getenv(prefix + "_CLIENT_ID", "").strip(),
+    prefix = provider.upper()
+    id_key = prefix + ("_CLIENT_KEY" if provider == "tiktok" else "_CLIENT_ID")
+    return (os.getenv(id_key, "").strip(),
             os.getenv(prefix + "_CLIENT_SECRET", "").strip(),
             os.getenv(prefix + "_ENABLED", "false").strip().lower() == "true")
 
 
 def _configured(provider):
+    if provider not in CONSUMER_PROVIDERS:
+        return False
     client_id, secret, enabled = _client(provider)
-    if provider == "google":
-        # No legacy PRUVS_SOCIAL_* switch or separate state secret needed.
-        return bool(enabled and client_id and secret)
-    common = (_globally_enabled() and enabled and client_id and
-              len(os.getenv("PRUVS_SOCIAL_AUTH_STATE_SECRET", "")) >= 32)
-    if provider == "apple":
-        return bool(common and os.getenv("PRUVS_SOCIAL_APPLE_TEAM_ID") and
-                    os.getenv("PRUVS_SOCIAL_APPLE_KEY_ID") and
-                    os.getenv("PRUVS_SOCIAL_APPLE_PRIVATE_KEY_BASE64"))
-    return bool(common and secret)
+    return bool(enabled and client_id and secret)
 
 
 def _social_enabled():
-    # Google has its own three-variable configuration; the legacy global switch
-    # remains relevant only to the other experimental providers.
-    return _globally_enabled() or _configured("google")
+    return any(_configured(p) for p in CONSUMER_PROVIDERS)
 
 
 def _ensure_provider(provider):
@@ -300,13 +300,32 @@ def _oidc_identity(provider, tokens, client_id, nonce):
 
 def _oauth_identity(provider, code, client_id, secret, redirect_uri, flow):
     data = {"code": code, "redirect_uri": redirect_uri, "grant_type": "authorization_code"}
-    if provider in ("google", "yahoo", "apple"):
+    if provider in ("google", "linkedin", "yahoo", "apple"):
         data.update(client_id=client_id,
                     client_secret=_apple_client_secret(client_id) if provider == "apple" else secret)
         if provider == "google":
             data["code_verifier"] = flow["verifier"]
         tokens = _fetch(TOKEN[provider], method="POST", data=data)
-        return _oidc_identity(provider, tokens, client_id, flow["nonce"])
+        identity = _oidc_identity(provider, tokens, client_id, flow["nonce"])
+        if provider in ("linkedin", "yahoo"):
+            access = tokens.get("access_token")
+            if not isinstance(access, str) or not access:
+                raise HTTPException(502, "Identity provider did not return an access token")
+            endpoint = ("https://api.linkedin.com/v2/userinfo" if provider == "linkedin"
+                        else "https://api.login.yahoo.com/openid/v1/userinfo")
+            profile = _fetch(endpoint, headers={"Authorization": "Bearer " + access})
+            if str(profile.get("sub") or "") != identity["subject"]:
+                raise HTTPException(502, "Identity provider subject mismatch")
+            if profile.get("name"):
+                identity["name"] = str(profile["name"])[:255]
+            # Trust email only with an explicit verified claim; otherwise use Pruvs OTP.
+            email = profile.get("email")
+            if isinstance(email, str) and "@" in email and len(email) <= 255:
+                identity["email"] = email.strip().lower()
+                identity["verified"] = profile.get("email_verified") is True or profile.get("email_verified") == "true"
+        if not identity.get("email") or "@" not in identity["email"]:
+            identity["verified"] = False
+        return identity
     if provider == "facebook":
         tokens = _fetch(TOKEN[provider], params={
             "code": code, "client_id": client_id, "client_secret": secret,
@@ -314,10 +333,18 @@ def _oauth_identity(provider, code, client_id, secret, redirect_uri, flow):
         access = str(tokens.get("access_token") or "")
         if not access:
             raise HTTPException(502, "Facebook authorization unsuccessful")
+        token_info = _fetch("https://graph.facebook.com/v24.0/debug_token",
+            params={"input_token": access}, headers={"Authorization": "Bearer " + client_id + "|" + secret}).get("data")
+        if (not isinstance(token_info, dict) or token_info.get("is_valid") is not True
+                or str(token_info.get("app_id") or "") != client_id
+                or not token_info.get("user_id")):
+            raise HTTPException(502, "Facebook token validation failed")
         proof = hmac.new(secret.encode(), access.encode(), hashlib.sha256).hexdigest()
         profile = _fetch("https://graph.facebook.com/v24.0/me",
             params={"fields": "id,name,email", "appsecret_proof": proof},
             headers={"Authorization": "Bearer " + access})
+        if str(profile.get("id") or "") != str(token_info["user_id"]):
+            raise HTTPException(502, "Facebook identity mismatch")
         return {"subject": str(profile.get("id") or ""), "name": str(profile.get("name") or "")[:255],
                 "email": "", "verified": False}
     if provider == "instagram":
@@ -337,7 +364,17 @@ def _oauth_identity(provider, code, client_id, secret, redirect_uri, flow):
     if provider == "tiktok":
         tokens = _fetch(TOKEN[provider], method="POST", data={
             **data, "client_key": client_id, "client_secret": secret})
-        return {"subject": str(tokens.get("open_id") or ""), "name": "TikTok account",
+        access = tokens.get("access_token")
+        subject = str(tokens.get("open_id") or "")
+        if not isinstance(access, str) or not access or not subject:
+            raise HTTPException(502, "TikTok token validation failed")
+        result = _fetch("https://open.tiktokapis.com/v2/user/info/",
+            params={"fields": "open_id,display_name"},
+            headers={"Authorization": "Bearer " + access})
+        profile = (result.get("data") or {}).get("user") or {}
+        if str(profile.get("open_id") or "") != subject:
+            raise HTTPException(502, "TikTok identity mismatch")
+        return {"subject": subject, "name": str(profile.get("display_name") or "")[:255],
                 "email": "", "verified": False}
     raise HTTPException(404, "Provider unavailable")
 
@@ -345,12 +382,12 @@ def _oauth_identity(provider, code, client_id, secret, redirect_uri, flow):
 @router.get("/providers")
 def providers(db=Depends(get_db)):
     schema_ready = inspect(db.get_bind()).has_table(SocialAccount.__tablename__) if _social_enabled() else False
-    return {"providers": [{"id": p, "enabled": p == 'google' and _configured(p) and schema_ready,
+    return {"providers": [{"id": p, "enabled": _configured(p) and schema_ready,
              "signup": True,
              "note": ("Business or Creator Instagram accounts only; Pruvs email OTP required"
                       if p == "instagram" else
                       "Pruvs email OTP required for new accounts" if p in LINK_ONLY else "")}
-            for p in PROVIDERS]}
+            for p in CONSUMER_PROVIDERS]}
 
 
 @router.get("/{provider}/start")
@@ -375,7 +412,7 @@ def start(provider: str, request: Request,
     client_id, _secret, _ = _client(provider)
     params = {"client_id": client_id, "redirect_uri": _redirect_uri(provider),
               "response_type": "code", "state": state, "scope": SCOPES[provider]}
-    if provider in ("google", "yahoo", "apple"):
+    if provider in ("google", "linkedin", "yahoo", "apple"):
         params["nonce"] = nonce
     if provider == "google":
         params["code_challenge"] = _b64(hashlib.sha256(verifier.encode()).digest())
@@ -552,7 +589,7 @@ def complete(data: CompleteSignup, request: Request, response: Response,
     if _has_live_pruvs_session(request, db):
         raise HTTPException(409, "Sign out first or connect this provider in Account")
     ticket = _unseal(request.cookies.get(SIGNUP_COOKIE, ""),max_age=900)
-    if not ticket.get("verified") or not ticket.get("email") or ticket.get("provider") not in ("google","yahoo","apple"):
+    if not ticket.get("verified") or not ticket.get("email") or ticket.get("provider") not in ("google","linkedin","yahoo"):
         raise HTTPException(409, "Use verified email registration, then link your social account in Account")
     _ensure_provider(ticket["provider"])
     if not data.accepted_terms or not data.accepted_privacy:
