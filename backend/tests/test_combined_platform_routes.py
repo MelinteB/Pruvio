@@ -104,7 +104,11 @@ def test_core_social_login_has_visible_disabled_provider_options_and_apple_flow(
     assert "p.id!=='instagram'" not in source
     assert "Personal Instagram accounts cannot use this method" in source
     assert '"signup": True' in social
-    assert "SocialAuthOptions" in core_auth
+    assert "LoginMethodGrid" in core_auth
+    assert "PhoneNumberField" in core_auth
+    grid = (BACKEND/"frontend"/"src"/"LoginMethodGrid.jsx").read_text(encoding="utf-8")
+    assert grid.index("id: 'google'") < grid.index("id: 'linkedin'") < grid.index("id: 'yahoo'")
+    assert "google" in social
     assert "SocialAuthOptions" in core_account
     assert 'APPLE_BRIDGE_COOKIE' in social
     assert 'response_mode"] = "form_post"' in social
