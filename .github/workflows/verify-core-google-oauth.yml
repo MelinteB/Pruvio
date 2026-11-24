@@ -1,0 +1,57 @@
+name: Verify Google OIDC enrollment and ordered social login
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/app/react_app/google_auth.py'
+      - 'backend/app/models/social_identity.py'
+      - 'backend/migrations/c1_social_accounts_20261124.sql'
+      - 'backend/app/react_main.py'
+      - 'backend/requirements.txt'
+      - 'backend/tests/test_google_social_auth_20261124.py'
+      - 'backend/frontend/src/Auth.jsx'
+      - 'backend/frontend/src/Account.jsx'
+      - 'backend/frontend/src/LoginMethodGrid.jsx'
+      - 'backend/frontend/src/login_method_grid.test.jsx'
+      - 'backend/frontend/src/optional_registration.test.jsx'
+      - '.github/workflows/verify-core-google-oauth.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  google-auth:
+    runs-on: ubuntu-latest
+    env:
+      APP_ENV: testing
+      PUBLIC_BASE_URL: https://pruvs.io
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install isolated OIDC test dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --disable-pip-version-check pytest fastapi 'sqlalchemy>=2' python-dotenv httpx 'PyJWT[crypto]>=2.10,<3.0' phonenumbers python-multipart pywebpush email-validator
+      - name: Check Google OIDC and phone enrollment security
+        working-directory: backend
+        run: |
+          python -m compileall -q app/react_app/google_auth.py app/models/social_identity.py
+          python -m pytest -q tests/test_google_social_auth_20261124.py tests/test_phone_numbers_country_signup.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: backend/frontend
+        run: npm ci --no-audit --no-fund
+      - name: Verify login ordering and unchanged email signup
+        working-directory: backend/frontend
+        run: npx vitest run src/login_method_grid.test.jsx src/optional_registration.test.jsx src/phone_number_field.test.jsx
+      - name: Build Pruvs Core
+        working-directory: backend/frontend
+        run: npm run build
