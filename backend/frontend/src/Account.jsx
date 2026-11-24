@@ -56,6 +56,8 @@ export default function Account() {
     [notice, setNotice] = useState(''),
     [busy, setBusy] = useState(false);
   const keys = useLoad(() => request('/account/passkeys'), []);
+  const googleProviders = useLoad(() => request('/auth/social/providers'), []);
+  const linkedSocial = useLoad(() => request('/auth/social/accounts'), []);
   async function run(fn, msg = t("Saved."), scope = '') {
     setBusy(true);
     setError('');
@@ -161,6 +163,14 @@ export default function Account() {
             });
             await keys.reload();
           }, t("Passkey added."), 'security')}><Fingerprint size={17} /> {t("Add passkey")}</button></Panel>}
+  <Panel title="Google account sign-in">
+    {linkedSocial.data?.accounts?.some(account => account.provider === 'google')
+      ? <p className="muted">Your Google account is connected. You can sign in to Pruvs using Google.</p>
+      : googleProviders.data?.providers?.some(provider => provider.id === 'google' && provider.enabled === true)
+        ? <><p className="muted">Connect Google explicitly to your current Pruvs account. Matching email addresses alone never link accounts.</p>
+           <a className="secondary" href="/api/v1/auth/social/google/start?mode=link">Connect Google</a></>
+        : <p className="muted">Google sign-in is not configured yet. Email and passkey login remain available.</p>}
+  </Panel>
  </AccountSection>
 <AccountSection id="account-privacy" title={t("Privacy & account deletion")} description={t("Control your personal data")}><Panel title={t("Download your account activity")}>
   <p className="muted">{t("Download a JSON snapshot of your profile, saved receipt items, your bill participation and your payment events. It excludes receipt images and other users’ private details. Keep the downloaded file secure.")}</p>
