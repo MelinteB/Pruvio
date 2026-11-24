@@ -146,6 +146,12 @@ def _configured(provider):
     return bool(common and secret)
 
 
+def _social_enabled():
+    # Google has its own three-variable configuration; the legacy global switch
+    # remains relevant only to the other experimental providers.
+    return _globally_enabled() or _configured("google")
+
+
 def _ensure_provider(provider):
     if not _configured(provider):
         raise HTTPException(503, "This social sign-in provider is unavailable")
@@ -307,7 +313,7 @@ def _oauth_identity(provider, code, client_id, secret, redirect_uri, flow):
 
 @router.get("/providers")
 def providers(db=Depends(get_db)):
-    schema_ready = inspect(db.get_bind()).has_table(SocialAccount.__tablename__) if _globally_enabled() else False
+    schema_ready = inspect(db.get_bind()).has_table(SocialAccount.__tablename__) if _social_enabled() else False
     return {"providers": [{"id": p, "enabled": p == 'google' and _configured(p) and schema_ready,
              "signup": True,
              "note": ("Business or Creator Instagram accounts only; Pruvs email OTP required"
@@ -459,11 +465,12 @@ def _finish_verified_identity(provider, identity, flow, request, db):
 
 @router.get("/pending")
 def pending(request: Request, db=Depends(get_db)):
-    if not _globally_enabled():
+    if not _social_enabled():
         raise HTTPException(503, "Social registration is disabled")
     ticket = _unseal(request.cookies.get(SIGNUP_COOKIE, ""),max_age=900)
     if ticket.get("provider") not in PROVIDERS:
         raise HTTPException(400, "Social registration session invalid")
+    _ensure_provider(ticket["provider"])
     can_complete = bool(ticket.get("verified") and ticket.get("email"))
     return {"provider":ticket["provider"],"name":ticket.get("name") or "",
             "email":ticket.get("email") if can_complete else "",
@@ -475,7 +482,7 @@ def pending(request: Request, db=Depends(get_db)):
 @router.post("/complete")
 def complete(data: CompleteSignup, request: Request, response: Response,
              db=Depends(get_db)):
-    if not _globally_enabled():
+    if not _social_enabled():
         raise HTTPException(503, "Social registration is disabled")
     _schema_ready(db)
     limit(db,request,"social-registration",10)
@@ -484,6 +491,7 @@ def complete(data: CompleteSignup, request: Request, response: Response,
     ticket = _unseal(request.cookies.get(SIGNUP_COOKIE, ""),max_age=900)
     if not ticket.get("verified") or not ticket.get("email") or ticket.get("provider") not in ("google","yahoo","apple"):
         raise HTTPException(409, "Use verified email registration, then link your social account in Account")
+    _ensure_provider(ticket["provider"])
     if not data.accepted_terms or not data.accepted_privacy:
         raise HTTPException(422, "Accept the Terms and Privacy Notice")
     email = str(ticket["email"]).strip().lower()
@@ -529,7 +537,7 @@ def complete_email(data: CompleteEmailSignup, request: Request, response: Respon
     a unique email, phone and password and issues an email OTP. Only the Pruvs
     registration OTP (not provider supplied email) can activate the new user.
     """
-    if not _globally_enabled():
+    if not _social_enabled():
         raise HTTPException(503, "Social registration is disabled")
     _schema_ready(db)
     limit(db, request, "social-registration-otp", 15)
@@ -569,7 +577,7 @@ def complete_email(data: CompleteEmailSignup, request: Request, response: Respon
 
 @router.get("/accounts")
 def accounts(identity=Depends(current),db=Depends(get_db)):
-    if not _globally_enabled():
+    if not _social_enabled():
         return {"accounts": [], "disabled": True}
     _schema_ready(db)
     rows = db.query(SocialAccount).filter_by(user_id=identity[0].id).order_by(SocialAccount.provider).all()
@@ -579,7 +587,7 @@ def accounts(identity=Depends(current),db=Depends(get_db)):
 
 @router.delete("/accounts/{provider}")
 def unlink(provider: str, identity=Depends(current),db=Depends(get_db)):
-    if not _globally_enabled():
+    if not _social_enabled():
         raise HTTPException(503, "Social account management is disabled")
     _schema_ready(db)
     if provider not in PROVIDERS:
