@@ -247,10 +247,24 @@ def _apple_client_secret(client_id: str) -> str:
         raise HTTPException(503, "Apple private-key configuration is invalid") from None
 
 
+class OAuthCodeRejected(Exception):
+    """Internal signal: Google rejected a one-time OAuth authorization code."""
+
+
 def _fetch(url, *, method="GET", params=None, data=None, headers=None, auth=None):
     try:
         with httpx.Client(timeout=8, follow_redirects=False) as client:
             r = client.request(method, url, params=params, data=data, headers=headers, auth=auth)
+        if method == "POST" and url == TOKEN["google"] and r.status_code == 400:
+            # Google authorization codes are one-use; browsers can re-request
+            # the same callback after the first exchange succeeded. Never log
+            # authorization codes or the upstream body.
+            try:
+                provider_error = r.json()
+            except ValueError:
+                provider_error = {}
+            if isinstance(provider_error, dict) and provider_error.get("error") == "invalid_grant":
+                raise OAuthCodeRejected()
         if r.status_code < 200 or r.status_code >= 300 or len(r.content) > 65536:
             raise ValueError("Provider refused request")
         result = r.json()
@@ -404,6 +418,34 @@ def apple_finish(request: Request, db=Depends(get_db)):
     return response
 
 
+def _rejected_google_code_response(provider, request, flow, db):
+    """Gracefully handle a repeated one-time Google code without authenticating it.
+
+    Never issue a session from a replay. A previously successful callback may
+    already have created a verified session or an HMAC-signed signup ticket.
+    Otherwise send the browser back to the sign-in page to restart the flow.
+    """
+    destination = "/login?social_error=retry"
+    if flow.get("mode") == "login":
+        if _has_live_pruvs_session(request, db):
+            destination = _internal_next(flow.get("next"))
+        else:
+            try:
+                pending_ticket = _unseal(request.cookies.get(SIGNUP_COOKIE, ""), max_age=900)
+                if (pending_ticket.get("provider") == provider and
+                        pending_ticket.get("oauth_flow_state") == flow.get("state") and
+                        pending_ticket.get("next") == _internal_next(flow.get("next"))):
+                    destination = "/register?social=pending&next=" + quote(
+                        _internal_next(flow.get("next")), safe="")
+            except HTTPException:
+                pass
+    elif flow.get("mode") == "link":
+        destination = "/account?social_error=retry" if _has_live_pruvs_session(request, db) else destination
+    response = RedirectResponse(destination, status_code=303, headers={"Cache-Control": "no-store"})
+    _clear(response, STATE_COOKIE)
+    return response
+
+
 @router.get("/{provider}/callback")
 def callback(provider: str, request: Request, code: str = "", state: str = "",
              error: str = "", db=Depends(get_db)):
@@ -421,8 +463,11 @@ def callback(provider: str, request: Request, code: str = "", state: str = "",
         _clear(response, STATE_COOKIE)
         return response
     client_id, client_secret, _ = _client(provider)
-    identity = _oauth_identity(provider, code, client_id, client_secret,
-                               _redirect_uri(provider), flow)
+    try:
+        identity = _oauth_identity(provider, code, client_id, client_secret,
+                                   _redirect_uri(provider), flow)
+    except OAuthCodeRejected:
+        return _rejected_google_code_response(provider, request, flow, db)
     if not identity["subject"] or len(identity["subject"]) > 255:
         raise HTTPException(502, "Provider identity unavailable")
     if provider == "apple":
@@ -473,7 +518,8 @@ def _finish_verified_identity(provider, identity, flow, request, db):
     pending = {"iat":int(time.time()), "provider":provider,
                "subject":identity["subject"],"name":identity["name"],
                "email":identity["email"] if identity["verified"] else "",
-               "verified":bool(identity["verified"]),"next":_internal_next(flow.get("next"))}
+               "verified":bool(identity["verified"]),"next":_internal_next(flow.get("next")),
+               "oauth_flow_state":flow.get("state")}
     response = RedirectResponse("/register?social=pending&next=" + quote(_internal_next(flow.get("next")),safe=""),status_code=303)
     _cookie(response,SIGNUP_COOKIE,_seal(pending),900)
     _clear(response,STATE_COOKIE)
