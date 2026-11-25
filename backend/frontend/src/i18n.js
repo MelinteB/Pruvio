@@ -840,3 +840,14 @@ Object.assign(ro, {
   'Resolve payment activity before removing this participant.': 'Rezolvă situația plății înainte de a elimina participantul.',
   'You no longer have access to this bill.': 'Nu mai ai acces la această notă.'
 });
+
+Object.assign(ro,{
+ 'Featured rewards':'Recompense recomandate',
+ 'Campaign artwork unavailable':'Imaginea campaniei nu este disponibilă',
+ 'Qualifying receipts':'Bonuri eligibile',
+ 'Reward':'Recompensă',
+ 'Minimum purchase':'Valoare minimă a cumpărăturii',
+ 'Ends':'Se încheie',
+ 'See loyalty program':'Vezi programul de fidelitate',
+ 'Explore rewards':'Explorează recompensele'
+});

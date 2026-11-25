@@ -1,1 +1,7 @@
-.pruvs-promos{margin:14px 0 24px}.pruvs-promos-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}.pruvs-promos-heading>div{display:flex;align-items:center;gap:8px}.pruvs-promos-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr));gap:12px}.pruvs-promo{background:linear-gradient(130deg,#e6f7f3,#fff);border:1px solid #bde6dc;border-radius:15px;padding:17px}.pruvs-promo h3{margin:8px 0;font-size:1.17rem}.pruvs-promo p{margin:8px 0;line-height:1.5}.pruvs-promo-tag{font-size:.7rem;font-weight:750;color:#087e74;letter-spacing:.06em}.pruvs-promo-meta{display:flex;align-items:center;gap:8px;margin:12px 0;font-size:.84rem}.pruvs-promo a{font-weight:700}
+/* Home section: one meaningful heading and one rewards navigation action. */
+.pruvs-promos{margin:24px 0;display:grid;gap:12px;min-width:0}
+.pruvs-promos-grid{display:grid;grid-template-columns:minmax(0,1fr);min-width:0}
+.campaign-preview-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.campaign-preview-heading>div{display:flex;align-items:center;gap:9px;color:#1a4287}
+.campaign-preview-heading h2{font-size:clamp(17px,2vw,21px);line-height:1.25;margin:0}
+.pruvs-promos .campaign-preview-heading .pruvs-promos-more{display:inline-flex;align-items:center;gap:6px;text-decoration:none;font-weight:700;color:#1553b6;min-height:40px;padding:4px 0}
