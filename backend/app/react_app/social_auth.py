@@ -6,8 +6,8 @@ Supported authorization methods:
 - TikTok: Login Kit open_id. Link to an already authenticated Pruvs account.
 - Instagram: API with Instagram Login for professional accounts only; link-only.
 
-No provider tokens are stored. No existing Pruvs account is linked by matching
-email. State and signup tickets are HMAC signed and bound to an HttpOnly cookie.
+No provider tokens are stored. Existing account linking requires a separate
+Pruvs email OTP bound to the OAuth identity and the existing verified account. State and signup tickets are HMAC signed and bound to an HttpOnly cookie.
 Disable globally until provider compliance, staging verification and legal review.
 """
 from __future__ import annotations
@@ -100,6 +100,15 @@ class CompleteEmailSignup(BaseModel):
     email: str = Field(min_length=5, max_length=255)
     code: str = Field(min_length=6, max_length=6)
     challenge_id: str = Field(min_length=1, max_length=128)
+
+
+class ExistingLinkStart(BaseModel):
+    email: str = Field(default="", max_length=255)
+
+
+class ExistingLinkVerify(ExistingLinkStart):
+    challenge_id: str = Field(min_length=1, max_length=128)
+    code: str = Field(min_length=6, max_length=6)
 
 
 class CompleteSignup(BaseModel):
@@ -656,18 +665,18 @@ def _finish_verified_identity(provider, identity, flow, request, db):
         issue(db,user,request,response)
         _clear(response,STATE_COOKIE)
         return response
-    if identity.get("verified") and identity.get("email") and db.query(User.id).filter(func.lower(User.email) == identity["email"].strip().lower()).first():
+    collision = bool(identity.get("verified") and identity.get("email") and
+                     db.query(User.id).filter(func.lower(User.email) == identity["email"].strip().lower()).first())
+    if collision:
         logger.info("social_signup_collision provider=%s reason=existing_email", provider)
-        response = RedirectResponse("/login?social_error=existing_account&provider=" + provider + "&next=" + quote(_internal_next(flow.get("next")),safe=""), status_code=303)
-        _clear(response, STATE_COOKIE)
-        _clear(response, SIGNUP_COOKIE)
-        return response
     pending = {"iat":int(time.time()), "provider":provider,
+               "link_nonce":secrets.token_urlsafe(32), "existing_only":collision,
                "subject":identity["subject"],"name":identity["name"],
                "email":identity["email"] if identity["verified"] else "",
                "verified":bool(identity["verified"]),"next":_internal_next(flow.get("next")),
                "oauth_flow_state":flow.get("state")}
-    response = RedirectResponse("/register?social=pending&next=" + quote(_internal_next(flow.get("next")),safe=""),status_code=303)
+    destination = "/login?social=link&next=" if collision else "/register?social=pending&next="
+    response = RedirectResponse(destination + quote(_internal_next(flow.get("next")),safe=""),status_code=303)
     _cookie(response,SIGNUP_COOKIE,_seal(pending),900)
     _clear(response,STATE_COOKIE)
     return response
@@ -681,12 +690,134 @@ def pending(request: Request, db=Depends(get_db)):
     if ticket.get("provider") not in PROVIDERS:
         raise HTTPException(400, "Social registration session invalid")
     _ensure_provider(ticket["provider"])
-    can_complete = bool(ticket.get("verified") and ticket.get("email"))
+    verified_email = bool(ticket.get("verified") and ticket.get("email"))
+    can_complete = verified_email and not ticket.get("existing_only")
     return {"provider":ticket["provider"],"name":ticket.get("name") or "",
-            "email":ticket.get("email") if can_complete else "",
+            "email":ticket.get("email") if verified_email else "",
             "can_complete":can_complete,
-            "requires_email_otp":not can_complete,
+            "existing_only":bool(ticket.get("existing_only")),
+            "requires_email_otp":not verified_email,
             "note": "Verify your email to finish social registration. Existing Pruvs users should sign in and link their provider in Account." if not can_complete else ""}
+
+
+# Existing-account linking deliberately uses a different OTP purpose from registration,
+# login and password reset. A provider's verified email alone is never sufficient.
+EXISTING_LINK_PURPOSE = "social_existing_link"
+
+
+def _existing_ticket(request, db):
+    _schema_ready(db)
+    if _has_live_pruvs_session(request, db):
+        raise HTTPException(409, "Use Account to connect a provider while signed in.")
+    ticket = _unseal(request.cookies.get(SIGNUP_COOKIE, ""), max_age=900)
+    provider = ticket.get("provider")
+    subject = ticket.get("subject")
+    if provider not in CONSUMER_PROVIDERS or not isinstance(subject, str) or not subject or len(subject) > 255 or not ticket.get("link_nonce"):
+        raise HTTPException(400, "Social sign-in expired. Start again.")
+    _ensure_provider(provider)
+    if db.query(SocialAccount.id).filter_by(provider=provider, subject=subject).first():
+        raise HTTPException(409, "This identity is already linked. Restart sign-in.")
+    secret = os.getenv("OTP_SECRET", "").strip()
+    if not secret or secret == "dev-secret-change-me":
+        raise HTTPException(503, "Email verification is temporarily unavailable.")
+    return ticket
+
+
+def _existing_email(ticket, supplied):
+    from app.services.onboarding_otp_service import normalize_email
+    if ticket.get("verified") and ticket.get("email"):
+        email = normalize_email(ticket["email"])
+        if supplied and normalize_email(supplied) != email:
+            raise HTTPException(400, "Use the email verified by your sign-in provider.")
+        return email
+    email = normalize_email(supplied)
+    if not email:
+        raise HTTPException(422, "Enter your existing Pruvs email address.")
+    return email
+
+
+def _existing_user(db, email, *, lock=False):
+    query = db.query(User).filter(func.lower(User.email) == email).order_by(User.id)
+    if lock:
+        query = query.with_for_update().populate_existing()
+    users = query.limit(2).all()
+    # Reject legacy duplicate email records, pending registrations and blocked users.
+    if len(users) != 1 or users[0].status != "active" or not users[0].is_email_verified:
+        return None
+    return users[0]
+
+
+def _existing_context(ticket, user, email):
+    # Bind proof to the exact verified provider subject, browser flow, account,
+    # current email and password state; never accept an unrelated OTP.
+    return hmac.new(_state_secret(), json.dumps([
+        "existing-link-v1", ticket["link_nonce"], ticket["provider"], ticket["subject"],
+        user.id, email, user.password_hash,
+    ], separators=(",", ":")).encode(), hashlib.sha256).hexdigest()
+
+
+@router.post("/existing/send-code")
+def existing_send(data: ExistingLinkStart, request: Request, db=Depends(get_db)):
+    from app.services import onboarding_otp_service as otp
+    limit(db, request, "social-existing-send", 8)
+    ticket = _existing_ticket(request, db)
+    email = _existing_email(ticket, data.email)
+    user = _existing_user(db, email)
+    # Identical response for absent/ambiguous/ineligible accounts, to limit enumeration.
+    result = {"challenge_id":secrets.token_urlsafe(32),
+              "message":"If an eligible account exists, a verification code has been sent."}
+    if not user or db.query(SocialAccount.id).filter_by(user_id=user.id, provider=ticket["provider"]).first():
+        return result
+    try:
+        row, code = otp.create_verification_code(db, user, "email", email, EXISTING_LINK_PURPOSE,
+                                                context_value=_existing_context(ticket, user, email))
+    except ValueError:
+        return result
+    delivery = otp._deliver("email", email, code, db=db, row=row)
+    if delivery.get("sent") is not True:
+        row.status = "failed"
+        db.commit()
+        return result
+    result["challenge_id"] = row.challenge_id
+    logger.info("social_existing_link_code_sent provider=%s", ticket["provider"])
+    return result
+
+
+@router.post("/existing/verify-code")
+def existing_verify(data: ExistingLinkVerify, request: Request, response: Response, db=Depends(get_db)):
+    from app.services import onboarding_otp_service as otp
+    from app.services.identity_lock import lock_email
+    limit(db, request, "social-existing-verify", 15)
+    ticket = _existing_ticket(request, db)
+    email = _existing_email(ticket, data.email)
+    lock_email(db, email)
+    user = _existing_user(db, email, lock=True)
+    if not user:
+        raise HTTPException(400, "Verification failed. Request a new code or use your existing sign-in method.")
+    provider = ticket["provider"]
+    if db.query(SocialAccount.id).filter_by(user_id=user.id, provider=provider).first():
+        raise HTTPException(409, "This account already has a connected identity for this provider.")
+    try:
+        verified = otp.verify_code(db, destination_type="email", destination=email, code=data.code,
+            purpose=EXISTING_LINK_PURPOSE, challenge_id=data.challenge_id, user_id=user.id,
+            context_value=_existing_context(ticket, user, email), commit_success=False)
+    except ValueError:
+        raise HTTPException(400, "Verification failed. Check the code or request a new one.") from None
+    try:
+        if verified.id != user.id or verified.status != "active" or not verified.is_email_verified:
+            raise HTTPException(409, "Account unavailable.")
+        db.add(SocialAccount(user_id=user.id, provider=provider, subject=ticket["subject"],
+                             display_name=str(ticket.get("name") or "")[:255],
+                             last_used_at=datetime.utcnow()))
+        db.flush()
+        # issue commits the consumed OTP, link and new session together.
+        result = issue(db, user, request, response)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "This identity or provider is already connected.") from None
+    _clear(response, SIGNUP_COOKIE)
+    logger.info("social_existing_link_completed provider=%s", provider)
+    return result
 
 
 @router.post("/complete")
@@ -699,7 +830,7 @@ def complete(data: CompleteSignup, request: Request, response: Response,
     if _has_live_pruvs_session(request, db):
         raise HTTPException(409, "Sign out first or connect this provider in Account")
     ticket = _unseal(request.cookies.get(SIGNUP_COOKIE, ""),max_age=900)
-    if not ticket.get("verified") or not ticket.get("email") or ticket.get("provider") not in ("google","linkedin","yahoo"):
+    if ticket.get("existing_only") or not ticket.get("verified") or not ticket.get("email") or ticket.get("provider") not in ("google","linkedin","yahoo"):
         raise HTTPException(409, "Use verified email registration, then link your social account in Account")
     _ensure_provider(ticket["provider"])
     if not data.accepted_terms or not data.accepted_privacy:
@@ -759,7 +890,7 @@ def complete_email(data: CompleteEmailSignup, request: Request, response: Respon
         raise HTTPException(409, "Sign out before completing social registration")
     ticket = _unseal(request.cookies.get(SIGNUP_COOKIE, ""), max_age=900)
     provider = str(ticket.get("provider") or "")
-    if provider not in PROVIDERS or not _configured(provider) or (ticket.get('verified') and ticket.get('email')):
+    if ticket.get("existing_only") or provider not in PROVIDERS or not _configured(provider) or (ticket.get('verified') and ticket.get('email')):
         raise HTTPException(409, "This provider requires a different registration flow")
     subject = str(ticket.get("subject") or "")
     if not subject or len(subject) > 255:

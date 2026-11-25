@@ -62,10 +62,12 @@ def test_verified_email_collision_redirects_without_linking(tmp_path,monkeypatch
     Base.metadata.create_all(engine)
     with Session(engine) as db:
         db.add(User(phone_number="+40722000123",username="test.guest",username_key="test.guest",email="user@example.org",status="active",is_email_verified=True));db.commit()
+        monkeypatch.setenv("PRUVS_SOCIAL_AUTH_STATE_SECRET", "x"*40)
         req=Request({"type":"http","method":"GET","path":"/callback","headers":[],"query_string":b""})
         response=social._finish_verified_identity("yahoo",{"subject":"new-yahoo","name":"Test","email":"USER@example.org","verified":True},{"mode":"login","next":"/rewards"},req,db)
         assert response.status_code==303
-        assert "social_error=existing_account" in response.headers["location"]
+        assert "social=link" in response.headers["location"]
+        assert social.SIGNUP_COOKIE in response.headers["set-cookie"]
         assert db.query(User).count()==1
         assert db.query(SocialAccount).count()==0
     engine.dispose()
