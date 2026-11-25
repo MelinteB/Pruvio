@@ -33,7 +33,9 @@ export default function Auth({
     [busy, setBusy] = useState(false),
     [done, setDone] = useState(false),
     [socialPending, setSocialPending] = useState(null),
-    [socialNotice, setSocialNotice] = useState('');
+    [socialNotice, setSocialNotice] = useState(''),
+    [passkeySignup,setPasskeySignup]=useState(false),
+    [passkeyOptions,setPasskeyOptions]=useState(null);
   const socialProviders = useLoad(() => request('/auth/social/providers'), []);
   useEffect(() => {
     if (mode !== 'register' || params.get('social') !== 'pending') return;
@@ -47,7 +49,7 @@ export default function Auth({
     return () => {active = false;};
   }, [mode, params.get('social')]);
 
-  useEffect(()=>{if(mode==='login')return;if(challenge&&!done)sessionStorage.setItem(storageKey,JSON.stringify({email:challenge.email||form.email,challenge,next:safeNext(returnTo),expires:Date.now()+15*60*1000}));else sessionStorage.removeItem(storageKey)},[challenge,done,returnTo]);
+  useEffect(()=>{if(mode==='login')return;if(passkeySignup){sessionStorage.removeItem(storageKey);return;}if(challenge&&!done)sessionStorage.setItem(storageKey,JSON.stringify({email:challenge.email||form.email,challenge,next:safeNext(returnTo),expires:Date.now()+15*60*1000}));else sessionStorage.removeItem(storageKey)},[challenge,done,returnTo,passkeySignup]);
   const set = (k, v) => {
     if(k==='username')setUsernameEdited(true);
     setForm(f=>({...f,[k]:v,...(k==='name'&&!usernameEdited?{username:usernameFromName(v)}:{})}));
@@ -101,6 +103,17 @@ export default function Auth({
         return;
       }
       if (mode === 'register') {
+        if (passkeySignup) {
+          if (challenge) {
+            const options=await send('/auth/passkey/signup/options',{otp_challenge_id:challenge.challenge_id,code:form.code});
+            setPasskeyOptions(options);
+          } else {
+            const result=await send('/auth/passkey/signup/start',{...form,username:usernameEdited?form.username:undefined});
+            setChallenge(result);
+            if(result.delivery?.sent===false)setError('Email delivery failed. Restart enrollment.');
+          }
+          return;
+        }
         if (socialPending?.can_complete) {
           signed(await send('/auth/social/complete', {
             name:form.name,username:usernameEdited?form.username:undefined,
@@ -148,14 +161,15 @@ export default function Auth({
  <section className="panel auth-card"><div className="eyebrow">{t("WELCOME TO PRUVS")}</div><h1>{mode === 'register' ? t("Create your account") : mode === 'reset' ? t("Reset your password") : t("Welcome back")}</h1><p className="muted">{challenge ? t("Enter the code sent to your email.") : mode === 'login' ? t("Your receipts and shared moments, in one place.") : t("Use an email address you can verify.")}</p>
  {error && <Message error={error} />}
  {socialNotice && <Message error={socialNotice}/>}
- {params.get('social_error') && <Message error="Social sign-in did not complete. Please try again."/>}
+ {params.get('social_error') && <Message error={params.get('social_error')==='existing_account'?'An account already exists. Sign in using your existing method, then connect the provider in Account.':`${({google:'Google',linkedin:'LinkedIn',yahoo:'Yahoo',facebook:'Facebook',tiktok:'TikTok'})[params.get('provider')]||'Social'} sign-in did not complete. Please try again or use another sign-in method.`}/>}
  {socialPending?.can_complete && <Message>Verified {socialPending.provider} email: {socialPending.email}. Complete your Pruvs profile below.</Message>}
  {socialPending?.requires_email_otp && <Message>
   {socialPending.provider} does not provide a verified email. Complete the usual email and password registration below, then verify the email code to link your social identity.
  </Message>}
- {done ? <Message>{t("Password updated.")} <Link to="/login">{t("Sign in")}</Link></Message> : <form onSubmit={submit}>
+ {mode==='register' && config?.passkey_signup && !challenge && !socialPending && <button type="button" className="secondary full" disabled={busy} onClick={()=>{setPasskeySignup(v=>!v);setError('');}}><Fingerprint size={18}/>{passkeySignup?'Use password instead':'Create account with a passkey'}</button>}
+ {passkeyOptions ? <button className="primary full" disabled={busy} onClick={()=>run(async()=>{const c=await credential(passkeyOptions.options,true);signed(await send('/auth/passkey/signup/finish',{otp_challenge_id:challenge.challenge_id,challenge_id:passkeyOptions.challenge_id,credential:c}),true);})}>Create passkey and activate account</button> : done ? <Message>{t("Password updated.")} <Link to="/login">{t("Sign in")}</Link></Message> : <form onSubmit={submit}>
  {!challenge && mode === 'login' && <>{input('identifier', t("Username or email"))}{input('password', t("Password"), 'password')}</>}
- {!challenge && mode === 'register' && <>{input('name', t("Full name"))}{input('username', t("Username"))}<p className="muted">{t('Suggested from your full name. You can change it. If already taken, Pruvs adds a number.')}</p>{!socialPending?.can_complete && input('email', t("Email"), 'email')}{<PhoneNumberField phone={form.phone_number || ''} country={form.phone_country || 'RO'} onPhoneChange={value=>set('phone_number',value)} onCountryChange={value=>set('phone_country',value)} />}{!socialPending?.can_complete && input('password', t("Password"), 'password')}<Check label={<span>{t("I accept the")} <Link to="/terms" target="_blank">{t("Terms")}</Link></span>} required checked={!!form.accepted_terms} onChange={e => set('accepted_terms', e.target.checked)} /><Check label={<span>{t("I accept the")} <Link to="/privacy" target="_blank">{t("Privacy Notice")}</Link></span>} required checked={!!form.accepted_privacy} onChange={e => set('accepted_privacy', e.target.checked)} /><Check label={t('Receive bill and payment notifications (optional)')} checked={!!form.notifications_opt_in} onChange={e => set('notifications_opt_in', e.target.checked)} /><p className="muted">{t('You can read bill activity in Inbox. Enable device push alerts later in Account, if your browser supports them.')}</p></>}
+ {!challenge && mode === 'register' && <>{input('name', t("Full name"))}{input('username', t("Username"))}<p className="muted">{t('Suggested from your full name. You can change it. If already taken, Pruvs adds a number.')}</p>{!socialPending?.can_complete && input('email', t("Email"), 'email')}{<PhoneNumberField phone={form.phone_number || ''} country={form.phone_country || 'RO'} onPhoneChange={value=>set('phone_number',value)} onCountryChange={value=>set('phone_country',value)} />}{!socialPending?.can_complete && !passkeySignup && input('password', t("Password"), 'password')}<Check label={<span>{t("I accept the")} <Link to="/terms" target="_blank">{t("Terms")}</Link></span>} required checked={!!form.accepted_terms} onChange={e => set('accepted_terms', e.target.checked)} /><Check label={<span>{t("I accept the")} <Link to="/privacy" target="_blank">{t("Privacy Notice")}</Link></span>} required checked={!!form.accepted_privacy} onChange={e => set('accepted_privacy', e.target.checked)} /><Check label={t('Receive bill and payment notifications (optional)')} checked={!!form.notifications_opt_in} onChange={e => set('notifications_opt_in', e.target.checked)} /><p className="muted">{t('You can read bill activity in Inbox. Enable device push alerts later in Account, if your browser supports them.')}</p></>}
  {!challenge && mode === 'reset' && input('email', t("Verified email"), 'email')}
  {challenge && <>{input('code', t("Email verification code"))}{mode === 'reset' && input('password', t("New password"), 'password')}</>}
  <button className="primary full" disabled={busy}>{busy ? t("Please wait…") : challenge ? t("Confirm") : mode === 'login' ? t("Sign in") : mode === 'register' ? t("Create account") : t("Send reset code")}<ArrowRight size={17} /></button>
@@ -164,7 +178,8 @@ export default function Auth({
     <LoginMethodGrid enabledProviders={Object.fromEntries((socialProviders.data?.providers||[]).map(p=>[p.id,p.enabled===true]))}
       disabled={busy} onChoose={chooseLoginMethod} />}
 
- {challenge && <button className="text-button" disabled={busy} onClick={() => run(async () => {
+ {challenge && passkeySignup && <button className="text-button" disabled={busy} onClick={()=>{setChallenge(null);setPasskeyOptions(null);setError('');}}>Restart passkey enrollment</button>}
+ {challenge && !passkeySignup && <button className="text-button" disabled={busy} onClick={() => run(async () => {
         const r = await send(mode === 'register' ? '/auth/register/resend' : '/auth/reset', {
           email: form.email
         });

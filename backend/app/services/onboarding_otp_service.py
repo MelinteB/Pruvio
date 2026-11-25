@@ -215,6 +215,8 @@ def create_or_update_registration_user(
         raise ValueError("You must review and accept the Terms and Privacy Notice before registration.")
     # Validate the password before storing any changes to a pending account.
     password_hash = hash_password(password) if password else None
+    from app.services.identity_lock import lock_email
+    lock_email(db, normalized_email)
     phone_owner = db.query(User).filter(User.phone_number == phone).first()
     email_owner = find_user_by_email(db, normalized_email)
     if phone_owner and email_owner and phone_owner.id != email_owner.id:
@@ -291,6 +293,7 @@ def verify_code(
     challenge_id: str | None = None,
     user_id: int | None = None,
     context_value: str | None = None,
+    commit_success: bool = True,
 ) -> User:
     if destination_type != "email":
         raise ValueError("Only email OTP is supported.")
@@ -364,8 +367,11 @@ def verify_code(
             user.status = "active"
     user.last_seen_at = datetime.utcnow()
     user.updated_at = datetime.utcnow()
-    db.commit()
-    db.refresh(user)
+    if commit_success:
+        db.commit()
+        db.refresh(user)
+    else:
+        db.flush()
     return user
 
 

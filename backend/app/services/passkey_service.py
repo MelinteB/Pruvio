@@ -106,10 +106,10 @@ def list_user_passkeys(db: Session, user_id: int) -> list[PasskeyCredential]:
     )
 
 
-def begin_passkey_registration(db: Session, user: User) -> tuple[object, str]:
+def begin_passkey_registration(db: Session, user: User, *, pending_signup=False) -> tuple[object, str]:
     if not passkeys_enabled():
         raise ValueError("Passkeys are not available on this server yet.")
-    if user.status != "active":
+    if user.status != "active" and not (pending_signup and user.status == "pending_join"):
         raise ValueError("Your account must be active before adding a passkey.")
 
     exclude = [
@@ -138,6 +138,7 @@ def complete_passkey_registration(
     challenge: bytes,
     browser_credential: dict,
     device_name: str | None = None,
+    commit: bool = True,
 ) -> PasskeyCredential:
     if not passkeys_enabled():
         raise ValueError("Passkeys are not available on this server yet.")
@@ -167,8 +168,11 @@ def complete_passkey_registration(
         device_name=(device_name or "").strip()[:120] or "Passkey",
     )
     db.add(row)
-    db.commit()
-    db.refresh(row)
+    if commit:
+        db.commit()
+        db.refresh(row)
+    else:
+        db.flush()
     return row
 
 
@@ -235,6 +239,12 @@ def delete_passkey(db: Session, *, user_id: int, passkey_id: int) -> None:
     )
     if row is None:
         raise ValueError("Passkey not found.")
+    from app.models.social_identity import SocialAccount
+    user = db.get(User, user_id)
+    other_keys = db.query(PasskeyCredential.id).filter(PasskeyCredential.user_id == user_id, PasskeyCredential.id != passkey_id).first()
+    social = db.query(SocialAccount.id).filter_by(user_id=user_id).first()
+    if user and not user.password_hash and not other_keys and not social:
+        raise ValueError("Set a password or connect another sign-in method before removing your last passkey.")
     db.delete(row)
     db.commit()
 

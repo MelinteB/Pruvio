@@ -357,7 +357,9 @@ def _oidc_identity(provider, tokens, client_id, nonce):
         logger.warning("social_oidc_failed provider=%s reason=%s", provider, reason)
         raise HTTPException(502, "Identity provider token verification failed") from None
     actual_nonce = claims.get("nonce")
-    if not isinstance(actual_nonce, str) or not secrets.compare_digest(actual_nonce, nonce):
+    # LinkedIn confidential authorization-code flow does not reliably return nonce.
+    # Omit nonce only for this provider; a supplied nonce must still match.
+    if not (provider == "linkedin" and actual_nonce is None) and (not isinstance(actual_nonce, str) or not secrets.compare_digest(actual_nonce, nonce)):
         logger.warning("social_oidc_failed provider=%s reason=%s", provider,
                        "nonce_missing" if actual_nonce is None else "nonce_mismatch")
         raise HTTPException(502, "Identity provider token verification failed")
@@ -492,7 +494,7 @@ def start(provider: str, request: Request,
     client_id, _secret, _ = _client(provider)
     params = {"client_id": client_id, "redirect_uri": _redirect_uri(provider),
               "response_type": "code", "state": state, "scope": SCOPES[provider]}
-    if provider in ("google", "linkedin", "yahoo", "apple"):
+    if provider in ("google", "yahoo", "apple"):
         params["nonce"] = nonce
     if provider == "google":
         params["code_challenge"] = _b64(hashlib.sha256(verifier.encode()).digest())
@@ -505,6 +507,7 @@ def start(provider: str, request: Request,
         params["client_key"] = params.pop("client_id")
     if provider == "instagram":
         params["enable_fb_login"] = "0"
+    logger.info("social_oauth_started provider=%s mode=%s", provider, mode)
     response = RedirectResponse(AUTHORIZE[provider] + "?" + urlencode(params),
                                 status_code=302)
     _cookie(response, STATE_COOKIE, _seal(body), 600, apple_post=(provider=="apple"))
@@ -570,6 +573,8 @@ def _callback_failure(provider, request, flow, db, reason="retry"):
     else:
         destination = "/login?social_error=" + reason + "&next=" + quote(
             _internal_next(flow.get("next")), safe="")
+    if destination.startswith("/login?"):
+        destination += "&provider=" + provider
     response = RedirectResponse(destination, status_code=303,
                                 headers={"Cache-Control": "no-store"})
     _clear(response, STATE_COOKIE)
@@ -583,6 +588,7 @@ def callback(provider: str, request: Request, code: str = "", state: str = "",
         raise HTTPException(405, "Sign in with Apple requires a POST callback")
     _ensure_provider(provider)
     _schema_ready(db)
+    logger.info("social_oauth_callback_received provider=%s", provider)
     flow = _unseal(request.cookies.get(STATE_COOKIE, ""), max_age=600)
     if flow.get("provider") != provider or not secrets.compare_digest(
         str(flow.get("state", "")), state
@@ -650,6 +656,12 @@ def _finish_verified_identity(provider, identity, flow, request, db):
         issue(db,user,request,response)
         _clear(response,STATE_COOKIE)
         return response
+    if identity.get("verified") and identity.get("email") and db.query(User.id).filter(func.lower(User.email) == identity["email"].strip().lower()).first():
+        logger.info("social_signup_collision provider=%s reason=existing_email", provider)
+        response = RedirectResponse("/login?social_error=existing_account&provider=" + provider + "&next=" + quote(_internal_next(flow.get("next")),safe=""), status_code=303)
+        _clear(response, STATE_COOKIE)
+        _clear(response, SIGNUP_COOKIE)
+        return response
     pending = {"iat":int(time.time()), "provider":provider,
                "subject":identity["subject"],"name":identity["name"],
                "email":identity["email"] if identity["verified"] else "",
@@ -693,14 +705,18 @@ def complete(data: CompleteSignup, request: Request, response: Response,
     if not data.accepted_terms or not data.accepted_privacy:
         raise HTTPException(422, "Accept the Terms and Privacy Notice")
     email = str(ticket["email"]).strip().lower()
+    from app.services.identity_lock import lock_email
+    lock_email(db, email)
     if db.query(User.id).filter(func.lower(User.email)==email).first():
-        raise HTTPException(409, "This email already belongs to Pruvs. Sign in and connect the provider in Account")
+        logger.info("social_signup_collision provider=%s reason=existing_email", ticket["provider"])
+        raise HTTPException(409, "An account already exists. Sign in using your existing method, then connect this provider in Account.")
     if db.query(SocialAccount.id).filter_by(
         provider=ticket["provider"],subject=ticket["subject"]).first():
         raise HTTPException(409, "This provider identity is already connected")
     phone = normalize_signup_phone(data.phone_number,data.phone_country)
     if db.query(User.id).filter_by(phone_number=phone).first():
-        raise HTTPException(409, "Phone number already registered")
+        logger.info("social_signup_collision provider=%s reason=existing_phone", ticket["provider"])
+        raise HTTPException(409, "Phone number already registered. Sign in to your existing Pruvs account.")
     name = " ".join(data.name.split()).strip()
     chosen = (check_username_available(db,data.username) if data.username
               else derive_available_username(db,name))
@@ -752,7 +768,16 @@ def complete_email(data: CompleteEmailSignup, request: Request, response: Respon
         raise HTTPException(409, "This provider identity is already connected")
     # This method only activates a pending registration with a valid OTP
     # matching the email on its Pruvs User record.
-    user = verify_registration_email(db, data.email, data.code, challenge_id=data.challenge_id)
+    from app.models.verification_code import VerificationCode
+    from app.services.onboarding_otp_service import normalize_email, verify_code
+    row = db.query(VerificationCode).filter_by(challenge_id=data.challenge_id, purpose="registration", destination=normalize_email(data.email), status="pending").first()
+    owner = db.get(User, row.user_id) if row else None
+    if not owner or owner.status != "pending_join":
+        raise HTTPException(409, "Use your existing sign-in method and connect this provider in Account.")
+    if not owner.created_at or (datetime.utcnow() - owner.created_at).total_seconds() > 3600:
+        raise HTTPException(409, "Please restart registration or connect the provider after signing in.")
+    user = verify_code(db, destination_type="email", destination=data.email, code=data.code,
+                       purpose="registration", challenge_id=data.challenge_id, user_id=owner.id, commit_success=False)
     if user.status != "active" or not user.is_email_verified:
         raise HTTPException(403, "Email verification is incomplete")
     # Only a freshly created account may inherit an unlinked external identity.
@@ -796,7 +821,9 @@ def unlink(provider: str, identity=Depends(current),db=Depends(get_db)):
         raise HTTPException(404, "Social identity not connected")
     remaining = db.query(SocialAccount).filter(
         SocialAccount.user_id==user.id, SocialAccount.id!=row.id).count()
-    if not user.password_hash and remaining == 0:
+    from app.models.passkey_credential import PasskeyCredential
+    has_passkey = db.query(PasskeyCredential.id).filter_by(user_id=user.id).first() is not None
+    if not user.password_hash and remaining == 0 and not has_passkey:
         raise HTTPException(409, "Set a password or connect another provider before disconnecting your last sign-in method")
     db.delete(row);db.commit()
     return {"ok":True}

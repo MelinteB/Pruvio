@@ -40,7 +40,7 @@ class Payload(BaseModel):
 @router.get('/config')
 def config():
     from app.services.receipt_currency_service import CURRENCY_OPTIONS
-    return {'version':RELEASE,'passkeys':passkeys.passkeys_enabled(),'currencies':CURRENCY_OPTIONS,
+    return {'version':RELEASE,'passkeys':passkeys.passkeys_enabled(),'passkey_signup':passkeys.passkeys_enabled() and os.getenv('PASSKEY_SIGNUP_ENABLED','false').lower()=='true','currencies':CURRENCY_OPTIONS,
             'support_email':os.getenv('PRUVIO_SUPPORT_EMAIL','')}
 
 @router.get('/me')
@@ -94,6 +94,84 @@ def verify_registration(body:dict,request:Request,response:Response,db=Depends(g
     limit(db,request,'verify',30)
     user=onboarding.verify_registration_email(db,body.get('email',''),body.get('code',''),challenge_id=body.get('challenge_id',''))
     return issue(db,user,request,response)
+
+# Direct passkey enrollment: OTP proof remains bound to the same browser and profile.
+PASSKEY_SIGNUP_COOKIE = 'pruvs_passkey_signup'
+
+def _passkey_signup_enabled():
+    if not passkeys.passkeys_enabled() or os.getenv('PASSKEY_SIGNUP_ENABLED','false').lower() != 'true':
+        raise HTTPException(503, 'Passkey enrollment is not available.')
+
+def _signup_context(user, binding):
+    return digest(json.dumps([binding,user.id,user.email,user.phone_number,user.name,user.username,user.password_hash,
+        bool(user.accepted_terms),bool(user.accepted_privacy)], separators=(',',':')))
+
+def _passkey_signup_user(db, request, body, *, verified=False):
+    from app.models.verification_code import VerificationCode
+    binding = request.cookies.get(PASSKEY_SIGNUP_COOKIE,'')
+    row = db.query(VerificationCode).filter_by(challenge_id=str(body.get('otp_challenge_id') or ''),
+        purpose='passkey_registration',status='verified' if verified else 'pending').first()
+    user = db.get(User,row.user_id,populate_existing=True) if row else None
+    if not binding or not user or user.status != 'pending_join' or user.password_hash or not user.email or not row.context_value or not secrets.compare_digest(row.context_value,_signup_context(user,binding)):
+        raise HTTPException(409,'Registration changed or expired. Start again.')
+    if row.expires_at < datetime.utcnow():
+        raise HTTPException(409,'Registration expired. Start again.')
+    return user,row,binding
+
+@router.post('/auth/passkey/signup/start')
+def passkey_signup_start(body:dict,request:Request,response:Response,db=Depends(get_db)):
+    _passkey_signup_enabled()
+    limit(db,request,'passkey-signup',8)
+    from app.react_app.social_auth import _has_live_pruvs_session
+    if _has_live_pruvs_session(request,db):raise HTTPException(409,'Sign out before creating an account.')
+    from app.services.identity_lock import lock_email
+    email=onboarding.normalize_email(body.get('email',''))
+    if not email:raise ValueError('Email is required.')
+    lock_email(db,email)
+    existing=onboarding.find_user_by_email(db,email)
+    if existing and existing.password_hash:raise HTTPException(409,'Finish your existing email registration or sign in first.')
+    user=onboarding.create_or_update_registration_user(db,phone_number=body.get('phone_number',''),
+        display_name=body.get('name',''),email=body.get('email',''),username=body.get('username'),
+        phone_country=body.get('phone_country','RO'),accepted_terms=body.get('accepted_terms') is True,
+        accepted_privacy=body.get('accepted_privacy') is True,marketing_opt_in=body.get('marketing_opt_in') is True)
+    if user.password_hash:raise HTTPException(409,'Finish your existing email registration first.')
+    user.notifications_opt_in=body.get('notifications_opt_in') is True
+    db.commit()
+    binding=secrets.token_urlsafe(32)
+    row,code=onboarding.create_verification_code(db,user,'email',user.email,'passkey_registration',context_value=_signup_context(user,binding))
+    delivery=onboarding._deliver('email',user.email,code,db=db,row=row)
+    response.set_cookie(PASSKEY_SIGNUP_COOKIE,binding,httponly=True,secure=secure(),samesite='strict',max_age=900,path='/api/v1/auth/passkey/signup')
+    return {'challenge_id':row.challenge_id,'email':user.email,'delivery':delivery}
+
+@router.post('/auth/passkey/signup/options')
+def passkey_signup_options(body:dict,request:Request,response:Response,db=Depends(get_db)):
+    _passkey_signup_enabled()
+    limit(db,request,'passkey-signup-otp',15)
+    user,row,binding=_passkey_signup_user(db,request,body)
+    onboarding.verify_code(db,destination_type='email',destination=user.email,code=body.get('code',''),
+        purpose='passkey_registration',challenge_id=row.challenge_id,user_id=user.id,context_value=_signup_context(user,binding))
+    challenge,options=passkeys.begin_passkey_registration(db,user,pending_signup=True)
+    return store_challenge(db,challenge,options,'passkey-signup',user.id,response)
+
+@router.post('/auth/passkey/signup/finish')
+def passkey_signup_finish(body:dict,request:Request,response:Response,db=Depends(get_db)):
+    _passkey_signup_enabled()
+    limit(db,request,'passkey-signup-finish',15)
+    from app.react_app.social_auth import _has_live_pruvs_session
+    if _has_live_pruvs_session(request,db):raise HTTPException(409,'Sign out before completing enrollment.')
+    user,row,binding=_passkey_signup_user(db,request,body,verified=True)
+    uid=user.id
+    challenge=consume(db,request,body.get('challenge_id'),'passkey-signup',uid)
+    # Recheck under a row lock after consuming the one-use challenge.
+    db.query(User).filter_by(id=uid).with_for_update().populate_existing().one()
+    user,row,binding=_passkey_signup_user(db,request,body,verified=True)
+    passkeys.complete_passkey_registration(db,user,challenge=challenge,browser_credential=body.get('credential',{}),
+        device_name=str(body.get('name','Passkey'))[:120],commit=False)
+    user.is_email_verified=True;user.status='active'
+    row.status='consumed'
+    result=issue(db,user,request,response)
+    response.delete_cookie(PASSKEY_SIGNUP_COOKIE,path='/api/v1/auth/passkey/signup',secure=secure(),httponly=True,samesite='strict')
+    return result
 
 @router.post('/auth/reset')
 def reset(body:dict,request:Request,db=Depends(get_db)):

@@ -35,6 +35,9 @@ from app.react_app.expenses import router as expense_router
 from app.react_app.history_manage import router as history_manage_router
 from app.react_app.receipt_groups_v7140 import router as receipt_groups_router
 from app.react_app.social_auth import router as social_auth_router
+from app.react_app.meta_privacy import router as meta_privacy_router
+from app.services.safe_access_log import install_access_filter
+install_access_filter()
 from app.react_app.bill_projects_v7141 import router as bill_projects_router
 from datetime import datetime
 from sqlalchemy import text as sql_text
@@ -75,7 +78,7 @@ async def lifespan(app):
         except asyncio.TimeoutError:worker.cancel()
 
 app=FastAPI(title='Pruvs Core',version=RELEASE,lifespan=lifespan)
-app.include_router(phone_router);app.include_router(social_auth_router);app.include_router(inbox_router);app.include_router(router);app.include_router(receipt_groups_router);app.include_router(bill_projects_router);app.include_router(loyalty_router);app.include_router(expense_router);app.include_router(history_manage_router);app.include_router(admin_router);app.include_router(legacy_router)
+app.include_router(meta_privacy_router);app.include_router(phone_router);app.include_router(social_auth_router);app.include_router(inbox_router);app.include_router(router);app.include_router(receipt_groups_router);app.include_router(bill_projects_router);app.include_router(loyalty_router);app.include_router(expense_router);app.include_router(history_manage_router);app.include_router(admin_router);app.include_router(legacy_router)
 app.include_router(commerce_router);app.include_router(billing_router);app.include_router(stripe_webhook_router)
 app.include_router(push_router);app.dependency_overrides[push_authenticate]=push_identity
 app.include_router(users_router,prefix='/users',tags=['Admin - Users'])
@@ -90,7 +93,7 @@ async def headers(request,call_next):
     redirect=canonical_browser_redirect(request)
     if redirect:return redirect
     path=request.url.path
-    if request.method not in ('GET','HEAD','OPTIONS') and path != '/api/v1/stripe/webhook' and (path.startswith('/api/v1/') or path.startswith('/notifications-api/')):
+    if request.method not in ('GET','HEAD','OPTIONS') and path not in ('/api/v1/stripe/webhook','/api/v1/auth/social/facebook/deauthorize') and (path.startswith('/api/v1/') or path.startswith('/notifications-api/')):
         if request.headers.get('X-Pruvs-Client')!='react':return JSONResponse({'detail':'Use the authenticated Pruvs client.'},403)
         origin=request.headers.get('origin')
         if origin and not origin_allowed(origin):return JSONResponse({'detail':'Origin is not allowed.'},403)
