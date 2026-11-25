@@ -107,7 +107,10 @@ def test_callback_provider_failure_redirects_without_authenticating(monkeypatch,
     request = SimpleNamespace(method="GET", cookies={social.STATE_COOKIE: ticket})
     response = social.callback(provider, request, code="test-code", state="state", db=None)
     assert response.status_code == 303
-    assert response.headers["location"] == "/login?social_error=retry&next=%2Fbills"
+    from urllib.parse import urlsplit, parse_qs
+    location = urlsplit(response.headers["location"])
+    assert location.path == "/login"
+    assert parse_qs(location.query) == {"social_error":["retry"], "next":["/bills"], "provider":[provider]}
     assert response.headers["cache-control"] == "no-store"
     assert "private-token" not in response.headers["location"]
     assert social.STATE_COOKIE in response.headers["set-cookie"]
@@ -142,9 +145,24 @@ def test_oidc_provider_published_metadata_and_nonce(monkeypatch, caplog, provide
         social._oidc_identity(provider, token({**claims, "nonce": "private-nonce"}), "client", "expected")
     assert "reason=nonce_mismatch" in caplog.text
     assert "private-nonce" not in caplog.text
+    without_nonce = {k:v for k,v in claims.items() if k != "nonce"}
+    if provider == "linkedin":
+        assert social._oidc_identity(provider, token(without_nonce), "client", "expected")["subject"] == "subject"
+    else:
+        with pytest.raises(HTTPException):
+            social._oidc_identity(provider, token(without_nonce), "client", "expected")
+        assert "reason=nonce_missing" in caplog.text
+    # The confidential code-flow compatibility exception never bypasses signature,
+    # expiration or issuer/audience checks, including when nonce is absent.
     with pytest.raises(HTTPException):
-        social._oidc_identity(provider, token({k:v for k,v in claims.items() if k != "nonce"}), "client", "expected")
-    assert "reason=nonce_missing" in caplog.text
+        social._oidc_identity(provider, token({**without_nonce, "exp":now-120}), "client", "expected")
+    assert "reason=expired" in caplog.text
+    other_key = (ec.generate_private_key(ec.SECP256R1()) if algorithm == "ES256"
+                 else rsa.generate_private_key(public_exponent=65537, key_size=2048))
+    forged = {"id_token": social.jwt.encode(without_nonce, other_key, algorithm=algorithm)}
+    with pytest.raises(HTTPException):
+        social._oidc_identity(provider, forged, "client", "expected")
+    assert "reason=signature" in caplog.text
     with pytest.raises(HTTPException):
         social._oidc_identity(provider, token({**claims, "iss": "https://wrong.example"}), "client", "expected")
     assert "reason=issuer" in caplog.text
