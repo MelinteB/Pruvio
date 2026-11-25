@@ -155,11 +155,34 @@ async def upload_campaign_picture(file:UploadFile=File(...),staff:Staff=Depends(
     key=f'campaigns/{staff.merchant_id}/{uuid4().hex}.jpg'
     return put(client,cfg,key,buffer.getvalue(),'image/jpeg')
 
+def campaign_source_keys(staff, primary, keys):
+    selected=list(keys or ([primary] if primary else []))
+    if len(selected)>5 or len(set(selected))!=len(selected) or (primary and selected and primary!=selected[0]):
+        raise HTTPException(422,'Choose up to five distinct pictures with the main picture first')
+    pattern=r'campaigns/'+re.escape(staff.merchant_id)+r'/[a-f0-9]{32}\.jpg'
+    if any(not isinstance(key,str) or not re.fullmatch(pattern,key) for key in selected):
+        raise HTTPException(403,'Campaign pictures must belong to the signed-in merchant')
+    return selected
+
 class RenderArtworkIn(BaseModel):
     media_key:str=Field(min_length=20,max_length=300)
+    media_keys:list[str]=Field(default_factory=list,max_length=5)
     format:str=Field(pattern='^(png|gif|mp4)$')
     headline:str=Field(min_length=3,max_length=100)
     watermark_text:str=Field(default='Pruvs Business',min_length=1,max_length=70)
+
+def photo_collage(photos):
+    if len(photos)==1:return photos[0]
+    # Large primary image, with all additional images in a supporting row.
+    canvas=Image.new('RGB',(720,900),'#edf2f8')
+    def place(photo,box):
+        x,y,w,h=box
+        image=ImageOps.contain(photo,(w,h),Image.Resampling.LANCZOS)
+        canvas.paste(image,(x+(w-image.width)//2,y+(h-image.height)//2))
+    place(photos[0],(12,12,696,480))
+    width=(696-8*(len(photos)-2))//(len(photos)-1)
+    for i,photo in enumerate(photos[1:]):place(photo,(12+i*(width+8),506,width,235))
+    return canvas
 
 def frame(photo,idx,frames,text,headline):
     w,h=720,900
@@ -198,19 +221,36 @@ def frame(photo,idx,frames,text,headline):
     draw.text((26,844),'PRUVS',font=font,fill='#8bebc4')
     return canvas
 
+def render_sequence(photos,fmt,watermark,headline):
+    if fmt=='png':return [frame(photo_collage(photos),0,1,watermark,headline)]
+    if len(photos)==1:return [frame(photos[0],i,18,watermark,headline) for i in range(18)]
+    result=[]
+    for n,photo in enumerate(photos):
+        fitted=ImageOps.pad(photo,(720,900),method=Image.Resampling.LANCZOS,color='#edf2f8')
+        current=frame(fitted,0,1,watermark,headline)
+        for i in range(9):
+            if n and i<2:result.append(Image.blend(previous,current,(i+1)/3))
+            else:result.append(current.copy())
+        previous=current
+    return result
+
 @router.post('/v1/merchant/promotions/media/render')
 def render_campaign_artwork(payload:RenderArtworkIn,staff:Staff=Depends(merchant_actor)):
     require_manager(staff)
-    if not re.fullmatch(r'campaigns/'+re.escape(staff.merchant_id)+r'/[a-f0-9]{32}\.jpg',payload.media_key):
-        raise HTTPException(403,'Artwork must belong to the signed-in merchant')
+    keys=campaign_source_keys(staff,payload.media_key,payload.media_keys)
+    raws=[read_merchant_campaign_source(staff,key) for key in keys]
+    if sum(map(len,raws))>12_000_000:raise HTTPException(413,'Combined campaign photos exceed 12 MB after normalization')
+    photos=[]
+    for raw in raws:
+        with Image.open(io.BytesIO(raw)) as im:
+            photo=im.convert('RGB')
+            photo.thumbnail((1000,1250),Image.Resampling.LANCZOS)
+            photos.append(photo)
     client,cfg=storage()
-    try:raw=client.get_object(Bucket=cfg['PRUVS_CAMPAIGN_R2_BUCKET'],Key=payload.media_key)['Body'].read(MAX_FILE_BYTES+1)
-    except Exception:raise HTTPException(404,'Campaign picture unavailable') from None
-    if len(raw)>MAX_FILE_BYTES:raise HTTPException(413,'Campaign picture too large')
-    try:photo=Image.open(io.BytesIO(raw)).convert('RGB')
-    except (ValueError,OSError,Image.DecompressionBombError):raise HTTPException(422,'Stored image invalid') from None
+    # Static and animated formats retain all source photos in a single compatible asset.
+    photo=photo_collage(photos)
     frames=1 if payload.format=='png' else 18
-    sequence=[frame(photo,i,frames,payload.watermark_text,payload.headline) for i in range(frames)]
+    sequence=render_sequence(photos,payload.format,payload.watermark_text,payload.headline)
     key=f'campaigns/{staff.merchant_id}/{uuid4().hex}.{payload.format}'
     if payload.format=='png':
         buffer=io.BytesIO();sequence[0].save(buffer,format='PNG',optimize=True)

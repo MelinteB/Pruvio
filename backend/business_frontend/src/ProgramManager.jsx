@@ -4,7 +4,7 @@ import ActivationPanel from './ActivationPanel.jsx';
 import {useBusinessLanguage} from './i18n.jsx';
 
 const API=(import.meta.env.VITE_API_BASE||'').replace(/\/$/,'');
-const statusLabel={draft:'Draft',published:'Published program',paused:'Paused program'};
+const statusLabel={draft:'Draft',published:'Published program',paused:'Paused program',archived:'Archived'};
 async function changeProgram(path,token,method='POST',body){
   const res=await fetch(API+path,{method,headers:{Authorization:'Bearer '+token,
     'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
@@ -23,7 +23,7 @@ export default function ProgramManager({programs=[],stores=[],token,onRefresh,no
     finally{setBusy('')}
   }
   function open(p){setEditing(p.id);setDraft({title:p.title,description:p.description||'',
-    stamps_required:p.stamps_required,min_purchase_minor:p.min_purchase_minor,reward_minor:p.reward_minor});setError('')}
+    store_id:p.store_id,stamps_required:p.stamps_required,min_purchase_minor:p.min_purchase_minor,reward_minor:p.reward_minor});setError('')}
   return <><ActivationPanel token={token} stores={stores} programs={programs} onAddStore={onAddStore} onCreateProgram={onCreateProgram} onViewPrograms={()=>document.getElementById('pruvs-programs-list')?.scrollIntoView({behavior:'smooth',block:'start'})} onVerifyPurchases={onVerifyPurchases}/><section className="panel" id="pruvs-programs-list">
     <div className="panel-heading"><h2>{t('Manage loyalty programs')}</h2><span>{t('{count} total',{count:programs.length})}</span></div>
     <p className="helper">{t('Publish, pause, resume and edit your programs. Reward criteria are locked after publication to protect existing customers.')}</p>
@@ -35,14 +35,18 @@ export default function ProgramManager({programs=[],stores=[],token,onRefresh,no
         minimum:((p.min_purchase_minor/100).toFixed(2))+' '+(p.currency||'RON')
       })}</small></div>
       <span className={'pill '+(p.status==='published'?'good':'')}>{t(statusLabel[p.status]||p.status)}</span>
-      <div className="pruvs-program-actions"><button type="button" className="btn subtle" onClick={()=>open(p)}><PencilLine size={15}/> {t('Edit')}</button>
+      <div className="pruvs-program-actions"><button type="button" className="btn subtle" disabled={!!busy||p.status==='archived'} onClick={()=>open(p)}><PencilLine size={15}/> {t('Edit')}</button>
+      <button type="button" className="btn outline" disabled={!!busy} onClick={()=>act(p.id,'POST','/v1/merchant/programs/'+p.id+'/duplicate')}>{t('Duplicate as draft')}</button>
+      {['draft','paused'].includes(p.status)&&<button type="button" className="btn outline" disabled={!!busy} onClick={()=>{if(window.confirm(t('Archive this program?')))act(p.id,'POST','/v1/merchant/programs/'+p.id+'/archive')}}>{t('Archive')}</button>}
+      {p.status==='draft'&&<button type="button" className="btn outline" disabled={!!busy} onClick={()=>{if(window.confirm(t('Delete this unused draft?')))act(p.id,'DELETE','/v1/merchant/programs/'+p.id)}}>{t('Delete draft')}</button>}
       {p.status==='draft'&&<button type="button" className="btn primary" disabled={!!busy} onClick={()=>act(p.id,'POST','/v1/merchant/programs/'+p.id+'/publish')}><Check size={15}/> {t('Publish')}</button>}
       {p.status==='published'&&<button type="button" className="btn outline" disabled={!!busy} onClick={()=>{if(window.confirm(t('Pause this program for new purchases?')))act(p.id,'POST','/v1/merchant/programs/'+p.id+'/pause')}}><PauseCircle size={15}/> {t('Pause')}</button>}
       {p.status==='paused'&&<button type="button" className="btn primary" disabled={!!busy} onClick={()=>act(p.id,'POST','/v1/merchant/programs/'+p.id+'/resume')}><PlayCircle size={15}/> {t('Resume')}</button>}
       </div>
-      {editing===p.id&&<form className="pruvs-program-editor" onSubmit={e=>{e.preventDefault();act(p.id,'PATCH','/v1/merchant/programs/'+p.id,draft)}}>
+      {editing===p.id&&<form className="pruvs-program-editor" onSubmit={e=>{e.preventDefault();act(p.id,'PATCH','/v1/merchant/programs/'+p.id,p.status==='draft'?draft:{title:draft.title,description:draft.description})}}>
         <label>{t('Name')}<input required minLength={3} maxLength={180} value={draft.title} onChange={e=>setDraft(x=>({...x,title:e.target.value}))}/></label>
         <label>{t('Program description')}<textarea value={draft.description} maxLength={500} onChange={e=>setDraft(x=>({...x,description:e.target.value}))}/></label>
+        <label>{t('Location')}<select value={draft.store_id} disabled={p.status!=='draft'} onChange={e=>setDraft(x=>({...x,store_id:e.target.value}))}>{stores.filter(s=>s.active!==false||s.id===draft.store_id).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
         <div className="pruvs-program-editor-grid">
           <label>{t('Required verified purchases')}<input type="number" min={2} max={30} disabled={p.status!=='draft'} value={draft.stamps_required} onChange={e=>setDraft(x=>({...x,stamps_required:Number(e.target.value)}))}/></label>
           <label>{t('Minimum purchase (RON)')}<input type="number" min={0} step={0.01} disabled={p.status!=='draft'} value={draft.min_purchase_minor/100} onChange={e=>setDraft(x=>({...x,min_purchase_minor:Math.round(Number(e.target.value)*100)}))}/></label>

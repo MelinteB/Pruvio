@@ -140,3 +140,8 @@
 @media (prefers-reduced-motion: reduce) {
   .campaign-carousel-progress i { transform: scaleX(1); }
 }
+
+/* Layout adapts to the actual slide width, not the desktop viewport. */
+.campaign-carousel-slide{container-type:inline-size}
+.campaign-carousel-viewport{align-items:stretch;border-radius:16px}
+.campaign-carousel-slide>.campaign-offer-card{height:100%}

@@ -1,12 +1,11 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {Link} from 'react-router-dom';
-import {Gift} from 'lucide-react';
+import {ArrowRight,Gift} from 'lucide-react';
 import {request} from './api';
 import {t} from './i18n';
 import './promotions-preview.css';
 import CampaignCarousel,{livePromotions} from './CampaignCarousel.jsx';
-import CampaignCreative,{hasCampaignCreative} from './CampaignCreative.jsx';
-import OfferLocation from './OfferLocation.jsx';
+import CampaignOfferCard from './CampaignOfferCard.jsx';
 /** Shows explicitly published, not-expired Business promotions; the parent gates this UI. */
 export default function PromotionsPreview(){
   const [items,setItems]=useState([]);
@@ -29,10 +28,12 @@ export default function PromotionsPreview(){
     // Refresh visibility whenever customers return to Core. Unpublished
     // campaigns disappear without requiring a hard browser reload.
     const onFocus=()=>{if(!document.hidden)refresh()};
+    const timer=window.setInterval(onFocus,30000);
     window.addEventListener('focus',onFocus);
     document.addEventListener('visibilitychange',onFocus);
     return()=>{
       requestVersion.current++;
+      window.clearInterval(timer);
       window.removeEventListener('focus',onFocus);
       document.removeEventListener('visibilitychange',onFocus);
     };
@@ -42,16 +43,13 @@ export default function PromotionsPreview(){
     <button type="button" onClick={refresh}>Retry campaigns</button>
   </section>;
   if(state==='loading'||!items.length)return null;
-  return <section className="pruvs-promos">
+  return <section className="pruvs-promos" aria-label={t('Merchant loyalty promotions')}>
+    <header className="campaign-preview-heading">
+      <div><Gift size={19} aria-hidden="true"/><h2>{t('Featured rewards')}</h2></div>
+      <Link className="pruvs-promos-more" to="/rewards">{t('Explore rewards')} <ArrowRight size={16} aria-hidden="true"/></Link>
+    </header>
     <div className="pruvs-promos-grid"><CampaignCarousel campaigns={items} label={t('Merchant loyalty promotions')}
-      renderCampaign={p=><article className="pruvs-promo">
-      {hasCampaignCreative(p)?
-        <CampaignCreative promotion={p}/>:
-        <><small className="pruvs-promo-tag">LOCAL REWARDS · {p.merchant_name}</small><h3>{p.headline}</h3><p>{p.message}</p></>}
-      <div className="pruvs-promo-meta"><Gift size={16}/>{p.stamps_required} qualifying receipts → {(p.reward_minor/100).toFixed(2)} {p.currency} reward</div>
-      <OfferLocation promotion={p} compact/>
-      <Link to={'/rewards?program='+encodeURIComponent(p.program_id)}>See loyalty program</Link>
-    </article>}/></div>
-    <Link className="pruvs-promos-more" to="/rewards">Explore rewards</Link>
+      renderCampaign={p=><CampaignOfferCard promotion={p} className="pruvs-promo"
+        action={<Link className="campaign-offer-action" to={'/rewards?program='+encodeURIComponent(p.program_id)}>{t('See loyalty program')} <ArrowRight size={17} aria-hidden="true"/></Link>}/>}/></div>
   </section>;
 }

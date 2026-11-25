@@ -25,6 +25,8 @@ class CampaignBrief(BaseModel):
     creative_instructions:str=Field(default='',max_length=1200)
     language: str = Field(default='en', pattern=r'^(en|ro)$')
     media_key:str|None=Field(default=None,min_length=20,max_length=300)
+    media_keys:list[str]=Field(default_factory=list,max_length=5)
+    restaurant_link:str=Field(default='',max_length=900)
 
 SCHEMA={'type':'object','additionalProperties':False,'properties':{
     'headline':{'type':'string'},'message':{'type':'string'},
@@ -77,10 +79,10 @@ def campaign_provider_input(facts:dict, uploaded_image:bytes|None):
     facts_text=json.dumps(facts,ensure_ascii=False)
     if not uploaded_image:
         return facts_text
-    image_uri='data:image/jpeg;base64,'+base64.b64encode(uploaded_image).decode('ascii')
+    images=[uploaded_image] if isinstance(uploaded_image,bytes) else uploaded_image
     return [{'role':'user','content':[
         {'type':'input_text','text':facts_text},
-        {'type':'input_image','image_url':image_uri,'detail':'auto'},
+        *[{'type':'input_image','image_url':'data:image/jpeg;base64,'+base64.b64encode(photo).decode('ascii'),'detail':'auto'} for photo in images],
     ]}]
 
 
@@ -102,10 +104,11 @@ def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Sessio
     campaign_schema_ready(db)  # Do not bill AI if the campaign cannot be saved.
     # Validate and load the merchant's uploaded photo before starting a billable AI call.
     # No arbitrary image URLs or cross-merchant R2 keys may be supplied.
-    source_image=None
-    if payload.media_key:
-        from .media_v067 import read_merchant_campaign_source
-        source_image=read_merchant_campaign_source(staff,payload.media_key)
+    from .media_v067 import campaign_source_keys, read_merchant_campaign_source
+    keys=campaign_source_keys(staff,payload.media_key,payload.media_keys)
+    source_image=[read_merchant_campaign_source(staff,key) for key in keys]
+    if sum(map(len,source_image))>12_000_000:
+        raise HTTPException(413,'Combined campaign photos exceed 12 MB after normalization')
     facts={
       'merchant':merchant.name,'location':store.name,
       'program_title':program.title,'program_description':program.description,
@@ -117,7 +120,8 @@ def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Sessio
       'requested_watermark':payload.watermark_text.strip() or 'Pruvs Business',
       'merchant_creative_brief':payload.creative_instructions.strip(),
       'output_language':payload.language,
-      'uploaded_campaign_photo':bool(source_image)
+      'uploaded_campaign_photo':bool(source_image),'uploaded_photo_count':len(source_image),
+      'merchant_supplied_restaurant_link':payload.restaurant_link
     }
     instructions=('You write merchant-reviewed advertising copy for the Pruvs loyalty app. '
       'Return only JSON with the specified keys. Use only the provided merchant facts. '
@@ -129,7 +133,8 @@ def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Sessio
       'If uploaded_campaign_photo is true, visually inspect the supplied photo and '
       'make its visible main product, food, object or scene the central SUBJECT '
       'of the headline, message, visual brief and motion storyboard. '
-      'Use the very same supplied photo as the creative foundation: recommend '
+      'The first photo is the selected main subject; consider all remaining photos as supporting context. '
+      'Use the supplied photos as the creative foundation: recommend '
       'layout and subtle pan/zoom, not an unrelated AI-generated scene. '
       'Do not invent a precise product brand, ingredients, person identity, '
       'prices, availability or promotion terms from the photo; when unclear, '
@@ -177,7 +182,7 @@ def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Sessio
         try:
             result=parse_generated_draft(payload_json,payload.format,facts['requested_watermark'])
             return {'draft':result.model_dump(),'criteria':facts,
-                    'source_image_used':bool(source_image),
+                    'source_image_used':bool(source_image),'source_image_count':len(source_image),
                     'review_required':True,'published':False,
                     'note':'Merchant must review the draft. No reward or campaign is published automatically.'}
         except ValueError:

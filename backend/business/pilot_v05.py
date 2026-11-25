@@ -20,6 +20,7 @@ from .db import get_db
 from .models import (Merchant, Staff, Store, Program, Membership, ReceiptClaim,
                      Promotion, PurchaseCode, utcnow)
 from .security import merchant_actor, customer_actor, decode
+from .studio_sources_v0623 import studio_data, save_studio_data
 
 router=APIRouter(tags=['Pruvs v0.5 Pilot'])
 
@@ -110,6 +111,8 @@ class PromotionIn(BaseModel):
     media_url: str|None = Field(default=None,max_length=900)
     media_type: str|None = Field(default=None,max_length=40)
     media_alt: str|None = Field(default=None,max_length=160)
+    source_keys: list[str]|None = Field(default=None,max_length=5)
+    restaurant_link: str|None = Field(default=None,max_length=900)
 
     @field_validator('headline','message',mode='before')
     @classmethod
@@ -137,7 +140,7 @@ def merchant_promotions(staff:Staff=Depends(merchant_actor),db:Session=Depends(g
     rows=db.scalars(select(Promotion).where(Promotion.merchant_id==staff.merchant_id)
                     .order_by(Promotion.created_at.desc()).limit(100)).all()
     now=utcnow()
-    return [promo_json(p,db,now=now) for p in rows]
+    return [{**promo_json(p,db,now=now),**studio_data(db,p)} for p in rows]
 
 @router.post('/v1/merchant/promotions',status_code=201)
 def merchant_create_promo(payload:PromotionIn,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
@@ -150,8 +153,8 @@ def merchant_create_promo(payload:PromotionIn,staff:Staff=Depends(merchant_actor
                     headline=payload.headline,message=payload.message,
                     media_url=media_url,media_type=media_type,media_alt=media_alt,
                     status='draft',duration_days=payload.duration_days)
-    db.add(promo);db.commit();db.refresh(promo)
-    return promo_json(promo,db)
+    db.add(promo);db.flush();save_studio_data(db,staff,promo,payload.source_keys,payload.restaurant_link);db.commit();db.refresh(promo)
+    return {**promo_json(promo,db),**studio_data(db,promo)}
 
 @router.patch('/v1/merchant/promotions/{promotion_id}')
 def update_promotion_draft(promotion_id:str,payload:PromotionIn,
@@ -172,8 +175,9 @@ def update_promotion_draft(promotion_id:str,payload:PromotionIn,
     promo.media_url=media_url
     promo.media_type=media_type
     promo.media_alt=media_alt
+    save_studio_data(db,staff,promo,payload.source_keys,payload.restaurant_link)
     db.commit()
-    return promo_json(promo,db)
+    return {**promo_json(promo,db),**studio_data(db,promo)}
 
 
 @router.post('/v1/merchant/promotions/{promotion_id}/publish')
@@ -240,6 +244,9 @@ def require_publishable_campaign(db:Session,staff:Staff,promotion:Promotion)->No
     store=db.get(Store,program.store_id)
     if not program_is_discoverable(program,merchant,store):
         raise HTTPException(409,'An active merchant and location are required to publish a campaign.')
+    from .campaign_policy_v0623 import campaign_gate_enabled, merchant_receipts_ready
+    if campaign_gate_enabled() and not merchant_receipts_ready(db,program.merchant_id):
+        raise HTTPException(409,'Activate merchant receipt rewards before publishing a campaign.')
 
 
 @router.post('/v1/merchant/promotions/{promotion_id}/reopen')
@@ -255,7 +262,7 @@ def reopen_unpublished_promotion(promotion_id:str,staff:Staff=Depends(merchant_a
     promotion.published_at=None
     promotion.expires_at=None
     db.commit()
-    return promo_json(promotion,db)
+    return {**promo_json(promotion,db),**studio_data(db,promotion)}
 
 
 @router.post('/v1/merchant/promotions/{promotion_id}/archive')
@@ -272,7 +279,7 @@ def archive_unpublished_promotion(promotion_id:str,staff:Staff=Depends(merchant_
         raise HTTPException(409,'Unpublish the live campaign before archiving it.')
     promotion.status='archived'
     db.commit()
-    return promo_json(promotion,db)
+    return {**promo_json(promotion,db),**studio_data(db,promotion)}
 
 
 @router.post('/v1/merchant/promotions/{promotion_id}/restore')
@@ -288,7 +295,7 @@ def restore_archived_promotion(promotion_id:str,staff:Staff=Depends(merchant_act
     promotion.published_at=None
     promotion.expires_at=None
     db.commit()
-    return promo_json(promotion,db)
+    return {**promo_json(promotion,db),**studio_data(db,promotion)}
 
 
 @router.get('/v1/promotions')
@@ -311,9 +318,17 @@ def public_promotions(limit:int=Query(12,ge=1,le=30),db:Session=Depends(get_db))
                Merchant.status=='active',
                Store.merchant_id==Merchant.id,Store.active.is_(True))
         .order_by(Promotion.published_at.desc(),Promotion.id.desc())
-        .limit(limit)
     ).all()
-    return [promo_json(p,db,now=now) for p in rows]
+    from .campaign_policy_v0623 import campaign_gate_enabled, merchant_receipts_ready
+    if campaign_gate_enabled():
+        allowed={}
+        result=[]
+        for p in rows:
+            if p.merchant_id not in allowed:allowed[p.merchant_id]=merchant_receipts_ready(db,p.merchant_id)
+            if allowed[p.merchant_id]:result.append(p)
+            if len(result)>=limit:break
+        rows=result
+    return [promo_json(p,db,now=now) for p in rows[:limit]]
 
 class IssuePurchaseIn(BaseModel):
     program_id: str

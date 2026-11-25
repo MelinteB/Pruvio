@@ -117,7 +117,9 @@ def my_pilot_access(staff: Staff = Depends(merchant_actor),
         }
     require_db_mode(db)
     row = db.get(MerchantPilotEnrollment, staff.merchant_id)
+    last=db.scalar(select(MerchantPilotAudit).where(MerchantPilotAudit.merchant_id==staff.merchant_id).order_by(MerchantPilotAudit.created_at.desc()).limit(1))
     return {**enrollment_json(row, mode='database'),
+            'decision_note': last.note if last and last.action in ('deny','revoke') else '',
             'merchant_id': staff.merchant_id,
             'request_supported': staff.role in ('owner','manager'),
             'has_published_program': merchant_is_eligible(db, staff.merchant_id)}

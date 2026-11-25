@@ -1,0 +1,4 @@
+# Consolidated loyalty release candidate
+Includes PR 43 adaptive layout and multi-photo studio plus public campaign-only Discover and map lists, join/publication eligibility gate, safe program edits, duplicate draft, archive/delete guard, activation-aware merchant messages and wallet instructions.
+Enable PRUVS_CAMPAIGN_DISCOVERY_REQUIRED=true on combined staging only after CI, migration/approval and live checks. Existing merchant approval remains mandatory; no automatic approval. Existing member wallet still uses the internal offers API to avoid losing receipt eligibility on campaign unpublication. Core public discovery filters by campaign feed and merchant approval. Direct Business discover endpoint still returns program metadata for wallet compatibility. No production deploy.
+Remaining: persistent media source metadata, safe website import, slideshow animation, revision lineage and activity audit, full translations and live device checks.

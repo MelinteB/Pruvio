@@ -33,6 +33,9 @@ def join(program_id:str,identity=Depends(current)):
     from uuid import UUID
     try: program_id=str(UUID(program_id))
     except (ValueError,AttributeError): raise HTTPException(422, 'Invalid program ID.') from None
+    from app.react_app.loyalty_pilot_access_v7158 import flags
+    if os.getenv('PRUVS_CAMPAIGN_DISCOVERY_REQUIRED','false').lower()=='true' and not flags()[3]:
+        raise HTTPException(503,'Campaign purchase verification is not enabled in this environment.')
     return call_business('/v1/customer/programs/'+program_id+'/join', method='POST', user_id=identity[0].id)
 
 class LeaveProgramIn(BaseModel):

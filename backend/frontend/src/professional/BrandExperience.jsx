@@ -24,7 +24,7 @@ export function BrandPhrase({ route = '/' }) {
   return <span className="pruvs-brand-phrase" aria-label="Pruvs brand message">{MESSAGES[index]}</span>;
 }
 
-export function HomeWelcome({ user }) {
+export function HomeWelcome({ user, children }) {
   const firstName=(user?.name||user?.username||'').trim().split(/\s+/)[0]||'there';
   const journeys=[
     {to:'/upload',label:'Scan a receipt',detail:'Start a fresh split',Icon:ScanLine,theme:'scan',tag:'START HERE'},
@@ -54,6 +54,7 @@ export function HomeWelcome({ user }) {
         </div>
       </div>
     </div>
+    {children}
     <div className="core-v7160-section-title"><div><span className="core-v7160-kicker">WHAT WOULD YOU LIKE TO DO?</span><h2>Your next move, made simple.</h2></div><Link to="/history">View everything <ChevronRight size={17}/></Link></div>
     <div className="core-v7160-journeys">{journeys.map(({to,label,detail,Icon,theme,tag})=>
       <Link key={to} className={'core-v7160-journey is-'+theme} to={to}>

@@ -10,7 +10,7 @@ import './rewards-v05.css';
 import './rewards-package-v7162.css';
 import CampaignCarousel,{livePromotions} from './CampaignCarousel.jsx';
 import CampaignCreative,{hasCampaignCreative} from './CampaignCreative.jsx';
-import OfferLocation from './OfferLocation.jsx';
+import CampaignOfferCard from './CampaignOfferCard.jsx';
 import CustomerReceiptCode from './CustomerReceiptCode';
 
 export default function Rewards(){
@@ -151,6 +151,7 @@ function AccountRewards(){
     }finally{setLoading(false);}
   }
   useEffect(()=>{refresh(null,tab);},[tab]);
+  useEffect(()=>{const onFocus=()=>{if(!document.hidden&&!busy)refresh(coordinates,tab)};window.addEventListener('focus',onFocus);return()=>window.removeEventListener('focus',onFocus)},[tab,coordinates,busy]);
 
   function nearMe(){
     setError('');setMessage('');
@@ -178,21 +179,21 @@ function AccountRewards(){
   // City search filters published Pruvs merchants by their registered store address.
   // It does not claim that Google Maps businesses are registered with Pruvs.
   const cityMatches=(text,city)=>String(text||'').toLocaleLowerCase().includes(city.toLocaleLowerCase());
-  const shownOffers=(cityFilter?offers.filter(o=>cityMatches(o.store?.address,cityFilter)||cityMatches(o.store?.name,cityFilter)||cityMatches(o.merchant_name,cityFilter)):offers)
+  const activePromotions=livePromotions(promotions);
+  const publicProgramIds=new Set(activePromotions.map(p=>p.program_id));
+  const publicOffers=offers.filter(o=>publicProgramIds.has(o.program.id)&&o.receipt_pilot_allowed===true);
+  const shownOffers=(cityFilter?publicOffers.filter(o=>cityMatches(o.store?.address,cityFilter)||cityMatches(o.store?.name,cityFilter)||cityMatches(o.merchant_name,cityFilter)):publicOffers)
     .slice().sort((a,b)=>Number(b.program.id===promotedProgram)-Number(a.program.id===promotedProgram));
-  const areaPreviewOffers=offers.filter(o=>!cityQuery.trim()||cityMatches(o.store?.address,cityQuery.trim())||cityMatches(o.store?.name,cityQuery.trim())||cityMatches(o.merchant_name,cityQuery.trim()));
+  const areaPreviewOffers=publicOffers.filter(o=>!cityQuery.trim()||cityMatches(o.store?.address,cityQuery.trim())||cityMatches(o.store?.name,cityQuery.trim())||cityMatches(o.merchant_name,cityQuery.trim()));
   const mappedOffer=areaPreviewOffers.find(o=>o.program.id===mapProgram)||areaPreviewOffers[0];
   const byProgram=new Map(offers.map(o=>[o.program.id,o]));
-  const activePromotions=livePromotions(promotions);
   const activePromotionByProgram=new Map();
   // The public feed is newest first. City and wallet show one preview per program.
   for(const promotion of activePromotions){
     if(!activePromotionByProgram.has(promotion.program_id))activePromotionByProgram.set(promotion.program_id,promotion);
   }
-  const featuredPromotions=cityFilter?[]:activePromotions
-    .filter(p=>!coordinates||byProgram.has(p.program_id));
-  const featuredPrograms=new Set(featuredPromotions.map(p=>p.program_id));
-  const remainingOffers=shownOffers.filter(o=>!featuredPrograms.has(o.program.id));
+  const visibleProgramIds=new Set(shownOffers.map(o=>o.program.id));
+  const featuredPromotions=activePromotions.filter(p=>visibleProgramIds.has(p.program_id));
   const selectedFeaturedCampaign=featuredPromotions.find(p=>p.program_id===promotedProgram);
   // Business is the authority for merchant eligibility. Old Business versions
   // without this flag fail closed for receipt claims, not for program discovery.
@@ -219,11 +220,10 @@ function AccountRewards(){
         <button type="button" onClick={()=>refresh(null,'offers')}><RefreshCcw size={16}/> Retry membership check</button>
       </Panel>}
       {campaignState==='unavailable'&&<p role="status" className="pruvs-v7152-partial-warning">
-        Featured campaigns are currently unavailable. Published loyalty programs are still available below.
+        Published campaigns are temporarily unavailable. Your existing memberships and rewards remain in My wallet.
       </p>}
       <div className="row wrap rewards-actions"><button type="button" onClick={nearMe} disabled={!!busy}><MapPin size={17}/> Offers near me</button><button type="button" onClick={()=>setCityOpen(true)} disabled={!!busy}><Search size={17}/> Search area on map</button><button type="button" onClick={()=>{setCityFilter('');setCoordinates(null);refresh(null);}} disabled={!!busy}><Compass size={17}/> All offers</button><button type="button" onClick={()=>refresh()} disabled={!!busy}><RefreshCcw size={17}/> Refresh</button></div>
       {cityFilter&&<p className="pruvs-v7150-city-status">Showing Pruvs merchant programs matching <strong>{cityFilter}</strong>. <button type="button" onClick={()=>setCityOpen(true)}>Change city</button></p>}
-      {promotedProgram&&remainingOffers.some(o=>o.program.id===promotedProgram)&&<p role="status" className="pruvs-v7152-partial-warning">Your selected loyalty program is listed first below. Join it to start earning merchant-approved rewards.</p>}
       {featuredPromotions.length>0&&<section className="rewards-featured">
         <h2>{t('Featured merchant promotions')}</h2>
         <CampaignCarousel key={selectedFeaturedCampaign?.id||'featured'} campaigns={featuredPromotions}
@@ -231,30 +231,14 @@ function AccountRewards(){
             const offer=byProgram.get(p.program_id);
             const member=joined.has(p.program_id);
             const description=offer?.program.description;
-            return <Panel className="rewards-card rewards-promotion">
-              {hasCampaignCreative(p)?<CampaignCreative promotion={p}/>:
-                <><small className="rewards-promo-tag">LOCAL PROMOTION · {p.merchant_name}</small><h3>{p.headline}</h3><p>{p.message}</p></>}
-              {p.program_title&&p.program_title!==p.headline&&<strong>{p.program_title}</strong>}
-              {description&&description!==p.message&&<p>{description}</p>}
-              <p><strong>{p.stamps_required} eligible receipts</strong> to earn {money(p.reward_minor/100,p.currency)} · Minimum purchase {money(p.min_purchase_minor/100,p.currency)}</p>
-              <small>{p.store_name}{offer?.distance_km!=null?' · '+offer.distance_km+' km away':''}{p.expires_at?' · Ends '+new Date(p.expires_at).toLocaleDateString():''}</small>
-              <OfferLocation promotion={p} compact/>
-              <button type="button" className="primary" disabled={!!busy||!canJoin||member}
+            return <CampaignOfferCard promotion={p} className="rewards-promotion" description={description} distanceKm={offer?.distance_km}
+              action={<button type="button" className="campaign-offer-action primary" disabled={!!busy||!canJoin||member}
                 onClick={()=>perform(p.program_id,()=>send('/loyalty/programs/'+p.program_id+'/join'),()=> 'Joined '+p.program_title+'.')}>
                 {member?<><CheckCircle2 size={16}/> {t('Joined')}</>:t(busy===p.program_id?'Joining…':'Join promoted program')}
-              </button>
-            </Panel>;
+              </button>}/>;
           }}/>
       </section>}
-      <div className="rewards-cards">{remainingOffers.map(o=><Panel key={o.program.id} className="rewards-card"><div className="rewards-icon"><Gift size={22}/></div><small className="muted">{o.merchant_name} · {o.store.name}</small>
-        {activePromotionByProgram.has(o.program.id)&&hasCampaignCreative(activePromotionByProgram.get(o.program.id))&&
-          <CampaignCreative promotion={activePromotionByProgram.get(o.program.id)} compact/>}
-        <h2>{o.program.title}</h2><p>{o.program.description}</p><p><strong>{o.program.stamps_required} qualifying receipts</strong> to earn {money(o.program.reward_minor/100,o.program.currency)}</p>
-        {o.distance_km!=null && <small>{o.distance_km} km away</small>}
-        <button type="button" className="primary" disabled={!!busy || !canJoin || joined.has(o.program.id)} onClick={()=>perform(o.program.id,()=>send('/loyalty/programs/'+o.program.id+'/join'),()=> 'Joined '+o.program.title+'.')}>{joined.has(o.program.id)?<><CheckCircle2 size={16}/> Joined</>:busy===o.program.id?'Joining…':'Join loyalty program'}</button>
-      </Panel>)}
-      </div>
-      {!remainingOffers.length&&!featuredPromotions.length&&!error&&<Panel><p>{cityFilter?'No published Pruvs loyalty programs match this city. Try another city or choose All offers.':'No published merchant programs are available yet. Once merchants publish programs, they will appear here.'}</p></Panel>}
+      {!featuredPromotions.length&&campaignState==='ready'&&!error&&<Panel><p>{t('No active published campaigns are available for this area.')}</p></Panel>}
     </>}
     {!loading && status?.enabled && tab==='wallet' && walletState!=='ready' &&
       <Panel title="Wallet temporarily unavailable">
@@ -301,7 +285,7 @@ function AccountRewards(){
               <div className="pruvs-package-head"><strong>Receipts linked to this campaign</strong>
                 <small>{pending.length} awaiting package review · {remaining} receipt slot{remaining===1?'':'s'} remaining</small>
               </div>
-              {!offer&&<p className="muted">This campaign is not currently accepting purchase verification.</p>}
+              {!offer&&<p className="muted">{t('Receipt verification is unavailable for this program. The merchant may need to activate receipt rewards or resume the program.')}</p>}
               {offer&&!status?.customer_codes_v12_enabled&&<p className="muted">Campaign purchase verification is not enabled for this account in the current environment.</p>}
               {claimsState==='unavailable'&&<p role="status">Receipt status could not be loaded. QR creation is unavailable until verification is restored.</p>}
               {claimsState==='ready'&&<>
@@ -316,7 +300,7 @@ function AccountRewards(){
                       </div>
                     </li>;
                   })}
-                </ol>:<p className="muted">No receipts linked yet. Add one saved receipt per required purchase.</p>}
+                </ol>:<p className="muted">{t(offer&&status?.customer_codes_v12_enabled?'No receipts linked yet. Add one saved receipt per required purchase.':'No receipts linked yet.')}</p>}
                 {verificationChoices.length>0&&offer&&status?.customer_codes_v12_enabled&&
                   <div className="pruvs-package-add">
                     <strong>Campaign purchase verification</strong>
@@ -329,7 +313,7 @@ function AccountRewards(){
                       caseId={receipt.case_id} userId={user?.id} storageMode={receipt.storage_mode}
                       programs={[offer]} existingClaim={choice?.claim} onFinished={()=>refresh(null,'wallet')}/>
                   </div>}
-                {!verificationChoices.length&&remaining>0&&rewardCount===0&&<Link to="/upload">Scan a receipt to continue this campaign</Link>}
+                {!verificationChoices.length&&remaining>0&&rewardCount===0&&offer&&status?.customer_codes_v12_enabled&&<Link to="/upload">Scan a receipt to continue this campaign</Link>}
                 {rewardCount>0&&<p className="pruvs-package-ready">You have an unused reward. Redeem it before beginning another package of receipts.</p>}
                 {remaining===0&&pending.length>0&&<p className="pruvs-package-ready">All required receipts are linked. The merchant must unlock and review each QR before approving the entire package.</p>}
                 {m.status!=='published'&&<p className="muted">Program paused. Existing receipt records remain linked; new QR submissions require an active program.</p>}
