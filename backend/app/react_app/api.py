@@ -124,6 +124,12 @@ def passkey_signup_start(body:dict,request:Request,response:Response,db=Depends(
     limit(db,request,'passkey-signup',8)
     from app.react_app.social_auth import _has_live_pruvs_session
     if _has_live_pruvs_session(request,db):raise HTTPException(409,'Sign out before creating an account.')
+    from app.services.identity_lock import lock_email
+    email=onboarding.normalize_email(body.get('email',''))
+    if not email:raise ValueError('Email is required.')
+    lock_email(db,email)
+    existing=onboarding.find_user_by_email(db,email)
+    if existing and existing.password_hash:raise HTTPException(409,'Finish your existing email registration or sign in first.')
     user=onboarding.create_or_update_registration_user(db,phone_number=body.get('phone_number',''),
         display_name=body.get('name',''),email=body.get('email',''),username=body.get('username'),
         phone_country=body.get('phone_country','RO'),accepted_terms=body.get('accepted_terms') is True,

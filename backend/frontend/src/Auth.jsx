@@ -49,7 +49,7 @@ export default function Auth({
     return () => {active = false;};
   }, [mode, params.get('social')]);
 
-  useEffect(()=>{if(mode==='login')return;if(passkeySignup){sessionStorage.removeItem(storageKey);return;}if(challenge&&!done)sessionStorage.setItem(storageKey,JSON.stringify({email:challenge.email||form.email,challenge,next:safeNext(returnTo),expires:Date.now()+15*60*1000}));else sessionStorage.removeItem(storageKey)},[challenge,done,returnTo]);
+  useEffect(()=>{if(mode==='login')return;if(passkeySignup){sessionStorage.removeItem(storageKey);return;}if(challenge&&!done)sessionStorage.setItem(storageKey,JSON.stringify({email:challenge.email||form.email,challenge,next:safeNext(returnTo),expires:Date.now()+15*60*1000}));else sessionStorage.removeItem(storageKey)},[challenge,done,returnTo,passkeySignup]);
   const set = (k, v) => {
     if(k==='username')setUsernameEdited(true);
     setForm(f=>({...f,[k]:v,...(k==='name'&&!usernameEdited?{username:usernameFromName(v)}:{})}));

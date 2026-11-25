@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from app.db.database import get_db
 from app.models.social_identity import SocialAccount
+from datetime import datetime
 from app.react_app.auth import revoke_user
 
 router=APIRouter()
@@ -16,7 +17,7 @@ router=APIRouter()
 def _decode(s):
     return base64.b64decode(s+"="*(-len(s)%4),altchars=b"-_",validate=True)
 
-def verify_signed_request(raw, secret):
+def verify_signed_request(raw, secret, *, with_issued_at=False):
     try:
         if not secret or len(raw)>8192:raise ValueError()
         sig,payload=raw.split(".",1)
@@ -28,7 +29,7 @@ def verify_signed_request(raw, secret):
         if not -60 <= time.time()-issued <= 86400:raise ValueError()
         subject=str(body["user_id"])
         if not subject.isdigit() or len(subject)>255:raise ValueError()
-        return subject
+        return (subject, issued) if with_issued_at else subject
     except (ValueError,TypeError,KeyError,AttributeError):
         raise HTTPException(400,"Invalid Meta signed request") from None
 
@@ -40,9 +41,10 @@ def instructions():
 async def deauthorize(request:Request,db=Depends(get_db)):
     if int(request.headers.get("content-length") or 0)>8192:raise HTTPException(413,"Request too large")
     form=await request.form()
-    subject=verify_signed_request(str(form.get("signed_request") or ""),os.getenv("FACEBOOK_CLIENT_SECRET",""))
+    subject,issued=verify_signed_request(str(form.get("signed_request") or ""),os.getenv("FACEBOOK_CLIENT_SECRET",""),with_issued_at=True)
     identity=db.query(SocialAccount).filter_by(provider="facebook",subject=subject).with_for_update().first()
-    if identity:
+    # Replayed deauthorization must not remove a newer connection.
+    if identity and identity.connected_at <= datetime.utcfromtimestamp(issued):
         revoke_user(db,identity.user_id)
         db.delete(identity)
         db.commit()

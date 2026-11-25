@@ -31,3 +31,41 @@ def test_linkedin_nonce_compatibility(monkeypatch):
     with pytest.raises(HTTPException):social._oidc_identity("google",{"id_token":"test"},"client","nonce")
     claims["nonce"]="wrong"
     with pytest.raises(HTTPException):social._oidc_identity("linkedin",{"id_token":"test"},"client","nonce")
+
+
+def test_passkey_signup_context_binds_browser_and_profile():
+    from types import SimpleNamespace
+    from app.react_app.api import _signup_context
+    user=SimpleNamespace(id=42,email="test@example.org",phone_number="+40722000000",name="Test User",username="test.user",password_hash=None,accepted_terms=True,accepted_privacy=True)
+    proof=_signup_context(user,"browser-a")
+    assert proof != _signup_context(user,"browser-b")
+    user.phone_number="+40722000001"
+    assert proof != _signup_context(user,"browser-a")
+
+def test_passkey_signup_fails_closed_when_flag_off(monkeypatch):
+    from app.react_app.api import _passkey_signup_enabled
+    monkeypatch.delenv("PASSKEY_SIGNUP_ENABLED",raising=False)
+    with pytest.raises(HTTPException) as err:
+        _passkey_signup_enabled()
+    assert err.value.status_code==503
+
+def test_verified_email_collision_redirects_without_linking(tmp_path,monkeypatch):
+    import importlib,pkgutil,app.models
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    from app.db.database import Base
+    from app.models.user import User
+    from app.models.social_identity import SocialAccount
+    from starlette.requests import Request
+    for m in pkgutil.iter_modules(app.models.__path__):importlib.import_module("app.models."+m.name)
+    engine=create_engine("sqlite:///"+str(tmp_path/"collision.db"))
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        db.add(User(phone_number="+40722000123",username="test.guest",username_key="test.guest",email="user@example.org",status="active",is_email_verified=True));db.commit()
+        req=Request({"type":"http","method":"GET","path":"/callback","headers":[],"query_string":b""})
+        response=social._finish_verified_identity("yahoo",{"subject":"new-yahoo","name":"Test","email":"USER@example.org","verified":True},{"mode":"login","next":"/rewards"},req,db)
+        assert response.status_code==303
+        assert "social_error=existing_account" in response.headers["location"]
+        assert db.query(User).count()==1
+        assert db.query(SocialAccount).count()==0
+    engine.dispose()
