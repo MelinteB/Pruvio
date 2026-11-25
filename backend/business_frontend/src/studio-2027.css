@@ -230,3 +230,5 @@
   .pruvs-business-2027 .pruvs-ai-copy-editor{padding:14px}
   .pruvs-business-2027 .promo-console>.promo-form{padding:15px}
 }
+
+.campaign-photo-gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(120px,100%),1fr));gap:10px;width:100%}.campaign-photo-item{display:grid;gap:6px;min-width:0;border:1px solid #cbd8e8;border-radius:12px;padding:8px;background:#fff}.campaign-photo-item img{width:100%;height:100px;object-fit:contain;background:#edf2f8;border-radius:8px}.campaign-photo-item strong{font-size:12px;color:#1355bc}.campaign-photo-item .btn{font-size:11px;padding:6px;min-height:34px;justify-content:center}

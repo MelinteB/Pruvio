@@ -1,0 +1,47 @@
+/* A campaign is a product card, not a full-page advertising poster.
+   Intrinsic slide/container width controls the split layout. */
+.campaign-offer-card,
+.core-experience .pruvs-promos .campaign-offer-card{
+  display:grid;grid-template-columns:minmax(0,1fr);align-content:start;gap:0;
+  min-width:0;overflow:hidden;border:1px solid #dbe4f1;border-radius:16px;
+  background:#fff;color:#142b50;padding:0;box-shadow:0 3px 12px rgba(27,55,100,.06);
+}
+.campaign-artwork{
+  display:grid;place-items:center;width:100%;min-width:0;min-height:0;
+  aspect-ratio:16 / 10;max-height:236px;overflow:hidden;background:#edf2f8;
+  border-radius:0;isolation:isolate;
+}
+.campaign-artwork-media{display:block;width:100%;height:100%;min-height:0;max-height:236px;object-fit:contain;object-position:center}
+.campaign-artwork-fallback{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:16px;color:#526680;font-size:12px;text-align:center}
+.campaign-offer-content{min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:clamp(14px,3cqw,22px)}
+.campaign-offer-merchant{font-weight:700;font-size:12px;color:#3a5b8a;overflow-wrap:anywhere}
+.campaign-offer-card .campaign-offer-content h3{color:#142b50;font-size:clamp(17px,2.7cqw,24px);line-height:1.22;letter-spacing:-.025em;margin:0;overflow-wrap:anywhere}
+.campaign-offer-card .campaign-offer-content p{margin:0;color:#50637e;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+.campaign-offer-program{color:#50637e;font-size:12px;overflow-wrap:anywhere}
+.campaign-offer-facts{display:flex;flex-wrap:wrap;gap:8px;width:100%;margin:2px 0 0;padding:0}
+.campaign-offer-facts>div{min-width:0;flex:1 1 100px;padding:10px 11px;background:#f3f6fc;border-radius:10px}
+.campaign-offer-facts>div.campaign-offer-reward{background:#e8f5ee;color:#17664b}
+.campaign-offer-facts dt{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;line-height:1.3;overflow-wrap:anywhere}
+.campaign-offer-facts dd{font-weight:750;font-size:15px;line-height:1.3;margin:5px 0 0;overflow-wrap:anywhere}
+.campaign-offer-card .campaign-offer-content .campaign-offer-detail{font-size:12px;color:#60738b}
+.campaign-offer-card .campaign-offer-content .pruvs-offer-location{width:100%;min-width:0;margin:0}
+.campaign-offer-footer{margin-top:auto;padding-top:2px;width:100%}
+.campaign-offer-card .campaign-offer-action{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:44px;padding:10px 14px;border:1px solid #1555cf;border-radius:10px;background:#1555cf;color:#fff;font:inherit;font-size:13px;font-weight:700;text-align:center;text-decoration:none;cursor:pointer;overflow-wrap:anywhere}
+.campaign-offer-card .campaign-offer-action:hover:not(:disabled){background:#1248b3}
+.campaign-offer-card .campaign-offer-action:focus-visible{outline:3px solid #88b8ff;outline-offset:2px}
+.campaign-offer-card .campaign-offer-action:disabled{opacity:.65;cursor:not-allowed}
+.campaign-inline-headline{font-size:14px;overflow-wrap:anywhere}
+.rewards-card>.campaign-artwork{border-radius:12px}
+@container (min-width:680px){
+  .campaign-offer-card.has-artwork,.core-experience .pruvs-promos .campaign-offer-card.has-artwork{grid-template-columns:minmax(0, 43%) minmax(0, 1fr);align-items:start;align-content:stretch}
+  .campaign-offer-card.has-artwork>.campaign-artwork{align-self:start;margin:14px 0 14px 14px;width:calc(100% - 14px);aspect-ratio:16 / 10;max-height:250px;border-radius:12px}
+  .campaign-offer-card.has-artwork .campaign-artwork-media{max-height:250px}
+  .campaign-offer-content{padding:20px;align-self:stretch}
+  .campaign-offer-card .campaign-offer-action{width:auto;min-width:180px}
+}
+@media(max-width:480px){.campaign-offer-content{padding:14px}.campaign-artwork,.campaign-artwork-media{max-height:210px}.campaign-offer-facts>div{flex-basis:92px}}
+@media(prefers-reduced-motion:reduce){.campaign-offer-card *{transition:none}}
+
+.campaign-carousel-slide>.campaign-offer-card{grid-template-rows:auto minmax(0,1fr);align-content:stretch}
+.campaign-carousel-slide>.campaign-offer-card:not(.has-artwork){grid-template-rows:minmax(0,1fr)}
+@container (min-width:680px){.campaign-carousel-slide>.campaign-offer-card.has-artwork{grid-template-rows:minmax(0,1fr)}}

@@ -114,7 +114,7 @@ def test_config_accepts_valid_https_public_host(monkeypatch):
 def test_frontend_keeps_media_server_generated():
     source = (Path(__file__).resolve().parents[1] / "business_frontend" / "src" / "PromotionConsole.jsx").read_text(encoding="utf-8")
     assert "Campaign asset HTTPS URL" not in source
-    assert "setMediaUrl(data.media_url)" in source
+    assert "setMediaUrl(main.media_url)" in source
     assert "Local preview only" in source
     assert "mediaCannotSave" in source
     library = (Path(__file__).resolve().parents[1] / "business_frontend" / "src" / "CampaignLibrary.jsx").read_text(encoding="utf-8")

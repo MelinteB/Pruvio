@@ -1,5 +1,6 @@
 import React,{useEffect,useState} from 'react';
-import {MapPin,ExternalLink} from 'lucide-react';
+import {MapPin,ExternalLink,ImageOff} from 'lucide-react';
+import {t} from './i18n';
 import './campaign-creative.css';
 import './campaign-creative-v7162.css';
 
@@ -9,7 +10,7 @@ export function hasCampaignCreative(p){
     (p.media_type?.startsWith('image/') || p.media_type?.startsWith('video/')));
 }
 
-export default function CampaignCreative({promotion:p,compact=false}){
+export default function CampaignCreative({promotion:p,compact=false,presentation='overlay'}){
   const [reduceMotion,setReduceMotion]=useState(false);
   useEffect(()=>{
     if(typeof window.matchMedia!=='function')return;
@@ -19,6 +20,7 @@ export default function CampaignCreative({promotion:p,compact=false}){
     return()=>pref.removeEventListener?.('change',update);
   },[]);
   if(!hasCampaignCreative(p))return null;
+  if(presentation==='artwork')return <CampaignArtwork key={p.media_url+'|'+p.media_type} promotion={p} reduceMotion={reduceMotion}/>;
   const video=p.media_type.startsWith('video/');
   const locationQuery=encodeURIComponent([p.store_name||p.merchant_name,p.store_address].filter(Boolean).join(', '));
   const mapsUrl='https://www.google.com/maps/search/?api=1&query='+locationQuery+
@@ -38,5 +40,16 @@ export default function CampaignCreative({promotion:p,compact=false}){
     {(p.google_place_id||p.store_address)&&<a className="pruvs-campaign-location-link" href={mapsUrl}
       target="_blank" rel="noopener noreferrer" aria-label={'Open '+(p.store_name||p.merchant_name||'location')+' in Google Maps'}>
       <MapPin size={15}/> Visit location <ExternalLink size={13}/></a>}
+  </div>;
+}
+
+/** Keep approved artwork intact; copy and actions are rendered separately. */
+function CampaignArtwork({promotion:p,reduceMotion}){
+  const [failed,setFailed]=useState(false);
+  const video=p.media_type.startsWith('video/');
+  return <div className="campaign-artwork" data-media-type={video?'video':'image'}>
+    {failed?<div className="campaign-artwork-fallback" role="status"><ImageOff size={24} aria-hidden="true"/><span>{t('Campaign artwork unavailable')}</span></div>:
+      video?<video className="campaign-artwork-media" aria-label={p.media_alt||p.headline} muted autoPlay={!reduceMotion} controls loop playsInline preload="metadata" onError={()=>setFailed(true)}><source src={p.media_url} type={p.media_type} onError={()=>setFailed(true)}/></video>:
+      <img className="campaign-artwork-media" src={p.media_url} loading="lazy" decoding="async" alt={p.media_alt||p.headline||''} onError={()=>setFailed(true)}/>}
   </div>;
 }

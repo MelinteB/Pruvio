@@ -5,6 +5,11 @@ import './campaign-carousel.css';
 
 const MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 const ROTATION_DELAY = 8000;
+const TWO_CARD_MIN_WIDTH = 720;
+
+export function campaignColumns(width) {
+  return Number.isFinite(width) && width >= TWO_CARD_MIN_WIDTH ? 2 : 1;
+}
 
 export function livePromotions(promotions) {
   const byId = new Map();
@@ -63,7 +68,7 @@ export default function CampaignCarousel({campaigns, label, initialCampaignId, r
   }, []);
 
   useEffect(() => {
-    const update = width => setVisibleCount(width >= 980 ? 3 : width >= 560 ? 2 : 1);
+    const update = width => setVisibleCount(campaignColumns(width));
     const measure = () => update(region.current?.getBoundingClientRect().width || window.innerWidth);
     measure();
     if (typeof ResizeObserver === 'undefined') {
