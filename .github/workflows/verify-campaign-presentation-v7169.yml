@@ -1,0 +1,23 @@
+name: Verify Core 7.1.69 campaign presentation
+on:
+  pull_request:
+    branches: ["release/core-7.1.66-business-0.6.22"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  campaign-ui:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx vitest run src/campaigns-v7155.test.jsx src/responsive_home_v7161.test.jsx src/campaign-presentation-v7169.test.jsx
+      - run: npm run build

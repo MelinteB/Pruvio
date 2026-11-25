@@ -10,7 +10,7 @@ import './rewards-v05.css';
 import './rewards-package-v7162.css';
 import CampaignCarousel,{livePromotions} from './CampaignCarousel.jsx';
 import CampaignCreative,{hasCampaignCreative} from './CampaignCreative.jsx';
-import OfferLocation from './OfferLocation.jsx';
+import CampaignOfferCard from './CampaignOfferCard.jsx';
 import CustomerReceiptCode from './CustomerReceiptCode';
 
 export default function Rewards(){
@@ -231,24 +231,17 @@ function AccountRewards(){
             const offer=byProgram.get(p.program_id);
             const member=joined.has(p.program_id);
             const description=offer?.program.description;
-            return <Panel className="rewards-card rewards-promotion">
-              {hasCampaignCreative(p)?<CampaignCreative promotion={p}/>:
-                <><small className="rewards-promo-tag">LOCAL PROMOTION · {p.merchant_name}</small><h3>{p.headline}</h3><p>{p.message}</p></>}
-              {p.program_title&&p.program_title!==p.headline&&<strong>{p.program_title}</strong>}
-              {description&&description!==p.message&&<p>{description}</p>}
-              <p><strong>{p.stamps_required} eligible receipts</strong> to earn {money(p.reward_minor/100,p.currency)} · Minimum purchase {money(p.min_purchase_minor/100,p.currency)}</p>
-              <small>{p.store_name}{offer?.distance_km!=null?' · '+offer.distance_km+' km away':''}{p.expires_at?' · Ends '+new Date(p.expires_at).toLocaleDateString():''}</small>
-              <OfferLocation promotion={p} compact/>
-              <button type="button" className="primary" disabled={!!busy||!canJoin||member}
+            return <CampaignOfferCard promotion={p} className="rewards-promotion" description={description} distanceKm={offer?.distance_km}
+              action={<button type="button" className="campaign-offer-action primary" disabled={!!busy||!canJoin||member}
                 onClick={()=>perform(p.program_id,()=>send('/loyalty/programs/'+p.program_id+'/join'),()=> 'Joined '+p.program_title+'.')}>
                 {member?<><CheckCircle2 size={16}/> {t('Joined')}</>:t(busy===p.program_id?'Joining…':'Join promoted program')}
-              </button>
-            </Panel>;
+              </button>}/>;
           }}/>
       </section>}
       <div className="rewards-cards">{remainingOffers.map(o=><Panel key={o.program.id} className="rewards-card"><div className="rewards-icon"><Gift size={22}/></div><small className="muted">{o.merchant_name} · {o.store.name}</small>
         {activePromotionByProgram.has(o.program.id)&&hasCampaignCreative(activePromotionByProgram.get(o.program.id))&&
-          <CampaignCreative promotion={activePromotionByProgram.get(o.program.id)} compact/>}
+          <><CampaignCreative promotion={activePromotionByProgram.get(o.program.id)} compact presentation="artwork"/>
+          <strong className="campaign-inline-headline">{activePromotionByProgram.get(o.program.id).headline}</strong></>}
         <h2>{o.program.title}</h2><p>{o.program.description}</p><p><strong>{o.program.stamps_required} qualifying receipts</strong> to earn {money(o.program.reward_minor/100,o.program.currency)}</p>
         {o.distance_km!=null && <small>{o.distance_km} km away</small>}
         <button type="button" className="primary" disabled={!!busy || !canJoin || joined.has(o.program.id)} onClick={()=>perform(o.program.id,()=>send('/loyalty/programs/'+o.program.id+'/join'),()=> 'Joined '+o.program.title+'.')}>{joined.has(o.program.id)?<><CheckCircle2 size={16}/> Joined</>:busy===o.program.id?'Joining…':'Join loyalty program'}</button>
