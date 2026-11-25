@@ -93,10 +93,11 @@ def test_studio_upload_before_generating_and_no_picture_replacement():
     assert ui.index('Main campaign picture and subject')<ui.index('Predefined campaign text · edit before generating')
     assert ui.index('Predefined campaign text · edit before generating')<ui.index('onClick={generateDraft}')
     assert "media_key:imageOrigin==='upload'?artworkKey:null" in ui
-    assert "imageOrigin==='upload'&&!result.source_image_used" in ui
+    assert "imageOrigin==='upload'&&(!result.source_image_used" in ui
     assert "if(imageOrigin==='upload')" in ui
     assert 'source_image_used' in ai
     assert "'input':campaign_provider_input(facts,source_image)" in ai
     assert "visible main product, food, object or scene" in ai
     assert 'setRenderedSignature(renderSignature)' in ui
-    assert "imageOrigin==='upload'?'Replace main picture':'Upload main campaign picture'" in ui
+    assert 'type="file" multiple' in ui
+    assert "media_keys:imageOrigin==='upload'?sourcePhotos.map" in ui

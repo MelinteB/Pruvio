@@ -43,6 +43,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
     [watermark,setWatermark]=useState('Pruvs Business'),[artworkKey,setArtworkKey]=useState(''),
     [draftPreview,setDraftPreview]=useState(null),[aiBusy,setAiBusy]=useState(false),[assetBusy,setAssetBusy]=useState(false),[aiReadiness,setAiReadiness]=useState(null);
   const [creativeInstructions,setCreativeInstructions]=useState('');
+  const [sourcePhotos,setSourcePhotos]=useState([]);
   const [imageOrigin,setImageOrigin]=useState(''); // upload | ai | empty
   const [renderedSignature,setRenderedSignature]=useState('');
   const [editingPromotionId,setEditingPromotionId]=useState('');
@@ -56,15 +57,15 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
   const published=programs.filter(p=>p.status==='published');
   const currentProgram=programs.find(p=>p.id===programId);
   const displayedMediaUrl=mediaUrl&&!mediaPreviewError?mediaUrl:localMediaPreview;
-  const mediaCannotSave=uploadPending||mediaPreviewError;
+  const mediaCannotSave=uploadPending||mediaPreviewError||assetBusy||aiBusy;
   const targetMediaType={png:'image/png',gif:'image/gif',mp4:'video/mp4'}[creativeFormat];
-  const renderSignature=[creativeFormat,headline.trim(),watermark.trim()].join('|');
+  const renderSignature=[creativeFormat,headline.trim(),watermark.trim(),...sourcePhotos.map(p=>p.media_key)].join('|');
   const mediaNeedsRendering=Boolean(artworkKey&&mediaUrl&&(
     mediaType!==targetMediaType||renderedSignature!==renderSignature));
   function resetMedia(){
     setArtworkKey('');setMediaUrl('');setMediaType('image/jpeg');
     setLocalMediaPreview('');setUploadPending(false);setMediaPreviewError(false);
-    setImageOrigin('');setRenderedSignature('');
+    setImageOrigin('');setRenderedSignature('');setSourcePhotos([]);
   }
   function removeMedia(){resetMedia();setError('');setNotice('Picture removed. You may save a text-only promotion.')}
   function editPromotion(p,copy=false){
@@ -90,13 +91,14 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
         format:creativeFormat==='mp4'?'video':creativeFormat==='gif'?'gif':'image',
         duration_days:Number(days),watermark_text:watermark,
         creative_instructions:creativeInstructions.trim(),language:locale,
-        media_key:imageOrigin==='upload'?artworkKey:null
+        media_key:imageOrigin==='upload'?artworkKey:null,
+        media_keys:imageOrigin==='upload'?sourcePhotos.map(p=>p.media_key):[]
       });
-      if(imageOrigin==='upload'&&!result.source_image_used)
+      if(imageOrigin==='upload'&&(!result.source_image_used||result.source_image_count!==sourcePhotos.length))
         throw new Error('AI copy did not use the uploaded picture. Retry after checking the image upload.');
       setHeadline(result.draft.headline);setMessage(result.draft.message);
       setDraftPreview(result.draft);
-      setNotice(result.source_image_used?'AI copy uses your uploaded picture as its subject. Review and edit before generating artwork.':'AI copy generated. Review and edit before saving; publishing remains manual.');
+      setNotice(result.source_image_used?'AI copy uses your selected pictures. Review and edit before generating artwork.':'AI copy generated. Review and edit before saving; publishing remains manual.');
     }catch(e){setError(e.message)}finally{setAiBusy(false)}
   }
   async function generateAIArtwork(){
@@ -133,42 +135,42 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
     }catch(e){setError(e.message||'AI image generation failed.')}
     finally{setAssetBusy(false)}
   }
-  async function uploadArtwork(file){
-    if(!file)return;
-    if(!['image/jpeg','image/png','image/webp'].includes(file.type)){
-      setError('Choose a JPEG, PNG or WebP picture.');return;
-    }
-    if(!file.size||file.size>6000000){
-      setError('Campaign pictures must be smaller than 6 MB.');return;
-    }
-    const localUrl=URL.createObjectURL(file);
-    setLocalMediaPreview(localUrl);setUploadPending(true);setMediaPreviewError(false);
-    setArtworkKey('');setMediaUrl('');setMediaType('image/jpeg');
-    setImageOrigin('');setRenderedSignature('');setDraftPreview(null);
-    setAssetBusy(true);setError('');setNotice('Uploading picture to campaign storage…');
-    try{
-      const form=new FormData();form.append('file',file);
-      const resp=await fetch(API+'/v1/merchant/promotions/media/upload',{
-        method:'POST',headers:{Authorization:'Bearer '+token},body:form
-      });
-      const data=await resp.json().catch(()=>({}));
-      if(!resp.ok){
-        const detail=typeof data.detail==='string'?data.detail:'Campaign image upload failed';
-        throw new Error(resp.status===503?t('{detail} (HTTP 503). Ask the administrator to check campaign R2 storage.',{detail:t(detail)}):detail);
-      }
-      if(!data.media_key||!data.media_url||!data.media_type)throw Error('Upload did not return a saved campaign picture.');
-      setArtworkKey(data.media_key);setMediaUrl(data.media_url);setMediaType(data.media_type);
-      setImageOrigin('upload');setRenderedSignature('');
-      setUploadPending(false);setMediaPreviewError(false);
-      setNotice('Picture uploaded. AI will use the visible product or scene as the campaign subject; GIF/MP4 will animate this same image.');
-    }catch(e){
-      setUploadPending(true);
-      setError(t('{detail} Local preview only: this picture is not saved and cannot be published.',{detail:t(e.message||'Picture upload failed')}));
-    }finally{setAssetBusy(false)}
+  function usePhotos(photos){
+    if(!photos.length){resetMedia();return;}
+    const main=photos[0];
+    setSourcePhotos(photos);setArtworkKey(main.media_key);setMediaUrl(main.media_url);setMediaType(main.media_type);
+    setImageOrigin('upload');setRenderedSignature('');setDraftPreview(null);setMediaPreviewError(false);
+    setLocalMediaPreview('');setUploadPending(false);
   }
+  async function uploadArtwork(files){
+    const selected=Array.from(files||[]);
+    if(!selected.length)return;
+    if(sourcePhotos.length+selected.length>5){setError(t('Choose up to five campaign pictures.'));return;}
+    if(selected.some(file=>!['image/jpeg','image/png','image/webp'].includes(file.type)||!file.size||file.size>6000000)){
+      setError(t('Choose JPEG, PNG or WebP pictures under 6 MB each.'));return;
+    }
+    const next=[...sourcePhotos];
+    setUploadPending(true);setAssetBusy(true);setError('');setNotice(t('Uploading campaign pictures…'));
+    try{
+      for(const file of selected){
+        const form=new FormData();form.append('file',file);
+        const resp=await fetch(API+'/v1/merchant/promotions/media/upload',{method:'POST',headers:{Authorization:'Bearer '+token},body:form});
+        const data=await resp.json().catch(()=>({}));
+        if(!resp.ok||!data.media_key||!data.media_url||!data.media_type)throw Error(typeof data.detail==='string'?data.detail:'Campaign image upload failed');
+        next.push({...data,name:file.name});
+      }
+      usePhotos(next);
+      setNotice(t('Pictures uploaded. Choose the main picture, then generate AI copy and artwork.'));
+    }catch(e){
+      if(next.length)usePhotos(next);
+      setError(t('Some pictures could not be uploaded. Review the selected pictures and retry.')+' '+e.message);
+    }finally{setUploadPending(false);setAssetBusy(false)}
+  }
+  function selectMainPhoto(key){const selected=sourcePhotos.find(p=>p.media_key===key);if(selected)usePhotos([selected,...sourcePhotos.filter(p=>p.media_key!==key)]);}
+  function removePhoto(key){usePhotos(sourcePhotos.filter(p=>p.media_key!==key));setError('');}
   function renderSelectedArtwork(key){
     return call('/v1/merchant/promotions/media/render',token,{
-      media_key:key,format:creativeFormat,
+      media_key:key,media_keys:imageOrigin==='upload'?sourcePhotos.map(p=>p.media_key):[],format:creativeFormat,
       headline:headline.trim()||'Pruvs Rewards',
       watermark_text:watermark.trim()||'Pruvs Business'
     });
@@ -281,10 +283,15 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
         {currentProgram&&<div className="pruvs-ai-criteria"><strong>{t('Program conditions (locked)')}</strong><small>{currentProgram.title} · {t('Minimum {minimum} RON · {count} verified purchases → {reward} RON reward',{minimum:(currentProgram.min_purchase_minor/100).toFixed(2),count:currentProgram.stamps_required,reward:(currentProgram.reward_minor/100).toFixed(2)})}</small></div>}
         <div className="pruvs-ai-image-source" aria-label={t('Main campaign picture and subject')}>
           <div><h4>1. {t('Main campaign picture and subject')}</h4>
-            <p>{t('Upload a product or scene photo first. Pruvs AI will describe what is visible in this image and use it as the main subject. PNG, GIF and MP4 will use the same photo.')}</p></div>
-          <label className="btn outline pruvs-ai-file"><ImagePlus size={17}/>{t(imageOrigin==='upload'?'Replace main picture':'Upload main campaign picture')}
-            <input type="file" accept="image/jpeg,image/png,image/webp" disabled={assetBusy||aiBusy} onChange={e=>{const file=e.target.files?.[0];e.target.value='';uploadArtwork(file)}}/></label>
-          {imageOrigin==='upload'&&<small role="status">{t('The uploaded picture is the main visual for this campaign.')}</small>}
+            <p>{t('Upload up to five pictures. AI uses the main picture as its subject and the others as supporting context. Artwork combines the selected pictures.')}</p></div>
+          <label className="btn outline pruvs-ai-file"><ImagePlus size={17}/>{t('Add campaign pictures')}
+            <input type="file" multiple accept="image/jpeg,image/png,image/webp" disabled={assetBusy||aiBusy||busy||sourcePhotos.length>=5} onChange={e=>{const files=Array.from(e.target.files||[]);e.target.value='';uploadArtwork(files)}}/></label>
+          <small role="status">{sourcePhotos.length}/5 {t('Pictures selected')}</small>
+          {sourcePhotos.length>0&&<div className="campaign-photo-gallery">{sourcePhotos.map((photo,index)=><div className="campaign-photo-item" key={photo.media_key}>
+            <img src={photo.media_url} alt={photo.name||t('Campaign picture')}/>
+            {index===0?<strong>{t('Main picture')}</strong>:<button type="button" className="btn subtle" disabled={assetBusy||aiBusy||busy} onClick={()=>selectMainPhoto(photo.media_key)}>{t('Make main')}</button>}
+            <button type="button" className="btn outline" disabled={assetBusy||aiBusy||busy} onClick={()=>removePhoto(photo.media_key)}>{t('Remove picture')}</button>
+          </div>)}</div>}
           {!mediaUrl&&!localMediaPreview&&<small>{t('Optional for a text-only promotion. To make a photo-led campaign, upload the image before generating copy.')}</small>}
         </div>
         <div className="pruvs-ai-brief-editor" aria-label={t('Predefined campaign brief editor')}>
@@ -322,7 +329,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
           {imageOrigin==='upload'?<p className="pruvs-ai-photo-note" role="status">{t('Select PNG, GIF or MP4, then generate branded artwork or save the draft to render it automatically.')}</p>:
             <button type="button" className="btn primary" disabled={!programId||!draftPreview||!headline.trim()||assetBusy||aiBusy||busy||aiReadiness?.artwork_ready===false} onClick={generateAIArtwork}><Sparkles size={17}/>{t(assetBusy?'Creating artwork…':creativeFormat==='png'?'Generate AI image (no photo)':'Generate AI source + {format}',{format:creativeFormat.toUpperCase()})}</button>}
 
-          <button type="button" className="btn outline" disabled={!artworkKey||assetBusy||!headline.trim()} onClick={renderArtwork}><Film size={17}/>{assetBusy?t('Processing artwork…'):t('Generate {format} artwork',{format:creativeFormat.toUpperCase()})}</button>
+          <button type="button" className="btn outline" disabled={!artworkKey||assetBusy||aiBusy||busy||!headline.trim()} onClick={renderArtwork}><Film size={17}/>{assetBusy?t('Processing artwork…'):t('Generate {format} artwork',{format:creativeFormat.toUpperCase()})}</button>
         </div>
         {draftPreview&&<div className="pruvs-ai-preview"><strong>{t('AI copy preview')}</strong><p><b>{draftPreview.cta}</b> · {draftPreview.visual_brief}</p><small>{t('Suggested motion: {motion}',{motion:draftPreview.motion_storyboard})}</small></div>}
         <p className="helper">{t(creativeFormat==='png'?
@@ -346,7 +353,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
               <p role="status">{uploadPending?t('Local preview only — upload pending or unsuccessful. Saving is blocked.'):mediaPreviewError?t('Stored picture could not be loaded. Fix the media URL before saving.'):t('Creative stored · {type}',{type:mediaType})}</p>
               <div className="pruvs-studio-2027-media-row">
                 {mediaPreviewError&&<button type="button" className="btn subtle" onClick={()=>setMediaPreviewError(false)}>{t('Retry preview')}</button>}
-                <button type="button" className="btn outline" disabled={assetBusy} onClick={removeMedia}>{t('Remove photo')}</button>
+                <button type="button" className="btn outline" disabled={assetBusy||aiBusy||busy} onClick={removeMedia}>{t('Remove photo')}</button>
               </div>
             </div>}
             <p className="pruvs-studio-2027-preview-note">{t('This card uses the same campaign styles as Pruvs Core. Previewing does not publish an offer or award a stamp.')}</p>
