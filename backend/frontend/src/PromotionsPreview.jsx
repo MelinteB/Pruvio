@@ -28,10 +28,12 @@ export default function PromotionsPreview(){
     // Refresh visibility whenever customers return to Core. Unpublished
     // campaigns disappear without requiring a hard browser reload.
     const onFocus=()=>{if(!document.hidden)refresh()};
+    const timer=window.setInterval(onFocus,30000);
     window.addEventListener('focus',onFocus);
     document.addEventListener('visibilitychange',onFocus);
     return()=>{
       requestVersion.current++;
+      window.clearInterval(timer);
       window.removeEventListener('focus',onFocus);
       document.removeEventListener('visibilitychange',onFocus);
     };

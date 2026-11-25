@@ -851,3 +851,5 @@ Object.assign(ro,{
  'See loyalty program':'Vezi programul de fidelitate',
  'Explore rewards':'Explorează recompensele'
 });
+
+Object.assign(ro,{'No active published campaigns are available for this area.':'Nu există campanii active publicate în această zonă.','Receipt verification is unavailable for this program. The merchant may need to activate receipt rewards or resume the program.':'Verificarea bonurilor nu este disponibilă pentru acest program. Comerciantul poate avea nevoie să activeze recompensele sau să reactiveze programul.','No receipts linked yet.':'Nu există bonuri asociate.','No receipts linked yet. Add one saved receipt per required purchase.':'Nu există bonuri asociate. Adaugă câte un bon salvat pentru fiecare cumpărătură necesară.'});

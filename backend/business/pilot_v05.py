@@ -240,6 +240,9 @@ def require_publishable_campaign(db:Session,staff:Staff,promotion:Promotion)->No
     store=db.get(Store,program.store_id)
     if not program_is_discoverable(program,merchant,store):
         raise HTTPException(409,'An active merchant and location are required to publish a campaign.')
+    from .campaign_policy_v0623 import campaign_gate_enabled, merchant_receipts_ready
+    if campaign_gate_enabled() and not merchant_receipts_ready(db,program.merchant_id):
+        raise HTTPException(409,'Activate merchant receipt rewards before publishing a campaign.')
 
 
 @router.post('/v1/merchant/promotions/{promotion_id}/reopen')
@@ -311,9 +314,17 @@ def public_promotions(limit:int=Query(12,ge=1,le=30),db:Session=Depends(get_db))
                Merchant.status=='active',
                Store.merchant_id==Merchant.id,Store.active.is_(True))
         .order_by(Promotion.published_at.desc(),Promotion.id.desc())
-        .limit(limit)
     ).all()
-    return [promo_json(p,db,now=now) for p in rows]
+    from .campaign_policy_v0623 import campaign_gate_enabled, merchant_receipts_ready
+    if campaign_gate_enabled():
+        allowed={}
+        result=[]
+        for p in rows:
+            if p.merchant_id not in allowed:allowed[p.merchant_id]=merchant_receipts_ready(db,p.merchant_id)
+            if allowed[p.merchant_id]:result.append(p)
+            if len(result)>=limit:break
+        rows=result
+    return [promo_json(p,db,now=now) for p in rows[:limit]]
 
 class IssuePurchaseIn(BaseModel):
     program_id: str

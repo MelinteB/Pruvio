@@ -13,16 +13,17 @@ async function call(path,token,method='GET',body=null){
 function cash(n){return (Number(n||0)/100).toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})+' RON'}
 export default function ReceiptInbox({token,onChange,onOpenLoyalty}){
  const {t}=useBusinessLanguage();
- const [readiness,setReadiness]=useState(null);
+ const [readiness,setReadiness]=useState(null),[activation,setActivation]=useState(null);
  const [packages,setPackages]=useState([]);
  const [claims,setClaims]=useState([]),[review,setReview]=useState(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[reason,setReason]=useState(''),[code,setCode]=useState('');
  async function refresh(){setLoading(true);try{
-   const [rows, pilot, packets] = await Promise.all([
+   const [rows, pilot, packets, access] = await Promise.all([
      call('/v1/merchant/claims',token),
      call('/v1/merchant/receipt-pilot/readiness',token).catch(()=>null),
-     call('/v1/merchant/claims/packages',token)
+     call('/v1/merchant/claims/packages',token),
+     call('/v1/merchant/pilot-access',token).catch(()=>null)
    ]);
-   setClaims(rows);setReadiness(pilot);setPackages(Array.isArray(packets)?packets:[]);setError('');
+   setClaims(rows);setReadiness(pilot);setActivation(access);setPackages(Array.isArray(packets)?packets:[]);setError('');
  }catch(ex){setError(ex.message)}finally{setLoading(false)}}
  useEffect(()=>{refresh()},[token]);
  async function show(claim){setError('');setBusy(true);try{const evidence=await call('/v1/merchant/claims/'+encodeURIComponent(claim.id)+'/evidence',token);setReview(evidence);setReason('');await refresh();return true}catch(ex){setError(ex.message);return false}finally{setBusy(false)}}
@@ -50,21 +51,21 @@ export default function ReceiptInbox({token,onChange,onOpenLoyalty}){
  }
  const pending=claims.filter(c=>c.status==='pending');
  return <section className="panel merchant-receipt-inbox">
-   <div className="panel-heading"><h2>Verify purchases</h2><span>{pending.length} AWAITING REVIEW</span></div>
+   <div className="panel-heading"><h2>{t('Verify purchases')}</h2><span>{pending.length} AWAITING REVIEW</span></div>
    <div className="receipt-inbox-intro"><ReceiptText size={20}/><p>Customers share a receipt and show a one-time code. Compare the preview with your sale records before confirming a purchase.</p></div>
    {error&&<p role="alert" className="receipt-inbox-error"><AlertCircle size={16}/>{error}</p>}
    {message&&<p role="status" className="receipt-inbox-success"><CheckCircle2 size={16}/>{message}</p>}
    {readiness&&!readiness.receipt_review_ready&&<div className="receipt-inbox-error" role="status"><AlertCircle size={16}/>
      <span>{(readiness.blocked_by||[]).includes('merchant_allowlisted')?
-       'Receipt rewards are not active for your business. Request activation in Loyalty programs.':
+       t(({requested:'Activation request is awaiting approval.',denied:'Activation was not approved. Review the decision in Loyalty programs.',revoked:'Receipt rewards are paused. Review activation in Loyalty programs.'})[activation?.status]||'Receipt rewards are not active for your business. Request activation in Loyalty programs.') :
        'Purchase verification is temporarily unavailable. Please contact Pruvs support.'}</span>
      {(readiness.blocked_by||[]).includes('merchant_allowlisted')&&onOpenLoyalty&&
-       <button className="btn outline" type="button" onClick={onOpenLoyalty}>Open Loyalty programs</button>}
+       <button className="btn outline" type="button" onClick={onOpenLoyalty}>{t('Open Loyalty programs')}</button>}
    </div>}
    <p className="helper">{t('Ask the customer to open their joined campaign in My Wallet and show the one-time code for each submitted receipt.')}</p>
    <form className="receipt-inbox-code-lookup" onSubmit={findCode}>
      <label>Customer verification code<input value={code} autoComplete="off" placeholder="PRV-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX" onChange={e=>setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g,''))}/></label>
-     <button type="submit" className="btn primary" disabled={busy||readiness?.receipt_review_ready===false||code.replace(/-/g,'').length<24}>Find purchase</button>
+     <button type="submit" className="btn primary" disabled={busy||readiness?.receipt_review_ready===false||code.replace(/-/g,'').length<24||!readiness?.receipt_review_ready}>Find purchase</button>
    </form>
    <button type="button" className="btn subtle" disabled={busy||loading} onClick={refresh}><RefreshCw size={16}/> Refresh requests</button>
    <div className="pruvs-receipt-packages" aria-label="Complete receipt packages">
