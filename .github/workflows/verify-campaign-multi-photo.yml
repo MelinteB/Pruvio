@@ -17,7 +17,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt -r business-requirements.txt pytest
-      - run: python -m pytest -q tests/test_campaign_policy_v0623.py tests/test_campaign_multi_photo.py tests/test_image_anchored_campaign_v0618.py tests/test_campaign_media_studio_v0615.py
+      - run: python -m pytest -q tests/test_campaign_studio_v0623.py tests/test_campaign_policy_v0623.py tests/test_campaign_multi_photo.py tests/test_image_anchored_campaign_v0618.py tests/test_campaign_media_studio_v0615.py
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

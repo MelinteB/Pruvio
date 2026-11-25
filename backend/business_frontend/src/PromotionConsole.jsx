@@ -44,6 +44,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
     [draftPreview,setDraftPreview]=useState(null),[aiBusy,setAiBusy]=useState(false),[assetBusy,setAssetBusy]=useState(false),[aiReadiness,setAiReadiness]=useState(null);
   const [creativeInstructions,setCreativeInstructions]=useState('');
   const [sourcePhotos,setSourcePhotos]=useState([]);
+  const [restaurantLink,setRestaurantLink]=useState(''),[importInfo,setImportInfo]=useState(null),[importConsent,setImportConsent]=useState(false);
   const [imageOrigin,setImageOrigin]=useState(''); // upload | ai | empty
   const [renderedSignature,setRenderedSignature]=useState('');
   const [editingPromotionId,setEditingPromotionId]=useState('');
@@ -65,7 +66,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
   function resetMedia(){
     setArtworkKey('');setMediaUrl('');setMediaType('image/jpeg');
     setLocalMediaPreview('');setUploadPending(false);setMediaPreviewError(false);
-    setImageOrigin('');setRenderedSignature('');setSourcePhotos([]);
+    setImageOrigin('');setRenderedSignature('');setSourcePhotos([]);setRestaurantLink('');setImportInfo(null);setImportConsent(false);
   }
   function removeMedia(){resetMedia();setError('');setNotice('Picture removed. You may save a text-only promotion.')}
   function editPromotion(p,copy=false){
@@ -77,6 +78,8 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
     setDays(p.duration_days||14);setDraftPreview(null);resetMedia();
     setCreativeFormat(p.media_type==='image/gif'?'gif':p.media_type==='video/mp4'?'mp4':'png');
     setMediaUrl(p.media_url||'');setMediaType(p.media_type||'image/jpeg');
+    setRestaurantLink(p.restaurant_link||'');
+    if(p.source_photos?.length){setSourcePhotos(p.source_photos);setArtworkKey(p.source_photos[0].media_key);setImageOrigin('upload');}
     setError('');
     setNotice(copy?'Copied into a new draft. Add or replace artwork before saving.':'Editing existing draft. Save changes before publishing.');
   }
@@ -92,7 +95,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
         duration_days:Number(days),watermark_text:watermark,
         creative_instructions:creativeInstructions.trim(),language:locale,
         media_key:imageOrigin==='upload'?artworkKey:null,
-        media_keys:imageOrigin==='upload'?sourcePhotos.map(p=>p.media_key):[]
+        media_keys:imageOrigin==='upload'?sourcePhotos.map(p=>p.media_key):[],restaurant_link:restaurantLink.trim()
       });
       if(imageOrigin==='upload'&&(!result.source_image_used||result.source_image_count!==sourcePhotos.length))
         throw new Error('AI copy did not use the uploaded picture. Retry after checking the image upload.');
@@ -168,6 +171,17 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
   }
   function selectMainPhoto(key){const selected=sourcePhotos.find(p=>p.media_key===key);if(selected)usePhotos([selected,...sourcePhotos.filter(p=>p.media_key!==key)]);}
   function removePhoto(key){usePhotos(sourcePhotos.filter(p=>p.media_key!==key));setError('');}
+  async function inspectWebsite(){
+    setAssetBusy(true);setError('');setImportInfo(null);setImportConsent(false);
+    try{setImportInfo(await call('/v1/merchant/promotions/website/inspect',token,{url:restaurantLink.trim()}))}
+    catch(e){setError(e.message)}finally{setAssetBusy(false)}
+  }
+  async function importPicture(url){
+    if(!importConsent||sourcePhotos.length>=5)return;
+    setAssetBusy(true);setError('');
+    try{const data=await call('/v1/merchant/promotions/website/photo',token,{url,rights_confirmed:true});usePhotos([...sourcePhotos,{...data,name:'Website photo'}]);}
+    catch(e){setError(e.message)}finally{setAssetBusy(false)}
+  }
   function renderSelectedArtwork(key){
     return call('/v1/merchant/promotions/media/render',token,{
       media_key:key,media_keys:imageOrigin==='upload'?sourcePhotos.map(p=>p.media_key):[],format:creativeFormat,
@@ -277,7 +291,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
           <label>{t('Campaign goal')}<input value={goal} minLength={8} maxLength={300} onChange={e=>setGoal(e.target.value)}/></label>
           <label>{t('Target audience')}<input value={audience} maxLength={140} onChange={e=>setAudience(e.target.value)}/></label>
           <label>{t('Brand tone')}<select value={tone} onChange={e=>setTone(e.target.value)}><option value="friendly">{t('Friendly')}</option><option value="premium">{t('Premium')}</option><option value="playful">{t('Playful')}</option><option value="professional">{t('Professional')}</option></select></label>
-          <label>{t('Creative format')}<select value={creativeFormat} onChange={e=>setCreativeFormat(e.target.value)}><option value="png">{t('Branded image')}</option><option value="gif">{t('Animated GIF (3 seconds)')}</option><option value="mp4">{t('Short video MP4 (3 seconds)')}</option></select></label>
+          <label>{t('Creative format')}<select value={creativeFormat} onChange={e=>setCreativeFormat(e.target.value)}><option value="png">{t('Branded image')}</option><option value="gif">{t('Animated GIF / photo slideshow')}</option><option value="mp4">{t('Short video MP4 / photo presentation')}</option></select></label>
           <label>{t('Watermark text')}<input value={watermark} maxLength={70} onChange={e=>setWatermark(e.target.value)}/></label>
         </div>
         {currentProgram&&<div className="pruvs-ai-criteria"><strong>{t('Program conditions (locked)')}</strong><small>{currentProgram.title} · {t('Minimum {minimum} RON · {count} verified purchases → {reward} RON reward',{minimum:(currentProgram.min_purchase_minor/100).toFixed(2),count:currentProgram.stamps_required,reward:(currentProgram.reward_minor/100).toFixed(2)})}</small></div>}
@@ -286,6 +300,13 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
             <p>{t('Upload up to five pictures. AI uses the main picture as its subject and the others as supporting context. Artwork combines the selected pictures.')}</p></div>
           <label className="btn outline pruvs-ai-file"><ImagePlus size={17}/>{t('Add campaign pictures')}
             <input type="file" multiple accept="image/jpeg,image/png,image/webp" disabled={assetBusy||aiBusy||busy||sourcePhotos.length>=5} onChange={e=>{const files=Array.from(e.target.files||[]);e.target.value='';uploadArtwork(files)}}/></label>
+          <label>{t('Restaurant website')}<input type="url" value={restaurantLink} maxLength={900} placeholder="https://restaurant.example" onChange={e=>{setRestaurantLink(e.target.value);setImportInfo(null);setImportConsent(false)}}/></label>
+          <button type="button" className="btn outline" disabled={!restaurantLink||assetBusy||aiBusy||busy} onClick={inspectWebsite}>{t('Find website pictures')}</button>
+          {importInfo&&<div className="campaign-website-result"><strong>{importInfo.title}</strong><p>{importInfo.description}</p>
+            <button type="button" className="btn subtle" onClick={()=>setCreativeInstructions(v=>(v+'\n'+importInfo.title+' '+importInfo.description).slice(0,1200))}>{t('Use website description')}</button>
+            <label><input type="checkbox" checked={importConsent} onChange={e=>setImportConsent(e.target.checked)}/>{t('I have permission to use the selected website pictures.')}</label>
+            <div className="campaign-photo-gallery">{importInfo.images.map((url,i)=><div className="campaign-photo-item" key={url}><span>{t('Website picture')} {i+1}</span><a href={url} target="_blank" rel="noopener noreferrer">{t('Preview source')}</a><button type="button" className="btn outline" disabled={!importConsent||assetBusy||aiBusy||busy||sourcePhotos.length>=5} onClick={()=>importPicture(url)}>{t('Import picture')}</button></div>)}</div>
+          </div>}
           <small role="status">{sourcePhotos.length}/5 {t('Pictures selected')}</small>
           {sourcePhotos.length>0&&<div className="campaign-photo-gallery">{sourcePhotos.map((photo,index)=><div className="campaign-photo-item" key={photo.media_key}>
             <img src={photo.media_url} alt={photo.name||t('Campaign picture')}/>
@@ -380,7 +401,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
             setRenderedSignature(renderSignature);
           }
           const payload={program_id:programId,headline:headline.trim(),message:message.trim(),duration_days:Number(days),
-            media_url:savedMediaUrl||null,media_type:savedMediaUrl?savedMediaType:null,media_alt:headline.trim()};
+            media_url:savedMediaUrl||null,media_type:savedMediaUrl?savedMediaType:null,media_alt:headline.trim(),source_keys:sourcePhotos.map(p=>p.media_key),restaurant_link:restaurantLink.trim()};
           if(editingPromotionId)await call('/v1/merchant/promotions/'+editingPromotionId,token,payload,'PATCH');
           else await call('/v1/merchant/promotions',token,payload);
           setEditingPromotionId('');setHeadline('');setMessage('');setDraftPreview(null);resetMedia();

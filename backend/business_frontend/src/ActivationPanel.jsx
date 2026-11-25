@@ -70,6 +70,9 @@ export default function ActivationPanel({token,stores=[],programs=[],onAddStore,
         <div><strong>3. {t('Activate receipt rewards')}</strong><small>{t(approved?'Approved by Pruvs':waiting?'Pruvs is reviewing your request':'One-time business approval')}</small></div>
       </li>
     </ol>
+    {access?.requested_at&&<p className="helper">{t('Requested at')}: {new Date(access.requested_at).toLocaleString()}</p>}
+    {access?.reviewed_at&&<p className="helper">{t('Reviewed at')}: {new Date(access.reviewed_at).toLocaleString()}</p>}
+    {access?.decision_note&&<p className="helper">{t('Decision note')}: {access.decision_note}</p>}
     {error&&<p className="pruvs-activation-error" role="alert"><AlertTriangle size={16}/>{t(error)}</p>}
     {message&&<p className="pruvs-activation-good" role="status">{t(message)}</p>}
     {loading?<p role="status" className="helper">{t('Checking activation…')}</p>:approved?

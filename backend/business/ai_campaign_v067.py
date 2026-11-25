@@ -26,6 +26,7 @@ class CampaignBrief(BaseModel):
     language: str = Field(default='en', pattern=r'^(en|ro)$')
     media_key:str|None=Field(default=None,min_length=20,max_length=300)
     media_keys:list[str]=Field(default_factory=list,max_length=5)
+    restaurant_link:str=Field(default='',max_length=900)
 
 SCHEMA={'type':'object','additionalProperties':False,'properties':{
     'headline':{'type':'string'},'message':{'type':'string'},
@@ -119,7 +120,8 @@ def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Sessio
       'requested_watermark':payload.watermark_text.strip() or 'Pruvs Business',
       'merchant_creative_brief':payload.creative_instructions.strip(),
       'output_language':payload.language,
-      'uploaded_campaign_photo':bool(source_image),'uploaded_photo_count':len(source_image)
+      'uploaded_campaign_photo':bool(source_image),'uploaded_photo_count':len(source_image),
+      'merchant_supplied_restaurant_link':payload.restaurant_link
     }
     instructions=('You write merchant-reviewed advertising copy for the Pruvs loyalty app. '
       'Return only JSON with the specified keys. Use only the provided merchant facts. '

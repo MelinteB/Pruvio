@@ -221,6 +221,19 @@ def frame(photo,idx,frames,text,headline):
     draw.text((26,844),'PRUVS',font=font,fill='#8bebc4')
     return canvas
 
+def render_sequence(photos,fmt,watermark,headline):
+    if fmt=='png':return [frame(photo_collage(photos),0,1,watermark,headline)]
+    if len(photos)==1:return [frame(photos[0],i,18,watermark,headline) for i in range(18)]
+    result=[]
+    for n,photo in enumerate(photos):
+        fitted=ImageOps.pad(photo,(720,900),method=Image.Resampling.LANCZOS,color='#edf2f8')
+        current=frame(fitted,0,1,watermark,headline)
+        for i in range(9):
+            if n and i<2:result.append(Image.blend(previous,current,(i+1)/3))
+            else:result.append(current.copy())
+        previous=current
+    return result
+
 @router.post('/v1/merchant/promotions/media/render')
 def render_campaign_artwork(payload:RenderArtworkIn,staff:Staff=Depends(merchant_actor)):
     require_manager(staff)
@@ -237,8 +250,7 @@ def render_campaign_artwork(payload:RenderArtworkIn,staff:Staff=Depends(merchant
     # Static and animated formats retain all source photos in a single compatible asset.
     photo=photo_collage(photos)
     frames=1 if payload.format=='png' else 18
-    # Avoid motion cropping of a multi-picture composition.
-    sequence=[frame(photo,i,frames if len(photos)==1 else 1,payload.watermark_text,payload.headline) for i in range(frames)]
+    sequence=render_sequence(photos,payload.format,payload.watermark_text,payload.headline)
     key=f'campaigns/{staff.merchant_id}/{uuid4().hex}.{payload.format}'
     if payload.format=='png':
         buffer=io.BytesIO();sequence[0].save(buffer,format='PNG',optimize=True)
