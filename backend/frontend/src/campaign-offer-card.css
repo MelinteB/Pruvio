@@ -41,3 +41,7 @@
 }
 @media(max-width:480px){.campaign-offer-content{padding:14px}.campaign-artwork,.campaign-artwork-media{max-height:210px}.campaign-offer-facts>div{flex-basis:92px}}
 @media(prefers-reduced-motion:reduce){.campaign-offer-card *{transition:none}}
+
+.campaign-carousel-slide>.campaign-offer-card{grid-template-rows:auto minmax(0,1fr);align-content:stretch}
+.campaign-carousel-slide>.campaign-offer-card:not(.has-artwork){grid-template-rows:minmax(0,1fr)}
+@container (min-width:680px){.campaign-carousel-slide>.campaign-offer-card.has-artwork{grid-template-rows:minmax(0,1fr)}}

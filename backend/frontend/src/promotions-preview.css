@@ -5,3 +5,6 @@
 .campaign-preview-heading>div{display:flex;align-items:center;gap:9px;color:#1a4287}
 .campaign-preview-heading h2{font-size:clamp(17px,2vw,21px);line-height:1.25;margin:0}
 .pruvs-promos .campaign-preview-heading .pruvs-promos-more{display:inline-flex;align-items:center;gap:6px;text-decoration:none;font-weight:700;color:#1553b6;min-height:40px;padding:4px 0}
+
+.core-experience .core-v7160-dashboard>.pruvs-promos{margin:0;gap:10px;min-width:0}
+.core-v7160-dashboard>.pruvs-promos{margin:0}
