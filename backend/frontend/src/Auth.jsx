@@ -36,18 +36,24 @@ export default function Auth({
     [socialNotice, setSocialNotice] = useState(''),
     [passkeySignup,setPasskeySignup]=useState(false),
     [passkeyOptions,setPasskeyOptions]=useState(null);
+  const linkMode=mode==='login' && params.get('social')==='link';
+  const [linkEmail,setLinkEmail]=useState('');
+  const [linkCode,setLinkCode]=useState('');
+  const [linkChallenge,setLinkChallenge]=useState(null);
+  const [linkNotice,setLinkNotice]=useState('');
   const socialProviders = useLoad(() => request('/auth/social/providers'), []);
   useEffect(() => {
-    if (mode !== 'register' || params.get('social') !== 'pending') return;
+    if (!linkMode && (mode !== 'register' || params.get('social') !== 'pending')) return;
     let active = true;
     request('/auth/social/pending').then(data => {
       if (!active) return;
       setSocialPending(data);
+      if(linkMode)setLinkEmail(data.email||'');
       setForm(current => ({...current, name: current.name || data.name || '',
         email: data.email || current.email || '',phone_country:current.phone_country || 'RO'}));
     }).catch(() => {if(active)setSocialNotice('Social registration expired. Start again or register with email.');});
     return () => {active = false;};
-  }, [mode, params.get('social')]);
+  }, [mode, params.get('social'), linkMode]);
 
   useEffect(()=>{if(mode==='login')return;if(passkeySignup){sessionStorage.removeItem(storageKey);return;}if(challenge&&!done)sessionStorage.setItem(storageKey,JSON.stringify({email:challenge.email||form.email,challenge,next:safeNext(returnTo),expires:Date.now()+15*60*1000}));else sessionStorage.removeItem(storageKey)},[challenge,done,returnTo,passkeySignup]);
   const set = (k, v) => {
@@ -157,11 +163,35 @@ export default function Auth({
       }
     });
   }
+  async function sendExistingCode(){
+    await run(async()=>{
+      const result=await send('/auth/social/existing/send-code',{email:linkEmail});
+      setLinkChallenge(result.challenge_id);setLinkCode('');setLinkNotice(result.message);
+    });
+  }
+  if(linkMode)return <div className="auth-layout">
+    <div className="auth-story"><span className="eyebrow">{t("STAY IN CONTROL")}</span><h1>{t("One account. More ways to sign in.")}</h1><p>{t("Keep your existing receipts, shared bills, projects and rewards. Verify your Pruvs email before connecting another sign-in method.")}</p></div>
+    <section className="panel auth-card">
+      <div className="eyebrow">{t("WELCOME TO PRUVS")}</div><h1>{t("Connect to your existing account")}</h1>
+      <p className="muted">{t("Confirm the email on your existing Pruvs account to connect")} {({google:'Google',linkedin:'LinkedIn',yahoo:'Yahoo',facebook:'Facebook',tiktok:'TikTok',apple:'Apple',instagram:'Instagram'})[socialPending?.provider]||t('your sign-in provider')}.</p>
+      {error&&<Message error={error}/>}
+      {socialNotice&&<Message error={socialNotice}/>}
+      {linkNotice&&<Message>{linkNotice}</Message>}
+      {socialPending&&<form onSubmit={async e=>{e.preventDefault();if(!linkChallenge)return sendExistingCode();await run(async()=>signed(await send('/auth/social/existing/verify-code',{email:linkEmail,code:linkCode,challenge_id:linkChallenge})));}}>
+        <label className="field"><span>{t("Existing Pruvs email")}</span><input type="email" autoComplete="email" required maxLength={255} value={linkEmail} readOnly={Boolean(socialPending.email)||Boolean(linkChallenge)} onChange={e=>setLinkEmail(e.target.value)}/></label>
+        {linkChallenge&&<label className="field"><span>{t("Email verification code")}</span><input inputMode="numeric" autoComplete="one-time-code" required pattern="[0-9]{6}" maxLength={6} value={linkCode} onChange={e=>setLinkCode(e.target.value)}/></label>}
+        <button type="submit" className="primary full" disabled={busy}>{busy?t("Please wait…"):linkChallenge?t("Verify and sign in"):t("Send verification code")}<ArrowRight size={17}/></button>
+        {linkChallenge&&<button className="text-button" type="button" disabled={busy} onClick={sendExistingCode}>{t("Resend code")}</button>}
+        {linkChallenge&&!socialPending.email&&<button className="text-button" type="button" disabled={busy} onClick={()=>{setLinkChallenge(null);setLinkCode('');setLinkNotice('');}}>{t("Change email")}</button>}
+      </form>}
+      <div className="auth-links"><Link to={'/login?next='+encodeURIComponent(safeNext(returnTo))}>{t("Use your existing sign-in method")}</Link>{socialPending&&!socialPending.existing_only&&<Link to={'/register?social=pending&next='+encodeURIComponent(safeNext(returnTo))}>{t("Create account instead")}</Link>}</div>
+    </section></div>;
   return <div className="auth-layout"><div className="auth-story"><span className="eyebrow">{t("LESS MATH. MORE MOMENTS.")}</span><h1>{t("Good company.")} <br /> {t("Fair shares.")}</h1><p>{t("From the first scan to the last payment, keep every shared bill clear.")}</p><div className="story-card"><ScanLine /><div><strong>{t("Scan once")}</strong><p>{t("Keep the original receipt and review every item.")}</p></div></div><div className="story-card"><Users /><div><strong>{t("Split together")}</strong><p>{t("Everyone picks their items. Totals stay in sync.")}</p></div></div><div className="story-card"><ShieldCheck /><div><strong>{t("Stay in control")}</strong><p>{t("Your account, your history, your notification choices.")}</p></div></div></div>
  <section className="panel auth-card"><div className="eyebrow">{t("WELCOME TO PRUVS")}</div><h1>{mode === 'register' ? t("Create your account") : mode === 'reset' ? t("Reset your password") : t("Welcome back")}</h1><p className="muted">{challenge ? t("Enter the code sent to your email.") : mode === 'login' ? t("Your receipts and shared moments, in one place.") : t("Use an email address you can verify.")}</p>
  {error && <Message error={error} />}
  {socialNotice && <Message error={socialNotice}/>}
  {params.get('social_error') && <Message error={params.get('social_error')==='existing_account'?'An account already exists. Sign in using your existing method, then connect the provider in Account.':`${({google:'Google',linkedin:'LinkedIn',yahoo:'Yahoo',facebook:'Facebook',tiktok:'TikTok'})[params.get('provider')]||'Social'} sign-in did not complete. Please try again or use another sign-in method.`}/>}
+ {mode==='register'&&socialPending&&<p><Link to={'/login?social=link&next='+encodeURIComponent(safeNext(returnTo))}>{t("Already have a Pruvs account? Verify your email to connect this provider.")}</Link></p>}
  {socialPending?.can_complete && <Message>Verified {socialPending.provider} email: {socialPending.email}. Complete your Pruvs profile below.</Message>}
  {socialPending?.requires_email_otp && <Message>
   {socialPending.provider} does not provide a verified email. Complete the usual email and password registration below, then verify the email code to link your social identity.
