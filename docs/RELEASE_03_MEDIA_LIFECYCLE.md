@@ -20,9 +20,12 @@ The staging Render start command runs
 `backend/scripts/apply_staging_business_migrations.py` before starting the app.
 The runner accepts only PostgreSQL database `pruvs_business_staging` with
 `PRUVS_PLATFORM_COMBINED_STAGING=true`, applies the three reviewed SQL files in
-order, and verifies their tables. It is idempotent and refuses a different
-database. Production is not a target of this deployment. The migrations add
-tables and indexes; they do not rewrite existing campaign or customer rows.
+order, and verifies their tables. If the Business role lacks DDL permission, it
+can use the existing Core URL only when it points to the same Postgres host and
+can create tables; it grants the least-privilege Business role CRUD access to
+the resulting tables. It is idempotent and refuses a different database.
+Production is not a target of this deployment. The migrations add tables and
+indexes; they do not rewrite existing campaign or customer rows.
 The `/ready` endpoint reports unavailable until the registry and required
 schema are present.
 
