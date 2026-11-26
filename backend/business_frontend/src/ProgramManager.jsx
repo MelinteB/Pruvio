@@ -4,7 +4,7 @@ import ActivationPanel from './ActivationPanel.jsx';
 import {useBusinessLanguage} from './i18n.jsx';
 
 const API=(import.meta.env.VITE_API_BASE||'').replace(/\/$/,'');
-const statusLabel={draft:'Draft',published:'Published program',paused:'Paused program'};
+const statusLabel={draft:'Draft',published:'Published program',paused:'Paused program',archived:'Archived program'};
 async function changeProgram(path,token,method='POST',body){
   const res=await fetch(API+path,{method,headers:{Authorization:'Bearer '+token,
     'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
@@ -32,7 +32,7 @@ export default function ProgramManager({programs=[],stores=[],token,onRefresh,no
     {error&&<div className="error-text" role="alert">{t(error)}</div>}
     <div className="pruvs-program-editor-grid">
       <label>{t('Search programs')}<input type="search" value={query} onChange={e=>setQuery(e.target.value)}/></label>
-      <label>{t('Status')}<select value={status} onChange={e=>setStatus(e.target.value)}>{['all','draft','published','paused'].map(s=><option key={s} value={s}>{t(s)}</option>)}</select></label>
+      <label>{t('Status')}<select value={status} onChange={e=>setStatus(e.target.value)}>{['all','draft','published','paused','archived'].map(s=><option key={s} value={s}>{t(s)}</option>)}</select></label>
       <label>{t('Location')}<select value={location} onChange={e=>setLocation(e.target.value)}><option value="all">{t('All locations')}</option>{stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
     </div>
     {filtered.length?<div className="pruvs-program-list">{filtered.map(p=><div className="pruvs-program-row" key={p.id}>
@@ -46,6 +46,9 @@ export default function ProgramManager({programs=[],stores=[],token,onRefresh,no
       {p.status==='draft'&&<button type="button" className="btn primary" disabled={!!busy} onClick={()=>act(p.id,'POST','/v1/merchant/programs/'+p.id+'/publish')}><Check size={15}/> {t('Publish')}</button>}
       {p.status==='published'&&<button type="button" className="btn outline" disabled={!!busy} onClick={()=>{if(window.confirm(t('Pause this program for new purchases?')))act(p.id,'POST','/v1/merchant/programs/'+p.id+'/pause')}}><PauseCircle size={15}/> {t('Pause')}</button>}
       {p.status==='paused'&&<button type="button" className="btn primary" disabled={!!busy} onClick={()=>act(p.id,'POST','/v1/merchant/programs/'+p.id+'/resume')}><PlayCircle size={15}/> {t('Resume')}</button>}
+      <button type="button" className="btn outline" disabled={!!busy} onClick={()=>act(p.id,'POST','/v1/merchant/programs/'+p.id+'/duplicate')}>{t('Duplicate')}</button>
+      {['draft','paused'].includes(p.status)&&<button type="button" className="btn outline" disabled={!!busy} onClick={()=>{if(window.confirm(t('Archive this program? Customer history is retained.')))act(p.id,'POST','/v1/merchant/programs/'+p.id+'/archive')}}>{t('Archive')}</button>}
+      {p.status==='archived'&&<button type="button" className="btn outline" disabled={!!busy} onClick={()=>act(p.id,'POST','/v1/merchant/programs/'+p.id+'/restore')}>{t('Restore')}</button>}
       </div>}
       {canManage&&editing===p.id&&<form className="pruvs-program-editor" onSubmit={e=>{e.preventDefault();act(p.id,'PATCH','/v1/merchant/programs/'+p.id,p.status==='draft'?draft:{title:draft.title,description:draft.description})}}>
         <label>{t('Name')}<input required minLength={3} maxLength={180} value={draft.title} onChange={e=>setDraft(x=>({...x,title:e.target.value}))}/></label>

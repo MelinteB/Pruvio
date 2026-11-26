@@ -7,6 +7,7 @@ import '../../frontend/src/campaign-creative.css';
 import '../../frontend/src/campaign-creative-v7162.css';
 import '../../shared_ui/pruvs-campaign-card-2027.css';
 import './core-promotion-preview.css';
+import CampaignGallery from '../../frontend/src/CampaignGallery.jsx';
 
 const amount=(minor,currency)=>`${(Number(minor||0)/100).toFixed(2)} ${currency||'RON'}`;
 
@@ -17,7 +18,7 @@ const amount=(minor,currency)=>`${(Number(minor||0)/100).toFixed(2)} ${currency|
  */
 export default function CorePromotionPreview({
   program,merchantName,headline,message,mediaUrl,mediaType,
-  onMediaError,onMediaReady,mediaPending=false,
+  onMediaError,onMediaReady,mediaPending=false,gallery=[],
 }){
   const {t}=useBusinessLanguage();
   const [viewport,setViewport]=useState('phone');
@@ -62,7 +63,7 @@ export default function CorePromotionPreview({
           <span className="pruvs-core-preview-media-kind">
             {video?<Film size={13}/>:<ImageIcon size={13}/>} {mediaKind}
           </span>
-          {video?
+          {gallery.length?<CampaignGallery assets={gallery} alt={title} onMediaError={()=>{setImageBroken(true);onMediaError?.()}} onMediaReady={()=>onMediaReady?.()}/>:video?
             <video key={reduceMotion?'manual':'auto'} className="pruvs-campaign-creative-media" src={mediaUrl}
               muted autoPlay={!reduceMotion} controls={reduceMotion} loop playsInline preload="metadata"
               aria-label={title}

@@ -22,12 +22,14 @@ function Rating({place}){
     <small>{t('Reviews and ratings are provided live by Google Maps.')}</small>
   </div>;
 }
-export default function LocationManager({stores=[],token,canManage=true,onChange,onNotice}){
+export default function LocationManager({stores=[],programs=[],token,canManage=true,onChange,onNotice}){
   const {t,language}=useBusinessLanguage();
   const [selected,setSelected]=useState(stores[0]?.id||'');
+  const [filter,setFilter]=useState('all'),[search,setSearch]=useState('');
   const [place,setPlace]=useState(null),[detailsFailed,setDetailsFailed]=useState(false);
   const [busy,setBusy]=useState(false),[error,setError]=useState('');
-  const store=stores.find(s=>s.id===selected)||stores[0];
+  const filtered=stores.filter(s=>(filter==='all'||(filter==='active'?s.active!==false:filter==='inactive'?s.active===false:!!s.google_place_id))&&[s.name,s.address].join(' ').toLowerCase().includes(search.toLowerCase()));
+  const store=filtered.find(s=>s.id===selected)||filtered[0];
   const [draft,setDraft]=useState(null);
   const google=useMerchantPlaces(token,language,canManage);
   const canFetchDetails=!canManage||google.readiness?.places_search_enabled===true||google.readiness?.unreachable===true;
@@ -68,11 +70,13 @@ export default function LocationManager({stores=[],token,canManage=true,onChange
       setPlace(null);onNotice?.(t('Google Maps link disconnected.'));await onChange?.();
     }catch{setError('Could not disconnect the Google Maps listing. Try again.')}finally{setBusy(false)}
   }
-  if(!store)return null;
   return <section className="panel pruvs-location-manager" aria-label={t('Location management')}>
     <div className="panel-heading"><h2><MapPin size={21}/> {t('Location management')}</h2><span>GOOGLE MAPS</span></div>
     <p>{t('Connect a Google Maps listing so customers can view live ratings and get directions.')}</p>
-    <label>{t('Manage location')}<select value={store.id} disabled={busy} onChange={e=>{setSelected(e.target.value);google.changeQuery('');setError('');}}>{stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+    <div className="pruvs-location-edit"><label>{t('Search locations')}<input type="search" value={search} onChange={e=>setSearch(e.target.value)}/></label><label>{t('Status')}<select value={filter} onChange={e=>setFilter(e.target.value)}>{['all','active','inactive','linked'].map(s=><option value={s} key={s}>{t(s)}</option>)}</select></label></div>
+    {!store?<p>{t('No matching locations')}</p>:<>
+    <label>{t('Manage location')}<select value={store.id} disabled={busy} onChange={e=>{setSelected(e.target.value);google.changeQuery('');setError('');}}>{filtered.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+    <p>{t('Linked loyalty programs')}: {programs.filter(p=>p.store_id===store.id).length} · {t('Published')}: {programs.filter(p=>p.store_id===store.id&&p.status==='published').length}</p>
     {canManage&&draft&&<form className="pruvs-location-edit" onSubmit={saveLocation}>
       <label>{t('Location name')}<input required minLength="2" maxLength="180" value={draft.name} onChange={e=>setDraft({...draft,name:e.target.value})}/></label>
       <label>{t('Address')}<input maxLength="250" value={draft.address} onChange={e=>setDraft({...draft,address:e.target.value})}/></label>
@@ -118,5 +122,6 @@ export default function LocationManager({stores=[],token,canManage=true,onChange
     </div>}
     {!store.google_place_id&&!google.unavailable&&<p className="muted">{t('No Google Maps listing is connected to this location.')}</p>}
     <small>{t('Only the Google Place ID is saved when you connect a listing.')}</small>
+    </>}
   </section>;
 }
