@@ -108,8 +108,8 @@ function App(){
  {page==='loyalty'&&<ProgramManager programs={programs} stores={stores} token={token} canManage={['owner','manager'].includes(me?.role)} onRefresh={()=>reload(token)} notify={inform} onAddStore={()=>setModal('store')} onCreateProgram={()=>setModal('program')} onVerifyPurchases={()=>setPage('claims')}/>}
   {page==='claims'&&<ReceiptInbox token={token} onChange={reload} onOpenLoyalty={()=>setPage('loyalty')}/>}
 
- {page==='campaigns'&&<PromotionConsole token={token} programs={programs} merchantName={me?.merchant_name} locale={language} mode="promotions" initialView="studio" canManage={['owner','manager'].includes(me?.role)}/>}
- {page==='promotions'&&<PromotionConsole token={token} programs={programs} merchantName={me?.merchant_name} locale={language} mode="promotions" initialView="library" canManage={['owner','manager'].includes(me?.role)}/>}
+ {page==='campaigns'&&<PromotionConsole token={token} programs={programs} merchantName={me?.merchant_name} locale={language} mode="promotions" initialView="studio" canManage={['owner','manager'].includes(me?.role)} onOpenLoyalty={()=>setPage('loyalty')}/>}
+ {page==='promotions'&&<PromotionConsole token={token} programs={programs} merchantName={me?.merchant_name} locale={language} mode="promotions" initialView="library" canManage={['owner','manager'].includes(me?.role)} onOpenLoyalty={()=>setPage('loyalty')}/>}
  {page==='pilot'&&<PromotionConsole token={token} programs={programs} mode="pilot"/>}
  {page==='team'&&<TeamAccounts token={token} api={request} currentEmail={me?.email}
    onPasswordChanged={()=>{setToken('');setMe(null);inform('Password updated. Sign in with your new password.')}}/>}
