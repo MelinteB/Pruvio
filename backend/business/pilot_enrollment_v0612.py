@@ -129,6 +129,7 @@ def request_pilot_access(staff: Staff = Depends(merchant_actor),
     require_db_mode(db)
     if staff.role not in ('owner','manager'):
         raise HTTPException(403, 'Merchant owner or manager required.')
+    db.scalar(select(Merchant).where(Merchant.id == staff.merchant_id).with_for_update())
     if not merchant_is_eligible(db, staff.merchant_id):
         raise HTTPException(409, 'An active merchant, store and published loyalty program are required.')
     row = db.scalar(select(MerchantPilotEnrollment).where(

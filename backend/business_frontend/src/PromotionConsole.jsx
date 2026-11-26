@@ -43,6 +43,9 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
     [watermark,setWatermark]=useState('Pruvs Business'),[artworkKey,setArtworkKey]=useState(''),
     [draftPreview,setDraftPreview]=useState(null),[aiBusy,setAiBusy]=useState(false),[assetBusy,setAssetBusy]=useState(false),[aiReadiness,setAiReadiness]=useState(null);
   const [creativeInstructions,setCreativeInstructions]=useState('');
+  const [skillId,setSkillId]=useState('loyalty');
+  const skills=[{"id":"restaurant","en":"Restaurant & Café","ro":"Restaurant și cafenea","briefEn":"Focus on the visible food, ambience and repeat visits.","briefRo":"Evidențiază preparatele, atmosfera și revenirea clienților."},{"id":"retail","en":"Product showcase","ro":"Prezentare produse","briefEn":"Focus on actual visible products and their appeal.","briefRo":"Evidențiază produsele vizibile și atractivitatea lor."},{"id":"loyalty","en":"Repeat visits","ro":"Vizite repetate","briefEn":"Encourage regular customers to return.","briefRo":"Încurajează clienții fideli să revină."},{"id":"welcome","en":"New customer welcome","ro":"Clienți noi","briefEn":"Invite new customers to discover the location.","briefRo":"Invită clienții noi să descopere locația."},{"id":"seasonal","en":"Seasonal campaign","ro":"Campanie sezonieră","briefEn":"Use the season as context without inventing offers or dates.","briefRo":"Folosește sezonul ca temă fără a inventa oferte sau date."},{"id":"quiet_hours","en":"Quiet-hour traffic","ro":"Intervale liniștite","briefEn":"Encourage visits at merchant-specified times without inventing schedules.","briefRo":"Încurajează vizitele la orele indicate de comerciant."},{"id":"winback","en":"Customer win-back","ro":"Reactivare clienți","briefEn":"Warmly invite past customers to return.","briefRo":"Invită cu căldură foștii clienți să revină."},{"id":"premium","en":"Premium brand","ro":"Marcă premium","briefEn":"Use understated copy and restrained visual direction.","briefRo":"Folosește un mesaj elegant și o direcție vizuală discretă."},{"id":"story","en":"Multi-photo story","ro":"Poveste în imagini","briefEn":"Create a coherent visual narrative from the selected photos.","briefRo":"Construiește o poveste vizuală coerentă din fotografiile alese."}];
+  const [gallery,setGallery]=useState([]);
   const [imageOrigin,setImageOrigin]=useState(''); // upload | ai | empty
   const [renderedSignature,setRenderedSignature]=useState('');
   const [editingPromotionId,setEditingPromotionId]=useState('');
@@ -57,11 +60,12 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
   const currentProgram=programs.find(p=>p.id===programId);
   const displayedMediaUrl=mediaUrl&&!mediaPreviewError?mediaUrl:localMediaPreview;
   const mediaCannotSave=uploadPending||mediaPreviewError;
-  const targetMediaType={png:'image/png',gif:'image/gif',mp4:'video/mp4'}[creativeFormat];
+  const targetMediaType={png:'image/png',gif:'image/gif',mp4:'video/mp4',gallery:'image/jpeg'}[creativeFormat];
   const renderSignature=[creativeFormat,headline.trim(),watermark.trim()].join('|');
-  const mediaNeedsRendering=Boolean(artworkKey&&mediaUrl&&(
+  const mediaNeedsRendering=Boolean(creativeFormat!=='gallery'&&artworkKey&&mediaUrl&&(
     mediaType!==targetMediaType||renderedSignature!==renderSignature));
   function resetMedia(){
+    setGallery([]);
     setArtworkKey('');setMediaUrl('');setMediaType('image/jpeg');
     setLocalMediaPreview('');setUploadPending(false);setMediaPreviewError(false);
     setImageOrigin('');setRenderedSignature('');
@@ -76,6 +80,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
     setDays(p.duration_days||14);setDraftPreview(null);resetMedia();
     setCreativeFormat(p.media_type==='image/gif'?'gif':p.media_type==='video/mp4'?'mp4':'png');
     setMediaUrl(p.media_url||'');setMediaType(p.media_type||'image/jpeg');
+    if(p.gallery?.length){setGallery(p.gallery);setCreativeFormat('gallery');setImageOrigin('upload');}
     setError('');
     setNotice(copy?'Copied into a new draft. Add or replace artwork before saving.':'Editing existing draft. Save changes before publishing.');
   }
@@ -86,11 +91,12 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
     setAiBusy(true);setError('');setNotice('');
     try{
       const result=await call('/v1/merchant/promotions/ai-draft',token,{
-        program_id:programId,goal:goal.trim(),audience:audience.trim(),tone,
+        program_id:programId,skill_id:skillId,skill_version:1,goal:goal.trim(),audience:audience.trim(),tone,
         format:creativeFormat==='mp4'?'video':creativeFormat==='gif'?'gif':'image',
         duration_days:Number(days),watermark_text:watermark,
         creative_instructions:creativeInstructions.trim(),language:locale,
-        media_key:imageOrigin==='upload'?artworkKey:null
+        media_key:imageOrigin==='upload'?artworkKey||null:null,
+        gallery_keys:creativeFormat==='gallery'?gallery.map(a=>a.media_key):[]
       });
       if(imageOrigin==='upload'&&!result.source_image_used)
         throw new Error('AI copy did not use the uploaded picture. Retry after checking the image upload.');
@@ -132,6 +138,32 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
       }
     }catch(e){setError(e.message||'AI image generation failed.')}
     finally{setAssetBusy(false)}
+  }
+  function applyGallery(items){
+    setGallery(items);setMediaUrl(items[0]?.media_url||'');setMediaType('image/jpeg');
+    setArtworkKey('');setImageOrigin(items.length?'upload':'');setMediaPreviewError(false);
+    setLocalMediaPreview('');setUploadPending(false);setDraftPreview(null);
+  }
+  async function uploadGallery(files){
+    if(assetBusy||aiBusy)return;
+    setAssetBusy(true);setError('');let next=[...gallery];
+    try{
+      for(const file of Array.from(files)){
+        if(next.length>=5)throw Error('Maximum five campaign pictures.');
+        if(!['image/jpeg','image/png','image/webp'].includes(file.type)||!file.size||file.size>6000000)
+          throw Error('Each picture must be JPEG, PNG or WebP and under 6 MB.');
+        const form=new FormData();form.append('file',file);
+        const resp=await fetch(API+'/v1/merchant/promotions/media/upload',{method:'POST',headers:{Authorization:'Bearer '+token},body:form});
+        const data=await resp.json().catch(()=>({}));
+        if(!resp.ok||!data.media_key||!data.media_url)throw Error(typeof data.detail==='string'?data.detail:'Picture upload failed. Retry the remaining pictures.');
+        next.push(data);applyGallery([...next]);
+      }
+      setNotice('Pictures uploaded. Choose the cover and order before saving.');
+    }catch(e){setError(e.message)}finally{setAssetBusy(false)}
+  }
+  function moveGallery(i,j){
+    if(j<0||j>=gallery.length)return;
+    const next=[...gallery];[next[i],next[j]]=[next[j],next[i]];applyGallery(next);
   }
   async function uploadArtwork(file){
     if(!file)return;
@@ -272,19 +304,21 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
           <div className="pruvs-studio-2027-editor">
         <label className="pruvs-ai-program-select">{t('Published loyalty program')}<select required value={programId} disabled={Boolean(editingPromotionId)} onChange={e=>changeProgram(e.target.value)}>{published.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></label>
         <div className="pruvs-ai-grid">
+          <label>{t('Campaign specialist')}<select value={skillId} onChange={e=>{const id=e.target.value;setSkillId(id);const skill=skills.find(s=>s.id===id);if(skill)setCreativeInstructions(locale==='ro'?skill.briefRo:skill.briefEn);}}>{skills.map(s=><option key={s.id} value={s.id}>{locale==='ro'?s.ro:s.en}</option>)}</select></label>
           <label>{t('Campaign goal')}<input value={goal} minLength={8} maxLength={300} onChange={e=>setGoal(e.target.value)}/></label>
           <label>{t('Target audience')}<input value={audience} maxLength={140} onChange={e=>setAudience(e.target.value)}/></label>
           <label>{t('Brand tone')}<select value={tone} onChange={e=>setTone(e.target.value)}><option value="friendly">{t('Friendly')}</option><option value="premium">{t('Premium')}</option><option value="playful">{t('Playful')}</option><option value="professional">{t('Professional')}</option></select></label>
-          <label>{t('Creative format')}<select value={creativeFormat} onChange={e=>setCreativeFormat(e.target.value)}><option value="png">{t('Branded image')}</option><option value="gif">{t('Animated GIF (3 seconds)')}</option><option value="mp4">{t('Short video MP4 (3 seconds)')}</option></select></label>
+          <label>{t('Creative format')}<select value={creativeFormat} onChange={e=>{if(e.target.value!==creativeFormat){if((e.target.value==='gallery')!==(creativeFormat==='gallery')){if((gallery.length||mediaUrl)&&!window.confirm(t('Changing gallery mode removes the selected artwork. Continue?')))return;resetMedia();}setCreativeFormat(e.target.value);}}}><option value="gallery">{t('Multi-picture gallery')}</option><option value="png">{t('Branded image')}</option><option value="gif">{t('Animated GIF (3 seconds)')}</option><option value="mp4">{t('Short video MP4 (3 seconds)')}</option></select></label>
           <label>{t('Watermark text')}<input value={watermark} maxLength={70} onChange={e=>setWatermark(e.target.value)}/></label>
         </div>
         {currentProgram&&<div className="pruvs-ai-criteria"><strong>{t('Program conditions (locked)')}</strong><small>{currentProgram.title} · {t('Minimum {minimum} RON · {count} verified purchases → {reward} RON reward',{minimum:(currentProgram.min_purchase_minor/100).toFixed(2),count:currentProgram.stamps_required,reward:(currentProgram.reward_minor/100).toFixed(2)})}</small></div>}
         <div className="pruvs-ai-image-source" aria-label={t('Main campaign picture and subject')}>
           <div><h4>1. {t('Main campaign picture and subject')}</h4>
             <p>{t('Upload a product or scene photo first. Pruvs AI will describe what is visible in this image and use it as the main subject. PNG, GIF and MP4 will use the same photo.')}</p></div>
-          <label className="btn outline pruvs-ai-file"><ImagePlus size={17}/>{t(imageOrigin==='upload'?'Replace main picture':'Upload main campaign picture')}
-            <input type="file" accept="image/jpeg,image/png,image/webp" disabled={assetBusy||aiBusy} onChange={e=>{const file=e.target.files?.[0];e.target.value='';uploadArtwork(file)}}/></label>
-          {imageOrigin==='upload'&&<small role="status">{t('The uploaded picture is the main visual for this campaign.')}</small>}
+          <label className="btn outline pruvs-ai-file"><ImagePlus size={17}/>{t(creativeFormat==='gallery'?'Add campaign pictures':imageOrigin==='upload'?'Replace main picture':'Upload main campaign picture')}
+            <input type="file" multiple={creativeFormat==='gallery'} accept="image/jpeg,image/png,image/webp" disabled={assetBusy||aiBusy} onChange={e=>{const files=Array.from(e.target.files||[]);e.target.value='';if(creativeFormat==='gallery')uploadGallery(files);else uploadArtwork(files[0])}}/></label>
+          {creativeFormat==='gallery'&&<div className="pruvs-ai-grid">{gallery.map((a,i)=><div key={a.media_key} className="panel"><img src={a.media_url} alt={t('Campaign picture')+' '+(i+1)} style={{width:'100%',maxHeight:120,objectFit:'cover'}}/><small>{i===0?t('Cover photo'):t('Picture')+' '+(i+1)}</small><div className="pruvs-ai-actions"><button type="button" className="btn outline" aria-label={t('Move picture left')} disabled={assetBusy||i===0} onClick={()=>moveGallery(i,i-1)}>←</button><button type="button" className="btn outline" aria-label={t('Move picture right')} disabled={assetBusy||i===gallery.length-1} onClick={()=>moveGallery(i,i+1)}>→</button><button type="button" className="btn outline" disabled={assetBusy} onClick={()=>applyGallery(gallery.filter((_,j)=>i!==j))}>{t('Remove')}</button></div></div>)}</div>}
+          {imageOrigin==='upload'&&<small role="status">{t(creativeFormat==='gallery'?'The first picture is the cover. AI uses all selected pictures.':'The uploaded picture is the main visual for this campaign.')}</small>}
           {!mediaUrl&&!localMediaPreview&&<small>{t('Optional for a text-only promotion. To make a photo-led campaign, upload the image before generating copy.')}</small>}
         </div>
         <div className="pruvs-ai-brief-editor" aria-label={t('Predefined campaign brief editor')}>
@@ -314,15 +348,15 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
         </div>}
         <div className="pruvs-ai-copy-editor" aria-label={t('Review campaign copy before artwork')}>
           <h4>3. {t('Campaign copy · review and edit before generating artwork')}</h4>
-          <p className="helper">{t('Generate AI copy from your edited brief, then review the resulting headline and message before making artwork.')}</p>
+          <p className="helper">{t('Generate AI copy from your edited brief, then review the resulting headline and message before making artwork.')} {t('Keep numerical reward conditions in the loyalty program, not the campaign headline or message.')}</p>
           <label>{t('Promotion headline')}<input value={headline} minLength={5} maxLength={100} required placeholder={t('A little extra for your next visit')} onChange={e=>setHeadline(e.target.value)}/><small className="pruvs-studio-char-count">{headline.length}/100 {t('characters · Visible on the Core preview')}</small></label>
           <label>{t('Promotional message')}<textarea value={message} minLength={10} maxLength={500} required rows={4} placeholder={t('Join our loyalty program and earn a reward after qualifying visits.')} onChange={e=>setMessage(e.target.value)}/><small className="pruvs-studio-char-count">{message.length}/500 {t('characters · Core cards show a concise version')}</small></label>
         </div>
         <div className="pruvs-ai-actions"><button type="button" className="btn primary" disabled={!programId||uploadPending||mediaPreviewError||aiBusy||assetBusy||busy||aiReadiness?.copy_ready===false} onClick={generateDraft}><WandSparkles size={17}/>{t(aiBusy?'Creating AI draft…':'Generate AI copy')}</button>
           {imageOrigin==='upload'?<p className="pruvs-ai-photo-note" role="status">{t('Select PNG, GIF or MP4, then generate branded artwork or save the draft to render it automatically.')}</p>:
-            <button type="button" className="btn primary" disabled={!programId||!draftPreview||!headline.trim()||assetBusy||aiBusy||busy||aiReadiness?.artwork_ready===false} onClick={generateAIArtwork}><Sparkles size={17}/>{t(assetBusy?'Creating artwork…':creativeFormat==='png'?'Generate AI image (no photo)':'Generate AI source + {format}',{format:creativeFormat.toUpperCase()})}</button>}
+            <button type="button" className="btn primary" disabled={creativeFormat==='gallery'||!programId||!draftPreview||!headline.trim()||assetBusy||aiBusy||busy||aiReadiness?.artwork_ready===false} onClick={generateAIArtwork}><Sparkles size={17}/>{t(assetBusy?'Creating artwork…':creativeFormat==='png'?'Generate AI image (no photo)':'Generate AI source + {format}',{format:creativeFormat.toUpperCase()})}</button>}
 
-          <button type="button" className="btn outline" disabled={!artworkKey||assetBusy||!headline.trim()} onClick={renderArtwork}><Film size={17}/>{assetBusy?t('Processing artwork…'):t('Generate {format} artwork',{format:creativeFormat.toUpperCase()})}</button>
+          <button type="button" className="btn outline" disabled={creativeFormat==='gallery'||!artworkKey||assetBusy||!headline.trim()} onClick={renderArtwork}><Film size={17}/>{assetBusy?t('Processing artwork…'):t('Generate {format} artwork',{format:creativeFormat.toUpperCase()})}</button>
         </div>
         {draftPreview&&<div className="pruvs-ai-preview"><strong>{t('AI copy preview')}</strong><p><b>{draftPreview.cta}</b> · {draftPreview.visual_brief}</p><small>{t('Suggested motion: {motion}',{motion:draftPreview.motion_storyboard})}</small></div>}
         <p className="helper">{t(creativeFormat==='png'?
@@ -337,7 +371,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
               key={String(displayedMediaUrl||'empty')+'-'+String(mediaPreviewError)}
               program={currentProgram} merchantName={merchantName}
               headline={headline} message={message}
-              mediaUrl={displayedMediaUrl} mediaType={mediaType}
+              mediaUrl={displayedMediaUrl} mediaType={mediaType} gallery={creativeFormat==='gallery'?gallery:[]}
               mediaPending={uploadPending}
               onMediaError={()=>{if(mediaUrl&&!uploadPending&&displayedMediaUrl===mediaUrl)setMediaPreviewError(true)}}
               onMediaReady={()=>{if(mediaUrl&&!uploadPending&&displayedMediaUrl===mediaUrl)setMediaPreviewError(false)}}
@@ -373,7 +407,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
             setRenderedSignature(renderSignature);
           }
           const payload={program_id:programId,headline:headline.trim(),message:message.trim(),duration_days:Number(days),
-            media_url:savedMediaUrl||null,media_type:savedMediaUrl?savedMediaType:null,media_alt:headline.trim()};
+            media_url:savedMediaUrl||null,media_type:savedMediaUrl?savedMediaType:null,media_alt:headline.trim(),gallery_keys:creativeFormat==='gallery'?gallery.map(a=>a.media_key):[]};
           if(editingPromotionId)await call('/v1/merchant/promotions/'+editingPromotionId,token,payload,'PATCH');
           else await call('/v1/merchant/promotions',token,payload);
           setEditingPromotionId('');setHeadline('');setMessage('');setDraftPreview(null);resetMedia();

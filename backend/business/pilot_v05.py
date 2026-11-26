@@ -69,7 +69,7 @@ def _promo_google_place_id(db,store):
     return linked_place_id(db,store.id)
 
 
-def promo_json(p,db,*,now=None):
+def promo_json(p,db,*,now=None,acquisition_ready=None):
     now=now or utcnow()
     program=db.get(Program,p.program_id)
     if program and program.merchant_id != p.merchant_id:
@@ -78,10 +78,16 @@ def promo_json(p,db,*,now=None):
     if store and store.merchant_id != p.merchant_id:
         store=None
     merchant=db.get(Merchant,p.merchant_id)
+    from .pilot_readiness_v069 import merchant_acquisition_ready
+    if acquisition_ready is None:
+        acquisition_ready = merchant_acquisition_ready(db,p.merchant_id)
     created=aware(p.created_at)
     published=aware(p.published_at)
     expires=aware(p.expires_at)
+    from .campaign_gallery_v0624 import gallery_assets
+    assets=gallery_assets(db,p)
     return {'id':p.id,
+            'gallery':assets,
             'created_at':created.isoformat() if created else None,
             'published_at':published.isoformat() if published else None,
             'merchant_name':merchant.name if merchant else '',
@@ -97,7 +103,8 @@ def promo_json(p,db,*,now=None):
             'headline':p.headline,'message':p.message,'status':p.status,
             'is_live':bool(p.status=='published' and expires and expires>now
                            and (published is None or published<=now)
-                           and program_is_discoverable(program,merchant,store)),
+                           and program_is_discoverable(program,merchant,store) and acquisition_ready),
+            'receipt_activation_ready':bool(acquisition_ready),
             'media_url':p.media_url,'media_type':p.media_type,'media_alt':p.media_alt,
             'expires_at':expires.isoformat() if expires else None,
             'duration_days':p.duration_days}
@@ -110,6 +117,7 @@ class PromotionIn(BaseModel):
     media_url: str|None = Field(default=None,max_length=900)
     media_type: str|None = Field(default=None,max_length=40)
     media_alt: str|None = Field(default=None,max_length=160)
+    gallery_keys: list[str]|None = Field(default=None,max_length=5)
 
     @field_validator('headline','message',mode='before')
     @classmethod
@@ -145,12 +153,21 @@ def merchant_create_promo(payload:PromotionIn,staff:Staff=Depends(merchant_actor
     can_manage(staff)
     program=owned_program(db,staff,payload.program_id)
     if program.status!='published':raise HTTPException(409,'Publish the loyalty program first.')
+    from .campaign_gallery_v0624 import validate_gallery, save_gallery
+    assets=validate_gallery(db,staff,payload.gallery_keys,payload.media_alt)
+    from .campaign_copy_v0624 import validate_campaign_copy
+    try:validate_campaign_copy(payload.headline,payload.message)
+    except ValueError as exc:raise HTTPException(422,str(exc)) from None
     media_url,media_type,media_alt=campaign_media(payload)
+    if assets:
+        media_url,media_type,media_alt=(assets[0][k] for k in ('media_url','media_type','media_alt'))
     promo=Promotion(merchant_id=staff.merchant_id,program_id=program.id,
                     headline=payload.headline,message=payload.message,
                     media_url=media_url,media_type=media_type,media_alt=media_alt,
                     status='draft',duration_days=payload.duration_days)
-    db.add(promo);db.commit();db.refresh(promo)
+    db.add(promo);db.flush()
+    if assets:save_gallery(db,promo,assets)
+    db.commit();db.refresh(promo)
     return promo_json(promo,db)
 
 @router.patch('/v1/merchant/promotions/{promotion_id}')
@@ -165,7 +182,16 @@ def update_promotion_draft(promotion_id:str,payload:PromotionIn,
     program=owned_program(db,staff,promo.program_id)
     if program.status!='published' or payload.program_id!=promo.program_id:
         raise HTTPException(409,'Keep the original published loyalty program for this draft.')
+    from .campaign_gallery_v0624 import validate_gallery, save_gallery, gallery_assets
+    assets=(gallery_assets(db,promo) if payload.gallery_keys is None
+            else validate_gallery(db,staff,payload.gallery_keys,payload.media_alt))
+    from .campaign_copy_v0624 import validate_campaign_copy
+    try:validate_campaign_copy(payload.headline,payload.message)
+    except ValueError as exc:raise HTTPException(422,str(exc)) from None
     media_url,media_type,media_alt=campaign_media(payload)
+    if assets:
+        media_url,media_type,media_alt=(assets[0][k] for k in ('media_url','media_type','media_alt'))
+    if payload.gallery_keys is not None:save_gallery(db,promo,assets)
     promo.headline=payload.headline
     promo.message=payload.message
     promo.duration_days=payload.duration_days
@@ -240,6 +266,9 @@ def require_publishable_campaign(db:Session,staff:Staff,promotion:Promotion)->No
     store=db.get(Store,program.store_id)
     if not program_is_discoverable(program,merchant,store):
         raise HTTPException(409,'An active merchant and location are required to publish a campaign.')
+    from .pilot_readiness_v069 import merchant_acquisition_ready
+    if not merchant_acquisition_ready(db, staff.merchant_id):
+        raise HTTPException(409,'Complete receipt reward activation before publishing this campaign.')
 
 
 @router.post('/v1/merchant/promotions/{promotion_id}/reopen')
@@ -311,9 +340,16 @@ def public_promotions(limit:int=Query(12,ge=1,le=30),db:Session=Depends(get_db))
                Merchant.status=='active',
                Store.merchant_id==Merchant.id,Store.active.is_(True))
         .order_by(Promotion.published_at.desc(),Promotion.id.desc())
-        .limit(limit)
     ).all()
-    return [promo_json(p,db,now=now) for p in rows]
+    from .pilot_readiness_v069 import merchant_acquisition_ready
+    result=[]; eligibility={}
+    for p in rows:
+        if p.merchant_id not in eligibility:
+            eligibility[p.merchant_id]=merchant_acquisition_ready(db,p.merchant_id)
+        if eligibility[p.merchant_id]:
+            result.append(promo_json(p,db,now=now,acquisition_ready=True))
+        if len(result)>=limit:break
+    return result
 
 class IssuePurchaseIn(BaseModel):
     program_id: str

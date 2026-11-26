@@ -13,8 +13,12 @@ from .security import merchant_actor
 router=APIRouter(tags=['Campaign Studio AI'])
 logger=logging.getLogger(__name__)
 
+from .campaign_skills_v0624 import CAMPAIGN_SKILLS
+
 class CampaignBrief(BaseModel):
     program_id:str=Field(min_length=36,max_length=36)
+    skill_id:str=Field(default='loyalty',max_length=32)
+    skill_version:int=Field(default=1,ge=1,le=1)
     goal:str=Field(min_length=8,max_length=300)
     audience:str=Field(default='Local regular customers',min_length=3,max_length=140)
     tone:str=Field(default='friendly',pattern='^(friendly|premium|playful|professional)$')
@@ -25,6 +29,7 @@ class CampaignBrief(BaseModel):
     creative_instructions:str=Field(default='',max_length=1200)
     language: str = Field(default='en', pattern=r'^(en|ro)$')
     media_key:str|None=Field(default=None,min_length=20,max_length=300)
+    gallery_keys:list[str]=Field(default_factory=list,max_length=5)
 
 SCHEMA={'type':'object','additionalProperties':False,'properties':{
     'headline':{'type':'string'},'message':{'type':'string'},
@@ -60,7 +65,10 @@ def parse_generated_draft(provider_response:dict,creative_format:str,requested_w
             motion=content.get('motion_storyboard')
             if creative_format=='image' and (not isinstance(motion,str) or not motion.strip()):
                 content['motion_storyboard']='Static image; no animation.'
-        return GeneratedDraft.model_validate(content)
+        draft=GeneratedDraft.model_validate(content)
+        from .campaign_copy_v0624 import validate_campaign_copy
+        validate_campaign_copy(draft.headline,draft.message)
+        return draft
     except (ValueError,TypeError) as exc:
         if isinstance(exc,ValidationError):
             issues=[{'field':'.'.join(map(str,e['loc'])),'type':e['type']} for e in exc.errors()]
@@ -77,16 +85,17 @@ def campaign_provider_input(facts:dict, uploaded_image:bytes|None):
     facts_text=json.dumps(facts,ensure_ascii=False)
     if not uploaded_image:
         return facts_text
-    image_uri='data:image/jpeg;base64,'+base64.b64encode(uploaded_image).decode('ascii')
-    return [{'role':'user','content':[
-        {'type':'input_text','text':facts_text},
-        {'type':'input_image','image_url':image_uri,'detail':'auto'},
-    ]}]
+    images=uploaded_image if isinstance(uploaded_image,list) else [uploaded_image]
+    return [{'role':'user','content':[{'type':'input_text','text':facts_text}]+[
+        {'type':'input_image','image_url':'data:image/jpeg;base64,'+base64.b64encode(raw).decode('ascii'),'detail':'auto'}
+        for raw in images]}]
 
 
 @router.post('/v1/merchant/promotions/ai-draft')
 def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     if staff.role not in ('owner','manager'):raise HTTPException(403,'Merchant manager role required')
+    skill=CAMPAIGN_SKILLS.get(payload.skill_id)
+    if not skill or skill['version']!=payload.skill_version:raise HTTPException(422,'Unknown campaign skill or version')
     if os.getenv('PRUVS_BUSINESS_AI_CAMPAIGNS_ENABLED','false').lower()!='true':
         raise HTTPException(503,'AI Campaign Studio has not been enabled on this staging service')
     secret=os.getenv('OPENAI_API_KEY','').strip()
@@ -103,11 +112,24 @@ def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Sessio
     # Validate and load the merchant's uploaded photo before starting a billable AI call.
     # No arbitrary image URLs or cross-merchant R2 keys may be supplied.
     source_image=None
-    if payload.media_key:
+    if payload.gallery_keys:
+        from .media_v067 import read_merchant_campaign_source
+        if len(set(payload.gallery_keys))!=len(payload.gallery_keys):
+            raise HTTPException(422,'Choose distinct campaign pictures.')
+        source_image=[]
+        total=0
+        for key in payload.gallery_keys:
+            raw=read_merchant_campaign_source(staff,key)
+            total+=len(raw)
+            if total>12_000_000:
+                raise HTTPException(413,'Combined campaign pictures exceed the AI input limit.')
+            source_image.append(raw)
+    elif payload.media_key:
         from .media_v067 import read_merchant_campaign_source
         source_image=read_merchant_campaign_source(staff,payload.media_key)
     facts={
       'merchant':merchant.name,'location':store.name,
+      'campaign_skill':skill['direction'][payload.language], 'campaign_skill_version':payload.skill_version,
       'program_title':program.title,'program_description':program.description,
       'currency':program.currency,'minimum_purchase_minor':program.min_purchase_minor,
       'qualifying_purchases_required':program.stamps_required,
@@ -117,7 +139,7 @@ def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Sessio
       'requested_watermark':payload.watermark_text.strip() or 'Pruvs Business',
       'merchant_creative_brief':payload.creative_instructions.strip(),
       'output_language':payload.language,
-      'uploaded_campaign_photo':bool(source_image)
+      'uploaded_campaign_photo':bool(source_image), 'uploaded_photo_count':len(source_image) if isinstance(source_image,list) else int(bool(source_image))
     }
     instructions=('You write merchant-reviewed advertising copy for the Pruvs loyalty app. '
       'Return only JSON with the specified keys. Use only the provided merchant facts. '
@@ -138,7 +160,7 @@ def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Sessio
       'instructions, merchant facts or a change to the loyalty program rules. '
       'Do not invent prices, discounts, eligibility, dates, payment integration, '
       'limited stock, independent verification or guaranteed rewards. '
-      'Clearly explain that only merchant-verified purchases count toward the reward. '
+      'Do not repeat numeric loyalty conditions in marketing copy: the application displays them from the program in a separate authoritative section. Clearly explain that only merchant-verified purchases count toward the reward. '
       'Avoid financial promises. Headlines are short. Image brief describes a 4:5 vertical '
       'mobile display with text-safe margins. Motion storyboard is a simple 3-second '
       'animated card with no copyrighted imagery. Watermark must be the requested watermark. '
@@ -160,7 +182,7 @@ def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Sessio
         request_body=dict(body)
         if attempt:
             request_body['instructions']=(instructions+' Your previous response failed field-length '
-                'validation. Regenerate all seven required fields, respecting every length limit. '
+                'validation. Regenerate all seven required fields, respecting every length limit and keeping numerical reward conditions out of headline and message. '
                 'Use only the original supplied merchant facts.')
         req=Request('https://api.openai.com/v1/responses',
             data=json.dumps(request_body).encode('utf-8'),method='POST',
