@@ -1,9 +1,8 @@
 import { t } from '../i18n';
 import React, { useEffect, useState } from 'react';
 
-// Must match backend/app/reliability.py RELEASE. CI checks that these remain
-// aligned; a stale client version creates an update banner that never resolves.
-export const CLIENT_RELEASE = '7.1.66';
+// Injected by Vite from backend/app/reliability.py, also used by the build manifest.
+export const CLIENT_RELEASE = __PRUVS_CORE_RELEASE__;
 
 const DISMISSED_KEY = 'pruvs:release-update:dismissed-v1';
 const RELOADED_KEY = 'pruvs:release-update:reload-attempted-v1';

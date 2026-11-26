@@ -1,4 +1,5 @@
 import React from 'react';
+import {readFileSync} from 'node:fs';
 import {beforeEach,afterEach,describe,it,expect,vi} from 'vitest';
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {CLIENT_RELEASE,isNewerRelease,shouldOfferUpdate,ReleaseUpdateBanner} from './professional/ReleaseUpdateBanner';
@@ -20,7 +21,10 @@ afterEach(()=>{cleanup();vi.restoreAllMocks();});
 
 describe('Core release update banner',()=>{
   it('uses current compiled Core version, with semantic comparison',()=>{
-    expect(CLIENT_RELEASE).toBe('7.1.66');
+    const backend=readFileSync('../app/reliability.py','utf8');
+    const canonical=backend.match(/^RELEASE = "([0-9]+\.[0-9]+\.[0-9]+)"$/m)?.[1];
+    expect(canonical).toBeTruthy();
+    expect(CLIENT_RELEASE).toBe(canonical);
     expect(isNewerRelease(CLIENT_RELEASE)).toBe(false);
     expect(isNewerRelease('7.1.62')).toBe(false);
     expect(isNewerRelease('7.1.58')).toBe(false);

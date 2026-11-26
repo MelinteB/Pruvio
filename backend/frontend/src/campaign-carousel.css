@@ -140,3 +140,43 @@
 @media (prefers-reduced-motion: reduce) {
   .campaign-carousel-progress i { transform: scaleX(1); }
 }
+
+/* Desktop: a single portrait campaign must never stretch across the dashboard.
+   Keep the carousel itself full-width so ResizeObserver still selects 1–3 cards. */
+@media (min-width: 1025px) {
+  .campaign-carousel-viewport {
+    grid-template-columns: repeat(var(--campaigns-visible, 1), minmax(0, 360px));
+    justify-content: start;
+    align-items: stretch;
+  }
+  .campaign-carousel-slide {
+    display: flex;
+    flex-direction: column;
+  }
+  .campaign-carousel-slide > :is(.pruvs-promo, .rewards-promotion) {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+  }
+  .campaign-carousel-slide > .pruvs-promo > a:last-child {
+    margin-top: auto;
+    padding-top: 8px;
+  }
+  .campaign-carousel-slide > .rewards-promotion > button:last-child {
+    margin-top: auto;
+  }
+  .campaign-carousel-slide .pruvs-campaign-creative {
+    flex: none;
+    min-height: 0;
+  }
+  .campaign-carousel-slide .pruvs-campaign-creative-overlay {
+    padding: 18px !important;
+  }
+  .campaign-carousel-slide .pruvs-campaign-creative-overlay h3 {
+    font-size: 23px !important;
+  }
+}
