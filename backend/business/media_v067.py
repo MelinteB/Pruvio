@@ -173,7 +173,7 @@ def frame(photo,idx,frames,text,headline):
     top=round(dy*(.20+.60*progress))
     canvas=scaled.crop((left,top,left+w,top+h)).convert('RGB')
     draw=ImageDraw.Draw(canvas)
-    draw.rectangle((0,755,720,900),fill='#092a24')
+    # Campaign copy is presented once by the shared Core/Business card overlay.
     try:font=ImageFont.truetype('DejaVuSans-Bold.ttf',22)
     except OSError:font=ImageFont.load_default()
     # Sample the picture behind the watermark and retain its dominant tint while
@@ -194,8 +194,6 @@ def frame(photo,idx,frames,text,headline):
     draw.rounded_rectangle((24,34,24+badge_width,84),radius=17,fill=watermark_bg,
                            outline=watermark_outline,width=1)
     draw.text((40,46),watermark.upper(),font=font,fill=watermark_fg)
-    draw.text((26,780),headline[:48],font=font,fill='#ffffff')
-    draw.text((26,844),'PRUVS',font=font,fill='#8bebc4')
     return canvas
 
 @router.post('/v1/merchant/promotions/media/render')

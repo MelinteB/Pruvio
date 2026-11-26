@@ -43,8 +43,9 @@ def receipt_eligibility(
         .distinct()
     ).all()
 
+    from .pilot_readiness_v069 import merchant_receipt_report
     for merchant_id in merchant_ids:
-        if merchant_pilot_allowed(db, merchant_id):
+        if merchant_pilot_allowed(db, merchant_id) and merchant_receipt_report(db, merchant_id)['receipt_review_ready']:
             return {'eligible': True, 'reason': 'joined_approved_merchant'}
 
     return {'eligible': False, 'reason': 'no_joined_approved_merchant'}

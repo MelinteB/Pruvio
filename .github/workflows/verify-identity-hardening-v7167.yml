@@ -20,7 +20,7 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements.txt -r business-requirements.txt pytest
       - run: python -m compileall -q app business scripts
-      - run: python -m pytest -q tests/test_combined_platform_routes.py tests/test_stage_schema_v066.py tests/test_login_hardening_v7170.py tests/test_business_account_security_v0623.py tests/test_social_existing_link_v7168.py tests/test_identity_hardening_v7167.py tests/test_identity_provider_contract_v7167.py tests/test_core_social_auth_security_20261123.py tests/test_staging_google_readiness_20261124.py
+      - run: python -m pytest -q tests/test_loyalty_management_v0624.py tests/test_combined_platform_routes.py tests/test_stage_schema_v066.py tests/test_login_hardening_v7170.py tests/test_business_account_security_v0623.py tests/test_social_existing_link_v7168.py tests/test_identity_hardening_v7167.py tests/test_identity_provider_contract_v7167.py tests/test_core_social_auth_security_20261123.py tests/test_staging_google_readiness_20261124.py
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

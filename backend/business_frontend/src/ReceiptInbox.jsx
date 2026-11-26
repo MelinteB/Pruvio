@@ -22,7 +22,7 @@ export default function ReceiptInbox({token,onChange,onOpenLoyalty}){
      call('/v1/merchant/receipt-pilot/readiness',token).catch(()=>null),
      call('/v1/merchant/claims/packages',token)
    ]);
-   setClaims(rows);setReadiness(pilot);setPackages(Array.isArray(packets)?packets:[]);setError('');
+   setClaims(rows);setReadiness(pilot||{receipt_review_ready:false,blocked_by:['readiness_unavailable']});setPackages(Array.isArray(packets)?packets:[]);setError('');
  }catch(ex){setError(ex.message)}finally{setLoading(false)}}
  useEffect(()=>{refresh()},[token]);
  async function show(claim){setError('');setBusy(true);try{const evidence=await call('/v1/merchant/claims/'+encodeURIComponent(claim.id)+'/evidence',token);setReview(evidence);setReason('');await refresh();return true}catch(ex){setError(ex.message);return false}finally{setBusy(false)}}

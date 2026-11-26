@@ -43,6 +43,8 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
     [watermark,setWatermark]=useState('Pruvs Business'),[artworkKey,setArtworkKey]=useState(''),
     [draftPreview,setDraftPreview]=useState(null),[aiBusy,setAiBusy]=useState(false),[assetBusy,setAssetBusy]=useState(false),[aiReadiness,setAiReadiness]=useState(null);
   const [creativeInstructions,setCreativeInstructions]=useState('');
+  const [skillId,setSkillId]=useState('loyalty');
+  const skills=[{"id":"restaurant","en":"Restaurant & Café","ro":"Restaurant și cafenea","briefEn":"Focus on the visible food, ambience and repeat visits.","briefRo":"Evidențiază preparatele, atmosfera și revenirea clienților."},{"id":"retail","en":"Product showcase","ro":"Prezentare produse","briefEn":"Focus on actual visible products and their appeal.","briefRo":"Evidențiază produsele vizibile și atractivitatea lor."},{"id":"loyalty","en":"Repeat visits","ro":"Vizite repetate","briefEn":"Encourage regular customers to return.","briefRo":"Încurajează clienții fideli să revină."},{"id":"welcome","en":"New customer welcome","ro":"Clienți noi","briefEn":"Invite new customers to discover the location.","briefRo":"Invită clienții noi să descopere locația."},{"id":"seasonal","en":"Seasonal campaign","ro":"Campanie sezonieră","briefEn":"Use the season as context without inventing offers or dates.","briefRo":"Folosește sezonul ca temă fără a inventa oferte sau date."},{"id":"quiet_hours","en":"Quiet-hour traffic","ro":"Intervale liniștite","briefEn":"Encourage visits at merchant-specified times without inventing schedules.","briefRo":"Încurajează vizitele la orele indicate de comerciant."},{"id":"winback","en":"Customer win-back","ro":"Reactivare clienți","briefEn":"Warmly invite past customers to return.","briefRo":"Invită cu căldură foștii clienți să revină."},{"id":"premium","en":"Premium brand","ro":"Marcă premium","briefEn":"Use understated copy and restrained visual direction.","briefRo":"Folosește un mesaj elegant și o direcție vizuală discretă."},{"id":"story","en":"Multi-photo story","ro":"Poveste în imagini","briefEn":"Create a coherent visual narrative from the selected photos.","briefRo":"Construiește o poveste vizuală coerentă din fotografiile alese."}];
   const [imageOrigin,setImageOrigin]=useState(''); // upload | ai | empty
   const [renderedSignature,setRenderedSignature]=useState('');
   const [editingPromotionId,setEditingPromotionId]=useState('');
@@ -86,7 +88,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
     setAiBusy(true);setError('');setNotice('');
     try{
       const result=await call('/v1/merchant/promotions/ai-draft',token,{
-        program_id:programId,goal:goal.trim(),audience:audience.trim(),tone,
+        program_id:programId,skill_id:skillId,skill_version:1,goal:goal.trim(),audience:audience.trim(),tone,
         format:creativeFormat==='mp4'?'video':creativeFormat==='gif'?'gif':'image',
         duration_days:Number(days),watermark_text:watermark,
         creative_instructions:creativeInstructions.trim(),language:locale,
@@ -272,6 +274,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
           <div className="pruvs-studio-2027-editor">
         <label className="pruvs-ai-program-select">{t('Published loyalty program')}<select required value={programId} disabled={Boolean(editingPromotionId)} onChange={e=>changeProgram(e.target.value)}>{published.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></label>
         <div className="pruvs-ai-grid">
+          <label>{t('Campaign specialist')}<select value={skillId} onChange={e=>{const id=e.target.value;setSkillId(id);const skill=skills.find(s=>s.id===id);if(skill)setCreativeInstructions(locale==='ro'?skill.briefRo:skill.briefEn);}}>{skills.map(s=><option key={s.id} value={s.id}>{locale==='ro'?s.ro:s.en}</option>)}</select></label>
           <label>{t('Campaign goal')}<input value={goal} minLength={8} maxLength={300} onChange={e=>setGoal(e.target.value)}/></label>
           <label>{t('Target audience')}<input value={audience} maxLength={140} onChange={e=>setAudience(e.target.value)}/></label>
           <label>{t('Brand tone')}<select value={tone} onChange={e=>setTone(e.target.value)}><option value="friendly">{t('Friendly')}</option><option value="premium">{t('Premium')}</option><option value="playful">{t('Playful')}</option><option value="professional">{t('Professional')}</option></select></label>

@@ -83,7 +83,7 @@ export default function CorePromotionPreview({
           <h3>{title}</h3><p>{copy}</p>
         </>}
         <div className="pruvs-promo-meta"><Gift size={16}/>
-          {program?t('{count} qualifying receipts → {reward} reward',{count:program.stamps_required,reward:amount(program.reward_minor,program.currency)})
+          {program?t('{count} qualifying receipts · Minimum {minimum} → {reward} reward',{count:program.stamps_required,minimum:amount(program.min_purchase_minor,program.currency),reward:amount(program.reward_minor,program.currency)})
             :t('Verified purchases earn loyalty rewards')}
         </div>
         <span className="pruvs-core-preview-cta">{t('See loyalty program')}</span>

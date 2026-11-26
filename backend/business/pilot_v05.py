@@ -69,7 +69,7 @@ def _promo_google_place_id(db,store):
     return linked_place_id(db,store.id)
 
 
-def promo_json(p,db,*,now=None):
+def promo_json(p,db,*,now=None,acquisition_ready=None):
     now=now or utcnow()
     program=db.get(Program,p.program_id)
     if program and program.merchant_id != p.merchant_id:
@@ -78,6 +78,9 @@ def promo_json(p,db,*,now=None):
     if store and store.merchant_id != p.merchant_id:
         store=None
     merchant=db.get(Merchant,p.merchant_id)
+    from .pilot_readiness_v069 import merchant_acquisition_ready
+    if acquisition_ready is None:
+        acquisition_ready = merchant_acquisition_ready(db,p.merchant_id)
     created=aware(p.created_at)
     published=aware(p.published_at)
     expires=aware(p.expires_at)
@@ -97,7 +100,8 @@ def promo_json(p,db,*,now=None):
             'headline':p.headline,'message':p.message,'status':p.status,
             'is_live':bool(p.status=='published' and expires and expires>now
                            and (published is None or published<=now)
-                           and program_is_discoverable(program,merchant,store)),
+                           and program_is_discoverable(program,merchant,store) and acquisition_ready),
+            'receipt_activation_ready':bool(acquisition_ready),
             'media_url':p.media_url,'media_type':p.media_type,'media_alt':p.media_alt,
             'expires_at':expires.isoformat() if expires else None,
             'duration_days':p.duration_days}
@@ -240,6 +244,9 @@ def require_publishable_campaign(db:Session,staff:Staff,promotion:Promotion)->No
     store=db.get(Store,program.store_id)
     if not program_is_discoverable(program,merchant,store):
         raise HTTPException(409,'An active merchant and location are required to publish a campaign.')
+    from .pilot_readiness_v069 import merchant_acquisition_ready
+    if not merchant_acquisition_ready(db, staff.merchant_id):
+        raise HTTPException(409,'Complete receipt reward activation before publishing this campaign.')
 
 
 @router.post('/v1/merchant/promotions/{promotion_id}/reopen')
@@ -311,9 +318,16 @@ def public_promotions(limit:int=Query(12,ge=1,le=30),db:Session=Depends(get_db))
                Merchant.status=='active',
                Store.merchant_id==Merchant.id,Store.active.is_(True))
         .order_by(Promotion.published_at.desc(),Promotion.id.desc())
-        .limit(limit)
     ).all()
-    return [promo_json(p,db,now=now) for p in rows]
+    from .pilot_readiness_v069 import merchant_acquisition_ready
+    result=[]; eligibility={}
+    for p in rows:
+        if p.merchant_id not in eligibility:
+            eligibility[p.merchant_id]=merchant_acquisition_ready(db,p.merchant_id)
+        if eligibility[p.merchant_id]:
+            result.append(promo_json(p,db,now=now,acquisition_ready=True))
+        if len(result)>=limit:break
+    return result
 
 class IssuePurchaseIn(BaseModel):
     program_id: str

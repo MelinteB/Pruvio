@@ -26,7 +26,7 @@ from .login_security import authenticate_merchant
 from .schemas import LoginIn, StoreIn, StoreUpdate, ProgramIn, CampaignGoal, CampaignIn, ReceiptProofIn, ConfirmIn, DemoReceiptIn
 
 settings=get_settings()
-app=FastAPI(title='Pruvs Business API',version='0.6.23',docs_url='/docs' if settings.app_env!='production' else None)
+app=FastAPI(title='Pruvs Business API',version='0.6.24',docs_url='/docs' if settings.app_env!='production' else None)
 app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=False,
                    allow_methods=['GET','POST','PUT','PATCH','DELETE'],allow_headers=['Authorization','Content-Type'])
 app.include_router(merchant_enrollment_router)
@@ -84,7 +84,7 @@ def aware(dt):
 
 @app.get('/health')
 def health():
-    return {'service':'Pruvs Business','version':'0.6.23','status':'ok'}
+    return {'service':'Pruvs Business','version':'0.6.24','status':'ok'}
 
 @app.get('/ready', include_in_schema=False)
 def readiness():
@@ -93,10 +93,10 @@ def readiness():
     try:
         checks=check_schema(engine())
         if not all(checks.values()):
-            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.23'})
-        return {'status':'ready','version':'0.6.23'}
+            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.24'})
+        return {'status':'ready','version':'0.6.24'}
     except Exception:
-        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.23'})
+        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.24'})
 
 @app.post('/v1/merchant/login')
 def login(payload:LoginIn, request:Request, db:Session=Depends(get_db)):
@@ -140,8 +140,8 @@ def update_store(store_id:str,payload:StoreUpdate,staff:Staff=Depends(merchant_a
     if not store:raise HTTPException(404,'Location not found')
     if not payload.active:
         linked=db.scalar(select(Program.id).where(Program.store_id==store.id,
-                         Program.status.in_(('published','paused'))).limit(1))
-        if linked:raise HTTPException(409,'Pause or archive active loyalty programs before deactivating this location')
+                         Program.status=='published').limit(1))
+        if linked:raise HTTPException(409,'Pause published loyalty programs before deactivating this location')
     for key,value in payload.model_dump().items():setattr(store,key,value)
     db.commit();db.refresh(store)
     return store_json(store,db=db)
@@ -162,6 +162,9 @@ def add_program(payload:ProgramIn,staff:Staff=Depends(merchant_actor),db:Session
 def publish_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     merchant_check(staff)
     p=owned(db,Program,program_id,staff.merchant_id)
+    store=owned(db,Store,p.store_id,staff.merchant_id)
+    if not store.active:raise HTTPException(409,'Activate the program location first.')
+    if p.status not in ('draft','published'):raise HTTPException(409,'Use resume for paused programs.')
     p.status='published';db.commit()
     return program_json(p)
 
@@ -199,6 +202,8 @@ def resume_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Session
     merchant_check(staff)
     program=owned(db,Program,program_id,staff.merchant_id)
     if program.status!='paused':raise HTTPException(409,'Only paused programs may be resumed.')
+    store=owned(db,Store,program.store_id,staff.merchant_id)
+    if not store.active:raise HTTPException(409,'Activate the program location first.')
     program.status='published';db.commit();return program_json(program)
 
 @app.get('/v1/merchant/claims')
@@ -314,9 +319,11 @@ def discover(latitude:float|None=Query(default=None,ge=-90,le=90),longitude:floa
         distance=dist_km(latitude,longitude,s.latitude,s.longitude) if latitude is not None else None
         if distance is not None and distance>radius_km:continue
         if p.merchant_id not in eligibility:
-            eligibility[p.merchant_id]=merchant_pilot_allowed(db,p.merchant_id)
+            from .pilot_readiness_v069 import merchant_acquisition_ready
+            eligibility[p.merchant_id]=merchant_acquisition_ready(db,p.merchant_id)
+        if not eligibility[p.merchant_id]:continue
         results.append({'merchant_id':m.id,'merchant_name':m.name,'store':store_json(s,db=db),
-                        'program':program_json(p),'receipt_pilot_allowed':eligibility[p.merchant_id],
+                        'program':program_json(p),'receipt_pilot_allowed':merchant_pilot_allowed(db,p.merchant_id),
                         'distance_km':round(distance,2) if distance is not None else None})
     return sorted(results,key=lambda r:(r['distance_km'] is None,r['distance_km'] or 0))[:100]
 
@@ -329,6 +336,9 @@ def join_program(program_id:str,consumer_id:str=Depends(customer_actor),db:Sessi
         raise HTTPException(404,'Program not available')
     existing=db.scalar(select(Membership).where(Membership.consumer_id==consumer_id,Membership.program_id==program_id))
     if existing:return {'membership_id':existing.id,'stamps':existing.stamps,'already_joined':True}
+    from .pilot_readiness_v069 import merchant_acquisition_ready
+    if not merchant_acquisition_ready(db,p.merchant_id):
+        raise HTTPException(409,'Receipt rewards are not yet active for this merchant.')
     membership=Membership(consumer_id=consumer_id,program_id=program_id)
     db.add(membership)
     try:db.commit()

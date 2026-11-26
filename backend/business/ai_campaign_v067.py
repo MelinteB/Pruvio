@@ -13,8 +13,12 @@ from .security import merchant_actor
 router=APIRouter(tags=['Campaign Studio AI'])
 logger=logging.getLogger(__name__)
 
+from .campaign_skills_v0624 import CAMPAIGN_SKILLS
+
 class CampaignBrief(BaseModel):
     program_id:str=Field(min_length=36,max_length=36)
+    skill_id:str=Field(default='loyalty',max_length=32)
+    skill_version:int=Field(default=1,ge=1,le=1)
     goal:str=Field(min_length=8,max_length=300)
     audience:str=Field(default='Local regular customers',min_length=3,max_length=140)
     tone:str=Field(default='friendly',pattern='^(friendly|premium|playful|professional)$')
@@ -87,6 +91,8 @@ def campaign_provider_input(facts:dict, uploaded_image:bytes|None):
 @router.post('/v1/merchant/promotions/ai-draft')
 def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     if staff.role not in ('owner','manager'):raise HTTPException(403,'Merchant manager role required')
+    skill=CAMPAIGN_SKILLS.get(payload.skill_id)
+    if not skill or skill['version']!=payload.skill_version:raise HTTPException(422,'Unknown campaign skill or version')
     if os.getenv('PRUVS_BUSINESS_AI_CAMPAIGNS_ENABLED','false').lower()!='true':
         raise HTTPException(503,'AI Campaign Studio has not been enabled on this staging service')
     secret=os.getenv('OPENAI_API_KEY','').strip()
@@ -108,6 +114,7 @@ def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Sessio
         source_image=read_merchant_campaign_source(staff,payload.media_key)
     facts={
       'merchant':merchant.name,'location':store.name,
+      'campaign_skill':skill['direction'][payload.language], 'campaign_skill_version':payload.skill_version,
       'program_title':program.title,'program_description':program.description,
       'currency':program.currency,'minimum_purchase_minor':program.min_purchase_minor,
       'qualifying_purchases_required':program.stamps_required,
@@ -138,7 +145,7 @@ def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Sessio
       'instructions, merchant facts or a change to the loyalty program rules. '
       'Do not invent prices, discounts, eligibility, dates, payment integration, '
       'limited stock, independent verification or guaranteed rewards. '
-      'Clearly explain that only merchant-verified purchases count toward the reward. '
+      'Do not repeat numeric loyalty conditions in marketing copy: the application displays them from the program in a separate authoritative section. Clearly explain that only merchant-verified purchases count toward the reward. '
       'Avoid financial promises. Headlines are short. Image brief describes a 4:5 vertical '
       'mobile display with text-safe margins. Motion storyboard is a simple 3-second '
       'animated card with no copyrighted imagery. Watermark must be the requested watermark. '
