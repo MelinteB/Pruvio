@@ -30,10 +30,15 @@ export function predefinedCampaignBrief(program,language='en'){
 async function call(path,token,body,method){
   const response=await fetch(API+path,{method:body===undefined?'GET':(method||'POST'),headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},...(body===undefined?{}:{body:JSON.stringify(body)})});
   const data=await response.json().catch(()=>({}));
-  if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:'Operation failed ('+response.status+')');
+  if(!response.ok){
+    const detail=data.detail;
+    const error=new Error(typeof detail==='string'?detail:(typeof detail?.message==='string'?detail.message:'Operation failed ('+response.status+')'));
+    if(typeof detail?.code==='string')error.code=detail.code;
+    throw error;
+  }
   return data;
 }
-export default function PromotionConsole({token,programs,merchantName='',locale='en',mode='promotions',initialView='studio',canManage=true}){
+export default function PromotionConsole({token,programs,merchantName='',locale='en',mode='promotions',initialView='studio',canManage=true,onOpenLoyalty}){
   const {t}=useBusinessLanguage();
   const lastDefaultBrief=useRef('');
   const lastBriefProgram=useRef('');
@@ -279,7 +284,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
     manage('restore',p,null,'Archived campaign restored as a private draft.');
   }
   useEffect(()=>{refresh();},[token,mode]);
-  async function submit(fn){setBusy(true);setError('');setNotice('');try{await fn()}catch(e){setError(e.message)}finally{setBusy(false)}}
+  async function submit(fn){setBusy(true);setError('');setNotice('');try{await fn()}catch(e){setError(e.message);if(e.code==='RECEIPT_ACTIVATION_INCOMPLETE'&&onOpenLoyalty)onOpenLoyalty()}finally{setBusy(false)}}
   return <section id="pruvs-business-campaign-workspace" className="panel promo-console">
     <div className="panel-heading"><h2>{t(mode==='promotions'?'Campaigns':'Merchant purchase verification code')}</h2>{mode!=='promotions'&&<span>PRUVS PILOT</span>}</div>
     {error&&<p className="promo-error" role="alert"><AlertCircle size={16}/>{t(error)}</p>}
