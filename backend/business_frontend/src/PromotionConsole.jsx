@@ -40,7 +40,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
   const [list,setList]=useState([]),[programId,setProgramId]=useState(''),[headline,setHeadline]=useState(''),[message,setMessage]=useState(''),[mediaUrl,setMediaUrl]=useState(''),[mediaType,setMediaType]=useState('image/jpeg'),[days,setDays]=useState(14),[amount,setAmount]=useState(''),[code,setCode]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
   const [editedGoal,setGoal]=useState(null),[editedAudience,setAudience]=useState(null),
     [tone,setTone]=useState('friendly'),[creativeFormat,setCreativeFormat]=useState('png'),
-    [watermark,setWatermark]=useState('Pruvs Business'),[artworkKey,setArtworkKey]=useState(''),
+    [watermark,setWatermark]=useState('Pruvs Business'),[artworkKey,setArtworkKey]=useState(''),[renderedKey,setRenderedKey]=useState(''),
     [draftPreview,setDraftPreview]=useState(null),[aiBusy,setAiBusy]=useState(false),[assetBusy,setAssetBusy]=useState(false),[aiReadiness,setAiReadiness]=useState(null);
   const [creativeInstructions,setCreativeInstructions]=useState('');
   const [skillId,setSkillId]=useState('loyalty');
@@ -66,7 +66,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
     mediaType!==targetMediaType||renderedSignature!==renderSignature));
   function resetMedia(){
     setGallery([]);
-    setArtworkKey('');setMediaUrl('');setMediaType('image/jpeg');
+    setArtworkKey('');setRenderedKey('');setMediaUrl('');setMediaType('image/jpeg');
     setLocalMediaPreview('');setUploadPending(false);setMediaPreviewError(false);
     setImageOrigin('');setRenderedSignature('');
   }
@@ -80,7 +80,12 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
     setDays(p.duration_days||14);setDraftPreview(null);resetMedia();
     setCreativeFormat(p.media_type==='image/gif'?'gif':p.media_type==='video/mp4'?'mp4':'png');
     setMediaUrl(p.media_url||'');setMediaType(p.media_type||'image/jpeg');
+    const assets=copy?[]:(p.media_assets||[]);
+    const source=assets.find(a=>a.asset_kind==='source');
+    const render=assets.find(a=>a.asset_kind==='render');
+    setArtworkKey(source?.media_key||'');setRenderedKey(render?.media_key||'');
     if(p.gallery?.length){setGallery(p.gallery);setCreativeFormat('gallery');setImageOrigin('upload');}
+    else if(source)setImageOrigin('upload');
     setError('');
     setNotice(copy?'Copied into a new draft. Add or replace artwork before saving.':'Editing existing draft. Save changes before publishing.');
   }
@@ -120,7 +125,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
         visual_brief:draftPreview.visual_brief
       });
       // Keep the original so rendering failures do not discard paid AI output.
-      setArtworkKey(generated.media_key);setMediaUrl(generated.media_url);setMediaType(generated.media_type);
+      setArtworkKey(generated.media_key);setRenderedKey('');setMediaUrl(generated.media_url);setMediaType(generated.media_type);
       setImageOrigin('ai');setRenderedSignature('');
       setLocalMediaPreview('');setUploadPending(false);setMediaPreviewError(false);
       try{
@@ -128,7 +133,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
           media_key:generated.media_key,format:creativeFormat,
           headline:headline.trim(),watermark_text:watermark.trim()||'Pruvs Business'
         });
-        setMediaUrl(branded.media_url);setMediaType(branded.media_type);
+        setMediaUrl(branded.media_url);setMediaType(branded.media_type);setRenderedKey(branded.media_key||'');
         setRenderedSignature(renderSignature);
         setNotice(creativeFormat==='png'?
           'AI image generated and branded. Review the preview, save as draft and publish when approved.':
@@ -141,7 +146,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
   }
   function applyGallery(items){
     setGallery(items);setMediaUrl(items[0]?.media_url||'');setMediaType('image/jpeg');
-    setArtworkKey('');setImageOrigin(items.length?'upload':'');setMediaPreviewError(false);
+    setArtworkKey('');setRenderedKey('');setImageOrigin(items.length?'upload':'');setMediaPreviewError(false);
     setLocalMediaPreview('');setUploadPending(false);setDraftPreview(null);
   }
   async function uploadGallery(files){
@@ -175,7 +180,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
     }
     const localUrl=URL.createObjectURL(file);
     setLocalMediaPreview(localUrl);setUploadPending(true);setMediaPreviewError(false);
-    setArtworkKey('');setMediaUrl('');setMediaType('image/jpeg');
+    setArtworkKey('');setRenderedKey('');setMediaUrl('');setMediaType('image/jpeg');
     setImageOrigin('');setRenderedSignature('');setDraftPreview(null);
     setAssetBusy(true);setError('');setNotice('Uploading picture to campaign storage…');
     try{
@@ -189,7 +194,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
         throw new Error(resp.status===503?t('{detail} (HTTP 503). Ask the administrator to check campaign R2 storage.',{detail:t(detail)}):detail);
       }
       if(!data.media_key||!data.media_url||!data.media_type)throw Error('Upload did not return a saved campaign picture.');
-      setArtworkKey(data.media_key);setMediaUrl(data.media_url);setMediaType(data.media_type);
+      setArtworkKey(data.media_key);setRenderedKey('');setMediaUrl(data.media_url);setMediaType(data.media_type);
       setImageOrigin('upload');setRenderedSignature('');
       setUploadPending(false);setMediaPreviewError(false);
       setNotice('Picture uploaded. AI will use the visible product or scene as the campaign subject; GIF/MP4 will animate this same image.');
@@ -210,7 +215,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
     setAssetBusy(true);setError('');
     try{
       const result=await renderSelectedArtwork(artworkKey);
-      setMediaUrl(result.media_url);setMediaType(result.media_type);
+      setMediaUrl(result.media_url);setMediaType(result.media_type);setRenderedKey(result.media_key||'');
       setRenderedSignature(renderSignature);
       setUploadPending(false);setMediaPreviewError(false);
       setNotice(t('Branded {format} ready. Review the preview and save your promotion draft.',{format:creativeFormat.toUpperCase()}));
@@ -397,17 +402,22 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
         submit(async()=>{
           let savedMediaUrl=mediaUrl;
           let savedMediaType=mediaType;
+          let savedRenderedKey=renderedKey;
           if(mediaNeedsRendering){
             const rendered=await renderSelectedArtwork(artworkKey);
             if(!rendered.media_url||rendered.media_type!==targetMediaType)
               throw new Error('Artwork generation did not return the selected media format. Nothing was saved.');
             savedMediaUrl=rendered.media_url;
             savedMediaType=rendered.media_type;
+            savedRenderedKey=rendered.media_key||'';
             setMediaUrl(savedMediaUrl);setMediaType(savedMediaType);
             setRenderedSignature(renderSignature);
           }
           const payload={program_id:programId,headline:headline.trim(),message:message.trim(),duration_days:Number(days),
-            media_url:savedMediaUrl||null,media_type:savedMediaUrl?savedMediaType:null,media_alt:headline.trim(),gallery_keys:creativeFormat==='gallery'?gallery.map(a=>a.media_key):[]};
+            media_url:savedMediaUrl||null,media_type:savedMediaUrl?savedMediaType:null,media_alt:headline.trim(),
+            gallery_keys:creativeFormat==='gallery'?gallery.map(a=>a.media_key):[],
+            media_key:creativeFormat==='gallery'?null:(artworkKey||null),
+            rendered_media_key:creativeFormat==='gallery'?null:(savedRenderedKey||null)};
           if(editingPromotionId)await call('/v1/merchant/promotions/'+editingPromotionId,token,payload,'PATCH');
           else await call('/v1/merchant/promotions',token,payload);
           setEditingPromotionId('');setHeadline('');setMessage('');setDraftPreview(null);resetMedia();

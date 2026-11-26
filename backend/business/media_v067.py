@@ -12,6 +12,8 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel, Field
 from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageStat
+from sqlalchemy.orm import Session
+from .db import get_db
 from .models import Staff
 from .security import merchant_actor
 
@@ -108,10 +110,9 @@ def read_merchant_campaign_source(staff, media_key):
     The S3 key is derived from and constrained to the authenticated merchant.
     No arbitrary public URL, bucket key, other merchant asset or receipt is accepted.
     """
-    if not isinstance(media_key, str) or not re.fullmatch(
-        r'campaigns/' + re.escape(staff.merchant_id) + r'/[a-f0-9]{32}\.jpg',
-        media_key,
-    ):
+    legacy = r'campaigns/' + re.escape(staff.merchant_id) + r'/[a-f0-9]{32}\.jpg'
+    managed = r'campaigns/' + re.escape(staff.merchant_id) + r'/sources/[a-f0-9]{32}\.jpg'
+    if not isinstance(media_key, str) or not re.fullmatch(f'(?:{legacy}|{managed})', media_key):
         raise HTTPException(403, 'Campaign picture must belong to the signed-in merchant')
     client, cfg = storage()
     try:
@@ -137,8 +138,12 @@ def require_manager(staff):
     if staff.role not in ('owner','manager'):raise HTTPException(403,'Merchant manager role required')
 
 @router.post('/v1/merchant/promotions/media/upload')
-async def upload_campaign_picture(file:UploadFile=File(...),staff:Staff=Depends(merchant_actor)):
+async def upload_campaign_picture(file:UploadFile=File(...),staff:Staff=Depends(merchant_actor),
+                                 db:Session=Depends(get_db)):
     require_manager(staff)
+    from .media_assets_v0725 import media_registry_ready, register_media
+    if not media_registry_ready(db):
+        raise HTTPException(503,'Campaign media registry is not ready. Apply the reviewed additive migration.')
     if file.content_type not in ('image/jpeg','image/png','image/webp'):
         raise HTTPException(415,'Upload a JPEG, PNG or WebP picture')
     raw=await file.read(MAX_FILE_BYTES+1)
@@ -151,8 +156,9 @@ async def upload_campaign_picture(file:UploadFile=File(...),staff:Staff=Depends(
         buffer=io.BytesIO();picture.save(buffer,format='JPEG',quality=88,optimize=True)
     except (ValueError,OSError,Image.DecompressionBombError):
         raise HTTPException(422,'This picture cannot be processed') from None
+    key=f'campaigns/{staff.merchant_id}/sources/{uuid4().hex}.jpg'
+    register_media(db,staff.merchant_id,key,'source')
     client,cfg=storage()
-    key=f'campaigns/{staff.merchant_id}/{uuid4().hex}.jpg'
     return put(client,cfg,key,buffer.getvalue(),'image/jpeg')
 
 class RenderArtworkIn(BaseModel):
@@ -197,19 +203,22 @@ def frame(photo,idx,frames,text,headline):
     return canvas
 
 @router.post('/v1/merchant/promotions/media/render')
-def render_campaign_artwork(payload:RenderArtworkIn,staff:Staff=Depends(merchant_actor)):
+def render_campaign_artwork(payload:RenderArtworkIn,staff:Staff=Depends(merchant_actor),
+                            db:Session=Depends(get_db)):
     require_manager(staff)
-    if not re.fullmatch(r'campaigns/'+re.escape(staff.merchant_id)+r'/[a-f0-9]{32}\.jpg',payload.media_key):
-        raise HTTPException(403,'Artwork must belong to the signed-in merchant')
+    from .media_assets_v0725 import media_registry_ready, register_media
+    if not media_registry_ready(db):
+        raise HTTPException(503,'Campaign media registry is not ready. Apply the reviewed additive migration.')
+    # The endpoint may render a new version from either an older source key or a
+    # v0.6.25 source key. Render outputs are separately tracked for safe cleanup.
+    raw=read_merchant_campaign_source(staff,payload.media_key)
     client,cfg=storage()
-    try:raw=client.get_object(Bucket=cfg['PRUVS_CAMPAIGN_R2_BUCKET'],Key=payload.media_key)['Body'].read(MAX_FILE_BYTES+1)
-    except Exception:raise HTTPException(404,'Campaign picture unavailable') from None
-    if len(raw)>MAX_FILE_BYTES:raise HTTPException(413,'Campaign picture too large')
     try:photo=Image.open(io.BytesIO(raw)).convert('RGB')
     except (ValueError,OSError,Image.DecompressionBombError):raise HTTPException(422,'Stored image invalid') from None
     frames=1 if payload.format=='png' else 18
     sequence=[frame(photo,i,frames,payload.watermark_text,payload.headline) for i in range(frames)]
-    key=f'campaigns/{staff.merchant_id}/{uuid4().hex}.{payload.format}'
+    key=f'campaigns/{staff.merchant_id}/renders/{uuid4().hex}.{payload.format}'
+    register_media(db,staff.merchant_id,key,'render')
     if payload.format=='png':
         buffer=io.BytesIO();sequence[0].save(buffer,format='PNG',optimize=True)
         return put(client,cfg,key,buffer.getvalue(),'image/png')

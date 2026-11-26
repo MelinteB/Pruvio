@@ -69,7 +69,7 @@ def _promo_google_place_id(db,store):
     return linked_place_id(db,store.id)
 
 
-def promo_json(p,db,*,now=None,acquisition_ready=None):
+def promo_json(p,db,*,now=None,acquisition_ready=None,include_media_keys=False):
     now=now or utcnow()
     program=db.get(Program,p.program_id)
     if program and program.merchant_id != p.merchant_id:
@@ -86,7 +86,7 @@ def promo_json(p,db,*,now=None,acquisition_ready=None):
     expires=aware(p.expires_at)
     from .campaign_gallery_v0624 import gallery_assets
     assets=gallery_assets(db,p)
-    return {'id':p.id,
+    result={'id':p.id,
             'gallery':assets,
             'created_at':created.isoformat() if created else None,
             'published_at':published.isoformat() if published else None,
@@ -108,6 +108,10 @@ def promo_json(p,db,*,now=None,acquisition_ready=None):
             'media_url':p.media_url,'media_type':p.media_type,'media_alt':p.media_alt,
             'expires_at':expires.isoformat() if expires else None,
             'duration_days':p.duration_days}
+    if include_media_keys:
+        from .media_assets_v0725 import promotion_media_assets
+        result['media_assets']=promotion_media_assets(db,p.merchant_id,p.id)
+    return result
 
 class PromotionIn(BaseModel):
     program_id: str
@@ -118,6 +122,8 @@ class PromotionIn(BaseModel):
     media_type: str|None = Field(default=None,max_length=40)
     media_alt: str|None = Field(default=None,max_length=160)
     gallery_keys: list[str]|None = Field(default=None,max_length=5)
+    media_key: str|None = Field(default=None,max_length=500)
+    rendered_media_key: str|None = Field(default=None,max_length=500)
 
     @field_validator('headline','message',mode='before')
     @classmethod
@@ -145,7 +151,7 @@ def merchant_promotions(staff:Staff=Depends(merchant_actor),db:Session=Depends(g
     rows=db.scalars(select(Promotion).where(Promotion.merchant_id==staff.merchant_id)
                     .order_by(Promotion.created_at.desc()).limit(100)).all()
     now=utcnow()
-    return [promo_json(p,db,now=now) for p in rows]
+    return [promo_json(p,db,now=now,include_media_keys=True) for p in rows]
 
 @router.post('/v1/merchant/promotions',status_code=201)
 def merchant_create_promo(payload:PromotionIn,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
@@ -167,8 +173,11 @@ def merchant_create_promo(payload:PromotionIn,staff:Staff=Depends(merchant_actor
                     status='draft',duration_days=payload.duration_days)
     db.add(promo);db.flush()
     if assets:save_gallery(db,promo,assets)
+    from .media_assets_v0725 import set_promotion_media
+    set_promotion_media(db,staff.merchant_id,promo.id,
+        list(payload.gallery_keys or []) + [key for key in (payload.media_key,payload.rendered_media_key) if key])
     db.commit();db.refresh(promo)
-    return promo_json(promo,db)
+    return promo_json(promo,db,include_media_keys=True)
 
 @router.patch('/v1/merchant/promotions/{promotion_id}')
 def update_promotion_draft(promotion_id:str,payload:PromotionIn,
@@ -192,6 +201,10 @@ def update_promotion_draft(promotion_id:str,payload:PromotionIn,
     if assets:
         media_url,media_type,media_alt=(assets[0][k] for k in ('media_url','media_type','media_alt'))
     if payload.gallery_keys is not None:save_gallery(db,promo,assets)
+    from .media_assets_v0725 import set_promotion_media
+    if payload.model_fields_set.intersection({'gallery_keys','media_key','rendered_media_key'}):
+        set_promotion_media(db,staff.merchant_id,promo.id,
+            list(payload.gallery_keys or []) + [key for key in (payload.media_key,payload.rendered_media_key) if key])
     promo.headline=payload.headline
     promo.message=payload.message
     promo.duration_days=payload.duration_days
@@ -199,7 +212,7 @@ def update_promotion_draft(promotion_id:str,payload:PromotionIn,
     promo.media_type=media_type
     promo.media_alt=media_alt
     db.commit()
-    return promo_json(promo,db)
+    return promo_json(promo,db,include_media_keys=True)
 
 
 @router.post('/v1/merchant/promotions/{promotion_id}/publish')
@@ -212,7 +225,7 @@ def publish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),db:Se
     now=utcnow()
     p.status='published';p.published_at=now
     p.expires_at=now+timedelta(days=p.duration_days)
-    db.commit();return promo_json(p,db)
+    db.commit();return promo_json(p,db,include_media_keys=True)
 
 @router.post('/v1/merchant/promotions/{promotion_id}/republish')
 def republish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),
@@ -230,7 +243,7 @@ def republish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),
     p.published_at=now
     p.expires_at=now+timedelta(days=p.duration_days)
     db.commit()
-    return promo_json(p,db)
+    return promo_json(p,db,include_media_keys=True)
 
 
 @router.post('/v1/merchant/promotions/{promotion_id}/unpublish')
@@ -239,7 +252,7 @@ def unpublish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),db:
     can_manage(staff)
     p=owned_campaign(db,staff,promotion_id)
     if p.status!='published':raise HTTPException(409,'Only live promotions may be unpublished')
-    p.status='paused';db.commit();return promo_json(p,db)
+    p.status='paused';db.commit();return promo_json(p,db,include_media_keys=True)
 
 def owned_campaign(db:Session,staff:Staff,promotion_id:str)->Promotion:
     promotion=db.scalar(
@@ -284,7 +297,7 @@ def reopen_unpublished_promotion(promotion_id:str,staff:Staff=Depends(merchant_a
     promotion.published_at=None
     promotion.expires_at=None
     db.commit()
-    return promo_json(promotion,db)
+    return promo_json(promotion,db,include_media_keys=True)
 
 
 @router.post('/v1/merchant/promotions/{promotion_id}/archive')
@@ -301,7 +314,7 @@ def archive_unpublished_promotion(promotion_id:str,staff:Staff=Depends(merchant_
         raise HTTPException(409,'Unpublish the live campaign before archiving it.')
     promotion.status='archived'
     db.commit()
-    return promo_json(promotion,db)
+    return promo_json(promotion,db,include_media_keys=True)
 
 
 @router.post('/v1/merchant/promotions/{promotion_id}/restore')
@@ -317,7 +330,7 @@ def restore_archived_promotion(promotion_id:str,staff:Staff=Depends(merchant_act
     promotion.published_at=None
     promotion.expires_at=None
     db.commit()
-    return promo_json(promotion,db)
+    return promo_json(promotion,db,include_media_keys=True)
 
 
 @router.get('/v1/promotions')

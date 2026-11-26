@@ -122,9 +122,14 @@ def generate_artwork(payload: ArtworkBrief, staff: Staff = Depends(merchant_acto
     # Confirm the promotion schema and media credentials before a billable call.
     from .pilot_v05 import campaign_schema_ready
     campaign_schema_ready(db)
+    from .media_assets_v0725 import media_registry_ready
+    if not media_registry_ready(db):
+        raise HTTPException(503,'Campaign media registry is not ready. Apply the reviewed additive migration.')
     client, cfg = storage()
     raw = request_image(image_prompt(merchant, store, program, payload), secret)
-    key = f'campaigns/{staff.merchant_id}/{uuid4().hex}.jpg'
+    key = f'campaigns/{staff.merchant_id}/sources/{uuid4().hex}.jpg'
+    from .media_assets_v0725 import register_media
+    register_media(db,staff.merchant_id,key,'source')
     saved = put(client, cfg, key, raw, 'image/jpeg')
     return {**saved, 'source': 'ai_generated', 'published': False,
             'review_required': True,
@@ -141,17 +146,21 @@ def ai_readiness(staff: Staff = Depends(merchant_actor),
     image = ai_images_enabled()
     try:
         from .schema_readiness import check_schema
-        schema_ready = bool(check_schema(db.get_bind()).get('campaign_media'))
+        schema = check_schema(db.get_bind())
+        schema_ready = bool(schema.get('campaign_media'))
+        media_registry_ready = bool(schema.get('campaign_media_registry'))
     except Exception:
         schema_ready = False
+        media_registry_ready = False
     # Authenticated diagnostics expose reason codes only, never secret values.
     from .media_v067 import media_configuration_diagnostics
     media_diagnostic = media_configuration_diagnostics()
     media_configured = media_diagnostic['ready']
     return {
         'copy_ready': bool(ai and has_key and schema_ready),
-        'artwork_ready': bool(image and has_key and schema_ready and media_configured),
+        'artwork_ready': bool(image and has_key and schema_ready and media_registry_ready and media_configured),
         'campaign_schema_ready': schema_ready,
+        'media_registry_ready': media_registry_ready,
         'media_ready': media_configured,
         'media_issue': media_diagnostic['issue'],
         'media_missing_settings': media_diagnostic['missing_settings'],
