@@ -135,7 +135,7 @@ def _bootstrap_staging_admin(engine) -> None:
         raise RuntimeError(
             "Refusing admin bootstrap: expected the isolated staging Business database role"
         )
-    if not re.fullmatch(r"[^@\\s]+@[^@\\s]+\\.[^@\\s]+", email):
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
         raise RuntimeError("Refusing admin bootstrap: invalid admin email")
     if len(password) < 20 or len(password) > 256:
         raise RuntimeError("Refusing admin bootstrap: password must be 20 to 256 characters")
