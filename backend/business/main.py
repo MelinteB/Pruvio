@@ -8,7 +8,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func
+from sqlalchemy import select, func, inspect
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, Field
 from fastapi.responses import Response
@@ -17,7 +17,7 @@ from .config import get_settings
 from .merchant_enrollment import router as merchant_enrollment_router
 from .password_recovery import router as password_recovery_router
 from .staff_management import router as staff_management_router
-from .models import Merchant, Staff, Store, Program, Membership, ReceiptClaim, Reward, Campaign, utcnow
+from .models import Merchant, Staff, Store, Program, Membership, ReceiptClaim, Reward, Campaign, PurchaseCode, Promotion, utcnow
 from .models_v067 import DiscountRedemption
 from .google_places_v0618 import router as google_places_router, linked_place_id, validate_store_place
 from .models_v0618 import MerchantStorePlace
@@ -177,6 +177,22 @@ def restore_location(store_id:str,staff:Staff=Depends(merchant_actor),db:Session
     # Restored to inactive; activation is an explicit separate action.
     return {**store_json(store,db=db),'archived':False}
 
+@app.delete('/v1/merchant/stores/{store_id}')
+def delete_location(store_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    merchant_check(staff);management.require_management(db);management.lock_merchant(db,staff.merchant_id)
+    store=owned(db,Store,store_id,staff.merchant_id)
+    if not management.archived(db,store):
+        raise HTTPException(409,'Archive this location before deleting it.')
+    if db.scalar(select(Program.id).where(Program.store_id==store.id,Program.merchant_id==staff.merchant_id).limit(1)):
+        raise HTTPException(409,'This location has loyalty programs. Archive it to keep customer and campaign records.')
+    place=db.get(MerchantStorePlace,store.id)
+    archive=db.get(management.ArchivedLocation,store.id)
+    management.audit(db,staff,'location',store.id,'delete')
+    if place:db.delete(place)
+    if archive:db.delete(archive)
+    db.delete(store);db.commit()
+    return {'deleted':True,'store_id':store_id}
+
 @app.get('/v1/merchant/programs')
 def get_programs(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     return [{**program_json(p),**management.program_counts(db,p)} for p in db.scalars(select(Program).where(Program.merchant_id==staff.merchant_id)).all()]
@@ -288,6 +304,23 @@ def restore_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Sessio
     if any(db.scalar(select(model.id).where(model.program_id==p.id).limit(1)) for model in (Membership,ReceiptClaim,Reward)):
         raise HTTPException(409,'This program has customer history. Duplicate it to create a new draft.')
     p.status='draft';management.audit(db,staff,'program',p.id,'restore');db.commit();return program_json(p)
+
+@app.delete('/v1/merchant/programs/{program_id}')
+def delete_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    merchant_check(staff);management.require_management(db);management.lock_merchant(db,staff.merchant_id)
+    program=owned(db,Program,program_id,staff.merchant_id)
+    if program.status not in ('draft','archived'):
+        raise HTTPException(409,'Pause and archive this program before deleting it.')
+    dependencies=(Membership,ReceiptClaim,Reward,Promotion,PurchaseCode)
+    if any(db.scalar(select(model.id).where(model.program_id==program.id).limit(1)) for model in dependencies):
+        raise HTTPException(409,'This program has customer or campaign history. Keep it archived instead of deleting it.')
+    if inspect(db.get_bind()).has_table(DiscountRedemption.__tablename__) and db.scalar(
+        select(DiscountRedemption.id).where(DiscountRedemption.program_id==program.id).limit(1)
+    ):
+        raise HTTPException(409,'This program has reward redemption history. Keep it archived instead of deleting it.')
+    management.audit(db,staff,'program',program.id,'delete')
+    db.delete(program);db.commit()
+    return {'deleted':True,'program_id':program_id}
 
 @app.get('/v1/merchant/claims')
 def get_claims(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
