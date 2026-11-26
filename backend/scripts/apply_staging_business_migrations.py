@@ -44,6 +44,14 @@ def _normalized_url(raw_url: str):
     return parsed.set(drivername="postgresql+psycopg")
 
 
+def _render_host_identity(host: str) -> str:
+    normalized = host.rstrip(".").lower()
+    external_suffix = ".frankfurt-postgres.render.com"
+    if normalized.endswith(external_suffix):
+        return normalized[: -len(external_suffix)]
+    return normalized
+
+
 def _has_schema_create(engine) -> bool:
     with engine.connect() as connection:
         return bool(connection.execute(text(
@@ -70,11 +78,11 @@ def _database_engine():
     if migration_raw_url:
         migration_url = _normalized_url(migration_raw_url)
         if (
-            migration_url.host != business_url.host
+            _render_host_identity(migration_url.host) != _render_host_identity(business_url.host)
             or migration_url.port != business_url.port
         ):
             raise RuntimeError(
-                "Refusing migration: temporary migration credential is not on the Business database host"
+                "Refusing migration: temporary migration credential is not on the same Render Postgres instance"
             )
         migration_engine = create_engine(migration_url, pool_pre_ping=True)
         try:
