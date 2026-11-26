@@ -155,6 +155,9 @@ def merchant_create_promo(payload:PromotionIn,staff:Staff=Depends(merchant_actor
     if program.status!='published':raise HTTPException(409,'Publish the loyalty program first.')
     from .campaign_gallery_v0624 import validate_gallery, save_gallery
     assets=validate_gallery(db,staff,payload.gallery_keys,payload.media_alt)
+    from .campaign_copy_v0624 import validate_campaign_copy
+    try:validate_campaign_copy(payload.headline,payload.message)
+    except ValueError as exc:raise HTTPException(422,str(exc)) from None
     media_url,media_type,media_alt=campaign_media(payload)
     if assets:
         media_url,media_type,media_alt=(assets[0][k] for k in ('media_url','media_type','media_alt'))
@@ -182,6 +185,9 @@ def update_promotion_draft(promotion_id:str,payload:PromotionIn,
     from .campaign_gallery_v0624 import validate_gallery, save_gallery, gallery_assets
     assets=(gallery_assets(db,promo) if payload.gallery_keys is None
             else validate_gallery(db,staff,payload.gallery_keys,payload.media_alt))
+    from .campaign_copy_v0624 import validate_campaign_copy
+    try:validate_campaign_copy(payload.headline,payload.message)
+    except ValueError as exc:raise HTTPException(422,str(exc)) from None
     media_url,media_type,media_alt=campaign_media(payload)
     if assets:
         media_url,media_type,media_alt=(assets[0][k] for k in ('media_url','media_type','media_alt'))

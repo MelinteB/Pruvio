@@ -3,6 +3,8 @@ import React,{createContext,useContext,useEffect,useState} from 'react';
 // UI language is a presentation setting, not a source of merchant reward terms.
 // Add translations by key; never translate customer-entered content or financial rules.
 const RO={
+  "Keep numerical reward conditions in the loyalty program, not the campaign headline or message.":"Păstrează condițiile numerice ale recompensei în programul de fidelitate, nu în titlul sau mesajul campaniei.",
+  "Resolve customer progress, pending receipts and outstanding rewards before archiving.":"Rezolvă progresul clienților, bonurile în așteptare și recompensele restante înainte de arhivare.",
   "Search programs":"Caută programe",
   "Search locations":"Caută locații",
   "All locations":"Toate locațiile",

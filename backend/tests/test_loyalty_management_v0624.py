@@ -135,3 +135,10 @@ def test_multi_photo_ai_context_keeps_all_images():
     result=campaign_provider_input({'program':'test'},[b'photo-one',b'photo-two'])
     assert len(result[0]['content'])==3
     assert all(row['type']=='input_image' for row in result[0]['content'][1:])
+
+def test_numerical_conditions_are_not_repeated_in_advertising_copy():
+    from business.campaign_copy_v0624 import validate_campaign_copy
+    validate_campaign_copy('Coffee moments','Come back for another delicious visit.')
+    for text in ('20 RON reward','5 qualifying receipts','5 cumpărături eligibile','30 lei minimum','20% discount'):
+        with pytest.raises(ValueError):
+            validate_campaign_copy('Coffee moments',text)

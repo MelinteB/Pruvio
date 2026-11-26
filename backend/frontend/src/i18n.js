@@ -1,4 +1,8 @@
 const ro={
+  "Campaign pictures":"Fotografii campanie",
+  "Previous picture":"Fotografia anterioară",
+  "Next picture":"Fotografia următoare",
+  "{count} qualifying receipts · Minimum {minimum} → {reward} reward":"{count} bonuri eligibile · Minimum {minimum} → recompensă {reward}",
   "Download your account activity": "Descarcă activitatea contului",
   "Download my activity": "Descarcă activitatea mea",
   "Your activity snapshot is ready.": "Fișierul cu activitatea ta este pregătit.",

@@ -2,6 +2,7 @@ import React,{useEffect,useState} from 'react';
 import {MapPin,ExternalLink} from 'lucide-react';
 import './campaign-creative.css';
 import CampaignGallery from './CampaignGallery.jsx';
+import {t} from './i18n';
 import './campaign-creative-v7162.css';
 
 /** The R2 asset stays separate from campaign copy; overlay avoids editing private assets. */
@@ -25,7 +26,7 @@ export default function CampaignCreative({promotion:p,compact=false}){
   const mapsUrl='https://www.google.com/maps/search/?api=1&query='+locationQuery+
      (p.google_place_id?'&query_place_id='+encodeURIComponent(p.google_place_id):'');
   return <div className={'pruvs-campaign-creative'+(compact?' pruvs-campaign-creative-compact':'')}>
-    {p.gallery?.length?<CampaignGallery assets={p.gallery} alt={p.headline}/>:video?
+    {p.gallery?.length?<CampaignGallery assets={p.gallery} alt={p.headline} translate={t}/>:video?
       <video key={reduceMotion?'manual':'auto'} className="pruvs-campaign-creative-media" muted autoPlay={!reduceMotion} controls={reduceMotion} loop playsInline preload="metadata"
         aria-label={p.media_alt||p.headline}>
         <source src={p.media_url} type={p.media_type}/>

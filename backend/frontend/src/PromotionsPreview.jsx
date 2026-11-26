@@ -48,7 +48,7 @@ export default function PromotionsPreview(){
       {hasCampaignCreative(p)?
         <CampaignCreative promotion={p}/>:
         <><small className="pruvs-promo-tag">LOCAL REWARDS · {p.merchant_name}</small><h3>{p.headline}</h3><p>{p.message}</p></>}
-      <div className="pruvs-promo-meta"><Gift size={16}/>{p.stamps_required} qualifying receipts · Minimum {(p.min_purchase_minor/100).toFixed(2)} {p.currency} → {(p.reward_minor/100).toFixed(2)} {p.currency} reward</div>
+      <div className="pruvs-promo-meta"><Gift size={16}/>{t('{count} qualifying receipts · Minimum {minimum} → {reward} reward').replace('{count}',p.stamps_required).replace('{minimum}',(p.min_purchase_minor/100).toFixed(2)+' '+p.currency).replace('{reward}',(p.reward_minor/100).toFixed(2)+' '+p.currency)}</div>
       <OfferLocation promotion={p} compact/>
       <Link to={'/rewards?program='+encodeURIComponent(p.program_id)}>See loyalty program</Link>
     </article>}/></div>

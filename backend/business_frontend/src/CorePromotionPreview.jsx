@@ -63,7 +63,7 @@ export default function CorePromotionPreview({
           <span className="pruvs-core-preview-media-kind">
             {video?<Film size={13}/>:<ImageIcon size={13}/>} {mediaKind}
           </span>
-          {gallery.length?<CampaignGallery assets={gallery} alt={title} onMediaError={()=>{setImageBroken(true);onMediaError?.()}} onMediaReady={()=>onMediaReady?.()}/>:video?
+          {gallery.length?<CampaignGallery assets={gallery} alt={title} translate={t} onMediaError={()=>{setImageBroken(true);onMediaError?.()}} onMediaReady={()=>onMediaReady?.()}/>:video?
             <video key={reduceMotion?'manual':'auto'} className="pruvs-campaign-creative-media" src={mediaUrl}
               muted autoPlay={!reduceMotion} controls={reduceMotion} loop playsInline preload="metadata"
               aria-label={title}

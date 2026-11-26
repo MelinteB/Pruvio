@@ -65,7 +65,10 @@ def parse_generated_draft(provider_response:dict,creative_format:str,requested_w
             motion=content.get('motion_storyboard')
             if creative_format=='image' and (not isinstance(motion,str) or not motion.strip()):
                 content['motion_storyboard']='Static image; no animation.'
-        return GeneratedDraft.model_validate(content)
+        draft=GeneratedDraft.model_validate(content)
+        from .campaign_copy_v0624 import validate_campaign_copy
+        validate_campaign_copy(draft.headline,draft.message)
+        return draft
     except (ValueError,TypeError) as exc:
         if isinstance(exc,ValidationError):
             issues=[{'field':'.'.join(map(str,e['loc'])),'type':e['type']} for e in exc.errors()]
@@ -179,7 +182,7 @@ def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Sessio
         request_body=dict(body)
         if attempt:
             request_body['instructions']=(instructions+' Your previous response failed field-length '
-                'validation. Regenerate all seven required fields, respecting every length limit. '
+                'validation. Regenerate all seven required fields, respecting every length limit and keeping numerical reward conditions out of headline and message. '
                 'Use only the original supplied merchant facts.')
         req=Request('https://api.openai.com/v1/responses',
             data=json.dumps(request_body).encode('utf-8'),method='POST',

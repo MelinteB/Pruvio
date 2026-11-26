@@ -24,7 +24,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: npm ci && npm run build && python ../scripts/check_react_build.py && npx vitest run src/release-update.test.jsx src/campaigns-v7155.test.jsx src/responsive_home_v7161.test.jsx src/campaign-desktop-layout.test.jsx src/existing-social-link.test.jsx
+      - run: npm ci && npm run build && python ../scripts/check_react_build.py && npx vitest run src/release-update.test.jsx src/campaigns-v7155.test.jsx src/responsive_home_v7161.test.jsx src/campaign-desktop-layout.test.jsx src/existing-social-link.test.jsx src/campaign-gallery-v7171.test.jsx
         working-directory: backend/frontend
       - run: npm ci && VITE_API_BASE=/business VITE_PRUVS_CUSTOMER_URL= npm run build -- --base=/business/
         working-directory: backend/business_frontend

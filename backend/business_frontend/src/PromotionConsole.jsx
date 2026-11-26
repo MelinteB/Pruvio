@@ -348,7 +348,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
         </div>}
         <div className="pruvs-ai-copy-editor" aria-label={t('Review campaign copy before artwork')}>
           <h4>3. {t('Campaign copy · review and edit before generating artwork')}</h4>
-          <p className="helper">{t('Generate AI copy from your edited brief, then review the resulting headline and message before making artwork.')}</p>
+          <p className="helper">{t('Generate AI copy from your edited brief, then review the resulting headline and message before making artwork.')} {t('Keep numerical reward conditions in the loyalty program, not the campaign headline or message.')}</p>
           <label>{t('Promotion headline')}<input value={headline} minLength={5} maxLength={100} required placeholder={t('A little extra for your next visit')} onChange={e=>setHeadline(e.target.value)}/><small className="pruvs-studio-char-count">{headline.length}/100 {t('characters · Visible on the Core preview')}</small></label>
           <label>{t('Promotional message')}<textarea value={message} minLength={10} maxLength={500} required rows={4} placeholder={t('Join our loyalty program and earn a reward after qualifying visits.')} onChange={e=>setMessage(e.target.value)}/><small className="pruvs-studio-char-count">{message.length}/500 {t('characters · Core cards show a concise version')}</small></label>
         </div>
