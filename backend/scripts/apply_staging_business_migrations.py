@@ -8,8 +8,12 @@ database and only reads the three reviewed migration files below.
 from __future__ import annotations
 
 import os
+import re
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
+from argon2 import PasswordHasher
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import make_url
 
@@ -103,6 +107,103 @@ def _database_engine():
     return business_engine, business_role, False
 
 
+def _bootstrap_staging_admin(engine) -> None:
+    """Create at most one explicitly requested staging platform admin.
+
+    Render invokes this migration script at service startup. Provisioning runs
+    only when both temporary Render environment variables are present and only
+    against the isolated Business staging database. Remove both variables after
+    the first successful deploy.
+    """
+    email = os.getenv("PRUVS_STAGING_ADMIN_EMAIL", "").strip().lower()
+    password = os.getenv("PRUVS_STAGING_ADMIN_PASSWORD", "")
+    if not email and not password:
+        return
+    if not email or not password:
+        print(
+            "Staging admin bootstrap skipped: set both temporary admin variables.",
+            flush=True,
+        )
+        return
+    if os.getenv("PRUVS_PLATFORM_COMBINED_STAGING", "").lower() != "true":
+        raise RuntimeError("Refusing admin bootstrap: combined staging mode is not enabled")
+    business_url = _normalized_url(os.getenv("BUSINESS_DATABASE_URL", "").strip())
+    if (
+        business_url.database != EXPECTED_DATABASE
+        or business_url.username != "pruvs_business_stage"
+    ):
+        raise RuntimeError(
+            "Refusing admin bootstrap: expected the isolated staging Business database role"
+        )
+    if not re.fullmatch(r"[^@\\s]+@[^@\\s]+\\.[^@\\s]+", email):
+        raise RuntimeError("Refusing admin bootstrap: invalid admin email")
+    if len(password) < 20 or len(password) > 256:
+        raise RuntimeError("Refusing admin bootstrap: password must be 20 to 256 characters")
+
+    # Serialize the one-time check-and-create so two concurrent service starts
+    # cannot create separate platform admins.
+    with engine.begin() as connection:
+        connection.execute(
+            text("SELECT pg_advisory_xact_lock(:key_a, :key_b)"),
+            {"key_a": 76114621, "key_b": 612},
+        )
+        existing_admin = connection.execute(
+            text("SELECT id FROM merchant_staff WHERE role = 'platform_admin' LIMIT 1")
+        ).scalar_one_or_none()
+        if existing_admin:
+            print(
+                "Staging admin bootstrap skipped: a platform admin already exists.",
+                flush=True,
+            )
+            return
+        existing_email = connection.execute(
+            text("SELECT id FROM merchant_staff WHERE lower(email) = :email LIMIT 1"),
+            {"email": email},
+        ).scalar_one_or_none()
+        if existing_email:
+            print(
+                "Staging admin bootstrap skipped: the email is already in use.",
+                flush=True,
+            )
+            return
+
+        operations_name = "Pruvs Platform Operations (staging)"
+        merchant_id = connection.execute(
+            text("SELECT id FROM merchants WHERE name = :name LIMIT 1"),
+            {"name": operations_name},
+        ).scalar_one_or_none()
+        if merchant_id is None:
+            merchant_id = str(uuid.uuid4())
+            connection.execute(
+                text(
+                    "INSERT INTO merchants (id, name, status, created_at) "
+                    "VALUES (:id, :name, 'active', :created_at)"
+                ),
+                {
+                    "id": merchant_id,
+                    "name": operations_name,
+                    "created_at": datetime.now(timezone.utc),
+                },
+            )
+
+        connection.execute(
+            text(
+                "INSERT INTO merchant_staff "
+                "(id, merchant_id, email, password_hash, role, active) "
+                "VALUES (:id, :merchant_id, :email, :password_hash, "
+                "'platform_admin', TRUE)"
+            ),
+            {
+                "id": str(uuid.uuid4()),
+                "merchant_id": merchant_id,
+                "email": email,
+                "password_hash": PasswordHasher().hash(password),
+            },
+        )
+
+    print("Created one staging platform admin from temporary Render variables.", flush=True)
+
+
 def _statements(path: Path) -> list[str]:
     sql_lines = [
         line.split("--", 1)[0]
@@ -170,6 +271,7 @@ def main() -> None:
                     ))
 
         print(f"Staging Business schema ready in {EXPECTED_DATABASE}", flush=True)
+        _bootstrap_staging_admin(engine)
     finally:
         engine.dispose()
 
