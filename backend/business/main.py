@@ -206,6 +206,45 @@ def resume_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Session
     if not store.active:raise HTTPException(409,'Activate the program location first.')
     program.status='published';db.commit();return program_json(program)
 
+@app.post('/v1/merchant/programs/{program_id}/duplicate',status_code=201)
+def duplicate_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    merchant_check(staff)
+    original=owned(db,Program,program_id,staff.merchant_id)
+    db.scalar(select(Merchant).where(Merchant.id==staff.merchant_id).with_for_update())
+    title=(original.title[:170]+' (copy)')[:180]
+    existing=db.scalar(select(Program).where(Program.merchant_id==staff.merchant_id,
+        Program.store_id==original.store_id,Program.title==title,Program.status=='draft',
+        Program.description==original.description,Program.stamps_required==original.stamps_required,
+        Program.min_purchase_minor==original.min_purchase_minor,Program.reward_minor==original.reward_minor).limit(1))
+    if existing:return program_json(existing)
+    copy=Program(merchant_id=staff.merchant_id,store_id=original.store_id,title=title,
+        description=original.description,stamps_required=original.stamps_required,
+        min_purchase_minor=original.min_purchase_minor,reward_minor=original.reward_minor,
+        currency=original.currency,status='draft')
+    db.add(copy);db.commit();db.refresh(copy)
+    return program_json(copy)
+
+@app.post('/v1/merchant/programs/{program_id}/archive')
+def archive_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    merchant_check(staff)
+    p=db.scalar(select(Program).where(Program.id==program_id,Program.merchant_id==staff.merchant_id).with_for_update())
+    if not p:raise HTTPException(404,'Program not found')
+    if p.status=='archived':return program_json(p)
+    if p.status not in ('draft','paused'):raise HTTPException(409,'Pause the program first.')
+    if db.scalar(select(ReceiptClaim.id).where(ReceiptClaim.program_id==p.id,ReceiptClaim.status=='pending').limit(1)) or db.scalar(select(Reward.id).where(Reward.program_id==p.id,Reward.status.in_(('available','reserved'))).limit(1)):
+        raise HTTPException(409,'Resolve pending receipts and outstanding rewards before archiving.')
+    p.status='archived';db.commit();return program_json(p)
+
+@app.post('/v1/merchant/programs/{program_id}/restore')
+def restore_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    merchant_check(staff)
+    p=db.scalar(select(Program).where(Program.id==program_id,Program.merchant_id==staff.merchant_id).with_for_update())
+    if not p:raise HTTPException(404,'Program not found')
+    if p.status!='archived':raise HTTPException(409,'Only archived programs may be restored.')
+    if db.scalar(select(Membership.id).where(Membership.program_id==p.id).limit(1)):
+        raise HTTPException(409,'This program has customer history. Duplicate it to create a new draft.')
+    p.status='draft';db.commit();return program_json(p)
+
 @app.get('/v1/merchant/claims')
 def get_claims(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     from sqlalchemy import inspect

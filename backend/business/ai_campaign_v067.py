@@ -29,6 +29,7 @@ class CampaignBrief(BaseModel):
     creative_instructions:str=Field(default='',max_length=1200)
     language: str = Field(default='en', pattern=r'^(en|ro)$')
     media_key:str|None=Field(default=None,min_length=20,max_length=300)
+    gallery_keys:list[str]=Field(default_factory=list,max_length=5)
 
 SCHEMA={'type':'object','additionalProperties':False,'properties':{
     'headline':{'type':'string'},'message':{'type':'string'},
@@ -81,11 +82,10 @@ def campaign_provider_input(facts:dict, uploaded_image:bytes|None):
     facts_text=json.dumps(facts,ensure_ascii=False)
     if not uploaded_image:
         return facts_text
-    image_uri='data:image/jpeg;base64,'+base64.b64encode(uploaded_image).decode('ascii')
-    return [{'role':'user','content':[
-        {'type':'input_text','text':facts_text},
-        {'type':'input_image','image_url':image_uri,'detail':'auto'},
-    ]}]
+    images=uploaded_image if isinstance(uploaded_image,list) else [uploaded_image]
+    return [{'role':'user','content':[{'type':'input_text','text':facts_text}]+[
+        {'type':'input_image','image_url':'data:image/jpeg;base64,'+base64.b64encode(raw).decode('ascii'),'detail':'auto'}
+        for raw in images]}]
 
 
 @router.post('/v1/merchant/promotions/ai-draft')
@@ -109,7 +109,19 @@ def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Sessio
     # Validate and load the merchant's uploaded photo before starting a billable AI call.
     # No arbitrary image URLs or cross-merchant R2 keys may be supplied.
     source_image=None
-    if payload.media_key:
+    if payload.gallery_keys:
+        from .media_v067 import read_merchant_campaign_source
+        if len(set(payload.gallery_keys))!=len(payload.gallery_keys):
+            raise HTTPException(422,'Choose distinct campaign pictures.')
+        source_image=[]
+        total=0
+        for key in payload.gallery_keys:
+            raw=read_merchant_campaign_source(staff,key)
+            total+=len(raw)
+            if total>12_000_000:
+                raise HTTPException(413,'Combined campaign pictures exceed the AI input limit.')
+            source_image.append(raw)
+    elif payload.media_key:
         from .media_v067 import read_merchant_campaign_source
         source_image=read_merchant_campaign_source(staff,payload.media_key)
     facts={
@@ -124,7 +136,7 @@ def ai_draft(payload:CampaignBrief,staff:Staff=Depends(merchant_actor),db:Sessio
       'requested_watermark':payload.watermark_text.strip() or 'Pruvs Business',
       'merchant_creative_brief':payload.creative_instructions.strip(),
       'output_language':payload.language,
-      'uploaded_campaign_photo':bool(source_image)
+      'uploaded_campaign_photo':bool(source_image), 'uploaded_photo_count':len(source_image) if isinstance(source_image,list) else int(bool(source_image))
     }
     instructions=('You write merchant-reviewed advertising copy for the Pruvs loyalty app. '
       'Return only JSON with the specified keys. Use only the provided merchant facts. '
