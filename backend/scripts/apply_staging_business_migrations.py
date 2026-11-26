@@ -60,34 +60,44 @@ def _database_engine():
         raise RuntimeError("Refusing migration: BUSINESS_DATABASE_URL is missing")
 
     business_url = _normalized_url(raw_url)
+    business_role = business_url.username
     business_engine = create_engine(business_url, pool_pre_ping=True)
-    if _has_schema_create(business_engine):
-        return business_engine, business_url.username
 
-    # Staging's least-privilege Business role may be read/write only. If the
-    # existing Core URL belongs to the same Render Postgres instance and has
-    # DDL rights, reuse it only for this explicitly staging-targeted migration.
-    # Never print either URL or its credentials.
-    core_raw_url = os.getenv("DATABASE_URL", "").strip()
-    if core_raw_url:
-        core_parsed = make_url(core_raw_url)
-        if (core_parsed.host == business_url.host
-                and core_parsed.port == business_url.port
-                and core_parsed.drivername in {
-                    "postgres", "postgresql", "postgresql+psycopg", "postgresql+psycopg2"
-                }):
-            migration_url = core_parsed.set(
-                drivername="postgresql+psycopg", database=EXPECTED_DATABASE
+    # A short-lived Render environment variable may supply the database-owner
+    # credential for the one-time staging DDL. It is accepted only for this
+    # exact staging database on the same Postgres host and port as the Business
+    # URL. Remove it from Render once the additive migrations are verified.
+    migration_raw_url = os.getenv("PRUVS_STAGING_MIGRATION_DATABASE_URL", "").strip()
+    if migration_raw_url:
+        migration_url = _normalized_url(migration_raw_url)
+        if (
+            migration_url.host != business_url.host
+            or migration_url.port != business_url.port
+        ):
+            business_engine.dispose()
+            raise RuntimeError(
+                "Refusing migration: temporary migration credential is not on the Business database host"
             )
-            migration_engine = create_engine(migration_url, pool_pre_ping=True)
-            if _has_schema_create(migration_engine):
-                return migration_engine, business_url.username
+        migration_engine = create_engine(migration_url, pool_pre_ping=True)
+        try:
+            if not _has_schema_create(migration_engine):
+                raise RuntimeError(
+                    "Temporary staging migration role cannot create tables in public"
+                )
+        except Exception:
             migration_engine.dispose()
+            business_engine.dispose()
+            raise
+        business_engine.dispose()
+        return migration_engine, business_role
+
+    if _has_schema_create(business_engine):
+        return business_engine, business_role
 
     business_engine.dispose()
     raise RuntimeError(
-        "Neither staging database credential can create tables in public; "
-        "grant the staging migration role CREATE on schema public and retry"
+        "Staging Business role lacks DDL permission; add the temporary "
+        "PRUVS_STAGING_MIGRATION_DATABASE_URL for the isolated staging database"
     )
 
 
@@ -140,8 +150,8 @@ def main() -> None:
                     raise RuntimeError(f"Migration verification failed: {filename}")
             print(f"Applied and verified: {filename}", flush=True)
 
-        # Tables created through the Core owner credential must remain usable
-        # by the least-privilege Business app role.
+        # Grant only the required CRUD privileges on the new migration tables
+        # to the Business app role. Do not grant broad schema privileges.
         role_identifier = engine.dialect.identifier_preparer.quote(business_role)
         table_names = tuple(table for _, sentinels in MIGRATIONS for table in sentinels)
         with engine.begin() as connection:
