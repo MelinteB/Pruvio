@@ -22,7 +22,7 @@ The runner accepts only PostgreSQL database `pruvs_business_staging` with
 `PRUVS_PLATFORM_COMBINED_STAGING=true`, applies the three reviewed SQL files in
 order, and verifies their tables. For this one-time migration, Render may
 temporarily provide `PRUVS_STAGING_MIGRATION_DATABASE_URL`; the runner checks
-that it is the same host and exact staging database. Remove that credential
+that it is the same Render Postgres instance and exact staging database. Remove that credential
 from Render immediately after verified migration and before the normal app
 restart. The runner grants only table-level CRUD access to the Business app
 role. It is idempotent and refuses a different database.
