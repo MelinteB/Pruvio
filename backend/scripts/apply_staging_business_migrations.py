@@ -61,12 +61,11 @@ def _database_engine():
 
     business_url = _normalized_url(raw_url)
     business_role = business_url.username
-    business_engine = create_engine(business_url, pool_pre_ping=True)
 
     # A short-lived Render environment variable may supply the database-owner
     # credential for the one-time staging DDL. It is accepted only for this
     # exact staging database on the same Postgres host and port as the Business
-    # URL. Remove it from Render once the additive migrations are verified.
+    # URL. Remove it from Render immediately after verified migration.
     migration_raw_url = os.getenv("PRUVS_STAGING_MIGRATION_DATABASE_URL", "").strip()
     if migration_raw_url:
         migration_url = _normalized_url(migration_raw_url)
@@ -74,7 +73,6 @@ def _database_engine():
             migration_url.host != business_url.host
             or migration_url.port != business_url.port
         ):
-            business_engine.dispose()
             raise RuntimeError(
                 "Refusing migration: temporary migration credential is not on the Business database host"
             )
@@ -86,19 +84,13 @@ def _database_engine():
                 )
         except Exception:
             migration_engine.dispose()
-            business_engine.dispose()
             raise
-        business_engine.dispose()
-        return migration_engine, business_role
+        return migration_engine, business_role, True
 
-    if _has_schema_create(business_engine):
-        return business_engine, business_role
-
-    business_engine.dispose()
-    raise RuntimeError(
-        "Staging Business role lacks DDL permission; add the temporary "
-        "PRUVS_STAGING_MIGRATION_DATABASE_URL for the isolated staging database"
-    )
+    # After the one-time migration credential is removed, the least-privilege
+    # Business app role can still verify existing migrations on each restart.
+    business_engine = create_engine(business_url, pool_pre_ping=True)
+    return business_engine, business_role, False
 
 
 def _statements(path: Path) -> list[str]:
@@ -119,7 +111,7 @@ def _statements(path: Path) -> list[str]:
 
 
 def main() -> None:
-    engine, business_role = _database_engine()
+    engine, business_role, using_temporary_owner = _database_engine()
     try:
         with engine.connect() as connection:
             existing = inspect(connection)
@@ -134,6 +126,7 @@ def main() -> None:
                     + ", ".join(missing_base)
                 )
 
+        can_create = _has_schema_create(engine)
         for filename, sentinels in MIGRATIONS:
             path = MIGRATION_DIR / filename
             if not path.is_file():
@@ -142,6 +135,10 @@ def main() -> None:
                 if all(inspect(connection).has_table(table) for table in sentinels):
                     print(f"Migration already present: {filename}", flush=True)
                     continue
+            if not can_create:
+                raise RuntimeError(
+                    f"Migration {filename} is missing and the Business app role lacks DDL permission"
+                )
             with engine.begin() as connection:
                 for statement in _statements(path):
                     connection.execute(text(statement))
@@ -150,16 +147,17 @@ def main() -> None:
                     raise RuntimeError(f"Migration verification failed: {filename}")
             print(f"Applied and verified: {filename}", flush=True)
 
-        # Grant only the required CRUD privileges on the new migration tables
-        # to the Business app role. Do not grant broad schema privileges.
-        role_identifier = engine.dialect.identifier_preparer.quote(business_role)
-        table_names = tuple(table for _, sentinels in MIGRATIONS for table in sentinels)
-        with engine.begin() as connection:
-            for table in table_names:
-                quoted_table = engine.dialect.identifier_preparer.quote(table)
-                connection.execute(text(
-                    f"GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE {quoted_table} TO {role_identifier}"
-                ))
+        # The temporary database-owner role grants only table-level CRUD access
+        # to the least-privilege Business app role.
+        if using_temporary_owner:
+            role_identifier = engine.dialect.identifier_preparer.quote(business_role)
+            table_names = tuple(table for _, sentinels in MIGRATIONS for table in sentinels)
+            with engine.begin() as connection:
+                for table in table_names:
+                    quoted_table = engine.dialect.identifier_preparer.quote(table)
+                    connection.execute(text(
+                        f"GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE {quoted_table} TO {role_identifier}"
+                    ))
 
         print(f"Staging Business schema ready in {EXPECTED_DATABASE}", flush=True)
     finally:
