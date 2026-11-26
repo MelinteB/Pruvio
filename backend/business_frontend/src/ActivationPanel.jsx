@@ -19,6 +19,16 @@ const friendly=e=>{
   if(message.includes('published loyalty program'))return 'Add an active location and publish a loyalty program first.';
   return message;
 };
+const requirementLabels={
+  business_receipt_pilot:'Receipt rewards enabled',
+  customer_claim_codes:'Customer receipt claims enabled',
+  merchant_allowlisted:'Merchant approved for receipt rewards',
+  consented_receipt_review_required:'Receipt review consent enabled',
+  campaign_media_migrated:'Campaign media database ready',
+  customer_codes_migrated:'Customer claim codes database ready',
+  reward_reconciliation_migrated:'Reward reconciliation database ready',
+  merchant_pilot_migrated:'Merchant activation database ready',
+};
 export default function ActivationPanel({token,stores=[],programs=[],onAddStore,onCreateProgram,onViewPrograms,onVerifyPurchases}){
   const {t}=useBusinessLanguage();
   const [access,setAccess]=useState(null),[readiness,setReadiness]=useState(null);
@@ -71,6 +81,15 @@ export default function ActivationPanel({token,stores=[],programs=[],onAddStore,
         <div><strong>3. {t('Activate receipt rewards')}</strong><small>{t(approved?'Approved by Pruvs':waiting?'Pruvs is reviewing your request':'One-time business approval')}</small></div>
       </li>
     </ol>
+    {readiness?.requirements&&<section className="pruvs-activation-checklist" aria-label={t('Receipt reward activation checklist')}>
+      <h3>{t('Receipt reward activation checklist')}</h3>
+      <p>{t('These checks control campaign publishing when a loyalty offer requires receipt verification.')}</p>
+      <ul>{Object.entries(readiness.requirements).map(([key,passed])=><li key={key} className={passed?'is-ready':'needs-attention'}>
+        <span>{passed?<CheckCircle2 size={17}/>:<AlertTriangle size={17}/>}</span>
+        <strong>{t(requirementLabels[key]||key)}</strong>
+        <small>{t(passed?'Ready':'Needs attention')}</small>
+      </li>)}</ul>
+    </section>}
     {error&&<p className="pruvs-activation-error" role="alert"><AlertTriangle size={16}/>{t(error)}</p>}
     {message&&<p className="pruvs-activation-good" role="status">{t(message)}</p>}
     {approved&&!operational&&!loading&&<p role="alert">{t('Your approval is recorded, but receipt verification is not ready. Contact Pruvs support to complete configuration.')} {readiness?.blocked_by?.map(s=>t(s)).join(', ')}</p>}
