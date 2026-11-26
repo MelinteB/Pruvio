@@ -2,7 +2,7 @@ import React,{useEffect,useState} from 'react';
 import {ChevronLeft,ChevronRight} from 'lucide-react';
 
 export default function CampaignGallery({assets=[],alt='',onMediaError,onMediaReady,translate=(s)=>s}){
-  const pictures=assets.filter(a=>a?.media_type==='image/jpeg'&&/^https:\/\//i.test(a.media_url)).slice(0,5);
+  const pictures=assets.filter(a=>['image/jpeg','image/png','image/webp'].includes(a?.media_type)&&/^https:\/\//i.test(a.media_url)).slice(0,5);
   const [index,setIndex]=useState(0),[reduceMotion,setReduceMotion]=useState(false),[paused,setPaused]=useState(false);
   useEffect(()=>setIndex(0),[pictures.map(a=>a.media_url).join('|')]);
   useEffect(()=>{
