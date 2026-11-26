@@ -19,10 +19,10 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt pytest
-      - run: python -m compileall -q app
+      - run: python -m compileall -q app scripts
       - run: python -m pytest -q tests/test_social_existing_link_v7168.py tests/test_identity_hardening_v7167.py tests/test_identity_provider_contract_v7167.py tests/test_core_social_auth_security_20261123.py tests/test_staging_google_readiness_20261124.py
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: npm ci && npm run build && npx vitest run src/release-update.test.jsx src/campaigns-v7155.test.jsx src/responsive_home_v7161.test.jsx src/campaign-desktop-layout.test.jsx
+      - run: npm ci && npm run build && python ../scripts/check_react_build.py && npx vitest run src/release-update.test.jsx src/campaigns-v7155.test.jsx src/responsive_home_v7161.test.jsx src/campaign-desktop-layout.test.jsx
         working-directory: backend/frontend
