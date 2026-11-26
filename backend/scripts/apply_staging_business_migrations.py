@@ -44,12 +44,12 @@ def _normalized_url(raw_url: str):
     return parsed.set(drivername="postgresql+psycopg")
 
 
-def _render_host_identity(host: str) -> str:
-    normalized = host.rstrip(".").lower()
-    external_suffix = ".frankfurt-postgres.render.com"
-    if normalized.endswith(external_suffix):
-        return normalized[: -len(external_suffix)]
-    return normalized
+def _database_identity(engine) -> tuple[str, str | None]:
+    with engine.connect() as connection:
+        row = connection.execute(text(
+            "SELECT current_database(), inet_server_addr()::text"
+        )).one()
+        return row[0], row[1]
 
 
 def _has_schema_create(engine) -> bool:
@@ -77,22 +77,24 @@ def _database_engine():
     migration_raw_url = os.getenv("PRUVS_STAGING_MIGRATION_DATABASE_URL", "").strip()
     if migration_raw_url:
         migration_url = _normalized_url(migration_raw_url)
-        if (
-            _render_host_identity(migration_url.host) != _render_host_identity(business_url.host)
-            or migration_url.port != business_url.port
-        ):
-            raise RuntimeError(
-                "Refusing migration: temporary migration credential is not on the same Render Postgres instance"
-            )
+        business_engine = create_engine(business_url, pool_pre_ping=True)
         migration_engine = create_engine(migration_url, pool_pre_ping=True)
         try:
+            business_identity = _database_identity(business_engine)
+            migration_identity = _database_identity(migration_engine)
+            if business_identity != migration_identity:
+                raise RuntimeError(
+                    "Refusing migration: temporary credential connects to a different database server"
+                )
             if not _has_schema_create(migration_engine):
                 raise RuntimeError(
                     "Temporary staging migration role cannot create tables in public"
                 )
         except Exception:
+            business_engine.dispose()
             migration_engine.dispose()
             raise
+        business_engine.dispose()
         return migration_engine, business_role, True
 
     # After the one-time migration credential is removed, the least-privilege
