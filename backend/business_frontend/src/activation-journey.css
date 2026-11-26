@@ -28,3 +28,5 @@
 .pruvs-admin-eyebrow{color:#128c7a;font-weight:800;letter-spacing:.13em;font-size:11px}
 .pruvs-admin-subtitle{font-size:14px;color:#72888d;margin-bottom:26px}
 @media(max-width:760px){.pruvs-admin-layout{display:block}.pruvs-admin-aside{width:100%;gap:12px;padding:16px}.pruvs-admin-logout{margin-top:0}.pruvs-admin-main{padding:26px 14px}.pruvs-activation-done{flex-wrap:wrap}}
+
+.pruvs-activation-checklist{margin:18px 0;padding:16px;border:1px solid #d8e5de;border-radius:14px;background:#f8fbf9}.pruvs-activation-checklist h3{margin:0 0 6px;color:#143b2d;font-size:1rem}.pruvs-activation-checklist>p{margin:0 0 12px;color:#587066;font-size:.9rem}.pruvs-activation-checklist ul{list-style:none;padding:0;margin:0;display:grid;gap:8px}.pruvs-activation-checklist li{display:grid;grid-template-columns:22px 1fr auto;align-items:center;gap:8px;padding:9px 10px;border-radius:9px;background:#fff}.pruvs-activation-checklist li.is-ready{color:#17613e}.pruvs-activation-checklist li.needs-attention{color:#9a4b13;background:#fffaf3}.pruvs-activation-checklist li small{font-size:.8rem;font-weight:600}.pruvs-activation-checklist li.needs-attention small{color:#9a4b13}
