@@ -8,7 +8,7 @@ import hashlib
 import secrets
 from sqlalchemy.orm import Session
 from .db import get_db
-from .models import Staff, uid
+from .models import Staff, Merchant, uid
 from .config import get_settings
 
 hasher = PasswordHasher()
@@ -18,12 +18,17 @@ def password_version(password_hash: str) -> str:
     """Fingerprint to revoke previously issued merchant tokens after password changes."""
     return hashlib.sha256((password_hash or '').encode('utf-8')).hexdigest()
 
+def access_version(staff: Staff) -> str:
+    """Bind issued tokens to tenant and privilege level, not merely a password."""
+    import json
+    return hashlib.sha256(json.dumps([staff.merchant_id, staff.role], separators=(',', ':')).encode()).hexdigest()
+
 def encode_merchant_token(staff: Staff):
     cfg=get_settings()
     now=datetime.now(timezone.utc)
     return jwt.encode({'sub':staff.id,'iss':'pruvs-business','aud':'pruvs-business-merchant',
         'iat':now,'exp':now+timedelta(hours=2),'jti':uid(),
-        'pv':password_version(staff.password_hash)},cfg.business_jwt_secret,algorithm='HS256')
+        'pv':password_version(staff.password_hash),'av':access_version(staff)},cfg.business_jwt_secret,algorithm='HS256')
 
 def decode(raw, key, issuer, audience, typ=None):
     try:
@@ -46,8 +51,12 @@ def merchant_actor(credentials: Annotated[HTTPAuthorizationCredentials | None,De
     staff=db.get(Staff,payload['sub'])
     if not staff or not staff.active:
         raise HTTPException(401,'Inactive merchant account')
-    if not secrets.compare_digest(str(payload.get('pv', '')), password_version(staff.password_hash)):
-        raise HTTPException(401,'Merchant password changed. Sign in again.')
+    merchant=db.get(Merchant, staff.merchant_id)
+    if not merchant or merchant.status != 'active':
+        raise HTTPException(401,'Inactive merchant account')
+    if (not secrets.compare_digest(str(payload.get('pv', '')), password_version(staff.password_hash))
+        or not secrets.compare_digest(str(payload.get('av', '')), access_version(staff))):
+        raise HTTPException(401,'Authentication changed. Sign in again.')
     return staff
 
 def customer_actor(credentials: Annotated[HTTPAuthorizationCredentials | None,Depends(optional_bearer)]) -> str:

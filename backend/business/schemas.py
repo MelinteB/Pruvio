@@ -3,8 +3,8 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field, StringConstraints
 
 class LoginIn(BaseModel):
-    email: str
-    password: str
+    email: str = Field(min_length=1, max_length=255)
+    password: str = Field(min_length=1, max_length=256)
 
 class StoreIn(BaseModel):
     name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=180)]
