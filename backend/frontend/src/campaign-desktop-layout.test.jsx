@@ -7,7 +7,7 @@ const campaigns=Array.from({length:5},(_,i)=>({id:'p'+i}));
 afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.restoreAllMocks();});
 describe('Campaign desktop card sizing',()=>{
   it('caps desktop grid columns without shrinking the carousel measurement region',()=>{
-    const css=readFileSync(new URL('./campaign-carousel.css',import.meta.url),'utf8');
+    const css=readFileSync('src/campaign-carousel.css','utf8');
     expect(css).toMatch(/@media \(min-width: 1025px\)\s*\{\s*\.campaign-carousel-viewport\s*\{\s*grid-template-columns: repeat\(var\(--campaigns-visible, 1\), minmax\(0, 360px\)\)/);
     expect(css).toContain('justify-content: start');
   });
