@@ -33,6 +33,7 @@ async function call(path,token,body,method){
   if(!response.ok){
     const detail=data.detail;
     const error=new Error(typeof detail==='string'?detail:(typeof detail?.message==='string'?detail.message:'Operation failed ('+response.status+')'));
+    error.status=response.status;
     if(typeof detail?.code==='string')error.code=detail.code;
     throw error;
   }
@@ -284,7 +285,24 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
     manage('restore',p,null,'Archived campaign restored as a private draft.');
   }
   useEffect(()=>{refresh();},[token,mode]);
-  async function submit(fn){setBusy(true);setError('');setNotice('');try{await fn()}catch(e){setError(e.message);if(e.code==='RECEIPT_ACTIVATION_INCOMPLETE'&&onOpenLoyalty)onOpenLoyalty()}finally{setBusy(false)}}
+  async function submit(fn){
+    setBusy(true);setError('');setNotice('');
+    try{await fn()}
+    catch(e){
+      setError(e.message||'Operation failed');
+      if(onOpenLoyalty&&e.code==='RECEIPT_ACTIVATION_INCOMPLETE'){
+        onOpenLoyalty();
+      }else if(onOpenLoyalty&&e.status===409){
+        try{
+          const readiness=await call('/v1/merchant/receipt-pilot/readiness',token);
+          if(readiness?.receipt_review_ready===false){
+            setError('Receipt reward activation is incomplete. Opening the Loyalty checklist.');
+            onOpenLoyalty();
+          }
+        }catch{}
+      }
+    }finally{setBusy(false)}
+  }
   return <section id="pruvs-business-campaign-workspace" className="panel promo-console">
     <div className="panel-heading"><h2>{t(mode==='promotions'?'Campaigns':'Merchant purchase verification code')}</h2>{mode!=='promotions'&&<span>PRUVS PILOT</span>}</div>
     {error&&<p className="promo-error" role="alert"><AlertCircle size={16}/>{t(error)}</p>}
