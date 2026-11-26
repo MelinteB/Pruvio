@@ -1,4 +1,5 @@
 import React from 'react';
+import {readCoreRelease} from '../scripts/core-release.mjs';
 import {beforeEach,afterEach,describe,it,expect,vi} from 'vitest';
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {CLIENT_RELEASE,isNewerRelease,shouldOfferUpdate,ReleaseUpdateBanner} from './professional/ReleaseUpdateBanner';
@@ -20,7 +21,7 @@ afterEach(()=>{cleanup();vi.restoreAllMocks();});
 
 describe('Core release update banner',()=>{
   it('uses current compiled Core version, with semantic comparison',()=>{
-    expect(CLIENT_RELEASE).toBe('7.1.66');
+    expect(CLIENT_RELEASE).toBe(readCoreRelease());
     expect(isNewerRelease(CLIENT_RELEASE)).toBe(false);
     expect(isNewerRelease('7.1.62')).toBe(false);
     expect(isNewerRelease('7.1.58')).toBe(false);
