@@ -7,7 +7,7 @@ import '../../frontend/src/campaign-creative.css';
 import '../../frontend/src/campaign-creative-v7162.css';
 import '../../shared_ui/pruvs-campaign-card-2027.css';
 import './core-promotion-preview.css';
-import CampaignGallery from '../../frontend/src/CampaignGallery.jsx';
+import CampaignGallery from './CampaignGallery.jsx';
 
 const amount=(minor,currency)=>`${(Number(minor||0)/100).toFixed(2)} ${currency||'RON'}`;
 
