@@ -53,6 +53,7 @@ function PreviewDialog({campaign,onClose}){
         headline={campaign.headline} message={campaign.message}
         mediaUrl={campaign.media_url||''} mediaType={campaign.media_type||'image/jpeg'}
         gallery={campaign.gallery||[]}
+        gallery={campaign.gallery||[]}
       />
       <p><ShieldCheck size={16}/> {t('Only published, unexpired offers from active programs appear in Pruvs Core. This preview does not publish the campaign.')}</p>
     </section>
