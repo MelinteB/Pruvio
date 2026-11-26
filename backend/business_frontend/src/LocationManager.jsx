@@ -28,7 +28,7 @@ export default function LocationManager({stores=[],programs=[],token,canManage=t
   const [filter,setFilter]=useState('all'),[search,setSearch]=useState('');
   const [place,setPlace]=useState(null),[detailsFailed,setDetailsFailed]=useState(false);
   const [busy,setBusy]=useState(false),[error,setError]=useState('');
-  const filtered=stores.filter(s=>(filter==='all'||(filter==='active'?s.active!==false:filter==='inactive'?s.active===false:!!s.google_place_id))&&[s.name,s.address].join(' ').toLowerCase().includes(search.toLowerCase()));
+  const filtered=stores.filter(s=>(filter==='all'||(filter==='active'?s.active!==false:filter==='inactive'?s.active===false&&!s.archived:filter==='archived'?s.archived:!!s.google_place_id))&&[s.name,s.address].join(' ').toLowerCase().includes(search.toLowerCase()));
   const store=filtered.find(s=>s.id===selected)||filtered[0];
   const [draft,setDraft]=useState(null);
   const google=useMerchantPlaces(token,language,canManage);
@@ -46,6 +46,12 @@ export default function LocationManager({stores=[],programs=[],token,canManage=t
   },[store?.id,store?.google_place_id,token,language,canFetchDetails]);
   useEffect(()=>{if(store)setDraft({name:store.name,address:store.address||'',latitude:store.latitude,longitude:store.longitude,active:store.active!==false});},[store?.id,store?.name,store?.address,store?.latitude,store?.longitude,store?.active]);
 
+  async function lifecycle(action){
+    if(!store||!window.confirm(t(action==='archive'?'Archive this location? Existing records will remain.':'Restore this location as inactive?')))return;
+    setBusy(true);setError('');
+    try{await merchantPlacesRequest('/v1/merchant/stores/'+encodeURIComponent(store.id)+'/'+action,token,{method:'POST'});onNotice?.(t('Location updated.'));await onChange?.();}
+    catch(ex){setError(ex.message)}finally{setBusy(false)}
+  }
   async function saveLocation(event){
     event.preventDefault();setBusy(true);setError('');
     try{
@@ -73,11 +79,13 @@ export default function LocationManager({stores=[],programs=[],token,canManage=t
   return <section className="panel pruvs-location-manager" aria-label={t('Location management')}>
     <div className="panel-heading"><h2><MapPin size={21}/> {t('Location management')}</h2><span>GOOGLE MAPS</span></div>
     <p>{t('Connect a Google Maps listing so customers can view live ratings and get directions.')}</p>
-    <div className="pruvs-location-edit"><label>{t('Search locations')}<input type="search" value={search} onChange={e=>setSearch(e.target.value)}/></label><label>{t('Status')}<select value={filter} onChange={e=>setFilter(e.target.value)}>{['all','active','inactive','linked'].map(s=><option value={s} key={s}>{t(s)}</option>)}</select></label></div>
+    <div className="pruvs-location-edit"><label>{t('Search locations')}<input type="search" value={search} onChange={e=>setSearch(e.target.value)}/></label><label>{t('Status')}<select value={filter} onChange={e=>setFilter(e.target.value)}>{['all','active','inactive','archived','linked'].map(s=><option value={s} key={s}>{t(s)}</option>)}</select></label></div>
     {!store?<p>{t('No matching locations')}</p>:<>
     <label>{t('Manage location')}<select value={store.id} disabled={busy} onChange={e=>{setSelected(e.target.value);google.changeQuery('');setError('');}}>{filtered.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
     <p>{t('Linked loyalty programs')}: {programs.filter(p=>p.store_id===store.id).length} · {t('Published')}: {programs.filter(p=>p.store_id===store.id&&p.status==='published').length}</p>
-    {canManage&&draft&&<form className="pruvs-location-edit" onSubmit={saveLocation}>
+    <p>{t('Campaigns')}: {store.campaigns??0} · {t('Pending claims')}: {store.pending_claims??0} · {t('Outstanding rewards')}: {store.outstanding_rewards??0}</p>
+    {canManage&&<button type="button" className="btn outline" disabled={busy} onClick={()=>lifecycle(store.archived?'restore':'archive')}>{t(store.archived?'Restore location':'Archive location')}</button>}
+    {canManage&&!store.archived&&draft&&<form className="pruvs-location-edit" onSubmit={saveLocation}>
       <label>{t('Location name')}<input required minLength="2" maxLength="180" value={draft.name} onChange={e=>setDraft({...draft,name:e.target.value})}/></label>
       <label>{t('Address')}<input maxLength="250" value={draft.address} onChange={e=>setDraft({...draft,address:e.target.value})}/></label>
       <label>{t('Latitude')}<input required type="number" min="-90" max="90" step="any" value={draft.latitude} onChange={e=>setDraft({...draft,latitude:e.target.value})}/></label>

@@ -24,7 +24,7 @@ export default function ProgramManager({programs=[],stores=[],token,onRefresh,no
     catch(e){setError(e.message||'Update failed')}
     finally{setBusy('')}
   }
-  function open(p){setEditing(p.id);setDraft({title:p.title,description:p.description||'',
+  function open(p){setEditing(p.id);setDraft({store_id:p.store_id,title:p.title,description:p.description||'',
     stamps_required:p.stamps_required,min_purchase_minor:p.min_purchase_minor,reward_minor:p.reward_minor});setError('')}
   return <><ActivationPanel token={token} stores={stores} programs={programs} onAddStore={onAddStore} onCreateProgram={onCreateProgram} onViewPrograms={()=>document.getElementById('pruvs-programs-list')?.scrollIntoView({behavior:'smooth',block:'start'})} onVerifyPurchases={onVerifyPurchases}/><section className="panel" id="pruvs-programs-list">
     <div className="panel-heading"><h2>{t('Manage loyalty programs')}</h2><span>{t('{count} total',{count:programs.length})}</span></div>
@@ -41,6 +41,7 @@ export default function ProgramManager({programs=[],stores=[],token,onRefresh,no
         count:p.stamps_required,reward:((p.reward_minor/100).toFixed(2))+' '+(p.currency||'RON'),
         minimum:((p.min_purchase_minor/100).toFixed(2))+' '+(p.currency||'RON')
       })}</small></div>
+      <small>{stores.find(s=>s.id===p.store_id)?.name||''} · {t('Members')}: {p.memberships??0} · {t('Pending claims')}: {p.pending_claims??0} · {t('Outstanding rewards')}: {p.outstanding_rewards??0} · {t('Campaigns')}: {p.campaigns??0}</small>
       <span className={'pill '+(p.status==='published'?'good':'')}>{t(statusLabel[p.status]||p.status)}</span>
       {canManage&&<div className="pruvs-program-actions"><button type="button" className="btn subtle" onClick={()=>open(p)}><PencilLine size={15}/> {t('Edit')}</button>
       {p.status==='draft'&&<button type="button" className="btn primary" disabled={!!busy} onClick={()=>act(p.id,'POST','/v1/merchant/programs/'+p.id+'/publish')}><Check size={15}/> {t('Publish')}</button>}
@@ -51,6 +52,7 @@ export default function ProgramManager({programs=[],stores=[],token,onRefresh,no
       {p.status==='archived'&&<button type="button" className="btn outline" disabled={!!busy} onClick={()=>act(p.id,'POST','/v1/merchant/programs/'+p.id+'/restore')}>{t('Restore')}</button>}
       </div>}
       {canManage&&editing===p.id&&<form className="pruvs-program-editor" onSubmit={e=>{e.preventDefault();act(p.id,'PATCH','/v1/merchant/programs/'+p.id,p.status==='draft'?draft:{title:draft.title,description:draft.description})}}>
+        {p.status==='draft'&&<label>{t('Location')}<select required value={draft.store_id} onChange={e=>setDraft(x=>({...x,store_id:e.target.value}))}>{stores.filter(s=>s.active!==false||s.id===draft.store_id).map(s=><option value={s.id} key={s.id}>{s.name}</option>)}</select></label>}
         <label>{t('Name')}<input required minLength={3} maxLength={180} value={draft.title} onChange={e=>setDraft(x=>({...x,title:e.target.value}))}/></label>
         <label>{t('Program description')}<textarea value={draft.description} maxLength={500} onChange={e=>setDraft(x=>({...x,description:e.target.value}))}/></label>
         <div className="pruvs-program-editor-grid">

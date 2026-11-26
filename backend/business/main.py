@@ -23,6 +23,7 @@ from .google_places_v0618 import router as google_places_router, linked_place_id
 from .models_v0618 import MerchantStorePlace
 from .security import merchant_actor, customer_actor, verify_password, encode_merchant_token, decode
 from .login_security import authenticate_merchant
+from . import management_v0624 as management
 from .schemas import LoginIn, StoreIn, StoreUpdate, ProgramIn, CampaignGoal, CampaignIn, ReceiptProofIn, ConfirmIn, DemoReceiptIn
 
 settings=get_settings()
@@ -118,17 +119,21 @@ def overview(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
 
 @app.get('/v1/merchant/stores')
 def get_stores(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
-    return [store_json(s,db=db) for s in db.scalars(select(Store).where(Store.merchant_id==staff.merchant_id)).all()]
+    return [{**store_json(s,db=db),'archived':management.archived(db,s),**management.location_counts(db,s)} for s in db.scalars(select(Store).where(Store.merchant_id==staff.merchant_id)).all()]
 
 @app.post('/v1/merchant/stores',status_code=201)
 def add_store(payload:StoreIn,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     merchant_check(staff)
+    management.lock_merchant(db,staff.merchant_id)
+    management.prevent_duplicate_location(db,staff,payload)
     place = validate_store_place(db, payload.google_place_id) if payload.google_place_id else None
     s = Store(merchant_id=staff.merchant_id, **payload.model_dump(exclude={'google_place_id'}))
     db.add(s)
     if place:
         db.flush()
         db.add(MerchantStorePlace(store_id=s.id, merchant_id=staff.merchant_id, place_id=place['place_id']))
+    db.flush()
+    management.audit(db,staff,'location',s.id,'create')
     db.commit()
     db.refresh(s)
     return store_json(s,db=db)
@@ -138,38 +143,68 @@ def update_store(store_id:str,payload:StoreUpdate,staff:Staff=Depends(merchant_a
     merchant_check(staff)
     store=db.scalar(select(Store).where(Store.id==store_id,Store.merchant_id==staff.merchant_id))
     if not store:raise HTTPException(404,'Location not found')
-    if not payload.active:
-        linked=db.scalar(select(Program.id).where(Program.store_id==store.id,
-                         Program.status=='published').limit(1))
-        if linked:raise HTTPException(409,'Pause published loyalty programs before deactivating this location')
+    management.lock_merchant(db,staff.merchant_id)
+    db.refresh(store)
+    if management.archived(db,store) and payload.active:
+        raise HTTPException(409,'Restore the archived location first.')
+    if not payload.active:management.require_retirable(db,store)
+    management.prevent_duplicate_location(db,staff,payload,exclude=store.id)
+    before=store.active
     for key,value in payload.model_dump().items():setattr(store,key,value)
+    management.audit(db,staff,'location',store.id,'update',{'active_before':before,'active_after':store.active})
     db.commit();db.refresh(store)
     return store_json(store,db=db)
 
+@app.post('/v1/merchant/stores/{store_id}/archive')
+def archive_location(store_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    merchant_check(staff);management.require_management(db);management.lock_merchant(db,staff.merchant_id)
+    store=owned(db,Store,store_id,staff.merchant_id)
+    management.require_retirable(db,store)
+    if not management.archived(db,store):
+        store.active=False
+        db.add(management.ArchivedLocation(store_id=store.id,merchant_id=staff.merchant_id))
+        management.audit(db,staff,'location',store.id,'archive')
+        db.commit()
+    return {**store_json(store,db=db),'archived':True}
+
+@app.post('/v1/merchant/stores/{store_id}/restore')
+def restore_location(store_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    merchant_check(staff);management.require_management(db);management.lock_merchant(db,staff.merchant_id)
+    store=owned(db,Store,store_id,staff.merchant_id)
+    row=db.get(management.ArchivedLocation,store.id)
+    if row and row.merchant_id==staff.merchant_id:
+        db.delete(row);management.audit(db,staff,'location',store.id,'restore');db.commit()
+    # Restored to inactive; activation is an explicit separate action.
+    return {**store_json(store,db=db),'archived':False}
+
 @app.get('/v1/merchant/programs')
 def get_programs(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
-    return [program_json(p) for p in db.scalars(select(Program).where(Program.merchant_id==staff.merchant_id)).all()]
+    return [{**program_json(p),**management.program_counts(db,p)} for p in db.scalars(select(Program).where(Program.merchant_id==staff.merchant_id)).all()]
 
 @app.post('/v1/merchant/programs',status_code=201)
 def add_program(payload:ProgramIn,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     merchant_check(staff)
-    owned(db,Store,payload.store_id,staff.merchant_id)
+    management.lock_merchant(db,staff.merchant_id)
+    store=owned(db,Store,payload.store_id,staff.merchant_id)
+    if not store.active:raise HTTPException(409,'Activate the program location first.')
     p=Program(merchant_id=staff.merchant_id,**payload.model_dump())
-    db.add(p);db.commit();db.refresh(p)
+    db.add(p);db.flush();management.audit(db,staff,'program',p.id,'create');db.commit();db.refresh(p)
     return program_json(p)
 
 @app.post('/v1/merchant/programs/{program_id}/publish')
 def publish_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     merchant_check(staff)
+    management.lock_merchant(db,staff.merchant_id)
     p=owned(db,Program,program_id,staff.merchant_id)
     store=owned(db,Store,p.store_id,staff.merchant_id)
     if not store.active:raise HTTPException(409,'Activate the program location first.')
     if p.status not in ('draft','published'):raise HTTPException(409,'Use resume for paused programs.')
-    p.status='published';db.commit()
+    p.status='published';management.audit(db,staff,'program',p.id,'publish');db.commit()
     return program_json(p)
 
 
 class ProgramEdit(BaseModel):
+    store_id: str | None = Field(default=None,min_length=1,max_length=36)
     title: str | None = Field(default=None,min_length=3,max_length=180)
     description: str | None = Field(default=None,max_length=500)
     stamps_required: int | None = Field(default=None,ge=2,le=30)
@@ -179,14 +214,19 @@ class ProgramEdit(BaseModel):
 @app.patch('/v1/merchant/programs/{program_id}')
 def edit_program(program_id:str,payload:ProgramEdit,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     merchant_check(staff)
+    management.lock_merchant(db,staff.merchant_id)
     program=owned(db,Program,program_id,staff.merchant_id)
     changes=payload.model_dump(exclude_unset=True)
     if not changes or any(v is None for v in changes.values()):
         raise HTTPException(422,'Provide at least one valid program change.')
-    monetary={'stamps_required','min_purchase_minor','reward_minor'}
+    monetary={'store_id','stamps_required','min_purchase_minor','reward_minor'}
     if program.status!='draft' and monetary.intersection(changes):
         raise HTTPException(409,'Active program criteria cannot change. Pause or create a new program instead.')
+    if 'store_id' in changes:
+        store=owned(db,Store,changes['store_id'],staff.merchant_id)
+        if not store.active:raise HTTPException(409,'Activate the program location first.')
     for key,value in changes.items():setattr(program,key,value.strip() if isinstance(value,str) else value)
+    management.audit(db,staff,'program',program.id,'edit',{'fields':sorted(changes)})
     db.commit()
     return program_json(program)
 
@@ -195,7 +235,7 @@ def pause_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Session=
     merchant_check(staff)
     program=owned(db,Program,program_id,staff.merchant_id)
     if program.status!='published':raise HTTPException(409,'Only published programs may be paused.')
-    program.status='paused';db.commit();return program_json(program)
+    program.status='paused';management.audit(db,staff,'program',program.id,'pause');db.commit();return program_json(program)
 
 @app.post('/v1/merchant/programs/{program_id}/resume')
 def resume_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
@@ -204,7 +244,7 @@ def resume_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Session
     if program.status!='paused':raise HTTPException(409,'Only paused programs may be resumed.')
     store=owned(db,Store,program.store_id,staff.merchant_id)
     if not store.active:raise HTTPException(409,'Activate the program location first.')
-    program.status='published';db.commit();return program_json(program)
+    program.status='published';management.audit(db,staff,'program',program.id,'resume');db.commit();return program_json(program)
 
 @app.post('/v1/merchant/programs/{program_id}/duplicate',status_code=201)
 def duplicate_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
@@ -221,7 +261,7 @@ def duplicate_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Sess
         description=original.description,stamps_required=original.stamps_required,
         min_purchase_minor=original.min_purchase_minor,reward_minor=original.reward_minor,
         currency=original.currency,status='draft')
-    db.add(copy);db.commit();db.refresh(copy)
+    db.add(copy);db.flush();management.audit(db,staff,'program',copy.id,'duplicate',{'source':original.id});db.commit();db.refresh(copy)
     return program_json(copy)
 
 @app.post('/v1/merchant/programs/{program_id}/archive')
@@ -233,7 +273,7 @@ def archive_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Sessio
     if p.status not in ('draft','paused'):raise HTTPException(409,'Pause the program first.')
     if db.scalar(select(ReceiptClaim.id).where(ReceiptClaim.program_id==p.id,ReceiptClaim.status=='pending').limit(1)) or db.scalar(select(Reward.id).where(Reward.program_id==p.id,Reward.status.in_(('available','reserved'))).limit(1)):
         raise HTTPException(409,'Resolve pending receipts and outstanding rewards before archiving.')
-    p.status='archived';db.commit();return program_json(p)
+    p.status='archived';management.audit(db,staff,'program',p.id,'archive');db.commit();return program_json(p)
 
 @app.post('/v1/merchant/programs/{program_id}/restore')
 def restore_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
@@ -243,7 +283,7 @@ def restore_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Sessio
     if p.status!='archived':raise HTTPException(409,'Only archived programs may be restored.')
     if db.scalar(select(Membership.id).where(Membership.program_id==p.id).limit(1)):
         raise HTTPException(409,'This program has customer history. Duplicate it to create a new draft.')
-    p.status='draft';db.commit();return program_json(p)
+    p.status='draft';management.audit(db,staff,'program',p.id,'restore');db.commit();return program_json(p)
 
 @app.get('/v1/merchant/claims')
 def get_claims(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
