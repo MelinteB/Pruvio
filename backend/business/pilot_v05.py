@@ -279,9 +279,18 @@ def require_publishable_campaign(db:Session,staff:Staff,promotion:Promotion)->No
     store=db.get(Store,program.store_id)
     if not program_is_discoverable(program,merchant,store):
         raise HTTPException(409,'An active merchant and location are required to publish a campaign.')
-    from .pilot_readiness_v069 import merchant_acquisition_ready
-    if not merchant_acquisition_ready(db, staff.merchant_id):
-        raise HTTPException(409,'Complete receipt reward activation before publishing this campaign.')
+    # Every current campaign is linked to a published loyalty program whose reward
+    # requires merchant-verified qualifying purchases. Keep this gate for those
+    # receipt-based rewards and return actionable readiness details to the editor.
+    from .pilot_readiness_v069 import acquisition_gate_enabled, merchant_receipt_report
+    if acquisition_gate_enabled():
+        readiness = merchant_receipt_report(db, staff.merchant_id)
+        if not readiness.get('receipt_review_ready'):
+            raise HTTPException(409, detail={
+                'code': 'RECEIPT_ACTIVATION_INCOMPLETE',
+                'message': 'Receipt rewards are not active for this merchant. The campaign remains a draft. Check the activation checklist under Loyalty.',
+                'blocked_by': readiness.get('blocked_by', []),
+            })
 
 
 @router.post('/v1/merchant/promotions/{promotion_id}/reopen')
