@@ -22,10 +22,11 @@ from .models_v067 import DiscountRedemption
 from .google_places_v0618 import router as google_places_router, linked_place_id, validate_store_place
 from .models_v0618 import MerchantStorePlace
 from .security import merchant_actor, customer_actor, verify_password, encode_merchant_token, decode
+from .login_security import authenticate_merchant
 from .schemas import LoginIn, StoreIn, StoreUpdate, ProgramIn, CampaignGoal, CampaignIn, ReceiptProofIn, ConfirmIn, DemoReceiptIn
 
 settings=get_settings()
-app=FastAPI(title='Pruvs Business API',version='0.6.22',docs_url='/docs' if settings.app_env!='production' else None)
+app=FastAPI(title='Pruvs Business API',version='0.6.23',docs_url='/docs' if settings.app_env!='production' else None)
 app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=False,
                    allow_methods=['GET','POST','PUT','PATCH','DELETE'],allow_headers=['Authorization','Content-Type'])
 app.include_router(merchant_enrollment_router)
@@ -83,7 +84,7 @@ def aware(dt):
 
 @app.get('/health')
 def health():
-    return {'service':'Pruvs Business','version':'0.6.22','status':'ok'}
+    return {'service':'Pruvs Business','version':'0.6.23','status':'ok'}
 
 @app.get('/ready', include_in_schema=False)
 def readiness():
@@ -92,18 +93,14 @@ def readiness():
     try:
         checks=check_schema(engine())
         if not all(checks.values()):
-            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.22'})
-        return {'status':'ready','version':'0.6.22'}
+            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.23'})
+        return {'status':'ready','version':'0.6.23'}
     except Exception:
-        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.22'})
+        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.23'})
 
 @app.post('/v1/merchant/login')
-def login(payload:LoginIn, db:Session=Depends(get_db)):
-    # Do not reveal whether email exists. Add IP/account throttling before public deployment.
-    staff=db.scalar(select(Staff).where(Staff.email==payload.email.strip().lower()))
-    if not staff or not staff.active or not verify_password(payload.password,staff.password_hash):
-        raise HTTPException(401,'Invalid credentials')
-    return {'access_token':encode_merchant_token(staff),'token_type':'bearer','expires_in':7200}
+def login(payload:LoginIn, request:Request, db:Session=Depends(get_db)):
+    return authenticate_merchant(payload, request, db)
 
 @app.get('/v1/merchant/me')
 def me(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):

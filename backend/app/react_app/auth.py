@@ -66,12 +66,25 @@ def limit(db,request,bucket,maximum=15):
     # The client connection address is used, not a caller-controlled forwarded header.
     key=digest(bucket+':'+(request.client.host if request.client else 'unknown'))
     now=datetime.utcnow()
-    row=db.query(ReactRateLimit).filter_by(id=key).with_for_update().first()
-    if not row:
-        row=ReactRateLimit(id=key,count=0,reset_at=now+timedelta(minutes=10));db.add(row)
-    if row.reset_at<=now:row.count=0;row.reset_at=now+timedelta(minutes=10)
-    if row.count>=maximum:raise HTTPException(429,'Too many attempts. Try again in 10 minutes.')
-    row.count+=1;db.commit()
+    # Atomic UPSERT handles concurrent first requests as well as existing buckets.
+    from sqlalchemy import case, or_
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+    dialect=db.get_bind().dialect.name
+    if dialect not in ('postgresql','sqlite'):
+        raise HTTPException(503,'Authentication temporarily unavailable.')
+    table=ReactRateLimit.__table__
+    expired=table.c.reset_at<=now
+    reset=now+timedelta(minutes=10)
+    insert=pg_insert if dialect=='postgresql' else sqlite_insert
+    stmt=insert(table).values(id=key,count=1,reset_at=reset).on_conflict_do_update(
+        index_elements=[table.c.id],
+        set_={'count':case((expired,1),else_=table.c.count+1),
+              'reset_at':case((expired,reset),else_=table.c.reset_at)},
+        where=or_(expired,table.c.count<maximum)).returning(table.c.count)
+    count=db.execute(stmt).scalar_one_or_none()
+    db.commit()
+    if count is None:raise HTTPException(429,'Too many attempts. Try again in 10 minutes.',headers={'Retry-After':'600'})
 
 def push_identity(identity=Depends(current),db=Depends(get_db)):
     user,session=identity
