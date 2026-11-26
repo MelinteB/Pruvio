@@ -104,7 +104,7 @@ function App(){
  {page==='overview'&&<MerchantOverview
     merchantName={me?.merchant_name} stats={stats} stores={stores} programs={programs} claims={claims}
     onNavigate={setPage} onAddStore={()=>setModal('store')} onAddProgram={()=>setModal('program')}/>}
- {page==='stores'&&<><section className="panel"><div className="panel-heading"><h2>{t('Store locations')}</h2><span>{t('{count} total',{count:stores.length})}</span></div>{stores.length?<div className="list">{stores.map(s=><div className="list-row" key={s.id}><div className="row-icon"><Store size={19}/></div><div className="row-main"><b>{s.name}</b><small><MapPin size={13}/>{s.address||t('Address not specified')}</small></div><span className={'pill '+(s.active===false?'':'good')}>{t(s.active===false?'Inactive':'Active')}</span></div>)}</div>:<Empty title={t('No locations yet')} detail={t('Add a business location to make offers discoverable to nearby Pruvs customers.')}/>}</section>{stores.length>0&&<LocationManager stores={stores} programs={programs} token={token} canManage={['owner','manager'].includes(me.role)} onChange={()=>reload(token)} onNotice={text=>inform(text)}/>}</>}
+ {page==='stores'&&<LocationManager stores={stores} programs={programs} token={token} canManage={['owner','manager'].includes(me.role)} onChange={()=>reload(token)} onNotice={text=>inform(text)}/>}
  {page==='loyalty'&&<ProgramManager programs={programs} stores={stores} token={token} canManage={['owner','manager'].includes(me?.role)} onRefresh={()=>reload(token)} notify={inform} onAddStore={()=>setModal('store')} onCreateProgram={()=>setModal('program')} onVerifyPurchases={()=>setPage('claims')}/>}
   {page==='claims'&&<ReceiptInbox token={token} onChange={reload} onOpenLoyalty={()=>setPage('loyalty')}/>}
 

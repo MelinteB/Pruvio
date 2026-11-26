@@ -1,5 +1,6 @@
 import React,{useEffect,useState} from 'react';
-import {ExternalLink,MapPin,Search,Star,Navigation,Link2,Link2Off,Save} from 'lucide-react';
+import {ExternalLink,MapPin,Search,Star,Navigation,Link2,Link2Off,Save,Trash2} from 'lucide-react';
+import './business-management-v073.css';
 import {useBusinessLanguage} from './i18n.jsx';
 import {merchantPlacesRequest,useMerchantPlaces} from './merchantPlaces.js';
 import './location-manager-v0618.css';
@@ -30,6 +31,8 @@ export default function LocationManager({stores=[],programs=[],token,canManage=t
   const [busy,setBusy]=useState(false),[error,setError]=useState('');
   const filtered=stores.filter(s=>(filter==='all'||(filter==='active'?s.active!==false:filter==='inactive'?s.active===false&&!s.archived:filter==='archived'?s.archived:!!s.google_place_id))&&[s.name,s.address].join(' ').toLowerCase().includes(search.toLowerCase()));
   const store=filtered.find(s=>s.id===selected)||filtered[0];
+  const storePrograms=store?programs.filter(p=>p.store_id===store.id):[];
+  const canDeleteLocation=Boolean(store?.archived&&storePrograms.length===0);
   const [draft,setDraft]=useState(null);
   const google=useMerchantPlaces(token,language,canManage);
   const canFetchDetails=!canManage||google.readiness?.places_search_enabled===true||google.readiness?.unreachable===true;
@@ -52,6 +55,16 @@ export default function LocationManager({stores=[],programs=[],token,canManage=t
     try{await merchantPlacesRequest('/v1/merchant/stores/'+encodeURIComponent(store.id)+'/'+action,token,{method:'POST'});onNotice?.(t('Location updated.'));await onChange?.();}
     catch(ex){setError(ex.message)}finally{setBusy(false)}
   }
+  async function deleteLocation(){
+    if(!store||!canDeleteLocation)return;
+    if(!window.confirm(t('Delete location "{name}" permanently? It can only be deleted when it has no loyalty programs.',{name:store.name})))return;
+    setBusy(true);setError('');
+    try{
+      await merchantPlacesRequest('/v1/merchant/stores/'+encodeURIComponent(store.id),token,{method:'DELETE'});
+      setPlace(null);onNotice?.(t('Location deleted.'));setSelected('');await onChange?.();
+    }catch(ex){setError(ex.message||t('Could not delete this location.'));}finally{setBusy(false)}
+  }
+
   async function saveLocation(event){
     event.preventDefault();setBusy(true);setError('');
     try{
@@ -76,15 +89,36 @@ export default function LocationManager({stores=[],programs=[],token,canManage=t
       setPlace(null);onNotice?.(t('Google Maps link disconnected.'));await onChange?.();
     }catch{setError('Could not disconnect the Google Maps listing. Try again.')}finally{setBusy(false)}
   }
-  return <section className="panel pruvs-location-manager" aria-label={t('Location management')}>
-    <div className="panel-heading"><h2><MapPin size={21}/> {t('Location management')}</h2><span>GOOGLE MAPS</span></div>
+  return <section className="panel pruvs-location-manager pruvs-location-management" aria-label={t('Location management')}>
+    <div className="panel-heading"><h2><MapPin size={21}/> {t('Location management')}</h2><span>{t('{count} total locations',{count:stores.length})}</span></div>
     <p>{t('Connect a Google Maps listing so customers can view live ratings and get directions.')}</p>
-    <div className="pruvs-location-edit"><label>{t('Search locations')}<input type="search" value={search} onChange={e=>setSearch(e.target.value)}/></label><label>{t('Status')}<select value={filter} onChange={e=>setFilter(e.target.value)}>{['all','active','inactive','archived','linked'].map(s=><option value={s} key={s}>{t(s)}</option>)}</select></label></div>
+    <div className="pruvs-location-filters"><label>{t('Search locations')}<input type="search" value={search} onChange={e=>setSearch(e.target.value)}/></label></div>
+    <div className="pruvs-management-tabs" role="tablist" aria-label={t('Filter locations by status')}>
+      {['all','active','inactive','archived','linked'].map(key=>{
+        const n=stores.filter(s=>(key==='all'||(key==='active'?s.active!==false:key==='inactive'?s.active===false&&!s.archived:key==='archived'?s.archived:!!s.google_place_id))&&[s.name,s.address].join(' ').toLowerCase().includes(search.toLowerCase())).length;
+        return <button type="button" role="tab" aria-selected={filter===key} className={filter===key?'active':''} key={key} onClick={()=>setFilter(key)}>{t(key)}<span>{n}</span></button>;
+      })}
+    </div>
+    <div className="pruvs-location-card-grid" role="list" aria-label={t('Select a location to manage')}>
+      {filtered.map(s=><button type="button" key={s.id}
+        className={'pruvs-location-card'+(store?.id===s.id?' selected':'')} aria-pressed={store?.id===s.id}
+        onClick={()=>{setSelected(s.id);google.changeQuery('');setError('');}}>
+        <span className="pruvs-location-card-head"><strong>{s.name}</strong><span className={'pill '+(s.archived?'':'good')}>{t(s.archived?'archived':s.active===false?'inactive':'active')}</span></span>
+        <small>{s.address||t('Address not specified')}</small>
+        <small>{t('{programs} programs · {campaigns} campaigns',{programs:s.programs??programs.filter(p=>p.store_id===s.id).length,campaigns:s.campaigns??0})}</small>
+        <small>{t('{pending} pending claims · {rewards} outstanding rewards',{pending:s.pending_claims??0,rewards:s.outstanding_rewards??0})}</small>
+      </button>)}
+    </div>
     {!store?<p>{t('No matching locations')}</p>:<>
-    <label>{t('Manage location')}<select value={store.id} disabled={busy} onChange={e=>{setSelected(e.target.value);google.changeQuery('');setError('');}}>{filtered.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
     <p>{t('Linked loyalty programs')}: {programs.filter(p=>p.store_id===store.id).length} · {t('Published')}: {programs.filter(p=>p.store_id===store.id&&p.status==='published').length}</p>
     <p>{t('Campaigns')}: {store.campaigns??0} · {t('Pending claims')}: {store.pending_claims??0} · {t('Outstanding rewards')}: {store.outstanding_rewards??0}</p>
-    {canManage&&<button type="button" className="btn outline" disabled={busy} onClick={()=>lifecycle(store.archived?'restore':'archive')}>{t(store.archived?'Restore location':'Archive location')}</button>}
+    {canManage&&<div className="pruvs-location-record-actions">
+      <button type="button" className="btn outline" disabled={busy} onClick={()=>lifecycle(store.archived?'restore':'archive')}>{t(store.archived?'Restore location':'Archive location')}</button>
+      {store.archived&&<button type="button" className="btn danger" disabled={busy||!canDeleteLocation}
+        title={canDeleteLocation?t('Delete location'):t('Delete unavailable until the location is archived and has no loyalty programs.')}
+        onClick={deleteLocation}><Trash2 size={15}/>{t('Delete location')}</button>}
+    </div>}
+    {canManage&&store.archived&&storePrograms.length>0&&<small className="pruvs-program-retain-note">{t('This location has loyalty programs. Archive it to keep records; permanent deletion is blocked.')}</small>}
     {canManage&&!store.archived&&draft&&<form className="pruvs-location-edit" onSubmit={saveLocation}>
       <label>{t('Location name')}<input required minLength="2" maxLength="180" value={draft.name} onChange={e=>setDraft({...draft,name:e.target.value})}/></label>
       <label>{t('Address')}<input maxLength="250" value={draft.address} onChange={e=>setDraft({...draft,address:e.target.value})}/></label>
