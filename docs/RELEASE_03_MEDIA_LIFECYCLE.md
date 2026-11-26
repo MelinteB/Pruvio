@@ -15,12 +15,16 @@ remain outstanding release work.
 
 ## Business database migration
 
-Apply `backend/business_migrations/versions/b16a0725_campaign_media_registry.sql`
-to the verified **staging Business database** after taking and checking a
-recoverable backup. Do not run this against production as part of the draft
-release. The migration only creates an additive registry table and indexes.
-The `/ready` endpoint now reports unavailable until this registry and the
-existing required schema are present.
+The user authorized applying b14, b15 and b16 to staging without a backup.
+The staging Render start command runs
+`backend/scripts/apply_staging_business_migrations.py` before starting the app.
+The runner accepts only PostgreSQL database `pruvs_business_staging` with
+`PRUVS_PLATFORM_COMBINED_STAGING=true`, applies the three reviewed SQL files in
+order, and verifies their tables. It is idempotent and refuses a different
+database. Production is not a target of this deployment. The migrations add
+tables and indexes; they do not rewrite existing campaign or customer rows.
+The `/ready` endpoint reports unavailable until the registry and required
+schema are present.
 
 ## Orphan cleanup
 
@@ -50,7 +54,7 @@ acceptance is documented.
 
 ## Release acceptance still needed
 
-- Apply b14, b15 and b16 to the verified staging database after backup.
+- Confirm b14, b15 and b16 were applied and verified in staging by startup logs.
 - Confirm `/ready` reports all checks ready and upload/render/save/edit works
   for an owner and manager account.
 - Confirm campaign source and render keys attach to their promotion and are
@@ -131,9 +135,8 @@ git -C $repo push -u origin feature/core-7.1.72-business-0.6.25-media-lifecycle
 if ($LASTEXITCODE -ne 0) { throw 'Feature branch push failed.' }
 ```
 
-Before staging deployment, verify the correct Render service and Business database,
-take and check a recoverable database backup, and apply b14, b15 and b16 with an
-authorized staging writer. After acceptance, rollback by redeploying the previous
-tested commit; leave additive migration tables and their data in place. Do not
-promote production until all receipt-to-reward and media lifecycle acceptance is
-recorded.
+For staging, the authorized no-backup migration runner verifies the exact target
+database before applying additive SQL. Roll back application code by redeploying
+the previous tested commit; leave additive migration tables and their data in
+place. Do not promote production until all receipt-to-reward and media lifecycle
+acceptance is recorded.
