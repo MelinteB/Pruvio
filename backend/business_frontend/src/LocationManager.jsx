@@ -100,7 +100,7 @@ export default function LocationManager({stores=[],programs=[],token,canManage=t
       })}
     </div>
     <div className="pruvs-location-card-grid" role="list" aria-label={t('Select a location to manage')}>
-      {filtered.map(s=><button type="button" role="listitem" key={s.id}
+      {filtered.map(s=><button type="button" key={s.id}
         className={'pruvs-location-card'+(store?.id===s.id?' selected':'')} aria-pressed={store?.id===s.id}
         onClick={()=>{setSelected(s.id);google.changeQuery('');setError('');}}>
         <span className="pruvs-location-card-head"><strong>{s.name}</strong><span className={'pill '+(s.archived?'':'good')}>{t(s.archived?'archived':s.active===false?'inactive':'active')}</span></span>
