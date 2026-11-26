@@ -117,6 +117,7 @@ export default function LocationManager({stores=[],programs=[],token,canManage=t
       </div>
       <strong>{place?.name||store.name}</strong><small>{place?.address||store.address}</small>
       {place&&<Rating place={place}/>}
+      {place?.opening_hours?.length>0&&<div><strong>{t('Opening hours')}</strong><ul>{place.opening_hours.map((h,i)=><li key={i}>{h}</li>)}</ul><small>{t('Provided by Google Maps')}</small></div>}
       {detailsFailed&&<p role="status">{t('Live Google Maps details are temporarily unavailable. You can still open the listing.')}</p>}
       <div className="pruvs-location-directions">
         <a href={place?.maps_url||'https://www.google.com/maps/search/?api=1&query_place_id='+encodeURIComponent(store.google_place_id)+'&query='+encodeURIComponent(store.name)}

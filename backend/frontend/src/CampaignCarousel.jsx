@@ -12,6 +12,7 @@ export function livePromotions(promotions) {
   for (const promotion of promotions) {
     if (!promotion.id || !promotion.program_id || byId.has(promotion.id)) continue;
     if (promotion.status && promotion.status !== 'published') continue;
+    if (promotion.is_live === false || promotion.receipt_activation_ready === false) continue;
     if (promotion.expires_at && !(Date.parse(promotion.expires_at) > now)) continue;
     byId.set(promotion.id, promotion);
   }

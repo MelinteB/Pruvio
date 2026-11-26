@@ -27,6 +27,9 @@ from business import main as business_main
 @pytest.fixture
 def data(monkeypatch):
     monkeypatch.setenv('PRUVS_BUSINESS_PILOT_DB_ENROLLMENT_ENABLED','true')
+    monkeypatch.setenv('PRUVS_BUSINESS_RECEIPT_PILOT_ENABLED','true')
+    monkeypatch.setenv('PRUVS_BUSINESS_CUSTOMER_CODES_V12_ENABLED','true')
+    monkeypatch.setenv('PRUVS_BUSINESS_V06_REQUIRE_EVIDENCE','true')
     monkeypatch.setenv('PRUVS_BUSINESS_V06_PILOT_MERCHANT_IDS','not-an-active-id')
     engine=create_engine('sqlite://')
     Base.metadata.create_all(engine)
@@ -61,9 +64,7 @@ def test_new_merchant_not_automatically_allowed(data):
     assert current['request_supported'] is True
     assert current['has_published_program'] is True
     offers=business_main.discover(latitude=None,longitude=None,radius_km=10,db=db)
-    row=next(row for row in offers if row['program']['id']==program.id)
-    assert row['receipt_pilot_allowed'] is False
-    assert row['merchant_id']==m1.id
+    assert not any(row['program']['id']==program.id for row in offers)
 
 
 def test_owner_request_admin_approval_revoke_and_audit(data):

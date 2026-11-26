@@ -28,7 +28,7 @@ export default function ActivationPanel({token,stores=[],programs=[],onAddStore,
     if(!token)return;
     if(!quiet)setLoading(true);
     try{const [a,r]=await Promise.all([api('/v1/merchant/pilot-access',token),api('/v1/merchant/receipt-pilot/readiness',token)]);setAccess(a);setReadiness(r);setError('');}
-    catch(e){if(!quiet)setError(friendly(e));}
+    catch(e){setAccess(null);setReadiness(null);setError(friendly(e));}
     finally{if(!quiet)setLoading(false);}
   },[token]);
   useEffect(()=>{
@@ -48,7 +48,7 @@ export default function ActivationPanel({token,stores=[],programs=[],onAddStore,
     finally{setBusy(false);}
   }
   const storeReady=stores.some(s=>s.active!==false);
-  const programReady=programs.some(p=>p.status==='published');
+  const programReady=programs.some(p=>p.status==='published'&&stores.some(s=>s.id===p.store_id&&s.active!==false));
   const approved=access?.status==='approved';
   const operational=approved&&readiness?.receipt_review_ready===true;
   const waiting=access?.status==='requested';
@@ -73,7 +73,7 @@ export default function ActivationPanel({token,stores=[],programs=[],onAddStore,
     </ol>
     {error&&<p className="pruvs-activation-error" role="alert"><AlertTriangle size={16}/>{t(error)}</p>}
     {message&&<p className="pruvs-activation-good" role="status">{t(message)}</p>}
-    {approved&&!operational&&!loading&&<p role="alert">{t('Your approval is recorded, but receipt verification is not ready. Contact Pruvs support to complete configuration.')} {readiness?.blocked_by?.join(', ')}</p>}
+    {approved&&!operational&&!loading&&<p role="alert">{t('Your approval is recorded, but receipt verification is not ready. Contact Pruvs support to complete configuration.')} {readiness?.blocked_by?.map(s=>t(s)).join(', ')}</p>}
     {loading?<p role="status" className="helper">{t('Checking activation…')}</p>:operational?
       <div className="pruvs-activation-done"><CheckCircle2 size={19}/> {t('Receipt rewards are active.')}
         {onVerifyPurchases&&<button className="btn primary" type="button" onClick={onVerifyPurchases}>{t('Verify purchases')}</button>}

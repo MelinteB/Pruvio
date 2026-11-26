@@ -26,7 +26,7 @@ logger=logging.getLogger(__name__)
 GOOGLE_ORIGIN='https://places.googleapis.com/v1'
 PLACE_ID=re.compile(r'^[A-Za-z0-9_-]{8,255}$')
 SEARCH_MASK='places.id,places.displayName,places.formattedAddress,places.location,places.googleMapsUri'
-DETAIL_MASK='id,displayName,formattedAddress,location,googleMapsUri,rating,userRatingCount,reviews.authorAttribution,reviews.rating,reviews.text,reviews.publishTime'
+DETAIL_MASK='id,displayName,formattedAddress,location,googleMapsUri,rating,userRatingCount,reviews.authorAttribution,reviews.rating,reviews.text,reviews.publishTime,regularOpeningHours.weekdayDescriptions'
 
 def configured_key():
     key=os.getenv('PRUVS_GOOGLE_PLACES_API_KEY','').strip()
@@ -78,6 +78,7 @@ def normalized(place,*,detail=False):
          'latitude':position.get('latitude'),'longitude':position.get('longitude'),
          'maps_url':url,'attribution':'Google Maps'}
     if detail:
+        out['opening_hours']=(place.get('regularOpeningHours') or {}).get('weekdayDescriptions',[])[:7]
         out['rating']=place.get('rating')
         out['user_rating_count']=place.get('userRatingCount')
         out['reviews']=[{

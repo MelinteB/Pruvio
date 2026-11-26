@@ -50,6 +50,7 @@ def program_counts(db, p):
     count=lambda model, *where: db.scalar(select(func.count(model.id)).where(model.program_id==p.id,*where)) or 0
     outstanding=count(Reward,Reward.merchant_id==p.merchant_id,Reward.status.in_(('available','reserved')))
     return {'memberships':count(Membership),
+            'in_progress_memberships':count(Membership,Membership.stamps>0),
             'pending_claims':count(ReceiptClaim,ReceiptClaim.merchant_id==p.merchant_id,ReceiptClaim.status=='pending'),
             'outstanding_rewards':outstanding,
             'outstanding_reward_minor':outstanding*p.reward_minor,
@@ -58,16 +59,16 @@ def program_counts(db, p):
 def location_counts(db, store):
     programs=db.scalars(select(Program).where(Program.store_id==store.id,Program.merchant_id==store.merchant_id)).all()
     counts={'programs':len(programs),'published_programs':sum(p.status=='published' for p in programs),
-            'pending_claims':0,'outstanding_rewards':0,'campaigns':0}
+            'pending_claims':0,'outstanding_rewards':0,'in_progress_memberships':0,'campaigns':0}
     for p in programs:
         summary=program_counts(db,p)
-        for k in ('pending_claims','outstanding_rewards','campaigns'):counts[k]+=summary[k]
+        for k in ('pending_claims','outstanding_rewards','in_progress_memberships','campaigns'):counts[k]+=summary[k]
     return counts
 
 def require_retirable(db,store):
     c=location_counts(db,store)
-    if c['published_programs'] or c['pending_claims'] or c['outstanding_rewards']:
-        raise HTTPException(409,'Pause published programs and resolve pending claims and outstanding rewards before deactivating this location.')
+    if c['published_programs'] or c['pending_claims'] or c['outstanding_rewards'] or c['in_progress_memberships']:
+        raise HTTPException(409,'Pause published programs and resolve customer progress, pending claims and outstanding rewards before deactivating this location.')
 
 def prevent_duplicate_location(db,staff,payload,exclude=None):
     rows=db.scalars(select(Store).where(Store.merchant_id==staff.merchant_id)).all()
