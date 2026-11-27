@@ -25,6 +25,7 @@ function setup(approved,{receiptEnabled=true}={}){
     program:{id:program,title:'Cafe loyalty',description:'Stamp visits',
       stamps_required:5,reward_minor:1000,currency:'RON'}};
   request.mockImplementation(async path=>{
+    if(path.includes('/customer-code-v12/eligibility'))return {eligible:true,reason:'eligible',message:'This receipt meets the selected program conditions.'};
     if(path==='/loyalty/status')return {
       enabled:true,receipt_claims_enabled:receiptEnabled,receipt_v06_enabled:receiptEnabled,customer_codes_v12_enabled:receiptEnabled,
     };

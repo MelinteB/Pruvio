@@ -1,6 +1,6 @@
 import React,{useEffect,useId,useRef,useState} from 'react';
 import {QRCodeSVG} from 'qrcode.react';
-import {send} from './api';
+import {send,request} from './api';
 import {getLocalReceipt} from './localReceipts';
 import {ShieldCheck, Copy, X, ReceiptText, CheckCircle2, LockKeyhole, Gift} from 'lucide-react';
 import './customer-code-v12.css';
@@ -49,13 +49,23 @@ export default function CustomerReceiptCode({
   const [consent,setConsent]=useState(false);
   const [latitude,setLatitude]=useState(''),[longitude,setLongitude]=useState('');
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[result,setResult]=useState(null);
+  const [eligibility,setEligibility]=useState(null),[checkingEligibility,setCheckingEligibility]=useState(false);
   const chosen=programs.some(p=>p.program.id===program)?program:programs[0]?.program?.id||'';
   const pending=existingClaim?.status==='pending';
 
   useEffect(()=>{if(open&&!result)initialFocus.current?.focus();},[open,result]);
+  useEffect(()=>{
+    if(!open||!chosen){setEligibility(null);return;}
+    let active=true;setCheckingEligibility(true);setEligibility(null);
+    request(`/receipts/${encodeURIComponent(caseId)}/customer-code-v12/eligibility?program_id=${encodeURIComponent(chosen)}`,{method:'GET'})
+      .then(data=>{if(active)setEligibility(data);})
+      .catch(ex=>{if(active)setEligibility({eligible:false,reason:'eligibility_unavailable',message:ex.message||'Unable to check this campaign yet.'});})
+      .finally(()=>{if(active)setCheckingEligibility(false);});
+    return()=>{active=false;};
+  },[open,chosen,caseId]);
   function close(){
     const wasCreated=!!result;
-    setOpen(false);setResult(null);setError('');setConsent(false);
+    setOpen(false);setResult(null);setError('');setConsent(false);setEligibility(null);
     if(wasCreated)onFinished?.();
   }
   if(existingClaim?.status==='approved')return <small role="status">Receipt approved · loyalty stamp credited.</small>;
@@ -82,7 +92,7 @@ export default function CustomerReceiptCode({
 
   return <>
     {pending&&<small role="status">Receipt awaiting merchant verification. Creating a new QR invalidates the previous code.</small>}
-    <button className="primary pruvs-v12-open" type="button" onClick={()=>{setResult(null);setError('');setOpen(true)}}>
+    <button className="primary pruvs-v12-open" type="button" onClick={()=>{setResult(null);setError('');setEligibility(null);setOpen(true)}}>
       <Gift size={17}/>{pending?'Create new verification QR':'Earn a stamp'}
     </button>
     {open&&<div className="pruvs-v12-overlay" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)close()}}>
@@ -112,6 +122,8 @@ export default function CustomerReceiptCode({
               {programs.map(o=><option key={o.program.id} value={o.program.id}>{o.program.title}{o.promotionHeadline?' · '+o.promotionHeadline:''} · {o.store?.name||o.merchant_name}</option>)}
             </select>
           </label>
+          {checkingEligibility&&<p role="status" className="pruvs-v12-notice">Checking this receipt against the selected program…</p>}
+          {!checkingEligibility&&eligibility?.message&&<p role={eligibility.eligible?'status':'alert'} className={eligibility.eligible?'pruvs-v12-eligible':'pruvs-v12-error'}>{eligibility.message}</p>}
           <div className="pruvs-v12-scanned"><ReceiptText size={20}/><div>
             <strong>Receipt photo ready</strong>
             <p>We'll securely use the original image from your scan. No additional upload is needed.</p>
@@ -126,8 +138,8 @@ export default function CustomerReceiptCode({
           {error&&<p role="alert" className="pruvs-v12-error">{error}</p>}
           <div className="pruvs-v12-actions">
             <button type="button" className="secondary" disabled={busy} onClick={close}>Cancel</button>
-            <button className="primary pruvs-v12-submit" type="submit" disabled={busy||!consent||!chosen||(LOCATION_TEST_MODE&&(latitude===''||longitude===''))}>
-              <ShieldCheck size={17}/>{busy?'Preparing verification…':'Create verification QR'}
+            <button className="primary pruvs-v12-submit" type="submit" aria-label="Create verification QR" disabled={busy||checkingEligibility||eligibility?.eligible!==true||!consent||!chosen||(LOCATION_TEST_MODE&&(latitude===''||longitude===''))}>
+              <ShieldCheck size={17}/>{busy?'Preparing verification…':checkingEligibility?'Checking eligibility…':'Create verification QR'}
             </button>
           </div>
         </form>}

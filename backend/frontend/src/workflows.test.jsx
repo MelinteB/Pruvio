@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { Context } from './common';
@@ -18,6 +18,7 @@ afterEach(() => {
   vi.resetAllMocks();
   sessionStorage.clear();
 });
+beforeEach(() => { request.mockResolvedValue({enabled:false,providers:[]}); });
 function Location() {
   const l = useLocation();
   return <output data-testid="location">{l.pathname}</output>;

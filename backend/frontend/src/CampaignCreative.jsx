@@ -22,11 +22,14 @@ export default function CampaignCreative({promotion:p,compact=false}){
   },[]);
   if(!hasCampaignCreative(p))return null;
   const video=p.media_type.startsWith('video/');
+  const campaignSlides=p.gallery?.length
+    ?[...p.gallery,...(video?[{media_key:'campaign-story',media_url:p.media_url,media_type:p.media_type,media_alt:p.media_alt||p.headline}]:[])]
+    :[];
   const locationQuery=encodeURIComponent([p.store_name||p.merchant_name,p.store_address].filter(Boolean).join(', '));
   const mapsUrl='https://www.google.com/maps/search/?api=1&query='+locationQuery+
      (p.google_place_id?'&query_place_id='+encodeURIComponent(p.google_place_id):'');
   return <div className={'pruvs-campaign-creative'+(compact?' pruvs-campaign-creative-compact':'')}>
-    {p.gallery?.length?<CampaignGallery assets={p.gallery} alt={p.headline} translate={t}/>:video?
+    {campaignSlides.length?<CampaignGallery assets={campaignSlides} alt={p.headline} translate={t}/>:video?
       <video key={reduceMotion?'manual':'auto'} className="pruvs-campaign-creative-media" muted autoPlay={!reduceMotion} controls={reduceMotion} loop playsInline preload="metadata"
         aria-label={p.media_alt||p.headline}>
         <source src={p.media_url} type={p.media_type}/>

@@ -8,7 +8,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func
+from sqlalchemy import select, func, inspect
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, Field
 from fastapi.responses import Response
@@ -17,7 +17,7 @@ from .config import get_settings
 from .merchant_enrollment import router as merchant_enrollment_router
 from .password_recovery import router as password_recovery_router
 from .staff_management import router as staff_management_router
-from .models import Merchant, Staff, Store, Program, Membership, ReceiptClaim, Reward, Campaign, utcnow
+from .models import Merchant, Staff, Store, Program, Membership, ReceiptClaim, Reward, Campaign, PurchaseCode, Promotion, utcnow
 from .models_v067 import DiscountRedemption
 from .google_places_v0618 import router as google_places_router, linked_place_id, validate_store_place
 from .models_v0618 import MerchantStorePlace
@@ -27,7 +27,7 @@ from . import management_v0624 as management
 from .schemas import LoginIn, StoreIn, StoreUpdate, ProgramIn, CampaignGoal, CampaignIn, ReceiptProofIn, ConfirmIn, DemoReceiptIn
 
 settings=get_settings()
-app=FastAPI(title='Pruvs Business API',version='0.6.25',docs_url='/docs' if settings.app_env!='production' else None)
+app=FastAPI(title='Pruvs Business API',version='0.6.26',docs_url='/docs' if settings.app_env!='production' else None)
 app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=False,
                    allow_methods=['GET','POST','PUT','PATCH','DELETE'],allow_headers=['Authorization','Content-Type'])
 app.include_router(merchant_enrollment_router)
@@ -85,7 +85,7 @@ def aware(dt):
 
 @app.get('/health')
 def health():
-    return {'service':'Pruvs Business','version':'0.6.25','status':'ok'}
+    return {'service':'Pruvs Business','version':'0.6.26','status':'ok'}
 
 @app.get('/ready', include_in_schema=False)
 def readiness():
@@ -94,10 +94,10 @@ def readiness():
     try:
         checks=check_schema(engine())
         if not all(checks.values()):
-            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.25'})
-        return {'status':'ready','version':'0.6.25'}
+            return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.26'})
+        return {'status':'ready','version':'0.6.26'}
     except Exception:
-        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.25'})
+        return JSONResponse(status_code=503,content={'status':'unavailable','version':'0.6.26'})
 
 @app.post('/v1/merchant/login')
 def login(payload:LoginIn, request:Request, db:Session=Depends(get_db)):
@@ -176,6 +176,22 @@ def restore_location(store_id:str,staff:Staff=Depends(merchant_actor),db:Session
         db.delete(row);management.audit(db,staff,'location',store.id,'restore');db.commit()
     # Restored to inactive; activation is an explicit separate action.
     return {**store_json(store,db=db),'archived':False}
+
+@app.delete('/v1/merchant/stores/{store_id}')
+def delete_location(store_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    merchant_check(staff);management.require_management(db);management.lock_merchant(db,staff.merchant_id)
+    store=owned(db,Store,store_id,staff.merchant_id)
+    if not management.archived(db,store):
+        raise HTTPException(409,'Archive this location before deleting it.')
+    if db.scalar(select(Program.id).where(Program.store_id==store.id,Program.merchant_id==staff.merchant_id).limit(1)):
+        raise HTTPException(409,'This location has loyalty programs. Archive it to keep customer and campaign records.')
+    place=db.get(MerchantStorePlace,store.id)
+    archive=db.get(management.ArchivedLocation,store.id)
+    management.audit(db,staff,'location',store.id,'delete')
+    if place:db.delete(place)
+    if archive:db.delete(archive)
+    db.delete(store);db.commit()
+    return {'deleted':True,'store_id':store_id}
 
 @app.get('/v1/merchant/programs')
 def get_programs(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
@@ -289,6 +305,23 @@ def restore_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Sessio
         raise HTTPException(409,'This program has customer history. Duplicate it to create a new draft.')
     p.status='draft';management.audit(db,staff,'program',p.id,'restore');db.commit();return program_json(p)
 
+@app.delete('/v1/merchant/programs/{program_id}')
+def delete_program(program_id:str,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
+    merchant_check(staff);management.require_management(db);management.lock_merchant(db,staff.merchant_id)
+    program=owned(db,Program,program_id,staff.merchant_id)
+    if program.status not in ('draft','archived'):
+        raise HTTPException(409,'Pause and archive this program before deleting it.')
+    dependencies=(Membership,ReceiptClaim,Reward,Promotion,PurchaseCode)
+    if any(db.scalar(select(model.id).where(model.program_id==program.id).limit(1)) for model in dependencies):
+        raise HTTPException(409,'This program has customer or campaign history. Keep it archived instead of deleting it.')
+    if inspect(db.get_bind()).has_table(DiscountRedemption.__tablename__) and db.scalar(
+        select(DiscountRedemption.id).where(DiscountRedemption.program_id==program.id).limit(1)
+    ):
+        raise HTTPException(409,'This program has reward redemption history. Keep it archived instead of deleting it.')
+    management.audit(db,staff,'program',program.id,'delete')
+    db.delete(program);db.commit()
+    return {'deleted':True,'program_id':program_id}
+
 @app.get('/v1/merchant/claims')
 def get_claims(staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
     from sqlalchemy import inspect
@@ -392,7 +425,6 @@ def discover(latitude:float|None=Query(default=None,ge=-90,le=90),longitude:floa
              radius_km:float=Query(default=10,gt=0,le=50),db:Session=Depends(get_db)):
     if (latitude is None)!=(longitude is None):raise HTTPException(422,'Both coordinates required')
     published=db.scalars(select(Program).where(Program.status=='published')).all()
-    from .pilot_enrollment_v0612 import merchant_pilot_allowed
     results=[]
     eligibility={}
     for p in published:
@@ -401,12 +433,12 @@ def discover(latitude:float|None=Query(default=None,ge=-90,le=90),longitude:floa
         if not program_is_discoverable(p,m,s):continue
         distance=dist_km(latitude,longitude,s.latitude,s.longitude) if latitude is not None else None
         if distance is not None and distance>radius_km:continue
-        if p.merchant_id not in eligibility:
+        if p.id not in eligibility:
             from .pilot_readiness_v069 import merchant_acquisition_ready
-            eligibility[p.merchant_id]=merchant_acquisition_ready(db,p.merchant_id)
-        if not eligibility[p.merchant_id]:continue
+            eligibility[p.id]=merchant_acquisition_ready(db,p.merchant_id,p.id)
+        if not eligibility[p.id]:continue
         results.append({'merchant_id':m.id,'merchant_name':m.name,'store':store_json(s,db=db),
-                        'program':program_json(p),'receipt_pilot_allowed':merchant_pilot_allowed(db,p.merchant_id),
+                        'program':program_json(p),'receipt_pilot_allowed':eligibility[p.id],
                         'distance_km':round(distance,2) if distance is not None else None})
     return sorted(results,key=lambda r:(r['distance_km'] is None,r['distance_km'] or 0))[:100]
 
@@ -420,8 +452,10 @@ def join_program(program_id:str,consumer_id:str=Depends(customer_actor),db:Sessi
     existing=db.scalar(select(Membership).where(Membership.consumer_id==consumer_id,Membership.program_id==program_id))
     if existing:return {'membership_id':existing.id,'stamps':existing.stamps,'already_joined':True}
     from .pilot_readiness_v069 import merchant_acquisition_ready
-    if not merchant_acquisition_ready(db,p.merchant_id):
-        raise HTTPException(409,'Receipt rewards are not yet active for this merchant.')
+    if not merchant_acquisition_ready(db,p.merchant_id,p.id):
+        raise HTTPException(409,detail={'code':'PROGRAM_RECEIPT_APPROVAL_REQUIRED',
+            'message':'Receipt rewards are not active for this exact loyalty program and location.',
+            'program_id':p.id,'store_id':p.store_id})
     membership=Membership(consumer_id=consumer_id,program_id=program_id)
     db.add(membership)
     try:db.commit()

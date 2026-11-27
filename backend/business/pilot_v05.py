@@ -80,7 +80,7 @@ def promo_json(p,db,*,now=None,acquisition_ready=None,include_media_keys=False):
     merchant=db.get(Merchant,p.merchant_id)
     from .pilot_readiness_v069 import merchant_acquisition_ready
     if acquisition_ready is None:
-        acquisition_ready = merchant_acquisition_ready(db,p.merchant_id)
+        acquisition_ready = merchant_acquisition_ready(db,p.merchant_id,p.program_id)
     created=aware(p.created_at)
     published=aware(p.published_at)
     expires=aware(p.expires_at)
@@ -284,11 +284,13 @@ def require_publishable_campaign(db:Session,staff:Staff,promotion:Promotion)->No
     # receipt-based rewards and return actionable readiness details to the editor.
     from .pilot_readiness_v069 import acquisition_gate_enabled, merchant_receipt_report
     if acquisition_gate_enabled():
-        readiness = merchant_receipt_report(db, staff.merchant_id)
+        readiness = merchant_receipt_report(db, staff.merchant_id, program.id)
         if not readiness.get('receipt_review_ready'):
             raise HTTPException(409, detail={
                 'code': 'RECEIPT_ACTIVATION_INCOMPLETE',
                 'message': 'Receipt rewards are not active for this merchant. The campaign remains a draft. Check the activation checklist under Loyalty.',
+                'program_id': program.id,
+                'store_id': program.store_id,
                 'blocked_by': readiness.get('blocked_by', []),
             })
 
@@ -366,9 +368,9 @@ def public_promotions(limit:int=Query(12,ge=1,le=30),db:Session=Depends(get_db))
     from .pilot_readiness_v069 import merchant_acquisition_ready
     result=[]; eligibility={}
     for p in rows:
-        if p.merchant_id not in eligibility:
-            eligibility[p.merchant_id]=merchant_acquisition_ready(db,p.merchant_id)
-        if eligibility[p.merchant_id]:
+        if p.id not in eligibility:
+            eligibility[p.id]=merchant_acquisition_ready(db,p.merchant_id,p.id)
+        if eligibility[p.id]:
             result.append(promo_json(p,db,now=now,acquisition_ready=True))
         if len(result)>=limit:break
     return result
@@ -397,9 +399,9 @@ def issue_purchase(payload:IssuePurchaseIn,staff:Staff=Depends(merchant_actor),d
     pilot_enabled();can_manage(staff)
     p=owned_program(db,staff,payload.program_id)
     if p.status!='published':raise HTTPException(409,'Program must be published')
-    from .pilot_enrollment_v0612 import db_mode_enabled, merchant_pilot_allowed
-    if db_mode_enabled() and not merchant_pilot_allowed(db,p.merchant_id):
-        raise HTTPException(403,'Merchant receipt pilot is not approved')
+    from .pilot_enrollment_v0612 import db_mode_enabled, program_pilot_allowed
+    if db_mode_enabled() and not program_pilot_allowed(db,p):
+        raise HTTPException(403,'This loyalty program and location are not approved for receipt rewards')
     if payload.amount_minor<p.min_purchase_minor:raise HTTPException(422,'Purchase below loyalty minimum')
     store=db.get(Store,p.store_id)
     if not store or not store.active:raise HTTPException(409,'Store inactive')
@@ -418,9 +420,9 @@ def preview_purchase(payload:CodeIn,consumer_id:str=Depends(customer_actor),db:S
     pilot_enabled()
     p=db.get(Program,payload.program_id)
     if not p or p.status!='published':raise HTTPException(404,'Program unavailable')
-    from .pilot_enrollment_v0612 import db_mode_enabled, merchant_pilot_allowed
-    if db_mode_enabled() and not merchant_pilot_allowed(db,p.merchant_id):
-        raise HTTPException(403,'Merchant receipt pilot is not approved')
+    from .pilot_enrollment_v0612 import db_mode_enabled, program_pilot_allowed
+    if db_mode_enabled() and not program_pilot_allowed(db,p):
+        raise HTTPException(403,'This loyalty program and location are not approved for receipt rewards')
     member=db.scalar(select(Membership).where(Membership.program_id==p.id,Membership.consumer_id==consumer_id))
     if not member:raise HTTPException(403,'Join the program before claiming')
     row=purchase_for_code(db,payload);validate_purchase(row,p.id)
@@ -435,9 +437,9 @@ def claim_purchase(payload:ClaimIn,consumer_id:str=Depends(customer_actor),db:Se
         raise HTTPException(409,'Use the updated v0.6 receipt submission flow.')
     p=db.get(Program,payload.program_id)
     if not p or p.status!='published':raise HTTPException(404,'Program unavailable')
-    from .pilot_enrollment_v0612 import db_mode_enabled, merchant_pilot_allowed
-    if db_mode_enabled() and not merchant_pilot_allowed(db,p.merchant_id):
-        raise HTTPException(403,'Merchant receipt pilot is not approved')
+    from .pilot_enrollment_v0612 import db_mode_enabled, program_pilot_allowed
+    if db_mode_enabled() and not program_pilot_allowed(db,p):
+        raise HTTPException(403,'This loyalty program and location are not approved for receipt rewards')
     member=db.scalar(select(Membership).where(Membership.program_id==p.id,Membership.consumer_id==consumer_id))
     if not member:raise HTTPException(403,'Join the program first')
     row=purchase_for_code(db,payload);validate_purchase(row,p.id)

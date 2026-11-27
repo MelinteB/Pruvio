@@ -11,7 +11,8 @@ REPO = Path(__file__).resolve().parents[1]
 
 def test_only_fully_configured_merchant_reports_ready():
     schema = {'campaign_media': True, 'customer_codes': True,
-              'discount_reconciliation': True}
+              'discount_reconciliation': True,
+              'program_scoped_pilot_approval': True}
     ready = readiness.summarize_readiness(
         schema, receipts_enabled=True, codes_enabled=True,
         merchant_allowed=True, evidence_required=True)

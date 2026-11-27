@@ -1,1 +1,7 @@
 .promo-qr{margin:1rem 0;padding:.8rem;background:white;color:#334155;border:1px solid #d3e0e6;border-radius:12px;display:grid;gap:.6rem;justify-items:center}.promo-qr p{margin:0;font-size:.82rem;text-align:center;max-width:340px}
+.pruvs-website-image-import{display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:10px;align-items:end;padding:14px;border:1px solid #d6e6df;border-radius:16px;background:#f8fbf9}
+.pruvs-website-image-import label{display:grid;gap:6px;font-weight:700;color:#164530}
+.pruvs-website-image-import input{width:100%;min-width:0;padding:10px 12px;border:1px solid #c6d9d0;border-radius:10px}
+.pruvs-website-image-import small{grid-column:1/-1;color:#63796f}
+.pruvs-website-image-import+.pruvs-ai-grid article{display:grid;gap:8px}
+@media(max-width:650px){.pruvs-website-image-import{grid-template-columns:1fr}.pruvs-website-image-import small{grid-column:auto}}

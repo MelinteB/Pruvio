@@ -27,6 +27,10 @@ MIGRATIONS = (
         ("merchant_location_archives_v0624", "merchant_management_audit_v0624"),
     ),
     ("b16a0725_campaign_media_registry.sql", ("loyalty_campaign_media_v0725",)),
+    (
+        "b17_0726_program_scoped_pilot_approval.sql",
+        ("merchant_program_pilot_enrollment_v0726", "merchant_program_pilot_audit_v0726"),
+    ),
 )
 
 

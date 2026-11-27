@@ -25,7 +25,7 @@ def ready():
     if os.getenv('PRUVS_BUSINESS_CUSTOMER_CODES_V12_ENABLED','false').lower()!='true':
         raise HTTPException(503,'Customer receipt codes pilot is not enabled')
 
-from .pilot_enrollment_v0612 import merchant_pilot_allowed
+from .pilot_enrollment_v0612 import program_pilot_allowed
 from .pilot_readiness_v069 import merchant_receipt_report
 
 class CustomerClaimIn(BaseModel):
@@ -47,18 +47,31 @@ def require_active_program_location(db, program):
 def eligible(program_id:str,consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
     ready()
     p=db.get(Program,program_id)
-    if not p or p.status!='published' or not merchant_receipt_report(db,p.merchant_id)['receipt_review_ready']:
-        raise HTTPException(404,'Program not available for receipt-code pilot')
+    if not p:
+        return {'eligible':False,'reason':'program_unavailable'}
+    if p.status!='published':
+        return {'eligible':False,'reason':'program_not_published','program_id':p.id}
+    if not program_pilot_allowed(db,p):
+        return {'eligible':False,'reason':'program_approval_required','program_id':p.id,'store_id':p.store_id}
+    readiness=merchant_receipt_report(db,p.merchant_id,p.id)
+    if not readiness['receipt_review_ready']:
+        return {'eligible':False,'reason':'receipt_pilot_not_ready','program_id':p.id,
+                'blocked_by':readiness.get('blocked_by',[])}
     member=db.scalar(select(Membership).where(Membership.program_id==p.id,Membership.consumer_id==consumer_id))
-    if not member:raise HTTPException(403,'Join the loyalty program before claiming')
-    require_active_program_location(db,p)
-    return {'store_id':p.store_id,'currency':p.currency,'min_purchase_minor':p.min_purchase_minor}
+    if not member:
+        return {'eligible':False,'reason':'membership_required','program_id':p.id}
+    try:
+        require_active_program_location(db,p)
+    except HTTPException:
+        return {'eligible':False,'reason':'location_unavailable','program_id':p.id,'store_id':p.store_id}
+    return {'eligible':True,'reason':'eligible','program_id':p.id,'store_id':p.store_id,
+            'currency':p.currency,'min_purchase_minor':p.min_purchase_minor}
 
 @router.post('/v1/customer/pilot/claims/v12/customer-code',status_code=201)
 def create_customer_code(payload:CustomerClaimIn,consumer_id:str=Depends(customer_actor),db:Session=Depends(get_db)):
     ready()
     p=db.get(Program,payload.program_id)
-    if not p or p.status!='published' or not merchant_receipt_report(db,p.merchant_id)['receipt_review_ready']:
+    if not p or p.status!='published' or not program_pilot_allowed(db,p) or not merchant_receipt_report(db,p.merchant_id,p.id)['receipt_review_ready']:
         raise HTTPException(404,'Program unavailable')
     membership_id=db.scalar(select(Membership.id).where(
         Membership.program_id==p.id,Membership.consumer_id==consumer_id))

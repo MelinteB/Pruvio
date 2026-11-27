@@ -18,6 +18,7 @@ import StoreForm from './StoreForm.jsx';
 import {BusinessLanguageProvider,useBusinessLanguage,LanguageSwitcher} from './i18n.jsx';
 import './i18n.css';
 import './business-sidebar-account-fix.css';
+import {restoreBusinessSession,saveBusinessSession,restoreBusinessPage,saveBusinessPage} from './authSession.js';
 
 const API = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
 const money = (v) => `${(v/100).toFixed(2)} RON`;
@@ -41,6 +42,12 @@ async function request(path, token, method='GET', body) {
 function Notice({msg,onDismiss}){return msg&&<div className={`notice ${msg.error?'error':''}`}><span>{msg.error?<AlertCircle size={16}/>:<CircleCheck size={16}/>} {msg.text}</span><button onClick={onDismiss}><X size={15}/></button></div>}
 function Field({label,children}){return <label className="field"><span>{label}</span>{children}</label>}
 function Empty({title,detail}){return <div className="empty"><div className="empty-icon"><Gift size={26}/></div><b>{title}</b><p>{detail}</p></div>}
+class BusinessErrorBoundary extends React.Component{
+ constructor(props){super(props);this.state={failed:false};}
+ static getDerivedStateFromError(){return {failed:true};}
+ componentDidCatch(error){console.error('Pruvs Business UI failed to render',error);}
+ render(){return this.state.failed?<main className="login-screen"><section className="login-card" role="alert"><h1>Business workspace could not load</h1><p>Your session is preserved. Reload the page to try again.</p><button className="btn primary" type="button" onClick={()=>window.location.reload()}>Reload workspace</button></section></main>:this.props.children;}
+}
 function Login({onLogin}){
  const {t}=useBusinessLanguage();
  const [email,setEmail]=useState(''),[password,setPassword]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[health,setHealth]=useState('');
@@ -50,7 +57,9 @@ function Login({onLogin}){
 }
 function App(){
  const {t,language}=useBusinessLanguage();
- const [token,setToken]=useState(''),[page,setPage]=useState('overview'),[menu,setMenu]=useState(false),[me,setMe]=useState(null),[stores,setStores]=useState([]),[programs,setPrograms]=useState([]),[claims,setClaims]=useState([]),[campaigns,setCampaigns]=useState([]),[stats,setStats]=useState(null),[notice,setNotice]=useState(null),[modal,setModal]=useState(''),[busy,setBusy]=useState(false);
+ const [token,setToken]=useState(restoreBusinessSession),[page,setPage]=useState(restoreBusinessPage),[menu,setMenu]=useState(false),[me,setMe]=useState(null),[stores,setStores]=useState([]),[programs,setPrograms]=useState([]),[claims,setClaims]=useState([]),[campaigns,setCampaigns]=useState([]),[stats,setStats]=useState(null),[notice,setNotice]=useState(null),[modal,setModal]=useState(''),[busy,setBusy]=useState(false);
+ const updateSession=value=>setToken(saveBusinessSession(value));
+ const navigate=value=>setPage(saveBusinessPage(value));
  const inform=(text,error=false)=>setNotice({text,error});
  useEffect(()=>{
    if(!menu)return;
@@ -59,7 +68,7 @@ function App(){
    return()=>document.removeEventListener('keydown',close);
  },[menu]);
  useEffect(()=>{
-   const expire=()=>{setToken('');setMe(null);setModal('');setNotice(null)};
+   const expire=()=>{updateSession('');setMe(null);setModal('');setNotice(null)};
    window.addEventListener('pruvs-business-auth-expired',expire);
    return()=>window.removeEventListener('pruvs-business-auth-expired',expire);
  },[]);
@@ -69,7 +78,7 @@ function App(){
     const profile=await request('/v1/merchant/me',t);
     setMe(profile);
     if(profile.role==='platform_admin'){
-      setPage('pilot-access');
+      navigate('pilot-access');
       setNotice(null);
       return;
     }
@@ -80,7 +89,7 @@ function App(){
     setStores(b);setPrograms(c);setClaims(d);setCampaigns(e);setStats(f);
   }catch(ex){
     inform(ex.message,true);
-    if(ex.message.includes('Authentication')||ex.message.includes('Inactive'))setToken('');
+    if(ex.message.includes('Authentication')||ex.message.includes('Inactive'))updateSession('');
   }
 }
  useEffect(()=>{if(token)reload(token)},[token]);
@@ -94,25 +103,25 @@ function App(){
      inform(t(created.google_place_id?'Store and Google Maps listing connected.':'Location saved.'));
    }finally{setBusy(false)}
  }
- if(!token)return <Login onLogin={setToken}/>;
+ if(!token)return <Login onLogin={updateSession}/>;
  if(!me)return <div role="status" className="login-side">Loading your workspace…</div>;
- if(me.role==='platform_admin')return <AdminWorkspace token={token} operator={me} onLogout={()=>{setToken('');setMe(null);setPage('overview')}}/>;
+ if(me.role==='platform_admin')return <AdminWorkspace token={token} operator={me} onLogout={()=>{updateSession('');setMe(null);navigate('overview')}}/>;
  const title=t(nav.find(n=>n[0]===page)?.[1]||'Overview');
- return <div className="shell pruvs-business-2027"><aside className={`sidebar ${menu?'show':''}`}><div className="brand"><img className="brand-symbol pruvs-business-icon" src="/business/business-favicon.svg" alt="" aria-hidden="true"/><div>pruvs <span>business</span></div></div><div className="tenant"><span className="tenant-avatar">{(me?.merchant_name||'P').slice(0,1)}</span><div><b>{me?.merchant_name||'Merchant account'}</b><small>{t('Merchant workspace')}</small></div></div><nav aria-label="Merchant workspace navigation">{navGroups.map(([group,items])=><div className="pruvs-nav-group" key={group}><small>{t(group)}</small>{items.map(([id,label,Icon])=><button key={id} aria-current={page===id?'page':undefined} onClick={()=>{setPage(id);setMenu(false);setNotice(null)}} className={`nav-link ${page===id?'active':''}`}><Icon size={19}/><span>{t(label)}</span>{page===id&&<ChevronRight size={14}/>}</button>)}</div>)}</nav><div className="sidebar-foot"><div className="pilot-chip"><span className="dot"/> Pilot environment</div><button className="nav-link logout" onClick={()=>{setToken('');setMe(null)}}><LogOut size={18}/> {t('Sign out')}</button><div className="foot-caption">Pruvs Business · v0.6.25</div></div></aside>{menu&&<button type="button" className="pruvs-business-nav-scrim" aria-label="Close navigation" onClick={()=>setMenu(false)}/>}
+ return <div className="shell pruvs-business-2027"><aside className={`sidebar ${menu?'show':''}`}><div className="brand"><img className="brand-symbol pruvs-business-icon" src="/business/business-favicon.svg" alt="" aria-hidden="true"/><div>pruvs <span>business</span></div></div><div className="tenant"><span className="tenant-avatar">{(me?.merchant_name||'P').slice(0,1)}</span><div><b>{me?.merchant_name||'Merchant account'}</b><small>{t('Merchant workspace')}</small></div></div><nav aria-label="Merchant workspace navigation">{navGroups.map(([group,items])=><div className="pruvs-nav-group" key={group}><small>{t(group)}</small>{items.map(([id,label,Icon])=><button key={id} aria-current={page===id?'page':undefined} onClick={()=>{navigate(id);setMenu(false);setNotice(null)}} className={`nav-link ${page===id?'active':''}`}><Icon size={19}/><span>{t(label)}</span>{page===id&&<ChevronRight size={14}/>}</button>)}</div>)}</nav><div className="sidebar-foot"><div className="pilot-chip"><span className="dot"/> Pilot environment</div><button className="nav-link logout" onClick={()=>{updateSession('');setMe(null);navigate('overview')}}><LogOut size={18}/> {t('Sign out')}</button><div className="foot-caption">Pruvs Business · v0.6.26</div></div></aside>{menu&&<button type="button" className="pruvs-business-nav-scrim" aria-label="Close navigation" onClick={()=>setMenu(false)}/>}
       <div className="main"><header className="topbar"><button className="hamburger" type="button" aria-label="Toggle workspace navigation" aria-expanded={menu} onClick={()=>setMenu(!menu)}><Menu size={23}/></button><span className="pruvs-business-compact-brand"><img src="/business/business-favicon.svg" alt=""/><b>Business</b></span><div className="breadcrumb">Workspace <ChevronRight size={15}/> <b>{title}</b></div><div className="top-right"><span className="env-label"><span className="dot"/> PILOT</span><LanguageSwitcher/><span className="user-circle">{(me?.email||'M')[0].toUpperCase()}</span></div></header><main className="content"><div className="page-head"><div><h1>{title}</h1><p>{t(page==='overview'?'Your loyalty business at a glance.':page==='integrations'?'Connect loyalty activity to your merchant checkout infrastructure.':page==='customer-demo'?'Simulate what a customer will see in Pruvs. Local development only.':'Manage your merchant loyalty experience.')}</p></div>{page==='stores'&&<button className="btn primary" onClick={()=>setModal('store')}><Plus size={16}/> {t('Add location')}</button>}{page==='loyalty'&&<button className="btn primary" onClick={()=>setModal('program')}><Plus size={16}/> {t('New program')}</button>}</div><Notice msg={notice} onDismiss={()=>setNotice(null)}/>
- {page==='customer-demo'&&<CustomerDemo merchantToken={token} request={request} onClaims={()=>{setPage('claims');reload()}} onCheckout={()=>setPage('integrations')}/> }
+ {page==='customer-demo'&&<CustomerDemo merchantToken={token} request={request} onClaims={()=>{navigate('claims');reload()}} onCheckout={()=>navigate('integrations')}/> }
  {page==='overview'&&<MerchantOverview
     merchantName={me?.merchant_name} stats={stats} stores={stores} programs={programs} claims={claims}
-    onNavigate={setPage} onAddStore={()=>setModal('store')} onAddProgram={()=>setModal('program')}/>}
- {page==='stores'&&<><section className="panel"><div className="panel-heading"><h2>{t('Store locations')}</h2><span>{t('{count} total',{count:stores.length})}</span></div>{stores.length?<div className="list">{stores.map(s=><div className="list-row" key={s.id}><div className="row-icon"><Store size={19}/></div><div className="row-main"><b>{s.name}</b><small><MapPin size={13}/>{s.address||t('Address not specified')}</small></div><span className={'pill '+(s.active===false?'':'good')}>{t(s.active===false?'Inactive':'Active')}</span></div>)}</div>:<Empty title={t('No locations yet')} detail={t('Add a business location to make offers discoverable to nearby Pruvs customers.')}/>}</section>{stores.length>0&&<LocationManager stores={stores} programs={programs} token={token} canManage={['owner','manager'].includes(me.role)} onChange={()=>reload(token)} onNotice={text=>inform(text)}/>}</>}
- {page==='loyalty'&&<ProgramManager programs={programs} stores={stores} token={token} canManage={['owner','manager'].includes(me?.role)} onRefresh={()=>reload(token)} notify={inform} onAddStore={()=>setModal('store')} onCreateProgram={()=>setModal('program')} onVerifyPurchases={()=>setPage('claims')}/>}
-  {page==='claims'&&<ReceiptInbox token={token} onChange={reload} onOpenLoyalty={()=>setPage('loyalty')}/>}
+    onNavigate={navigate} onAddStore={()=>setModal('store')} onAddProgram={()=>setModal('program')}/>}
+ {page==='stores'&&<LocationManager stores={stores} programs={programs} token={token} canManage={['owner','manager'].includes(me.role)} onChange={()=>reload(token)} onNotice={text=>inform(text)}/>}
+ {page==='loyalty'&&<ProgramManager programs={programs} stores={stores} token={token} canManage={['owner','manager'].includes(me?.role)} onRefresh={()=>reload(token)} notify={inform} onAddStore={()=>setModal('store')} onCreateProgram={()=>setModal('program')} onVerifyPurchases={()=>navigate('claims')}/>}
+  {page==='claims'&&<ReceiptInbox token={token} onChange={reload} onOpenLoyalty={()=>navigate('loyalty')}/>}
 
- {page==='campaigns'&&<PromotionConsole token={token} programs={programs} merchantName={me?.merchant_name} locale={language} mode="promotions" initialView="studio" canManage={['owner','manager'].includes(me?.role)} onOpenLoyalty={()=>setPage('loyalty')}/>}
- {page==='promotions'&&<PromotionConsole token={token} programs={programs} merchantName={me?.merchant_name} locale={language} mode="promotions" initialView="library" canManage={['owner','manager'].includes(me?.role)} onOpenLoyalty={()=>setPage('loyalty')}/>}
+ {page==='campaigns'&&<PromotionConsole token={token} programs={programs} merchantName={me?.merchant_name} locale={language} mode="promotions" initialView="studio" canManage={['owner','manager'].includes(me?.role)} onOpenLoyalty={()=>navigate('loyalty')}/>}
+ {page==='promotions'&&<PromotionConsole token={token} programs={programs} merchantName={me?.merchant_name} locale={language} mode="promotions" initialView="library" canManage={['owner','manager'].includes(me?.role)} onOpenLoyalty={()=>navigate('loyalty')}/>}
  {page==='pilot'&&<PromotionConsole token={token} programs={programs} mode="pilot"/>}
  {page==='team'&&<TeamAccounts token={token} api={request} currentEmail={me?.email}
-   onPasswordChanged={()=>{setToken('');setMe(null);inform('Password updated. Sign in with your new password.')}}/>}
+   onPasswordChanged={()=>{updateSession('');setMe(null);inform('Password updated. Sign in with your new password.')}}/>}
  {page==='integrations'&&<><div className="integration-grid"><section className="panel pruvs-checkout-panel"><div className="row-between"><div className="row-icon"><ScanLine size={20}/></div><span className="pill good">Checkout ready</span></div><h2>Issue payment and apply campaign discount</h2><p>Enter or scan the customer’s campaign reward code, verify it, then record the completed payment with the discount applied.</p><RedemptionForm token={token} onSuccess={()=>{reload();inform('Payment recorded and campaign discount redeemed')}} onError={x=>inform(x,true)}/></section><section className="panel"><div className="row-between"><div className="row-icon"><Plug size={20}/></div><span className="pill">Not connected</span></div><h2>POS / SIBS connector</h2><p>Future merchant ECR and approved payment integrations. No live merchant or SIBS system access is configured in this starter.</p></section></div><ReconciliationPanel token={token}/><div className="info-banner"><ShieldCheck size={21}/><span>Production integrations will require per-merchant credentials, scoped permissions, idempotent checkout events, reconciliation and approval.</span></div></>}
  </main></div>{modal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setModal('')}}><div className="modal"><div className="modal-head"><div><span className="eyebrow">{t('Merchant setup')}</span><h2>{t(modal==='store'?'Add store location':modal==='program'?'Create loyalty program':'Campaign Studio')}</h2></div><button className="icon-btn" onClick={()=>setModal('')}><X size={20}/></button></div>{modal==='store'&&<StoreForm busy={busy} token={token} onSave={saveStore}/>}{modal==='program'&&<ProgramForm stores={stores} busy={busy} onSave={x=>perform('/v1/merchant/programs',x)}/ >}{modal==='campaign'&&<CampaignForm token={token} busy={busy} onSave={x=>perform('/v1/merchant/campaigns',x)} onError={x=>inform(x,true)}/>}</div></div>}</div>
 }
@@ -212,4 +221,4 @@ function ProgramForm({stores,onSave,busy}){
 }
 function CampaignForm({token,busy,onSave,onError}){const [goal,setGoal]=useState(''),[title,setTitle]=useState(''),[message,setMessage]=useState(''),[suggesting,setSuggesting]=useState(false);async function suggest(){setSuggesting(true);try{const r=await request('/v1/merchant/campaign-suggestions',token,'POST',{goal});setTitle(r.title);setMessage(r.message)}catch(ex){onError(ex.message)}finally{setSuggesting(false)}}return <form className="modal-body" onSubmit={e=>{e.preventDefault();onSave({goal,title,message})}}><Field label="Business objective"><textarea rows="2" required minLength={8} value={goal} onChange={e=>setGoal(e.target.value)} placeholder="Increase repeat visits on weekdays"/></Field><button className="btn outline full" disabled={suggesting||goal.length<8} type="button" onClick={suggest}><Sparkles size={16}/> {suggesting?'Generating…':'Generate starter suggestion'}</button><div className="info-banner small">This version uses a template generator, not a live AI model. All drafts require human approval.</div><Field label="Campaign title"><input required minLength={3} value={title} onChange={e=>setTitle(e.target.value)}/></Field><Field label="Customer message"><textarea rows="4" required minLength={5} value={message} onChange={e=>setMessage(e.target.value)}/></Field><button disabled={busy} className="btn primary full">{busy?'Saving…':'Save campaign draft'}</button></form>}
 
-createRoot(document.getElementById('root')).render(<BusinessLanguageProvider><App/></BusinessLanguageProvider>);
+createRoot(document.getElementById('root')).render(<BusinessErrorBoundary><BusinessLanguageProvider><App/></BusinessLanguageProvider></BusinessErrorBoundary>);
