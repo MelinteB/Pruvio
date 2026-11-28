@@ -221,6 +221,7 @@ def publish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),db:Se
     can_manage(staff)
     p=owned_campaign(db,staff,promotion_id)
     if p.status!='draft':raise HTTPException(409,'Only drafts may be published')
+    require_single_active_campaign_slot(db,p)
     require_publishable_campaign(db,staff,p)
     now=utcnow()
     p.status='published';p.published_at=now
@@ -238,6 +239,7 @@ def republish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),
     ended=(p.status=='published' and (p.expires_at is None or aware(p.expires_at)<=now))
     if p.status!='paused' and not ended:
         raise HTTPException(409,'Only paused or expired promotions may be republished.')
+    require_single_active_campaign_slot(db,p)
     require_publishable_campaign(db,staff,p)
     p.status='published'
     p.published_at=now
@@ -264,6 +266,31 @@ def owned_campaign(db:Session,staff:Staff,promotion_id:str)->Promotion:
     if promotion is None:
         raise HTTPException(404,'Promotion not found')
     return promotion
+
+
+def require_single_active_campaign_slot(db:Session,promotion:Promotion)->None:
+    """Serialize campaign activation per loyalty program and reject a second live offer."""
+    program=db.scalar(select(Program).where(
+        Program.id==promotion.program_id,
+        Program.merchant_id==promotion.merchant_id,
+    ).with_for_update())
+    if program is None:
+        raise HTTPException(409,'The campaign loyalty program is unavailable.')
+    now=utcnow()
+    active_id=db.scalar(select(Promotion.id).where(
+        Promotion.program_id==program.id,
+        Promotion.status=='published',
+        Promotion.expires_at.is_not(None),
+        Promotion.expires_at>now,
+        Promotion.id!=promotion.id,
+    ).limit(1))
+    if active_id:
+        raise HTTPException(409,detail={
+            'code':'ACTIVE_CAMPAIGN_EXISTS',
+            'message':'Only one active campaign is allowed per loyalty program. Unpublish the current campaign before publishing another.',
+            'program_id':program.id,
+            'active_campaign_id':active_id,
+        })
 
 
 def can_reopen_program(db:Session,staff:Staff,promotion:Promotion)->Program:

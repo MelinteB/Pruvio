@@ -53,6 +53,43 @@ def test_paused_campaign_is_removed_and_can_be_republished_without_copy(data):
         pilot_v05.republish_promotion(pid,staff=staff,db=db)
     assert e.value.status_code==409
 
+def test_only_one_unexpired_campaign_can_be_active_per_loyalty_program(data):
+    db,staff,merchant,store,program=data
+    first=publish(db,staff,program)
+    second=pilot_v05.merchant_create_promo(pilot_v05.PromotionIn(
+        program_id=program.id,headline='A second coffee offer',
+        message='Get a reward after three qualifying visits.'),staff=staff,db=db)
+
+    with pytest.raises(HTTPException) as exc:
+        pilot_v05.publish_promotion(second['id'],staff=staff,db=db)
+    assert exc.value.status_code==409
+    assert exc.value.detail['code']=='ACTIVE_CAMPAIGN_EXISTS'
+    assert db.get(Promotion,second['id']).status=='draft'
+
+    pilot_v05.unpublish_promotion(first,staff=staff,db=db)
+    pilot_v05.publish_promotion(second['id'],staff=staff,db=db)
+    with pytest.raises(HTTPException) as exc:
+        pilot_v05.republish_promotion(first,staff=staff,db=db)
+    assert exc.value.status_code==409
+    assert exc.value.detail['active_campaign_id']==second['id']
+
+    # An expired promotion is no longer active and does not occupy the slot.
+    db.get(Promotion,second['id']).expires_at=pilot_v05.utcnow()-timedelta(seconds=1)
+    db.commit()
+    assert pilot_v05.republish_promotion(first,staff=staff,db=db)['status']=='published'
+
+def test_one_active_campaign_limit_is_per_program_not_per_merchant(data):
+    db,staff,merchant,store,program=data
+    publish(db,staff,program)
+    other_program=Program(merchant_id=merchant.id,store_id=store.id,
+        title='Tea loyalty',description='Test',stamps_required=2,
+        min_purchase_minor=100,reward_minor=300,currency='RON',status='published')
+    db.add(other_program);db.commit()
+    other=pilot_v05.merchant_create_promo(pilot_v05.PromotionIn(
+        program_id=other_program.id,headline='Tea loyalty offer',
+        message='Get a reward after two qualifying visits.'),staff=staff,db=db)
+    assert pilot_v05.publish_promotion(other['id'],staff=staff,db=db)['status']=='published'
+
 def test_expired_campaign_can_be_republished_with_new_period(data):
     db,staff,merchant,store,program=data
     pid=publish(db,staff,program)
