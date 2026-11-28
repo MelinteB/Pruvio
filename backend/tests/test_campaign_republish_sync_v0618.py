@@ -220,6 +220,16 @@ def test_public_limit_not_consumed_by_large_expired_backlog(data):
     db.commit()
     assert ids(db)==[live]
 
+def test_public_campaign_checks_approval_for_its_loyalty_program(data,monkeypatch):
+    db,staff,merchant,store,program=data
+    pid=publish(db,staff,program)
+    from business import pilot_readiness_v069
+    checked=[]
+    monkeypatch.setattr(pilot_readiness_v069,'merchant_acquisition_ready',
+        lambda _db,merchant_id,program_id=None: checked.append((merchant_id,program_id)) or True)
+    assert pid in ids(db)
+    assert checked==[(merchant.id,program.id)]
+
 def test_business_ux_exposes_republish_to_merchant():
     from pathlib import Path
     root=Path(__file__).resolve().parents[1]

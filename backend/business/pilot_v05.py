@@ -396,7 +396,9 @@ def public_promotions(limit:int=Query(12,ge=1,le=30),db:Session=Depends(get_db))
     result=[]; eligibility={}
     for p in rows:
         if p.id not in eligibility:
-            eligibility[p.id]=merchant_acquisition_ready(db,p.merchant_id,p.id)
+            # Receipt approval is scoped to the loyalty program (and its
+            # current location), not to the campaign's independent ID.
+            eligibility[p.id]=merchant_acquisition_ready(db,p.merchant_id,p.program_id)
         if eligibility[p.id]:
             result.append(promo_json(p,db,now=now,acquisition_ready=True))
         if len(result)>=limit:break

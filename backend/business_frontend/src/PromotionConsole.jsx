@@ -52,7 +52,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
   const [skillId,setSkillId]=useState('loyalty');
   const skills=[{"id":"restaurant","en":"Restaurant & Café","ro":"Restaurant și cafenea","briefEn":"Focus on the visible food, ambience and repeat visits.","briefRo":"Evidențiază preparatele, atmosfera și revenirea clienților."},{"id":"retail","en":"Product showcase","ro":"Prezentare produse","briefEn":"Focus on actual visible products and their appeal.","briefRo":"Evidențiază produsele vizibile și atractivitatea lor."},{"id":"loyalty","en":"Repeat visits","ro":"Vizite repetate","briefEn":"Encourage regular customers to return.","briefRo":"Încurajează clienții fideli să revină."},{"id":"welcome","en":"New customer welcome","ro":"Clienți noi","briefEn":"Invite new customers to discover the location.","briefRo":"Invită clienții noi să descopere locația."},{"id":"seasonal","en":"Seasonal campaign","ro":"Campanie sezonieră","briefEn":"Use the season as context without inventing offers or dates.","briefRo":"Folosește sezonul ca temă fără a inventa oferte sau date."},{"id":"quiet_hours","en":"Quiet-hour traffic","ro":"Intervale liniștite","briefEn":"Encourage visits at merchant-specified times without inventing schedules.","briefRo":"Încurajează vizitele la orele indicate de comerciant."},{"id":"winback","en":"Customer win-back","ro":"Reactivare clienți","briefEn":"Warmly invite past customers to return.","briefRo":"Invită cu căldură foștii clienți să revină."},{"id":"premium","en":"Premium brand","ro":"Marcă premium","briefEn":"Use understated copy and restrained visual direction.","briefRo":"Folosește un mesaj elegant și o direcție vizuală discretă."},{"id":"story","en":"Multi-photo story","ro":"Poveste în imagini","briefEn":"Create a coherent visual narrative from the selected photos.","briefRo":"Construiește o poveste vizuală coerentă din fotografiile alese."}];
   const [gallery,setGallery]=useState([]);
-  const [websiteUrl,setWebsiteUrl]=useState(''),[websiteCandidates,setWebsiteCandidates]=useState([]),[websiteBusy,setWebsiteBusy]=useState(false);
+  const [websiteUrl,setWebsiteUrl]=useState(''),[websiteCandidates,setWebsiteCandidates]=useState([]),[websiteBusy,setWebsiteBusy]=useState(false),[selectedWebsiteImages,setSelectedWebsiteImages]=useState([]);
   const [imageOrigin,setImageOrigin]=useState(''); // upload | ai | empty
   const [renderedSignature,setRenderedSignature]=useState('');
   const [editingPromotionId,setEditingPromotionId]=useState('');
@@ -175,17 +175,46 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
     }catch(e){setError(e.message)}finally{setAssetBusy(false)}
   }
   async function findWebsiteImages(event){
-    event?.preventDefault();setWebsiteBusy(true);setError('');setWebsiteCandidates([]);
-    try{const result=await call('/v1/merchant/promotions/media/website-candidates',token,{website_url:websiteUrl.trim()});setWebsiteUrl(result.website_url||websiteUrl.trim());setWebsiteCandidates(result.candidates||[]);setNotice(result.candidates?.length?'Choose a public image, then confirm that your business has permission to use it.':'No public campaign images were found on that website.');}
+    event?.preventDefault();setWebsiteBusy(true);setError('');setWebsiteCandidates([]);setSelectedWebsiteImages([]);
+    try{const result=await call('/v1/merchant/promotions/media/website-candidates',token,{website_url:websiteUrl.trim()});setWebsiteUrl(result.website_url||websiteUrl.trim());setWebsiteCandidates(result.candidates||[]);setNotice(result.candidates?.length?'Select the photos you want to add, then import them together. Confirm that your business has permission to use them.':'No public campaign images were found on that website.');}
     catch(e){setError(e.message)}finally{setWebsiteBusy(false)}
+  }
+  function toggleWebsiteImage(url){
+    setError('');
+    if(selectedWebsiteImages.includes(url)){
+      setSelectedWebsiteImages(selectedWebsiteImages.filter(item=>item!==url));
+      return;
+    }
+    if(selectedWebsiteImages.length>=5-gallery.length){
+      setError('Campaign galleries allow five photos. Remove a gallery photo before selecting another.');
+      return;
+    }
+    setSelectedWebsiteImages([...selectedWebsiteImages,url]);
   }
   async function importWebsiteImage(candidate){
     setWebsiteBusy(true);setError('');
     try{const asset=await call('/v1/merchant/promotions/media/import-website-image',token,{website_url:websiteUrl,image_url:candidate.url});
       if(creativeFormat==='gallery'){if(gallery.length>=5)throw Error('Maximum five campaign pictures.');applyGallery([...gallery,asset]);}
       else{setGallery([]);setArtworkKey(asset.media_key);setRenderedKey('');setMediaUrl(asset.media_url);setMediaType(asset.media_type);setImageOrigin('upload');setRenderedSignature('');setDraftPreview(null);}
-      setWebsiteCandidates([]);setNotice('Website photo imported to your campaign gallery. Review the image and your usage rights before publishing.');
+      setSelectedWebsiteImages(selected=>selected.filter(url=>url!==candidate.url));setNotice('Website photo imported. You can select and import more photos from these results. Review the image and your usage rights before publishing.');
     }catch(e){setError(e.message)}finally{setWebsiteBusy(false)}
+  }
+  async function importSelectedWebsiteImages(){
+    if(creativeFormat!=='gallery'){setError('Choose Multi-picture gallery before importing multiple website photos.');return;}
+    const selected=websiteCandidates.filter(candidate=>selectedWebsiteImages.includes(candidate.url));
+    const capacity=5-gallery.length;
+    if(!selected.length)return;
+    if(selected.length>capacity){setError(`Select no more than ${capacity} additional photo${capacity===1?'':'s'}; campaign galleries allow five.`);return;}
+    setWebsiteBusy(true);setError('');let next=[...gallery],imported=0;
+    try{
+      for(const candidate of selected){
+        const asset=await call('/v1/merchant/promotions/media/import-website-image',token,{website_url:websiteUrl,image_url:candidate.url});
+        next=[...next,asset];applyGallery(next);imported++;
+        setSelectedWebsiteImages(current=>current.filter(url=>url!==candidate.url));
+      }
+      setNotice(`${imported} website photo${imported===1?'':'s'} imported. You can select more from these results or reorder the gallery.`);
+    }catch(e){setError(`${imported} photo${imported===1?' was':'s were'} imported; the remaining selected photos are still selected. ${e.message||'Import failed.'}`);}
+    finally{setWebsiteBusy(false)}
   }
   async function renderGalleryStory(){
     if(gallery.length<2||!headline.trim()||!message.trim()){setError('Choose at least two pictures and complete the campaign copy before creating a story.');return;}
@@ -373,7 +402,25 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
             <button type="submit" className="btn outline" disabled={websiteBusy||assetBusy||websiteUrl.trim().length<8}>{t(websiteBusy?'Searching website…':'Find website photos')}</button>
             <small>{t('Pruvs only checks public HTTPS pages and images. Import only photos you have permission to use.')}</small>
           </form>
-          {websiteCandidates.length>0&&<div className="pruvs-ai-grid" aria-label={t('Restaurant website photo options')}>{websiteCandidates.map((candidate,index)=><article className="panel" key={candidate.url}><img src={candidate.url} alt={t('Website photo option')+' '+(index+1)} style={{width:'100%',maxHeight:140,objectFit:'cover'}} loading="lazy"/><small>{candidate.host}</small><button type="button" className="btn outline" disabled={websiteBusy||assetBusy||(creativeFormat==='gallery'&&gallery.length>=5)} onClick={()=>importWebsiteImage(candidate)}>{t('Import photo')}</button></article>)}</div>}
+          {websiteCandidates.length>0&&<>
+            {creativeFormat!=='gallery'&&<p className="helper">{t('To select and import multiple photos, choose Multi-picture gallery above.')}</p>}
+            {creativeFormat==='gallery'&&<div className="pruvs-website-import-actions">
+              <small>{t('{selected} selected · {remaining} gallery spaces left',{selected:selectedWebsiteImages.length,remaining:Math.max(0,5-gallery.length)})}</small>
+              <button type="button" className="btn primary" disabled={websiteBusy||assetBusy||!selectedWebsiteImages.length||selectedWebsiteImages.length>5-gallery.length} onClick={importSelectedWebsiteImages}>
+                {t(websiteBusy?'Importing selected photos…':'Import selected photos')}
+              </button>
+            </div>}
+            <div className="pruvs-ai-grid" aria-label={t('Restaurant website photo options')}>
+              {websiteCandidates.map((candidate,index)=><article className="panel" key={candidate.url}>
+                <img src={candidate.url} alt={t('Website photo option')+' '+(index+1)} style={{width:'100%',maxHeight:140,objectFit:'cover'}} loading="lazy"/>
+                <small>{candidate.host}</small>
+                {creativeFormat==='gallery'?<label className="pruvs-website-image-choice">
+                  <input type="checkbox" checked={selectedWebsiteImages.includes(candidate.url)} disabled={websiteBusy||assetBusy||(!selectedWebsiteImages.includes(candidate.url)&&gallery.length+selectedWebsiteImages.length>=5)} onChange={()=>toggleWebsiteImage(candidate.url)}/>
+                  {t('Select photo')}
+                </label>:<button type="button" className="btn outline" disabled={websiteBusy||assetBusy} onClick={()=>importWebsiteImage(candidate)}>{t('Import photo')}</button>}
+              </article>)}
+            </div>
+          </>}
           {creativeFormat==='gallery'&&<button type="button" className="btn primary" disabled={assetBusy||aiBusy||gallery.length<2||!headline.trim()||message.trim().length<10} onClick={renderGalleryStory}><Film size={17}/>{t(assetBusy?'Creating campaign story…':'Create short story from photos')}</button>}
           {imageOrigin==='upload'&&<small role="status">{t(creativeFormat==='gallery'?'The first picture is the cover. AI uses all selected pictures.':'The uploaded picture is the main visual for this campaign.')}</small>}
           {!mediaUrl&&!localMediaPreview&&<small>{t('Optional for a text-only promotion. To make a photo-led campaign, upload the image before generating copy.')}</small>}

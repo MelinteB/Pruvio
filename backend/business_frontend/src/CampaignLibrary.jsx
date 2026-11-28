@@ -13,7 +13,9 @@ import './campaign-library-v0615.css';
 export function effectiveCampaignStatus(p,now=Date.now()){
   if(p.status==='published'&&p.expires_at&&new Date(p.expires_at).getTime()<=now)
     return 'expired';
-  if(p.status==='published'&&p.is_live===false)
+  // Older/stale API payloads must never make a published row appear live
+  // when its current program, location or receipt approval cannot be checked.
+  if(p.status==='published'&&p.is_live!==true)
     return 'unavailable';
   return p.status||'draft';
 }
