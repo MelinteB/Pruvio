@@ -2,13 +2,14 @@ import React from 'react';
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import CustomerReceiptCode from './CustomerReceiptCode';
-import {send} from './api';
+import {send,request} from './api';
 import {getLocalReceipt} from './localReceipts';
-vi.mock('./api',()=>({send:vi.fn()}));
+vi.mock('./api',()=>({send:vi.fn(),request:vi.fn()}));
 vi.mock('./localReceipts',()=>({getLocalReceipt:vi.fn()}));
 const programs=[{merchant_name:'Bistro Central',store:{name:'Bistro Central'},
   program:{id:'12345678-1234-4234-9234-1234567890ab',title:'Breakfast · Bistro Central Rewards'}}];
 beforeEach(()=>{
+  request.mockResolvedValue({eligible:true,reason:'eligible',message:'This receipt meets the selected program conditions.'});
   send.mockResolvedValue({display_code:'PRV-AABB-CCDD-EEFF',expires_at:'2026-11-18T12:00:00Z',claim_id:'test-only'});
 });
 afterEach(()=>{cleanup();vi.resetAllMocks();});
@@ -33,7 +34,9 @@ describe('Verification dialog reuses the already scanned receipt',()=>{
     const blob=new File([new Uint8Array([255,216,255,1,2,3,255,217])],'original.jpg',{type:'image/jpeg'});
     getLocalReceipt.mockResolvedValue({blob,filename:'original.jpg'});
     open();
+    await screen.findByText('This receipt meets the selected program conditions.');
     fireEvent.click(screen.getByRole('checkbox'));
+    expect(screen.getByRole('button',{name:'Create verification QR'}).disabled).toBe(false);
     fireEvent.click(screen.getByRole('button',{name:'Create verification QR'}));
     await waitFor(()=>expect(send).toHaveBeenCalledTimes(1));
     expect(getLocalReceipt).toHaveBeenCalledWith(6,42);
@@ -48,7 +51,9 @@ describe('Verification dialog reuses the already scanned receipt',()=>{
   it('cloud fallback does not ask for a second receipt',async()=>{
     getLocalReceipt.mockResolvedValue(undefined);
     open({storageMode:'cloud'});
+    await screen.findByText('This receipt meets the selected program conditions.');
     fireEvent.click(screen.getByRole('checkbox'));
+    expect(screen.getByRole('button',{name:'Create verification QR'}).disabled).toBe(false);
     fireEvent.click(screen.getByRole('button',{name:'Create verification QR'}));
     await waitFor(()=>expect(send).toHaveBeenCalledTimes(1));
     expect(send.mock.calls[0][1].photo_base64).toBeNull();
@@ -56,6 +61,7 @@ describe('Verification dialog reuses the already scanned receipt',()=>{
   it('fails closed when a free-plan scan is missing from the device',async()=>{
     getLocalReceipt.mockResolvedValue(undefined);
     open();
+    await screen.findByText('This receipt meets the selected program conditions.');
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button',{name:'Create verification QR'}));
     expect(await screen.findByRole('alert')).toBeTruthy();

@@ -69,7 +69,7 @@ def _promo_google_place_id(db,store):
     return linked_place_id(db,store.id)
 
 
-def promo_json(p,db,*,now=None,acquisition_ready=None):
+def promo_json(p,db,*,now=None,acquisition_ready=None,include_media_keys=False):
     now=now or utcnow()
     program=db.get(Program,p.program_id)
     if program and program.merchant_id != p.merchant_id:
@@ -80,13 +80,13 @@ def promo_json(p,db,*,now=None,acquisition_ready=None):
     merchant=db.get(Merchant,p.merchant_id)
     from .pilot_readiness_v069 import merchant_acquisition_ready
     if acquisition_ready is None:
-        acquisition_ready = merchant_acquisition_ready(db,p.merchant_id)
+        acquisition_ready = merchant_acquisition_ready(db,p.merchant_id,p.program_id)
     created=aware(p.created_at)
     published=aware(p.published_at)
     expires=aware(p.expires_at)
     from .campaign_gallery_v0624 import gallery_assets
     assets=gallery_assets(db,p)
-    return {'id':p.id,
+    result={'id':p.id,
             'gallery':assets,
             'created_at':created.isoformat() if created else None,
             'published_at':published.isoformat() if published else None,
@@ -108,6 +108,10 @@ def promo_json(p,db,*,now=None,acquisition_ready=None):
             'media_url':p.media_url,'media_type':p.media_type,'media_alt':p.media_alt,
             'expires_at':expires.isoformat() if expires else None,
             'duration_days':p.duration_days}
+    if include_media_keys:
+        from .media_assets_v0725 import promotion_media_assets
+        result['media_assets']=promotion_media_assets(db,p.merchant_id,p.id)
+    return result
 
 class PromotionIn(BaseModel):
     program_id: str
@@ -118,6 +122,8 @@ class PromotionIn(BaseModel):
     media_type: str|None = Field(default=None,max_length=40)
     media_alt: str|None = Field(default=None,max_length=160)
     gallery_keys: list[str]|None = Field(default=None,max_length=5)
+    media_key: str|None = Field(default=None,max_length=500)
+    rendered_media_key: str|None = Field(default=None,max_length=500)
 
     @field_validator('headline','message',mode='before')
     @classmethod
@@ -145,7 +151,7 @@ def merchant_promotions(staff:Staff=Depends(merchant_actor),db:Session=Depends(g
     rows=db.scalars(select(Promotion).where(Promotion.merchant_id==staff.merchant_id)
                     .order_by(Promotion.created_at.desc()).limit(100)).all()
     now=utcnow()
-    return [promo_json(p,db,now=now) for p in rows]
+    return [promo_json(p,db,now=now,include_media_keys=True) for p in rows]
 
 @router.post('/v1/merchant/promotions',status_code=201)
 def merchant_create_promo(payload:PromotionIn,staff:Staff=Depends(merchant_actor),db:Session=Depends(get_db)):
@@ -167,8 +173,11 @@ def merchant_create_promo(payload:PromotionIn,staff:Staff=Depends(merchant_actor
                     status='draft',duration_days=payload.duration_days)
     db.add(promo);db.flush()
     if assets:save_gallery(db,promo,assets)
+    from .media_assets_v0725 import set_promotion_media
+    set_promotion_media(db,staff.merchant_id,promo.id,
+        list(payload.gallery_keys or []) + [key for key in (payload.media_key,payload.rendered_media_key) if key])
     db.commit();db.refresh(promo)
-    return promo_json(promo,db)
+    return promo_json(promo,db,include_media_keys=True)
 
 @router.patch('/v1/merchant/promotions/{promotion_id}')
 def update_promotion_draft(promotion_id:str,payload:PromotionIn,
@@ -192,6 +201,10 @@ def update_promotion_draft(promotion_id:str,payload:PromotionIn,
     if assets:
         media_url,media_type,media_alt=(assets[0][k] for k in ('media_url','media_type','media_alt'))
     if payload.gallery_keys is not None:save_gallery(db,promo,assets)
+    from .media_assets_v0725 import set_promotion_media
+    if payload.model_fields_set.intersection({'gallery_keys','media_key','rendered_media_key'}):
+        set_promotion_media(db,staff.merchant_id,promo.id,
+            list(payload.gallery_keys or []) + [key for key in (payload.media_key,payload.rendered_media_key) if key])
     promo.headline=payload.headline
     promo.message=payload.message
     promo.duration_days=payload.duration_days
@@ -199,7 +212,7 @@ def update_promotion_draft(promotion_id:str,payload:PromotionIn,
     promo.media_type=media_type
     promo.media_alt=media_alt
     db.commit()
-    return promo_json(promo,db)
+    return promo_json(promo,db,include_media_keys=True)
 
 
 @router.post('/v1/merchant/promotions/{promotion_id}/publish')
@@ -208,11 +221,12 @@ def publish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),db:Se
     can_manage(staff)
     p=owned_campaign(db,staff,promotion_id)
     if p.status!='draft':raise HTTPException(409,'Only drafts may be published')
+    require_single_active_campaign_slot(db,p)
     require_publishable_campaign(db,staff,p)
     now=utcnow()
     p.status='published';p.published_at=now
     p.expires_at=now+timedelta(days=p.duration_days)
-    db.commit();return promo_json(p,db)
+    db.commit();return promo_json(p,db,include_media_keys=True)
 
 @router.post('/v1/merchant/promotions/{promotion_id}/republish')
 def republish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),
@@ -225,12 +239,13 @@ def republish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),
     ended=(p.status=='published' and (p.expires_at is None or aware(p.expires_at)<=now))
     if p.status!='paused' and not ended:
         raise HTTPException(409,'Only paused or expired promotions may be republished.')
+    require_single_active_campaign_slot(db,p)
     require_publishable_campaign(db,staff,p)
     p.status='published'
     p.published_at=now
     p.expires_at=now+timedelta(days=p.duration_days)
     db.commit()
-    return promo_json(p,db)
+    return promo_json(p,db,include_media_keys=True)
 
 
 @router.post('/v1/merchant/promotions/{promotion_id}/unpublish')
@@ -239,7 +254,7 @@ def unpublish_promotion(promotion_id:str,staff:Staff=Depends(merchant_actor),db:
     can_manage(staff)
     p=owned_campaign(db,staff,promotion_id)
     if p.status!='published':raise HTTPException(409,'Only live promotions may be unpublished')
-    p.status='paused';db.commit();return promo_json(p,db)
+    p.status='paused';db.commit();return promo_json(p,db,include_media_keys=True)
 
 def owned_campaign(db:Session,staff:Staff,promotion_id:str)->Promotion:
     promotion=db.scalar(
@@ -251,6 +266,31 @@ def owned_campaign(db:Session,staff:Staff,promotion_id:str)->Promotion:
     if promotion is None:
         raise HTTPException(404,'Promotion not found')
     return promotion
+
+
+def require_single_active_campaign_slot(db:Session,promotion:Promotion)->None:
+    """Serialize campaign activation per loyalty program and reject a second live offer."""
+    program=db.scalar(select(Program).where(
+        Program.id==promotion.program_id,
+        Program.merchant_id==promotion.merchant_id,
+    ).with_for_update())
+    if program is None:
+        raise HTTPException(409,'The campaign loyalty program is unavailable.')
+    now=utcnow()
+    active_id=db.scalar(select(Promotion.id).where(
+        Promotion.program_id==program.id,
+        Promotion.status=='published',
+        Promotion.expires_at.is_not(None),
+        Promotion.expires_at>now,
+        Promotion.id!=promotion.id,
+    ).limit(1))
+    if active_id:
+        raise HTTPException(409,detail={
+            'code':'ACTIVE_CAMPAIGN_EXISTS',
+            'message':'Only one active campaign is allowed per loyalty program. Unpublish the current campaign before publishing another.',
+            'program_id':program.id,
+            'active_campaign_id':active_id,
+        })
 
 
 def can_reopen_program(db:Session,staff:Staff,promotion:Promotion)->Program:
@@ -266,9 +306,20 @@ def require_publishable_campaign(db:Session,staff:Staff,promotion:Promotion)->No
     store=db.get(Store,program.store_id)
     if not program_is_discoverable(program,merchant,store):
         raise HTTPException(409,'An active merchant and location are required to publish a campaign.')
-    from .pilot_readiness_v069 import merchant_acquisition_ready
-    if not merchant_acquisition_ready(db, staff.merchant_id):
-        raise HTTPException(409,'Complete receipt reward activation before publishing this campaign.')
+    # Every current campaign is linked to a published loyalty program whose reward
+    # requires merchant-verified qualifying purchases. Keep this gate for those
+    # receipt-based rewards and return actionable readiness details to the editor.
+    from .pilot_readiness_v069 import acquisition_gate_enabled, merchant_receipt_report
+    if acquisition_gate_enabled():
+        readiness = merchant_receipt_report(db, staff.merchant_id, program.id)
+        if not readiness.get('receipt_review_ready'):
+            raise HTTPException(409, detail={
+                'code': 'RECEIPT_ACTIVATION_INCOMPLETE',
+                'message': 'Receipt rewards are not active for this merchant. The campaign remains a draft. Check the activation checklist under Loyalty.',
+                'program_id': program.id,
+                'store_id': program.store_id,
+                'blocked_by': readiness.get('blocked_by', []),
+            })
 
 
 @router.post('/v1/merchant/promotions/{promotion_id}/reopen')
@@ -284,7 +335,7 @@ def reopen_unpublished_promotion(promotion_id:str,staff:Staff=Depends(merchant_a
     promotion.published_at=None
     promotion.expires_at=None
     db.commit()
-    return promo_json(promotion,db)
+    return promo_json(promotion,db,include_media_keys=True)
 
 
 @router.post('/v1/merchant/promotions/{promotion_id}/archive')
@@ -301,7 +352,7 @@ def archive_unpublished_promotion(promotion_id:str,staff:Staff=Depends(merchant_
         raise HTTPException(409,'Unpublish the live campaign before archiving it.')
     promotion.status='archived'
     db.commit()
-    return promo_json(promotion,db)
+    return promo_json(promotion,db,include_media_keys=True)
 
 
 @router.post('/v1/merchant/promotions/{promotion_id}/restore')
@@ -317,7 +368,7 @@ def restore_archived_promotion(promotion_id:str,staff:Staff=Depends(merchant_act
     promotion.published_at=None
     promotion.expires_at=None
     db.commit()
-    return promo_json(promotion,db)
+    return promo_json(promotion,db,include_media_keys=True)
 
 
 @router.get('/v1/promotions')
@@ -344,9 +395,11 @@ def public_promotions(limit:int=Query(12,ge=1,le=30),db:Session=Depends(get_db))
     from .pilot_readiness_v069 import merchant_acquisition_ready
     result=[]; eligibility={}
     for p in rows:
-        if p.merchant_id not in eligibility:
-            eligibility[p.merchant_id]=merchant_acquisition_ready(db,p.merchant_id)
-        if eligibility[p.merchant_id]:
+        if p.id not in eligibility:
+            # Receipt approval is scoped to the loyalty program (and its
+            # current location), not to the campaign's independent ID.
+            eligibility[p.id]=merchant_acquisition_ready(db,p.merchant_id,p.program_id)
+        if eligibility[p.id]:
             result.append(promo_json(p,db,now=now,acquisition_ready=True))
         if len(result)>=limit:break
     return result
@@ -375,9 +428,9 @@ def issue_purchase(payload:IssuePurchaseIn,staff:Staff=Depends(merchant_actor),d
     pilot_enabled();can_manage(staff)
     p=owned_program(db,staff,payload.program_id)
     if p.status!='published':raise HTTPException(409,'Program must be published')
-    from .pilot_enrollment_v0612 import db_mode_enabled, merchant_pilot_allowed
-    if db_mode_enabled() and not merchant_pilot_allowed(db,p.merchant_id):
-        raise HTTPException(403,'Merchant receipt pilot is not approved')
+    from .pilot_enrollment_v0612 import db_mode_enabled, program_pilot_allowed
+    if db_mode_enabled() and not program_pilot_allowed(db,p):
+        raise HTTPException(403,'This loyalty program and location are not approved for receipt rewards')
     if payload.amount_minor<p.min_purchase_minor:raise HTTPException(422,'Purchase below loyalty minimum')
     store=db.get(Store,p.store_id)
     if not store or not store.active:raise HTTPException(409,'Store inactive')
@@ -396,9 +449,9 @@ def preview_purchase(payload:CodeIn,consumer_id:str=Depends(customer_actor),db:S
     pilot_enabled()
     p=db.get(Program,payload.program_id)
     if not p or p.status!='published':raise HTTPException(404,'Program unavailable')
-    from .pilot_enrollment_v0612 import db_mode_enabled, merchant_pilot_allowed
-    if db_mode_enabled() and not merchant_pilot_allowed(db,p.merchant_id):
-        raise HTTPException(403,'Merchant receipt pilot is not approved')
+    from .pilot_enrollment_v0612 import db_mode_enabled, program_pilot_allowed
+    if db_mode_enabled() and not program_pilot_allowed(db,p):
+        raise HTTPException(403,'This loyalty program and location are not approved for receipt rewards')
     member=db.scalar(select(Membership).where(Membership.program_id==p.id,Membership.consumer_id==consumer_id))
     if not member:raise HTTPException(403,'Join the program before claiming')
     row=purchase_for_code(db,payload);validate_purchase(row,p.id)
@@ -413,9 +466,9 @@ def claim_purchase(payload:ClaimIn,consumer_id:str=Depends(customer_actor),db:Se
         raise HTTPException(409,'Use the updated v0.6 receipt submission flow.')
     p=db.get(Program,payload.program_id)
     if not p or p.status!='published':raise HTTPException(404,'Program unavailable')
-    from .pilot_enrollment_v0612 import db_mode_enabled, merchant_pilot_allowed
-    if db_mode_enabled() and not merchant_pilot_allowed(db,p.merchant_id):
-        raise HTTPException(403,'Merchant receipt pilot is not approved')
+    from .pilot_enrollment_v0612 import db_mode_enabled, program_pilot_allowed
+    if db_mode_enabled() and not program_pilot_allowed(db,p):
+        raise HTTPException(403,'This loyalty program and location are not approved for receipt rewards')
     member=db.scalar(select(Membership).where(Membership.program_id==p.id,Membership.consumer_id==consumer_id))
     if not member:raise HTTPException(403,'Join the program first')
     row=purchase_for_code(db,payload);validate_purchase(row,p.id)

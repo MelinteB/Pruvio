@@ -58,7 +58,7 @@ def data(monkeypatch):
 def test_new_merchant_not_automatically_allowed(data):
     db,m1,m2,owner,other,admin,program=data
     assert not pilot.merchant_pilot_allowed(db,m1.id)
-    assert not pilot_v12.merchant_pilot_allowed(db,m1.id)
+    assert not pilot.program_pilot_allowed(db,program)
     current=pilot.my_pilot_access(staff=owner,db=db)
     assert current['status']=='not_requested'
     assert current['request_supported'] is True
@@ -85,6 +85,11 @@ def test_owner_request_admin_approval_revoke_and_audit(data):
     assert allowed['status']=='approved'
     assert pilot.merchant_pilot_allowed(db,m1.id)
     assert not pilot.merchant_pilot_allowed(db,m2.id)
+    assert not pilot.program_pilot_allowed(db,program), 'merchant approval must not authorize a program'
+    pilot.request_program_pilot_access(program.id,staff=owner,db=db)
+    scoped=pilot.platform_decide_program_pilot(
+        program.id,pilot.PilotDecisionIn(action='approve'),staff=admin,db=db)
+    assert scoped['allowed'] is True
     offers=business_main.discover(latitude=None,longitude=None,radius_km=10,db=db)
     assert next(row for row in offers if row['program']['id']==program.id)['receipt_pilot_allowed'] is True
     admin_rows=pilot.platform_pilot_enrollments(staff=admin,db=db)
@@ -99,6 +104,10 @@ def test_owner_request_admin_approval_revoke_and_audit(data):
         staff=admin,db=db)
     assert revoked['status']=='revoked'
     assert not pilot.merchant_pilot_allowed(db,m1.id)
+    assert pilot.program_pilot_allowed(db,program), 'the scoped decision has its own lifecycle'
+    pilot.platform_decide_program_pilot(
+        program.id,pilot.PilotDecisionIn(action='revoke',note='Scoped pilot finished'),staff=admin,db=db)
+    assert not pilot.program_pilot_allowed(db,program)
     audit=db.scalars(select(MerchantPilotAudit).where(
         MerchantPilotAudit.merchant_id==m1.id).order_by(MerchantPilotAudit.created_at)).all()
     assert [entry.action for entry in audit]==['request','approve','revoke']
@@ -179,17 +188,21 @@ def test_dynamic_customer_receipt_access_tracks_membership_and_merchant_decision
     db.commit()
 
     assert receipt_eligibility(consumer_id='signed-customer-6',db=db)=={
-        'eligible':False,'reason':'no_joined_approved_merchant'}
+        'eligible':False,'reason':'no_joined_approved_program'}
     assert receipt_eligibility(consumer_id='signed-customer-2',db=db)['eligible'] is False
 
     pilot.request_pilot_access(staff=owner,db=db)
     pilot.platform_decide_pilot(m1.id,pilot.PilotDecisionIn(action='approve'),
                                 staff=admin,db=db)
+    assert receipt_eligibility(consumer_id='signed-customer-6',db=db)['eligible'] is False
+    pilot.request_program_pilot_access(program.id,staff=owner,db=db)
+    pilot.platform_decide_program_pilot(program.id,pilot.PilotDecisionIn(action='approve'),
+                                staff=admin,db=db)
     assert receipt_eligibility(consumer_id='signed-customer-6',db=db)=={
-        'eligible':True,'reason':'joined_approved_merchant'}
+        'eligible':True,'reason':'joined_approved_program','program_id':program.id,'store_id':program.store_id}
     assert receipt_eligibility(consumer_id='signed-customer-2',db=db)['eligible'] is False
 
-    pilot.platform_decide_pilot(m1.id,pilot.PilotDecisionIn(action='revoke',note='Test revoke'),
+    pilot.platform_decide_program_pilot(program.id,pilot.PilotDecisionIn(action='revoke',note='Test revoke'),
                                 staff=admin,db=db)
     assert receipt_eligibility(consumer_id='signed-customer-6',db=db)['eligible'] is False
 
@@ -203,6 +216,9 @@ def test_dynamic_customer_receipt_access_fails_closed_when_pilot_or_store_inacti
     db.commit()
     pilot.request_pilot_access(staff=owner,db=db)
     pilot.platform_decide_pilot(m1.id,pilot.PilotDecisionIn(action='approve'),
+                                staff=admin,db=db)
+    pilot.request_program_pilot_access(program.id,staff=owner,db=db)
+    pilot.platform_decide_program_pilot(program.id,pilot.PilotDecisionIn(action='approve'),
                                 staff=admin,db=db)
     monkeypatch.setenv('PRUVS_BUSINESS_RECEIPT_PILOT_ENABLED','false')
     assert receipt_eligibility(consumer_id='signed-customer-6',db=db)=={

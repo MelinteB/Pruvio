@@ -30,22 +30,29 @@ export function predefinedCampaignBrief(program,language='en'){
 async function call(path,token,body,method){
   const response=await fetch(API+path,{method:body===undefined?'GET':(method||'POST'),headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},...(body===undefined?{}:{body:JSON.stringify(body)})});
   const data=await response.json().catch(()=>({}));
-  if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:'Operation failed ('+response.status+')');
+  if(!response.ok){
+    const detail=data.detail;
+    const error=new Error(typeof detail==='string'?detail:(typeof detail?.message==='string'?detail.message:'Operation failed ('+response.status+')'));
+    error.status=response.status;
+    if(typeof detail?.code==='string')error.code=detail.code;
+    throw error;
+  }
   return data;
 }
-export default function PromotionConsole({token,programs,merchantName='',locale='en',mode='promotions',initialView='studio',canManage=true}){
+export default function PromotionConsole({token,programs,merchantName='',locale='en',mode='promotions',initialView='studio',canManage=true,onOpenLoyalty}){
   const {t}=useBusinessLanguage();
   const lastDefaultBrief=useRef('');
   const lastBriefProgram=useRef('');
   const [list,setList]=useState([]),[programId,setProgramId]=useState(''),[headline,setHeadline]=useState(''),[message,setMessage]=useState(''),[mediaUrl,setMediaUrl]=useState(''),[mediaType,setMediaType]=useState('image/jpeg'),[days,setDays]=useState(14),[amount,setAmount]=useState(''),[code,setCode]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
   const [editedGoal,setGoal]=useState(null),[editedAudience,setAudience]=useState(null),
     [tone,setTone]=useState('friendly'),[creativeFormat,setCreativeFormat]=useState('png'),
-    [watermark,setWatermark]=useState('Pruvs Business'),[artworkKey,setArtworkKey]=useState(''),
+    [watermark,setWatermark]=useState('Pruvs Business'),[artworkKey,setArtworkKey]=useState(''),[renderedKey,setRenderedKey]=useState(''),
     [draftPreview,setDraftPreview]=useState(null),[aiBusy,setAiBusy]=useState(false),[assetBusy,setAssetBusy]=useState(false),[aiReadiness,setAiReadiness]=useState(null);
   const [creativeInstructions,setCreativeInstructions]=useState('');
   const [skillId,setSkillId]=useState('loyalty');
   const skills=[{"id":"restaurant","en":"Restaurant & Café","ro":"Restaurant și cafenea","briefEn":"Focus on the visible food, ambience and repeat visits.","briefRo":"Evidențiază preparatele, atmosfera și revenirea clienților."},{"id":"retail","en":"Product showcase","ro":"Prezentare produse","briefEn":"Focus on actual visible products and their appeal.","briefRo":"Evidențiază produsele vizibile și atractivitatea lor."},{"id":"loyalty","en":"Repeat visits","ro":"Vizite repetate","briefEn":"Encourage regular customers to return.","briefRo":"Încurajează clienții fideli să revină."},{"id":"welcome","en":"New customer welcome","ro":"Clienți noi","briefEn":"Invite new customers to discover the location.","briefRo":"Invită clienții noi să descopere locația."},{"id":"seasonal","en":"Seasonal campaign","ro":"Campanie sezonieră","briefEn":"Use the season as context without inventing offers or dates.","briefRo":"Folosește sezonul ca temă fără a inventa oferte sau date."},{"id":"quiet_hours","en":"Quiet-hour traffic","ro":"Intervale liniștite","briefEn":"Encourage visits at merchant-specified times without inventing schedules.","briefRo":"Încurajează vizitele la orele indicate de comerciant."},{"id":"winback","en":"Customer win-back","ro":"Reactivare clienți","briefEn":"Warmly invite past customers to return.","briefRo":"Invită cu căldură foștii clienți să revină."},{"id":"premium","en":"Premium brand","ro":"Marcă premium","briefEn":"Use understated copy and restrained visual direction.","briefRo":"Folosește un mesaj elegant și o direcție vizuală discretă."},{"id":"story","en":"Multi-photo story","ro":"Poveste în imagini","briefEn":"Create a coherent visual narrative from the selected photos.","briefRo":"Construiește o poveste vizuală coerentă din fotografiile alese."}];
   const [gallery,setGallery]=useState([]);
+  const [websiteUrl,setWebsiteUrl]=useState(''),[websiteCandidates,setWebsiteCandidates]=useState([]),[websiteBusy,setWebsiteBusy]=useState(false),[selectedWebsiteImages,setSelectedWebsiteImages]=useState([]);
   const [imageOrigin,setImageOrigin]=useState(''); // upload | ai | empty
   const [renderedSignature,setRenderedSignature]=useState('');
   const [editingPromotionId,setEditingPromotionId]=useState('');
@@ -59,6 +66,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
   const published=programs.filter(p=>p.status==='published');
   const currentProgram=programs.find(p=>p.id===programId);
   const displayedMediaUrl=mediaUrl&&!mediaPreviewError?mediaUrl:localMediaPreview;
+  const previewGallery=gallery.length?[...gallery,...(mediaType?.startsWith('video/')&&mediaUrl?[{media_key:renderedKey||'campaign-story',media_url:mediaUrl,media_type:mediaType,media_alt:headline||'Campaign story'}]:[])]:[];
   const mediaCannotSave=uploadPending||mediaPreviewError;
   const targetMediaType={png:'image/png',gif:'image/gif',mp4:'video/mp4',gallery:'image/jpeg'}[creativeFormat];
   const renderSignature=[creativeFormat,headline.trim(),watermark.trim()].join('|');
@@ -66,7 +74,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
     mediaType!==targetMediaType||renderedSignature!==renderSignature));
   function resetMedia(){
     setGallery([]);
-    setArtworkKey('');setMediaUrl('');setMediaType('image/jpeg');
+    setArtworkKey('');setRenderedKey('');setMediaUrl('');setMediaType('image/jpeg');
     setLocalMediaPreview('');setUploadPending(false);setMediaPreviewError(false);
     setImageOrigin('');setRenderedSignature('');
   }
@@ -80,7 +88,12 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
     setDays(p.duration_days||14);setDraftPreview(null);resetMedia();
     setCreativeFormat(p.media_type==='image/gif'?'gif':p.media_type==='video/mp4'?'mp4':'png');
     setMediaUrl(p.media_url||'');setMediaType(p.media_type||'image/jpeg');
+    const assets=copy?[]:(p.media_assets||[]);
+    const source=assets.find(a=>a.asset_kind==='source');
+    const render=assets.find(a=>a.asset_kind==='render');
+    setArtworkKey(source?.media_key||'');setRenderedKey(render?.media_key||'');
     if(p.gallery?.length){setGallery(p.gallery);setCreativeFormat('gallery');setImageOrigin('upload');}
+    else if(source)setImageOrigin('upload');
     setError('');
     setNotice(copy?'Copied into a new draft. Add or replace artwork before saving.':'Editing existing draft. Save changes before publishing.');
   }
@@ -120,7 +133,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
         visual_brief:draftPreview.visual_brief
       });
       // Keep the original so rendering failures do not discard paid AI output.
-      setArtworkKey(generated.media_key);setMediaUrl(generated.media_url);setMediaType(generated.media_type);
+      setArtworkKey(generated.media_key);setRenderedKey('');setMediaUrl(generated.media_url);setMediaType(generated.media_type);
       setImageOrigin('ai');setRenderedSignature('');
       setLocalMediaPreview('');setUploadPending(false);setMediaPreviewError(false);
       try{
@@ -128,7 +141,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
           media_key:generated.media_key,format:creativeFormat,
           headline:headline.trim(),watermark_text:watermark.trim()||'Pruvs Business'
         });
-        setMediaUrl(branded.media_url);setMediaType(branded.media_type);
+        setMediaUrl(branded.media_url);setMediaType(branded.media_type);setRenderedKey(branded.media_key||'');
         setRenderedSignature(renderSignature);
         setNotice(creativeFormat==='png'?
           'AI image generated and branded. Review the preview, save as draft and publish when approved.':
@@ -141,7 +154,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
   }
   function applyGallery(items){
     setGallery(items);setMediaUrl(items[0]?.media_url||'');setMediaType('image/jpeg');
-    setArtworkKey('');setImageOrigin(items.length?'upload':'');setMediaPreviewError(false);
+    setArtworkKey('');setRenderedKey('');setImageOrigin(items.length?'upload':'');setMediaPreviewError(false);
     setLocalMediaPreview('');setUploadPending(false);setDraftPreview(null);
   }
   async function uploadGallery(files){
@@ -161,6 +174,55 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
       setNotice('Pictures uploaded. Choose the cover and order before saving.');
     }catch(e){setError(e.message)}finally{setAssetBusy(false)}
   }
+  async function findWebsiteImages(event){
+    event?.preventDefault();setWebsiteBusy(true);setError('');setWebsiteCandidates([]);setSelectedWebsiteImages([]);
+    try{const result=await call('/v1/merchant/promotions/media/website-candidates',token,{website_url:websiteUrl.trim()});setWebsiteUrl(result.website_url||websiteUrl.trim());setWebsiteCandidates(result.candidates||[]);setNotice(result.candidates?.length?'Select the photos you want to add, then import them together. Confirm that your business has permission to use them.':'No public campaign images were found on that website.');}
+    catch(e){setError(e.message)}finally{setWebsiteBusy(false)}
+  }
+  function toggleWebsiteImage(url){
+    setError('');
+    if(selectedWebsiteImages.includes(url)){
+      setSelectedWebsiteImages(selectedWebsiteImages.filter(item=>item!==url));
+      return;
+    }
+    if(selectedWebsiteImages.length>=5-gallery.length){
+      setError('Campaign galleries allow five photos. Remove a gallery photo before selecting another.');
+      return;
+    }
+    setSelectedWebsiteImages([...selectedWebsiteImages,url]);
+  }
+  async function importWebsiteImage(candidate){
+    setWebsiteBusy(true);setError('');
+    try{const asset=await call('/v1/merchant/promotions/media/import-website-image',token,{website_url:websiteUrl,image_url:candidate.url});
+      if(creativeFormat==='gallery'){if(gallery.length>=5)throw Error('Maximum five campaign pictures.');applyGallery([...gallery,asset]);}
+      else{setGallery([]);setArtworkKey(asset.media_key);setRenderedKey('');setMediaUrl(asset.media_url);setMediaType(asset.media_type);setImageOrigin('upload');setRenderedSignature('');setDraftPreview(null);}
+      setSelectedWebsiteImages(selected=>selected.filter(url=>url!==candidate.url));setNotice('Website photo imported. You can select and import more photos from these results. Review the image and your usage rights before publishing.');
+    }catch(e){setError(e.message)}finally{setWebsiteBusy(false)}
+  }
+  async function importSelectedWebsiteImages(){
+    if(creativeFormat!=='gallery'){setError('Choose Multi-picture gallery before importing multiple website photos.');return;}
+    const selected=websiteCandidates.filter(candidate=>selectedWebsiteImages.includes(candidate.url));
+    const capacity=5-gallery.length;
+    if(!selected.length)return;
+    if(selected.length>capacity){setError(`Select no more than ${capacity} additional photo${capacity===1?'':'s'}; campaign galleries allow five.`);return;}
+    setWebsiteBusy(true);setError('');let next=[...gallery],imported=0;
+    try{
+      for(const candidate of selected){
+        const asset=await call('/v1/merchant/promotions/media/import-website-image',token,{website_url:websiteUrl,image_url:candidate.url});
+        next=[...next,asset];applyGallery(next);imported++;
+        setSelectedWebsiteImages(current=>current.filter(url=>url!==candidate.url));
+      }
+      setNotice(`${imported} website photo${imported===1?'':'s'} imported. You can select more from these results or reorder the gallery.`);
+    }catch(e){setError(`${imported} photo${imported===1?' was':'s were'} imported; the remaining selected photos are still selected. ${e.message||'Import failed.'}`);}
+    finally{setWebsiteBusy(false)}
+  }
+  async function renderGalleryStory(){
+    if(gallery.length<2||!headline.trim()||!message.trim()){setError('Choose at least two pictures and complete the campaign copy before creating a story.');return;}
+    setAssetBusy(true);setError('');setNotice('Creating a short story with scene changes and transitions…');
+    try{const result=await call('/v1/merchant/promotions/media/story',token,{gallery_keys:gallery.map(item=>item.media_key),headline:headline.trim(),message:message.trim(),cta:draftPreview?.cta||'Visit us again',motion_storyboard:draftPreview?.motion_storyboard||'',watermark_text:watermark.trim()||'Pruvs Business',format:'mp4'});
+      setMediaUrl(result.media_url);setMediaType(result.media_type);setArtworkKey('');setRenderedKey(result.media_key||'');setRenderedSignature(["mp4",headline.trim(),watermark.trim()].join('|'));setCreativeFormat('mp4');setImageOrigin('upload');setMediaPreviewError(false);setNotice('Story created from your gallery. It will appear after the photos in the customer carousel.');
+    }catch(e){setError(e.message);setNotice('');}finally{setAssetBusy(false)}
+  }
   function moveGallery(i,j){
     if(j<0||j>=gallery.length)return;
     const next=[...gallery];[next[i],next[j]]=[next[j],next[i]];applyGallery(next);
@@ -175,7 +237,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
     }
     const localUrl=URL.createObjectURL(file);
     setLocalMediaPreview(localUrl);setUploadPending(true);setMediaPreviewError(false);
-    setArtworkKey('');setMediaUrl('');setMediaType('image/jpeg');
+    setArtworkKey('');setRenderedKey('');setMediaUrl('');setMediaType('image/jpeg');
     setImageOrigin('');setRenderedSignature('');setDraftPreview(null);
     setAssetBusy(true);setError('');setNotice('Uploading picture to campaign storage…');
     try{
@@ -189,7 +251,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
         throw new Error(resp.status===503?t('{detail} (HTTP 503). Ask the administrator to check campaign R2 storage.',{detail:t(detail)}):detail);
       }
       if(!data.media_key||!data.media_url||!data.media_type)throw Error('Upload did not return a saved campaign picture.');
-      setArtworkKey(data.media_key);setMediaUrl(data.media_url);setMediaType(data.media_type);
+      setArtworkKey(data.media_key);setRenderedKey('');setMediaUrl(data.media_url);setMediaType(data.media_type);
       setImageOrigin('upload');setRenderedSignature('');
       setUploadPending(false);setMediaPreviewError(false);
       setNotice('Picture uploaded. AI will use the visible product or scene as the campaign subject; GIF/MP4 will animate this same image.');
@@ -210,7 +272,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
     setAssetBusy(true);setError('');
     try{
       const result=await renderSelectedArtwork(artworkKey);
-      setMediaUrl(result.media_url);setMediaType(result.media_type);
+      setMediaUrl(result.media_url);setMediaType(result.media_type);setRenderedKey(result.media_key||'');
       setRenderedSignature(renderSignature);
       setUploadPending(false);setMediaPreviewError(false);
       setNotice(t('Branded {format} ready. Review the preview and save your promotion draft.',{format:creativeFormat.toUpperCase()}));
@@ -274,7 +336,24 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
     manage('restore',p,null,'Archived campaign restored as a private draft.');
   }
   useEffect(()=>{refresh();},[token,mode]);
-  async function submit(fn){setBusy(true);setError('');setNotice('');try{await fn()}catch(e){setError(e.message)}finally{setBusy(false)}}
+  async function submit(fn){
+    setBusy(true);setError('');setNotice('');
+    try{await fn()}
+    catch(e){
+      setError(e.message||'Operation failed');
+      if(onOpenLoyalty&&e.code==='RECEIPT_ACTIVATION_INCOMPLETE'){
+        onOpenLoyalty();
+      }else if(onOpenLoyalty&&e.status===409){
+        try{
+          const readiness=await call('/v1/merchant/receipt-pilot/readiness',token);
+          if(readiness?.receipt_review_ready===false){
+            setError('Receipt reward activation is incomplete. Opening the Loyalty checklist.');
+            onOpenLoyalty();
+          }
+        }catch{}
+      }
+    }finally{setBusy(false)}
+  }
   return <section id="pruvs-business-campaign-workspace" className="panel promo-console">
     <div className="panel-heading"><h2>{t(mode==='promotions'?'Campaigns':'Merchant purchase verification code')}</h2>{mode!=='promotions'&&<span>PRUVS PILOT</span>}</div>
     {error&&<p className="promo-error" role="alert"><AlertCircle size={16}/>{t(error)}</p>}
@@ -318,6 +397,31 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
           <label className="btn outline pruvs-ai-file"><ImagePlus size={17}/>{t(creativeFormat==='gallery'?'Add campaign pictures':imageOrigin==='upload'?'Replace main picture':'Upload main campaign picture')}
             <input type="file" multiple={creativeFormat==='gallery'} accept="image/jpeg,image/png,image/webp" disabled={assetBusy||aiBusy} onChange={e=>{const files=Array.from(e.target.files||[]);e.target.value='';if(creativeFormat==='gallery')uploadGallery(files);else uploadArtwork(files[0])}}/></label>
           {creativeFormat==='gallery'&&<div className="pruvs-ai-grid">{gallery.map((a,i)=><div key={a.media_key} className="panel"><img src={a.media_url} alt={t('Campaign picture')+' '+(i+1)} style={{width:'100%',maxHeight:120,objectFit:'cover'}}/><small>{i===0?t('Cover photo'):t('Picture')+' '+(i+1)}</small><div className="pruvs-ai-actions"><button type="button" className="btn outline" aria-label={t('Move picture left')} disabled={assetBusy||i===0} onClick={()=>moveGallery(i,i-1)}>←</button><button type="button" className="btn outline" aria-label={t('Move picture right')} disabled={assetBusy||i===gallery.length-1} onClick={()=>moveGallery(i,i+1)}>→</button><button type="button" className="btn outline" disabled={assetBusy} onClick={()=>applyGallery(gallery.filter((_,j)=>i!==j))}>{t('Remove')}</button></div></div>)}</div>}
+          <form className="pruvs-website-image-import" onSubmit={findWebsiteImages}>
+            <label>{t('Restaurant website') }<input type="url" value={websiteUrl} maxLength={500} placeholder="https://restaurant.example" onChange={e=>setWebsiteUrl(e.target.value)}/></label>
+            <button type="submit" className="btn outline" disabled={websiteBusy||assetBusy||websiteUrl.trim().length<8}>{t(websiteBusy?'Searching website…':'Find website photos')}</button>
+            <small>{t('Pruvs only checks public HTTPS pages and images. Import only photos you have permission to use.')}</small>
+          </form>
+          {websiteCandidates.length>0&&<>
+            {creativeFormat!=='gallery'&&<p className="helper">{t('To select and import multiple photos, choose Multi-picture gallery above.')}</p>}
+            {creativeFormat==='gallery'&&<div className="pruvs-website-import-actions">
+              <small>{t('{selected} selected · {remaining} gallery spaces left',{selected:selectedWebsiteImages.length,remaining:Math.max(0,5-gallery.length)})}</small>
+              <button type="button" className="btn primary" disabled={websiteBusy||assetBusy||!selectedWebsiteImages.length||selectedWebsiteImages.length>5-gallery.length} onClick={importSelectedWebsiteImages}>
+                {t(websiteBusy?'Importing selected photos…':'Import selected photos')}
+              </button>
+            </div>}
+            <div className="pruvs-ai-grid" aria-label={t('Restaurant website photo options')}>
+              {websiteCandidates.map((candidate,index)=><article className="panel" key={candidate.url}>
+                <img src={candidate.url} alt={t('Website photo option')+' '+(index+1)} style={{width:'100%',maxHeight:140,objectFit:'cover'}} loading="lazy"/>
+                <small>{candidate.host}</small>
+                {creativeFormat==='gallery'?<label className="pruvs-website-image-choice">
+                  <input type="checkbox" checked={selectedWebsiteImages.includes(candidate.url)} disabled={websiteBusy||assetBusy||(!selectedWebsiteImages.includes(candidate.url)&&gallery.length+selectedWebsiteImages.length>=5)} onChange={()=>toggleWebsiteImage(candidate.url)}/>
+                  {t('Select photo')}
+                </label>:<button type="button" className="btn outline" disabled={websiteBusy||assetBusy} onClick={()=>importWebsiteImage(candidate)}>{t('Import photo')}</button>}
+              </article>)}
+            </div>
+          </>}
+          {creativeFormat==='gallery'&&<button type="button" className="btn primary" disabled={assetBusy||aiBusy||gallery.length<2||!headline.trim()||message.trim().length<10} onClick={renderGalleryStory}><Film size={17}/>{t(assetBusy?'Creating campaign story…':'Create short story from photos')}</button>}
           {imageOrigin==='upload'&&<small role="status">{t(creativeFormat==='gallery'?'The first picture is the cover. AI uses all selected pictures.':'The uploaded picture is the main visual for this campaign.')}</small>}
           {!mediaUrl&&!localMediaPreview&&<small>{t('Optional for a text-only promotion. To make a photo-led campaign, upload the image before generating copy.')}</small>}
         </div>
@@ -371,7 +475,7 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
               key={String(displayedMediaUrl||'empty')+'-'+String(mediaPreviewError)}
               program={currentProgram} merchantName={merchantName}
               headline={headline} message={message}
-              mediaUrl={displayedMediaUrl} mediaType={mediaType} gallery={creativeFormat==='gallery'?gallery:[]}
+              mediaUrl={displayedMediaUrl} mediaType={mediaType} gallery={previewGallery}
               mediaPending={uploadPending}
               onMediaError={()=>{if(mediaUrl&&!uploadPending&&displayedMediaUrl===mediaUrl)setMediaPreviewError(true)}}
               onMediaReady={()=>{if(mediaUrl&&!uploadPending&&displayedMediaUrl===mediaUrl)setMediaPreviewError(false)}}
@@ -397,17 +501,22 @@ export default function PromotionConsole({token,programs,merchantName='',locale=
         submit(async()=>{
           let savedMediaUrl=mediaUrl;
           let savedMediaType=mediaType;
+          let savedRenderedKey=renderedKey;
           if(mediaNeedsRendering){
             const rendered=await renderSelectedArtwork(artworkKey);
             if(!rendered.media_url||rendered.media_type!==targetMediaType)
               throw new Error('Artwork generation did not return the selected media format. Nothing was saved.');
             savedMediaUrl=rendered.media_url;
             savedMediaType=rendered.media_type;
+            savedRenderedKey=rendered.media_key||'';
             setMediaUrl(savedMediaUrl);setMediaType(savedMediaType);
             setRenderedSignature(renderSignature);
           }
           const payload={program_id:programId,headline:headline.trim(),message:message.trim(),duration_days:Number(days),
-            media_url:savedMediaUrl||null,media_type:savedMediaUrl?savedMediaType:null,media_alt:headline.trim(),gallery_keys:creativeFormat==='gallery'?gallery.map(a=>a.media_key):[]};
+            media_url:savedMediaUrl||null,media_type:savedMediaUrl?savedMediaType:null,media_alt:headline.trim(),
+            gallery_keys:gallery.map(a=>a.media_key),
+            media_key:artworkKey||null,
+            rendered_media_key:savedRenderedKey||null};
           if(editingPromotionId)await call('/v1/merchant/promotions/'+editingPromotionId,token,payload,'PATCH');
           else await call('/v1/merchant/promotions',token,payload);
           setEditingPromotionId('');setHeadline('');setMessage('');setDraftPreview(null);resetMedia();

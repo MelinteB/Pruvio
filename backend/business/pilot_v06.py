@@ -70,8 +70,8 @@ def claim_v06(payload:ClaimV06In,consumer_id:str=Depends(customer_actor),db:Sess
     p=db.get(Program,payload.program_id)
     if not p or p.status!='published':raise HTTPException(404,'Program unavailable')
     from .pilot_readiness_v069 import merchant_receipt_report
-    if not merchant_receipt_report(db,p.merchant_id)['receipt_review_ready']:
-        raise HTTPException(403,'This receipt pilot is not enabled for this merchant')
+    if not merchant_receipt_report(db,p.merchant_id,p.id)['receipt_review_ready']:
+        raise HTTPException(403,'Receipt rewards are not active for this exact loyalty program and location')
     member=db.scalar(select(Membership).where(Membership.program_id==p.id,Membership.consumer_id==consumer_id))
     if not member:raise HTTPException(403,'Join the program before claiming')
     row=purchase_for_code(db,payload);validate_purchase(row,p.id)

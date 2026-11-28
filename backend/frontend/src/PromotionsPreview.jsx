@@ -1,6 +1,6 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {Link} from 'react-router-dom';
-import {Gift} from 'lucide-react';
+import {Gift,Sparkles} from 'lucide-react';
 import {request} from './api';
 import {t} from './i18n';
 import './promotions-preview.css';
@@ -42,7 +42,9 @@ export default function PromotionsPreview(){
     <button type="button" onClick={refresh}>Retry campaigns</button>
   </section>;
   if(state==='loading'||!items.length)return null;
-  return <section className="pruvs-promos">
+  return <section className="pruvs-promos" aria-label={t('Featured campaigns')}>
+    <div className="pruvs-promos-heading"><div><Sparkles size={18}/><h2>{t('Featured campaigns')}</h2></div>
+      <Link className="pruvs-promos-more" to="/rewards">{t('Explore rewards')}</Link></div>
     <div className="pruvs-promos-grid"><CampaignCarousel campaigns={items} label={t('Merchant loyalty promotions')}
       renderCampaign={p=><article className="pruvs-promo">
       {hasCampaignCreative(p)?
@@ -52,6 +54,5 @@ export default function PromotionsPreview(){
       <OfferLocation promotion={p} compact/>
       <Link to={'/rewards?program='+encodeURIComponent(p.program_id)}>See loyalty program</Link>
     </article>}/></div>
-    <Link className="pruvs-promos-more" to="/rewards">Explore rewards</Link>
   </section>;
 }

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from .db import get_db
 from .models import Membership, Program, Store
 from .security import customer_actor
-from .pilot_enrollment_v0612 import merchant_pilot_allowed
+from .pilot_enrollment_v0612 import program_pilot_allowed
 
 router = APIRouter(tags=['Customer receipt eligibility'])
 
@@ -31,21 +31,22 @@ def receipt_eligibility(
 
     # Only joined, published programs at active stores are candidates.
     # An administrator's approval of the *merchant* is also mandatory.
-    merchant_ids = db.scalars(
-        select(Program.merchant_id)
+    programs = db.scalars(
+        select(Program)
         .join(Membership, Membership.program_id == Program.id)
         .join(Store, Store.id == Program.store_id)
         .where(
             Membership.consumer_id == consumer_id,
             Program.status == 'published',
             Store.active.is_(True),
-        )
-        .distinct()
+        ).distinct()
     ).all()
 
     from .pilot_readiness_v069 import merchant_receipt_report
-    for merchant_id in merchant_ids:
-        if merchant_pilot_allowed(db, merchant_id) and merchant_receipt_report(db, merchant_id)['receipt_review_ready']:
-            return {'eligible': True, 'reason': 'joined_approved_merchant'}
+    for program in programs:
+        if (program_pilot_allowed(db, program)
+                and merchant_receipt_report(db, program.merchant_id, program.id)['receipt_review_ready']):
+            return {'eligible': True, 'reason': 'joined_approved_program',
+                    'program_id': program.id, 'store_id': program.store_id}
 
-    return {'eligible': False, 'reason': 'no_joined_approved_merchant'}
+    return {'eligible': False, 'reason': 'no_joined_approved_program'}

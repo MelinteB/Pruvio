@@ -92,7 +92,7 @@ def test_studio_upload_before_generating_and_no_picture_replacement():
     ai=(ROOT/'business/ai_campaign_v067.py').read_text(encoding='utf-8')
     assert ui.index('Main campaign picture and subject')<ui.index('Predefined campaign text · edit before generating')
     assert ui.index('Predefined campaign text · edit before generating')<ui.index('onClick={generateDraft}')
-    assert "media_key:imageOrigin==='upload'?artworkKey:null" in ui
+    assert "media_key:imageOrigin==='upload'?artworkKey||null:null" in ui
     assert "imageOrigin==='upload'&&!result.source_image_used" in ui
     assert "if(imageOrigin==='upload')" in ui
     assert 'source_image_used' in ai

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from .db import engine, get_db
-from .models import Staff
+from .models import Program, Staff
 from .schema_readiness import check_schema
 from .security import merchant_actor
 
@@ -23,7 +23,8 @@ def _on(name):
 def summarize_readiness(checks, *, receipts_enabled, codes_enabled,
                         merchant_allowed, evidence_required):
     checks = {name: bool(checks.get(name)) for name in (
-        'campaign_media', 'customer_codes', 'discount_reconciliation'
+        'campaign_media', 'customer_codes', 'discount_reconciliation',
+        'program_scoped_pilot_approval'
     )}
     requirements = {
         'business_receipt_pilot': bool(receipts_enabled),
@@ -33,6 +34,7 @@ def summarize_readiness(checks, *, receipts_enabled, codes_enabled,
         'campaign_media_migrated': checks['campaign_media'],
         'customer_codes_migrated': checks['customer_codes'],
         'reward_reconciliation_migrated': checks['discount_reconciliation'],
+        'program_scoped_approval_migrated': checks['program_scoped_pilot_approval'],
     }
     blocked = [name for name, passed in requirements.items() if not passed]
     return {
@@ -57,13 +59,24 @@ def require_reward_schema(db: Session):
             'reconciliation migration is not ready.')
 
 
-def merchant_receipt_report(db, merchant_id):
-    from .pilot_enrollment_v0612 import db_mode_enabled, tables_ready, merchant_pilot_allowed
+def merchant_receipt_report(db, merchant_id, program_id=None):
+    from .pilot_enrollment_v0612 import (
+        db_mode_enabled, tables_ready, merchant_pilot_allowed,
+        program_scope_tables_ready, program_pilot_allowed,
+    )
     try:
         flags = check_schema(db.connection())
         database_mode = db_mode_enabled()
-        permission_schema_ready = tables_ready(db) if database_mode else True
-        allowed = permission_schema_ready and merchant_pilot_allowed(db, merchant_id)
+        if database_mode and program_id:
+            permission_schema_ready = tables_ready(db) and program_scope_tables_ready(db)
+            program = db.get(Program, program_id)
+            scope_matches = bool(program and program.merchant_id == merchant_id)
+            allowed = (permission_schema_ready and scope_matches
+                       and program_pilot_allowed(db, program))
+        else:
+            permission_schema_ready = tables_ready(db) if database_mode else True
+            allowed = (permission_schema_ready and merchant_pilot_allowed(db, merchant_id)
+                       if not database_mode else False)
     except Exception:
         flags = {}
         database_mode = db_mode_enabled()
@@ -75,6 +88,16 @@ def merchant_receipt_report(db, merchant_id):
         merchant_allowed=allowed, evidence_required=_on('PRUVS_BUSINESS_V06_REQUIRE_EVIDENCE'))
     report['enrollment_mode'] = 'database' if database_mode else 'legacy'
     report['merchant_pilot_schema_ready'] = permission_schema_ready
+    report['program_id'] = program_id
+    report['program_scoped'] = bool(program_id and database_mode)
+    if database_mode and not program_id:
+        report['blocked_by'] = list(dict.fromkeys(report['blocked_by'] + ['program_id_required']))
+        report['status'] = 'not_ready'
+        report['receipt_review_ready'] = False
+    if database_mode and program_id and not allowed:
+        report['blocked_by'] = list(dict.fromkeys(report['blocked_by'] + ['program_approval_required']))
+        report['status'] = 'not_ready'
+        report['receipt_review_ready'] = False
     if not permission_schema_ready:
         report['requirements']['merchant_pilot_migrated'] = False
         report['blocked_by'].append('merchant_pilot_migrated')
@@ -88,11 +111,13 @@ def acquisition_gate_enabled():
     return db_mode_enabled() or _on('PRUVS_BUSINESS_RECEIPT_PILOT_ENABLED') or _on('PRUVS_BUSINESS_CUSTOMER_CODES_V12_ENABLED')
 
 
-def merchant_acquisition_ready(db, merchant_id):
-    return not acquisition_gate_enabled() or merchant_receipt_report(db, merchant_id)['receipt_review_ready']
+def merchant_acquisition_ready(db, merchant_id, program_id=None):
+    return not acquisition_gate_enabled() or merchant_receipt_report(
+        db, merchant_id, program_id)['receipt_review_ready']
 
 
 @router.get('/v1/merchant/receipt-pilot/readiness')
 def merchant_receipt_readiness(staff: Staff = Depends(merchant_actor),
+                                program_id: str | None = None,
                                 db: Session = Depends(get_db)):
-    return merchant_receipt_report(db, staff.merchant_id)
+    return merchant_receipt_report(db, staff.merchant_id, program_id)

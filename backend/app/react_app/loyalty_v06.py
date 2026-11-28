@@ -167,6 +167,48 @@ class CustomerCodeRequest(BaseModel):
     latitude:float|None=Field(default=None,ge=-90,le=90)
     longitude:float|None=Field(default=None,ge=-180,le=180)
 
+@router.get('/receipts/{case_id}/customer-code-v12/eligibility')
+def customer_code_v12_eligibility(case_id:int,program_id:str=Query(...,min_length=36,max_length=36),identity=Depends(current),db=Depends(get_db)):
+    uid=identity[0].id
+    pilot_ready(uid,require_eligibility=False)
+    if os.getenv('PRUVS_LOYALTY_CUSTOMER_CODES_V12_ENABLED','false').lower()!='true':
+        raise HTTPException(503,'Customer receipt codes are not enabled in this environment')
+    case=db.get(Case,case_id)
+    if not case or case.user_id!=uid:raise HTTPException(404,'Receipt not found')
+    if case.status in ('failed','processing_failed','processing','pending'):
+        return {'eligible':False,'reason':'receipt_processing','message':'Wait until receipt processing is complete.'}
+    try:program_id=str(UUID(program_id))
+    except (ValueError,AttributeError):raise HTTPException(422,'Invalid loyalty program') from None
+    eligible=call_business('/v1/customer/pilot/programs/'+program_id+'/receipt-eligibility-v12',user_id=uid)
+    if eligible.get('eligible') is not True:
+        reasons={
+            'program_unavailable':'This loyalty program is unavailable.',
+            'program_not_published':'This loyalty program is not published.',
+            'program_approval_required':'The merchant has not received approval for this loyalty program and location.',
+            'receipt_pilot_not_ready':'Receipt verification is not fully configured for this loyalty program.',
+            'membership_required':'Join this loyalty program before submitting a receipt.',
+            'location_unavailable':'This loyalty program location is inactive.',
+        }
+        reason=eligible.get('reason','not_eligible')
+        return {'eligible':False,'reason':reason,'message':reasons.get(reason,'This receipt is not eligible for this loyalty program.')}
+    detail=receipts.get_receipt_view(db,case_id,user_id=uid,ensure_translations=False)
+    currency=str(detail.get('currency') or '').upper()
+    if currency!=eligible.get('currency'):
+        return {'eligible':False,'reason':'currency_mismatch','message':'The receipt currency does not match this program.'}
+    try:
+        amount=Decimal(str(detail.get('receipt_total')))
+        if not amount.is_finite() or amount<=0 or amount*100!=(amount*100).to_integral_value():raise ValueError()
+        amount_minor=int(amount*100)
+    except (TypeError,ValueError,InvalidOperation):
+        return {'eligible':False,'reason':'invalid_receipt_amount','message':'The receipt total is missing or invalid.'}
+    minimum=int(eligible.get('min_purchase_minor') or 0)
+    if amount_minor<minimum:
+        return {'eligible':False,'reason':'minimum_not_met','message':f'This receipt is below the program minimum of {minimum/100:.2f} {currency}.',
+                'amount_minor':amount_minor,'min_purchase_minor':minimum,'currency':currency}
+    return {'eligible':True,'reason':'eligible','message':'This receipt meets the selected program conditions.',
+            'program_id':program_id,'store_id':eligible.get('store_id'),'amount_minor':amount_minor,
+            'min_purchase_minor':minimum,'currency':currency}
+
 @router.post('/receipts/{case_id}/customer-code-v12',status_code=201)
 def customer_code_v12(case_id:int,payload:CustomerCodeRequest,identity=Depends(current),db=Depends(get_db)):
     pilot_ready(identity[0].id)
@@ -191,10 +233,9 @@ def customer_code_v12(case_id:int,payload:CustomerCodeRequest,identity=Depends(c
         if amount>10_000_000:raise ValueError()
     except (TypeError,ValueError,InvalidOperation):
         raise HTTPException(422,'Receipt amount is missing or invalid') from None
-    eligible=call_business('/v1/customer/pilot/programs/'+program_id+'/receipt-eligibility-v12',
-                           method='GET',user_id=uid)
-    if eligible.get('currency')!=currency or amount<int(eligible.get('min_purchase_minor') or 0):
-        raise HTTPException(422,'Receipt does not meet the program currency or minimum amount')
+    eligible=call_business('/v1/customer/pilot/programs/'+program_id+'/receipt-eligibility-v12',method='GET',user_id=uid)
+    if eligible.get('eligible') is not True or eligible.get('currency')!=currency or amount<int(eligible.get('min_purchase_minor') or 0):
+        raise HTTPException(422,'Receipt does not meet this program’s eligibility requirements')
     store_id=eligible.get('store_id')
     if not isinstance(store_id,str) or not store_id:raise HTTPException(502,'Merchant program validation unavailable')
     if payload.photo_base64:

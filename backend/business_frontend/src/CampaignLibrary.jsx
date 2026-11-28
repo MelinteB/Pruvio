@@ -13,7 +13,9 @@ import './campaign-library-v0615.css';
 export function effectiveCampaignStatus(p,now=Date.now()){
   if(p.status==='published'&&p.expires_at&&new Date(p.expires_at).getTime()<=now)
     return 'expired';
-  if(p.status==='published'&&p.is_live===false)
+  // Older/stale API payloads must never make a published row appear live
+  // when its current program, location or receipt approval cannot be checked.
+  if(p.status==='published'&&p.is_live!==true)
     return 'unavailable';
   return p.status||'draft';
 }
@@ -52,6 +54,7 @@ function PreviewDialog({campaign,onClose}){
         merchantName={campaign.merchant_name}
         headline={campaign.headline} message={campaign.message}
         mediaUrl={campaign.media_url||''} mediaType={campaign.media_type||'image/jpeg'}
+        gallery={campaign.gallery||[]}
       />
       <p><ShieldCheck size={16}/> {t('Only published, unexpired offers from active programs appear in Pruvs Core. This preview does not publish the campaign.')}</p>
     </section>
